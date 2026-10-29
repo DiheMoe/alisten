@@ -1,0 +1,203 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - depguard
+    - forbidigo
+  exclusions:
+    rules:
+      # 这两个文件中未检查的错误不影响结果：decode.go 跳过 fmt 块的对齐填充失败时，读取下一个块头会报错；loudness_bench_test.go 的 binary.Write 写入 bytes.Buffer，不会失败。
+      - path: internal/lib/wav/decode\.go|internal/lib/loudness/loudness_bench_test\.go
+        linters:
+          - errcheck
+      # forbidigo 只检查 domain，其他目录可以读系统时钟。
+      - path-except: ^internal/domain/
+        linters:
+          - forbidigo
+  settings:
+    depguard:
+      # 不以 $ 结尾的条目按前缀匹配。depguard 只拿排序后紧挨在导入路径之前的一项比较，已有前缀的子包不要再单列：
+      # deny 中同时有 os 和 os/exec 时，os/signal 就不再被禁止。
+      rules:
+        domain:
+          list-mode: strict
+          files:
+            - "**/internal/domain/**"
+            - "!$test"
+          allow:
+            - $gostd
+            - github.com/dihemoe/alisten/internal/domain
+            - github.com/dihemoe/alisten/internal/lib
+          deny:
+            - pkg: os
+              desc: domain 不做 I/O
+            - pkg: net$
+              desc: domain 不做 I/O
+            - pkg: net/http
+              desc: domain 不做 I/O
+            - pkg: database/sql
+              desc: domain 不做 I/O
+            - pkg: io/fs
+              desc: domain 不做 I/O
+            - pkg: path/filepath
+              desc: domain 不做 I/O
+            - pkg: syscall
+              desc: domain 不做 I/O
+            - pkg: net/textproto
+              desc: domain 不做 I/O
+            - pkg: net/smtp
+              desc: domain 不做 I/O
+            - pkg: net/rpc
+              desc: domain 不做 I/O
+            - pkg: crypto/tls
+              desc: domain 不做 I/O
+            - pkg: log/syslog
+              desc: domain 不做 I/O
+            - pkg: plugin
+              desc: domain 不做 I/O
+            - pkg: sync
+              desc: domain 不加锁
+        domain-test:
+          list-mode: strict
+          files:
+            - "**/internal/domain/**/*_test.go"
+          allow:
+            - $gostd
+            - github.com/dihemoe/alisten/internal/domain
+            - github.com/dihemoe/alisten/internal/lib
+            - golang.org/x/tools/txtar
+        app:
+          list-mode: strict
+          files:
+            - "**/internal/app/**"
+            - "!$test"
+          allow:
+            - $gostd
+            - github.com/dihemoe/alisten/internal/domain
+            - github.com/dihemoe/alisten/internal/lib
+            - github.com/dihemoe/alisten/internal/app
+            # 用于房间密码的 argon2id 哈希；纯计算，不做 I/O。
+            - golang.org/x/crypto/argon2
+            # 用于合并同一首歌的并发播放地址解析；只协调 goroutine，不做 I/O。
+            - golang.org/x/sync/singleflight
+          deny:
+            - pkg: os
+              desc: app 的 I/O 经由出站端口
+            - pkg: net$
+              desc: app 的 I/O 经由出站端口
+            - pkg: net/http
+              desc: app 的 I/O 经由出站端口
+            - pkg: database/sql
+              desc: app 的 I/O 经由出站端口
+            - pkg: io/fs
+              desc: app 的 I/O 经由出站端口
+            - pkg: path/filepath
+              desc: app 的 I/O 经由出站端口
+            - pkg: syscall
+              desc: app 的 I/O 经由出站端口
+            - pkg: net/textproto
+              desc: app 的 I/O 经由出站端口
+            - pkg: net/smtp
+              desc: app 的 I/O 经由出站端口
+            - pkg: net/rpc
+              desc: app 的 I/O 经由出站端口
+            - pkg: crypto/tls
+              desc: app 的 I/O 经由出站端口
+            - pkg: log/syslog
+              desc: app 的 I/O 经由出站端口
+            - pkg: plugin
+              desc: app 的 I/O 经由出站端口
+        app-test:
+          list-mode: strict
+          files:
+            - "**/internal/app/**/*_test.go"
+          allow:
+            - $gostd
+            - github.com/dihemoe/alisten/internal/domain
+            - github.com/dihemoe/alisten/internal/lib
+            - github.com/dihemoe/alisten/internal/app
+            - golang.org/x/tools/txtar
+        porttest:
+          files:
+            - "!$test"
+          deny:
+            - pkg: github.com/dihemoe/alisten/internal/app/port/porttest
+              desc: 端口的内存实现只供测试使用
+        lib:
+          files:
+            - "**/internal/lib/**"
+          deny:
+            - pkg: github.com/dihemoe/alisten/internal/domain
+              desc: lib 与业务无关，不能依赖 domain
+            - pkg: github.com/dihemoe/alisten/internal/app
+              desc: lib 与业务无关，不能依赖 app
+            - pkg: github.com/dihemoe/alisten/internal/adapter
+              desc: lib 与业务无关，不能依赖 adapter
+            - pkg: github.com/dihemoe/alisten/internal/bootstrap
+              desc: lib 与业务无关，不能依赖 bootstrap
+            - pkg: github.com/dihemoe/alisten/protocol
+              desc: protocol 只能被 internal/adapter/in 使用
+        # app 通过 logctx 记录日志的关联字段；logctx 只依赖标准库，app 才不会经由它依赖 OpenTelemetry。
+        logctx:
+          list-mode: strict
+          files:
+            - "**/internal/lib/logctx/**"
+          allow:
+            - $gostd
+        adapter-in:
+          files:
+            - "**/internal/adapter/in/**"
+          deny:
+            - pkg: github.com/dihemoe/alisten/internal/adapter
+              desc: 只有 bootstrap 可以 import adapter
+            - pkg: github.com/dihemoe/alisten/internal/bootstrap
+              desc: adapter 不能依赖 bootstrap
+        adapter-out:
+          list-mode: lax
+          files:
+            - "**/internal/adapter/out/**"
+          # sqlc 把查询代码生成在 postgres 适配器的 internal 目录下；lax 模式让这个更长的 allow 前缀优先于 deny。
+          allow:
+            - github.com/dihemoe/alisten/internal/adapter/out/postgres/internal/query
+          deny:
+            - pkg: github.com/dihemoe/alisten/internal/adapter
+              desc: 只有 bootstrap 可以 import adapter
+            - pkg: github.com/dihemoe/alisten/internal/bootstrap
+              desc: adapter 不能依赖 bootstrap
+            - pkg: github.com/dihemoe/alisten/protocol
+              desc: protocol 只能被 internal/adapter/in 使用
+        bootstrap:
+          files:
+            - "**/internal/bootstrap/**"
+          deny:
+            - pkg: github.com/dihemoe/alisten/protocol
+              desc: protocol 只能被 internal/adapter/in 使用
+        cmd:
+          files:
+            - "**/cmd/**"
+          deny:
+            - pkg: github.com/dihemoe/alisten/internal/adapter
+              desc: 只有 bootstrap 可以 import adapter
+            - pkg: github.com/dihemoe/alisten/protocol
+              desc: protocol 只能被 internal/adapter/in 使用
+        protocol:
+          list-mode: strict
+          files:
+            - "**/protocol/**"
+          allow:
+            - $gostd
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^time\.(Now|Since|Until)$
+          msg: domain 不读系统时钟，时间作为输入传入
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/dihemoe/alisten

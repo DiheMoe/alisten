@@ -1,0 +1,4 @@
+/alisten
+/web/node_modules/
+/web/dist/
+.env
