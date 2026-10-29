@@ -1,0 +1,2998 @@
+{
+  "components": {
+    "schemas": {
+      "APIKey": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "description": "常驻房间的 API Key，只在生成或重置时返回这一次：bot 用 Authorization: Bearer <Key> 调用 /api/room 下的接口",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "ActivityKind": {
+        "enum": [
+          "added",
+          "removed",
+          "liked",
+          "voted",
+          "skipped",
+          "failed"
+        ],
+        "type": "string"
+      },
+      "AdminCheckBilibiliLoginRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "AdminCheckNeteaseLoginRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "AdminCheckQQLoginRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/QQLoginType"
+          }
+        },
+        "required": [
+          "type",
+          "key"
+        ],
+        "type": "object"
+      },
+      "AdminCreateRoomRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "description": "房间描述",
+            "maxLength": 500,
+            "type": "string"
+          },
+          "name": {
+            "description": "房间名称",
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "slug": {
+            "pattern": "^[a-z0-9-]{1,32}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description"
+        ],
+        "type": "object"
+      },
+      "AdminCreateRoomResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "AdminGetBilibiliCredentialResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceAccount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "set": {
+            "description": "是否保存了登录凭据，不代表凭据仍然有效",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "set",
+          "account"
+        ],
+        "type": "object"
+      },
+      "AdminGetNeteaseCredentialResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceAccount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "set": {
+            "description": "是否保存了登录凭据，不代表凭据仍然有效",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "set",
+          "account"
+        ],
+        "type": "object"
+      },
+      "AdminGetQQCredentialResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceAccount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "set": {
+            "description": "是否保存了登录凭据，不代表凭据仍然有效",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "set",
+          "account"
+        ],
+        "type": "object"
+      },
+      "AdminGetRoomApiKeyResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAtMs": {
+            "description": "Key 的生成时间；还没有 Key 时为 0",
+            "type": "integer"
+          },
+          "set": {
+            "description": "是否已经生成了 Key",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "set",
+          "createdAtMs"
+        ],
+        "type": "object"
+      },
+      "AdminGetYoutubeCredentialResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "set": {
+            "description": "是否保存了 cookies",
+            "type": "boolean"
+          },
+          "updatedAtMs": {
+            "description": "最近一次填写的时间；未设置时为 0",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "set",
+          "updatedAtMs"
+        ],
+        "type": "object"
+      },
+      "AdminListMediaResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StoredMedia"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "AdminListRoomsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RoomListing"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "AdminResetRoomApiKeyRequest": {
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "AdminSetYoutubeCredentialRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cookies": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "cookies"
+        ],
+        "type": "object"
+      },
+      "AdminStartBilibiliLoginRequest": {
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "AdminStartNeteaseLoginRequest": {
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "AdminStartQQLoginRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/QQLoginType"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "AdminUpdateRoomRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "description": "房间描述",
+            "maxLength": 500,
+            "type": "string"
+          },
+          "name": {
+            "description": "房间名称",
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "slug": {
+            "pattern": "^[a-z0-9-]{0,32}$",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AdminUpdateSiteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "brandName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "brandName"
+        ],
+        "type": "object"
+      },
+      "AdminUpdateSiteResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "brandName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "brandName"
+        ],
+        "type": "object"
+      },
+      "ChatSendRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "type": "object"
+      },
+      "CreateMemberRequest": {
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "CreateMemberResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "member": {
+            "$ref": "#/components/schemas/Member"
+          },
+          "memberToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "memberToken",
+          "member"
+        ],
+        "type": "object"
+      },
+      "CreateRoomRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "description": "房间描述",
+            "maxLength": 500,
+            "type": "string"
+          },
+          "name": {
+            "description": "房间名称",
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description"
+        ],
+        "type": "object"
+      },
+      "CreateRoomResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "CreateTicketRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateTicketResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ticket": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket"
+        ],
+        "type": "object"
+      },
+      "Empty": {
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "Entry": {
+        "additionalProperties": false,
+        "properties": {
+          "auto": {
+            "type": "boolean"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Member"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "AutoDJ 加入的歌为 null"
+          },
+          "id": {
+            "type": "string"
+          },
+          "likes": {
+            "type": "integer"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/TrackMeta"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EntryStatus"
+          },
+          "track": {
+            "$ref": "#/components/schemas/Track"
+          }
+        },
+        "required": [
+          "id",
+          "track",
+          "meta",
+          "by",
+          "auto",
+          "likes",
+          "status"
+        ],
+        "type": "object"
+      },
+      "EntryStatus": {
+        "enum": [
+          "preparing",
+          "ready"
+        ],
+        "type": "string"
+      },
+      "ErrorCode": {
+        "enum": [
+          "INVALID_ARGUMENT",
+          "UNAUTHORIZED",
+          "FORBIDDEN",
+          "NOT_FOUND",
+          "CONFLICT",
+          "QUEUE_FULL",
+          "NOTHING_PLAYING",
+          "RATE_LIMITED",
+          "PROVIDER_ERROR",
+          "UNAVAILABLE",
+          "CLIENT_OUTDATED",
+          "INTERNAL"
+        ],
+        "type": "string",
+        "x-httpStatus": {
+          "CONFLICT": 409,
+          "FORBIDDEN": 403,
+          "INTERNAL": 500,
+          "INVALID_ARGUMENT": 400,
+          "NOTHING_PLAYING": 409,
+          "NOT_FOUND": 404,
+          "PROVIDER_ERROR": 502,
+          "QUEUE_FULL": 409,
+          "RATE_LIMITED": 429,
+          "UNAUTHORIZED": 401,
+          "UNAVAILABLE": 503
+        }
+      },
+      "ErrorInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "description": "给人看的中文说明，客户端不得据此判断业务分支",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "GetMeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "member": {
+            "$ref": "#/components/schemas/Member"
+          }
+        },
+        "required": [
+          "member"
+        ],
+        "type": "object"
+      },
+      "GetSiteResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "brandName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "brandName"
+        ],
+        "type": "object"
+      },
+      "ListRoomsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RoomListing"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "Member": {
+        "additionalProperties": false,
+        "properties": {
+          "avatarHash": {
+            "description": "邮箱的 MD5，未设置邮箱时为空字符串",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "avatarHash"
+        ],
+        "type": "object"
+      },
+      "Members": {
+        "additionalProperties": false,
+        "properties": {
+          "onlineCount": {
+            "type": "integer"
+          },
+          "sessions": {
+            "description": "每个会话一项",
+            "items": {
+              "$ref": "#/components/schemas/Member"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sessions",
+          "onlineCount"
+        ],
+        "type": "object"
+      },
+      "NowPlaying": {
+        "additionalProperties": false,
+        "properties": {
+          "durationMs": {
+            "description": "准备结果中的时长",
+            "type": "integer"
+          },
+          "entry": {
+            "$ref": "#/components/schemas/Entry"
+          },
+          "gain": {
+            "description": "线性增益系数",
+            "type": "number"
+          },
+          "lyric": {
+            "type": "string"
+          },
+          "mediaUrl": {
+            "type": "string"
+          },
+          "startedAtMs": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entry",
+          "mediaUrl",
+          "startedAtMs",
+          "durationMs",
+          "gain",
+          "lyric"
+        ],
+        "type": "object"
+      },
+      "PlayMode": {
+        "enum": [
+          "sequential",
+          "random",
+          "rotation"
+        ],
+        "type": "string"
+      },
+      "PlaybackVoteSkipRequest": {
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "PlaybackVoteSkipResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "required": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "boolean"
+          },
+          "votes": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "votes",
+          "required",
+          "skipped"
+        ],
+        "type": "object"
+      },
+      "PlaylistSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "coverUrl": {
+            "type": "string"
+          },
+          "creator": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "playCount": {
+            "type": "integer"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "trackCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source",
+          "id",
+          "name",
+          "coverUrl",
+          "creator",
+          "description",
+          "trackCount",
+          "playCount"
+        ],
+        "type": "object"
+      },
+      "PlaylistTracksResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrackSummary"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "type": "object"
+      },
+      "QQLoginType": {
+        "description": "qq 是用 QQ 扫码，wx 是用微信扫码",
+        "enum": [
+          "qq",
+          "wx"
+        ],
+        "type": "string"
+      },
+      "QRLogin": {
+        "additionalProperties": false,
+        "properties": {
+          "expiresAtMs": {
+            "type": "integer"
+          },
+          "key": {
+            "description": "查询扫码结果时原样带上，只放在请求体中：有效期内它相当于这次登录的凭证",
+            "type": "string"
+          },
+          "qrImage": {
+            "description": "可以直接显示的二维码图片：data: URI 或 https 地址",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "qrImage",
+          "expiresAtMs"
+        ],
+        "type": "object"
+      },
+      "QRLoginResult": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "description": "平台给出的说明，可能为空",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/QRLoginStatus"
+          }
+        },
+        "required": [
+          "status",
+          "message"
+        ],
+        "type": "object"
+      },
+      "QRLoginStatus": {
+        "description": "success 时服务端已经保存了登录状态",
+        "enum": [
+          "waiting",
+          "scanned",
+          "success",
+          "expired",
+          "failed"
+        ],
+        "type": "string"
+      },
+      "QueueAddRequest": {
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "requester": {},
+              "track": {}
+            },
+            "required": [
+              "track"
+            ]
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "keyword": {},
+              "requester": {},
+              "source": {}
+            },
+            "required": [
+              "source",
+              "keyword"
+            ]
+          }
+        ],
+        "properties": {
+          "keyword": {
+            "description": "搜索和按关键词点歌的关键词",
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "requester": {
+            "description": "点歌人的名字，只有用常驻房间的 API Key 调用时才能填写，条目的点歌人显示为“<requester>（bot）”",
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "track": {
+            "$ref": "#/components/schemas/Track"
+          }
+        },
+        "type": "object"
+      },
+      "QueueAddResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "entry": {
+            "$ref": "#/components/schemas/Entry"
+          }
+        },
+        "required": [
+          "entry"
+        ],
+        "type": "object"
+      },
+      "QueueLikeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "likes": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "likes"
+        ],
+        "type": "object"
+      },
+      "RecommendListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrackSummary"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "RoomInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RoomKind"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "RoomKind": {
+        "enum": [
+          "persistent",
+          "ephemeral"
+        ],
+        "type": "string"
+      },
+      "RoomListing": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "hasPassword": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RoomKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "onlineCount": {
+            "type": "integer"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "没有别名时为 null"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "description",
+          "kind",
+          "hasPassword",
+          "onlineCount"
+        ],
+        "type": "object"
+      },
+      "RoomSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "等待队列",
+            "items": {
+              "$ref": "#/components/schemas/Entry"
+            },
+            "type": "array"
+          },
+          "members": {
+            "$ref": "#/components/schemas/Members"
+          },
+          "nowPlaying": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NowPlaying"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Entry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "playMode": {
+            "$ref": "#/components/schemas/PlayMode"
+          },
+          "room": {
+            "$ref": "#/components/schemas/RoomInfo"
+          },
+          "seq": {
+            "type": "integer"
+          },
+          "term": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "term",
+          "seq",
+          "room",
+          "playMode",
+          "nowPlaying",
+          "pending",
+          "items",
+          "members"
+        ],
+        "type": "object"
+      },
+      "RoomSyncResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "room": {
+            "$ref": "#/components/schemas/RoomSnapshot"
+          }
+        },
+        "required": [
+          "room"
+        ],
+        "type": "object"
+      },
+      "SearchPlaylistsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlaylistSummary"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "type": "object"
+      },
+      "SearchTracksResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrackSummary"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "type": "object"
+      },
+      "SettingsSetPlayModeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "playMode": {
+            "$ref": "#/components/schemas/PlayMode"
+          }
+        },
+        "required": [
+          "playMode"
+        ],
+        "type": "object"
+      },
+      "Source": {
+        "enum": [
+          "netease",
+          "qq",
+          "bilibili",
+          "link"
+        ],
+        "type": "string"
+      },
+      "SourceAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "音源平台的账号 ID，用字符串避免大整数精度丢失",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "账号昵称，未知时为 null"
+          },
+          "verified": {
+            "description": "是否由上游实时查询确认；仅从本地凭据识别时为 false",
+            "type": "boolean"
+          },
+          "vip": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "会员状态，未知时为 null"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "vip",
+          "verified"
+        ],
+        "type": "object"
+      },
+      "StoredMedia": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "description": "曲目 ID 的 SHA-256（十六进制），用于删除；链接曲目的 ID 是规范化之后的链接",
+            "type": "string"
+          },
+          "lastPlayedAtMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "没有播放过时为 null"
+          },
+          "link": {
+            "description": "这首歌的页面：链接曲目是链接本身，B 站的歌是视频页面",
+            "type": "string"
+          },
+          "size": {
+            "description": "音频文件的字节数",
+            "type": "integer"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "storedAtMs": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "source",
+          "link",
+          "title",
+          "size",
+          "storedAtMs",
+          "lastPlayedAtMs"
+        ],
+        "type": "object"
+      },
+      "Track": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "source": {
+                  "const": "link"
+                }
+              },
+              "required": [
+                "source"
+              ]
+            },
+            "then": {
+              "properties": {
+                "id": {
+                  "description": "http 或 https 的绝对地址，scheme 不区分大小写，按 UTF-8 编码不超过 2048 字节",
+                  "format": "iri",
+                  "type": "string",
+                  "x-maxBytes": 2048,
+                  "x-url": true
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "source": {
+                  "const": "bilibili"
+                }
+              },
+              "required": [
+                "source"
+              ]
+            },
+            "then": {
+              "properties": {
+                "id": {
+                  "pattern": "^BV[1-9A-HJ-NP-Za-km-z]{10}(?:/([2-9]|[1-9][0-9]{1,3}))?$"
+                }
+              }
+            }
+          }
+        ],
+        "properties": {
+          "id": {
+            "description": "来源为 link 时是链接，响应和事件中是规范化之后的链接（scheme 和主机名转成小写）；来源为 bilibili 时是 BV 号，或从第 2 P 起的 BV 号/分P序号",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          }
+        },
+        "required": [
+          "source",
+          "id"
+        ],
+        "type": "object"
+      },
+      "TrackMeta": {
+        "additionalProperties": false,
+        "properties": {
+          "album": {
+            "type": "string"
+          },
+          "artist": {
+            "type": "string"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "durationMs": {
+            "description": "未知时为 0",
+            "type": "integer"
+          },
+          "pageUrl": {
+            "description": "这首歌在音源网站上的页面，来源为 link 时是规范化之后的链接（scheme 和主机名转成小写），即曲目 ID",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "artist",
+          "album",
+          "coverUrl",
+          "pageUrl",
+          "durationMs"
+        ],
+        "type": "object"
+      },
+      "TrackSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "meta": {
+            "$ref": "#/components/schemas/TrackMeta"
+          },
+          "track": {
+            "$ref": "#/components/schemas/Track"
+          }
+        },
+        "required": [
+          "track",
+          "meta"
+        ],
+        "type": "object"
+      },
+      "UpdateMeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "maxLength": 320,
+            "type": "string"
+          },
+          "name": {
+            "description": "昵称",
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateMeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "member": {
+            "$ref": "#/components/schemas/Member"
+          }
+        },
+        "required": [
+          "member"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "adminToken": {
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "memberToken": {
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "ticket": {
+        "description": "进房票据或常驻房间的 API Key",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Alisten",
+    "version": "09dbf7ea495db969"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/admin/credentials/bilibili": {
+      "get": {
+        "operationId": "adminGetBilibiliCredential",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminGetBilibiliCredentialResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "B 站登录凭据是否存在及账号资料，不返回 Cookie"
+      }
+    },
+    "/api/admin/credentials/bilibili/qr-logins": {
+      "post": {
+        "operationId": "adminStartBilibiliLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminStartBilibiliLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QRLogin"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "生成 B 站的登录二维码"
+      }
+    },
+    "/api/admin/credentials/bilibili/qr-logins/status": {
+      "post": {
+        "operationId": "adminCheckBilibiliLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCheckBilibiliLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QRLoginResult"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "查询 B 站扫码登录的结果"
+      }
+    },
+    "/api/admin/credentials/netease": {
+      "get": {
+        "operationId": "adminGetNeteaseCredential",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminGetNeteaseCredentialResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "网易云登录凭据是否存在及账号资料，不返回 Cookie"
+      }
+    },
+    "/api/admin/credentials/netease/qr-logins": {
+      "post": {
+        "operationId": "adminStartNeteaseLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminStartNeteaseLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QRLogin"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "生成网易云音乐的登录二维码"
+      }
+    },
+    "/api/admin/credentials/netease/qr-logins/status": {
+      "post": {
+        "operationId": "adminCheckNeteaseLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCheckNeteaseLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QRLoginResult"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "查询网易云音乐扫码登录的结果"
+      }
+    },
+    "/api/admin/credentials/qq": {
+      "get": {
+        "operationId": "adminGetQqCredential",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminGetQQCredentialResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "QQ 音乐的登录凭据是否存在及账号资料，不返回 Cookie"
+      }
+    },
+    "/api/admin/credentials/qq/qr-logins": {
+      "post": {
+        "operationId": "adminStartQqLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminStartQQLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QRLogin"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "生成 QQ 音乐的登录二维码，用 QQ 或微信扫码"
+      }
+    },
+    "/api/admin/credentials/qq/qr-logins/status": {
+      "post": {
+        "operationId": "adminCheckQqLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCheckQQLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QRLoginResult"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "查询 QQ 音乐扫码登录的结果，type 与生成二维码时相同"
+      }
+    },
+    "/api/admin/credentials/youtube": {
+      "delete": {
+        "operationId": "adminDeleteYoutubeCredential",
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "清除 YouTube cookies"
+      },
+      "get": {
+        "operationId": "adminGetYoutubeCredential",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminGetYoutubeCredentialResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "YouTube cookies 是否已设置及最近一次填写的时间，不返回 cookies"
+      },
+      "put": {
+        "operationId": "adminSetYoutubeCredential",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminSetYoutubeCredentialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "写入或覆盖 YouTube cookies，不返回 cookies"
+      }
+    },
+    "/api/admin/media": {
+      "get": {
+        "operationId": "adminListMedia",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminListMediaResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "已存储的链接曲目和 B 站的歌"
+      }
+    },
+    "/api/admin/media/{key}": {
+      "delete": {
+        "operationId": "adminDeleteMedia",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "删除一首已存储的歌的音频和封面，并清除它的准备结果"
+      }
+    },
+    "/api/admin/rooms": {
+      "get": {
+        "operationId": "adminListRooms",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminListRoomsResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "全部常驻房间"
+      },
+      "post": {
+        "operationId": "adminCreateRoom",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCreateRoomRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCreateRoomResponse"
+                }
+              }
+            },
+            "description": "成功",
+            "headers": {
+              "Location": {
+                "description": "新资源的地址",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "创建常驻房间"
+      }
+    },
+    "/api/admin/rooms/{id}": {
+      "delete": {
+        "operationId": "adminDeleteRoom",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "删除常驻房间"
+      },
+      "patch": {
+        "operationId": "adminUpdateRoom",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUpdateRoomRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "修改常驻房间；slug 或 password 为空字符串表示取消别名或密码"
+      }
+    },
+    "/api/admin/rooms/{id}/api-key": {
+      "get": {
+        "operationId": "adminGetRoomApiKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminGetRoomApiKeyResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "常驻房间是否已经生成 API Key 及生成的时间，不返回 Key"
+      },
+      "post": {
+        "operationId": "adminResetRoomApiKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminResetRoomApiKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIKey"
+                }
+              }
+            },
+            "description": "成功",
+            "headers": {
+              "Location": {
+                "description": "新资源的地址",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "生成或重置常驻房间的 API Key：旧 Key 立即失效，新 Key 只在这次响应中返回"
+      }
+    },
+    "/api/admin/site": {
+      "patch": {
+        "operationId": "adminUpdateSite",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUpdateSiteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUpdateSiteResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "修改品牌名，返回存下的名字：去掉首尾空白后保存，应有 1 到 20 个字符，其中至少一个看得见，不能包含控制字符；设成 Alisten 就恢复了默认"
+      }
+    },
+    "/api/me": {
+      "get": {
+        "operationId": "getMe",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetMeResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "当前成员的资料"
+      },
+      "patch": {
+        "operationId": "updateMe",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateMeResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "修改昵称和头像；email 只用来计算头像哈希，空字符串表示清除头像"
+      }
+    },
+    "/api/members": {
+      "post": {
+        "operationId": "createMember",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMemberRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateMemberResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [],
+        "summary": "获取成员身份"
+      }
+    },
+    "/api/room": {
+      "get": {
+        "operationId": "roomSync",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomSyncResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "获取房间快照"
+      }
+    },
+    "/api/room/messages": {
+      "post": {
+        "operationId": "chatSend",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatSendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "发送聊天，超过 500 个字符的部分由服务端截断"
+      }
+    },
+    "/api/room/playlists/{source}/{playlistId}/tracks": {
+      "get": {
+        "operationId": "playlistTracks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Source"
+            }
+          },
+          {
+            "in": "path",
+            "name": "playlistId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaylistTracksResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "歌单内的歌曲"
+      }
+    },
+    "/api/room/queue": {
+      "post": {
+        "operationId": "queueAdd",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueueAddRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueAddResponse"
+                }
+              }
+            },
+            "description": "成功",
+            "headers": {
+              "Location": {
+                "description": "新资源的地址",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "点歌：指定曲目，或者按关键词搜索并取第一条结果。来源为 link 的 B 站视频链接转成来源为 bilibili 的曲目"
+      }
+    },
+    "/api/room/queue/{entryId}": {
+      "delete": {
+        "operationId": "queueRemove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entryId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "删除等待队列中的一首"
+      }
+    },
+    "/api/room/queue/{entryId}/likes": {
+      "post": {
+        "operationId": "queueLike",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entryId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueLikeResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "给等待队列中的一首点赞"
+      }
+    },
+    "/api/room/recommendations": {
+      "get": {
+        "operationId": "recommendList",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendListResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "推荐列表"
+      }
+    },
+    "/api/room/search/playlists": {
+      "get": {
+        "operationId": "searchPlaylists",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": true,
+            "schema": {
+              "description": "搜索和按关键词点歌的关键词",
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": true,
+            "schema": {
+              "description": "页码，从 1 开始",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": true,
+            "schema": {
+              "description": "每页的条数",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Source"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchPlaylistsResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "搜索歌单"
+      }
+    },
+    "/api/room/search/tracks": {
+      "get": {
+        "operationId": "searchTracks",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": true,
+            "schema": {
+              "description": "搜索和按关键词点歌的关键词",
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": true,
+            "schema": {
+              "description": "页码，从 1 开始",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": true,
+            "schema": {
+              "description": "每页的条数",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Source"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchTracksResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "搜索歌曲"
+      }
+    },
+    "/api/room/settings": {
+      "patch": {
+        "operationId": "settingsSetPlayMode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsSetPlayModeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "切换播放模式"
+      }
+    },
+    "/api/room/skip-votes": {
+      "post": {
+        "operationId": "playbackVoteSkip",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaybackVoteSkipRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackVoteSkipResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "投票切掉正在播放的歌"
+      }
+    },
+    "/api/rooms": {
+      "get": {
+        "operationId": "listRooms",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListRoomsResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [],
+        "summary": "房间列表"
+      },
+      "post": {
+        "operationId": "createRoom",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoomRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRoomResponse"
+                }
+              }
+            },
+            "description": "成功",
+            "headers": {
+              "Location": {
+                "description": "新资源的地址",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [],
+        "summary": "创建临时房间"
+      }
+    },
+    "/api/rooms/{id}/tickets": {
+      "post": {
+        "operationId": "createTicket",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTicketRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTicketResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "换取进房票据；没有密码的房间可以不填 password"
+      }
+    },
+    "/api/rooms/{ref}": {
+      "get": {
+        "operationId": "getRoom",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomListing"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [],
+        "summary": "按 UUID 或别名查找房间"
+      }
+    },
+    "/api/site": {
+      "get": {
+        "operationId": "getSite",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSiteResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [],
+        "summary": "品牌名；没有设置过时是 Alisten"
+      }
+    }
+  }
+}

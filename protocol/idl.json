@@ -1,0 +1,1100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alisten",
+  "$defs": {
+    "Empty": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": [
+        "INVALID_ARGUMENT",
+        "UNAUTHORIZED",
+        "FORBIDDEN",
+        "NOT_FOUND",
+        "CONFLICT",
+        "QUEUE_FULL",
+        "NOTHING_PLAYING",
+        "RATE_LIMITED",
+        "PROVIDER_ERROR",
+        "UNAVAILABLE",
+        "CLIENT_OUTDATED",
+        "INTERNAL"
+      ],
+      "x-httpStatus": {
+        "INVALID_ARGUMENT": 400,
+        "UNAUTHORIZED": 401,
+        "FORBIDDEN": 403,
+        "NOT_FOUND": 404,
+        "CONFLICT": 409,
+        "QUEUE_FULL": 409,
+        "NOTHING_PLAYING": 409,
+        "RATE_LIMITED": 429,
+        "PROVIDER_ERROR": 502,
+        "UNAVAILABLE": 503,
+        "INTERNAL": 500
+      }
+    },
+    "ErrorInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {"$ref": "#/$defs/ErrorCode"},
+        "message": {"type": "string", "description": "给人看的中文说明，客户端不得据此判断业务分支"}
+      },
+      "required": ["code", "message"]
+    },
+    "Source": {
+      "type": "string",
+      "enum": ["netease", "qq", "bilibili", "link"]
+    },
+    "PlayMode": {
+      "type": "string",
+      "enum": ["sequential", "random", "rotation"]
+    },
+    "RoomKind": {
+      "type": "string",
+      "enum": ["persistent", "ephemeral"]
+    },
+    "EntryStatus": {
+      "type": "string",
+      "enum": ["preparing", "ready"]
+    },
+    "ActivityKind": {
+      "type": "string",
+      "enum": ["added", "removed", "liked", "voted", "skipped", "failed"]
+    },
+    "Keyword": {"type": "string", "description": "搜索和按关键词点歌的关键词", "minLength": 1, "maxLength": 500},
+    "Page": {"type": "integer", "description": "页码，从 1 开始", "minimum": 1},
+    "PageSize": {"type": "integer", "description": "每页的条数", "minimum": 1, "maximum": 100},
+    "MemberName": {"type": "string", "description": "昵称", "minLength": 1, "maxLength": 80},
+    "RoomName": {"type": "string", "description": "房间名称", "minLength": 1, "maxLength": 80},
+    "RoomDescription": {"type": "string", "description": "房间描述", "maxLength": 500},
+    "Link": {"type": "string", "description": "http 或 https 的绝对地址，scheme 不区分大小写，按 UTF-8 编码不超过 2048 字节", "x-url": true, "x-maxBytes": 2048},
+    "Track": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {"$ref": "#/$defs/Source"},
+        "id": {"type": "string", "description": "来源为 link 时是链接，响应和事件中是规范化之后的链接（scheme 和主机名转成小写）；来源为 bilibili 时是 BV 号，或从第 2 P 起的 BV 号/分P序号"}
+      },
+      "required": ["source", "id"],
+      "allOf": [
+        {
+          "if": {"properties": {"source": {"const": "link"}}, "required": ["source"]},
+          "then": {"properties": {"id": {"$ref": "#/$defs/Link"}}}
+        },
+        {
+          "if": {"properties": {"source": {"const": "bilibili"}}, "required": ["source"]},
+          "then": {"properties": {"id": {"pattern": "^BV[1-9A-HJ-NP-Za-km-z]{10}(?:/([2-9]|[1-9][0-9]{1,3}))?$"}}}
+        }
+      ]
+    },
+    "TrackMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string"},
+        "artist": {"type": "string"},
+        "album": {"type": "string"},
+        "coverUrl": {"type": "string"},
+        "pageUrl": {"type": "string", "description": "这首歌在音源网站上的页面，来源为 link 时是规范化之后的链接（scheme 和主机名转成小写），即曲目 ID"},
+        "durationMs": {"type": "integer", "description": "未知时为 0"}
+      },
+      "required": ["title", "artist", "album", "coverUrl", "pageUrl", "durationMs"]
+    },
+    "TrackSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "track": {"$ref": "#/$defs/Track"},
+        "meta": {"$ref": "#/$defs/TrackMeta"}
+      },
+      "required": ["track", "meta"]
+    },
+    "PlaylistSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {"$ref": "#/$defs/Source"},
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "coverUrl": {"type": "string"},
+        "creator": {"type": "string"},
+        "description": {"type": "string"},
+        "trackCount": {"type": "integer"},
+        "playCount": {"type": "integer"}
+      },
+      "required": ["source", "id", "name", "coverUrl", "creator", "description", "trackCount", "playCount"]
+    },
+    "Member": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "avatarHash": {"type": "string", "description": "邮箱的 MD5，未设置邮箱时为空字符串"}
+      },
+      "required": ["id", "name", "avatarHash"]
+    },
+    "Members": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sessions": {"type": "array", "items": {"$ref": "#/$defs/Member"}, "description": "每个会话一项"},
+        "onlineCount": {"type": "integer"}
+      },
+      "required": ["sessions", "onlineCount"]
+    },
+    "Entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "track": {"$ref": "#/$defs/Track"},
+        "meta": {"$ref": "#/$defs/TrackMeta"},
+        "by": {"anyOf": [{"$ref": "#/$defs/Member"}, {"type": "null"}], "description": "AutoDJ 加入的歌为 null"},
+        "auto": {"type": "boolean"},
+        "likes": {"type": "integer"},
+        "status": {"$ref": "#/$defs/EntryStatus"}
+      },
+      "required": ["id", "track", "meta", "by", "auto", "likes", "status"]
+    },
+    "NowPlaying": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "entry": {"$ref": "#/$defs/Entry"},
+        "mediaUrl": {"type": "string"},
+        "startedAtMs": {"type": "integer"},
+        "durationMs": {"type": "integer", "description": "准备结果中的时长"},
+        "gain": {"type": "number", "description": "线性增益系数"},
+        "lyric": {"type": "string"}
+      },
+      "required": ["entry", "mediaUrl", "startedAtMs", "durationMs", "gain", "lyric"]
+    },
+    "RoomInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "description": {"type": "string"},
+        "kind": {"$ref": "#/$defs/RoomKind"}
+      },
+      "required": ["id", "name", "description", "kind"]
+    },
+    "RoomSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "term": {"type": "integer"},
+        "seq": {"type": "integer"},
+        "room": {"$ref": "#/$defs/RoomInfo"},
+        "playMode": {"$ref": "#/$defs/PlayMode"},
+        "nowPlaying": {"anyOf": [{"$ref": "#/$defs/NowPlaying"}, {"type": "null"}]},
+        "pending": {"anyOf": [{"$ref": "#/$defs/Entry"}, {"type": "null"}]},
+        "items": {"type": "array", "items": {"$ref": "#/$defs/Entry"}, "description": "等待队列"},
+        "members": {"$ref": "#/$defs/Members"}
+      },
+      "required": ["term", "seq", "room", "playMode", "nowPlaying", "pending", "items", "members"]
+    },
+    "RoomListing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "slug": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "没有别名时为 null"},
+        "name": {"type": "string"},
+        "description": {"type": "string"},
+        "kind": {"$ref": "#/$defs/RoomKind"},
+        "hasPassword": {"type": "boolean"},
+        "onlineCount": {"type": "integer"}
+      },
+      "required": ["id", "slug", "name", "description", "kind", "hasPassword", "onlineCount"]
+    },
+    "APIKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {"type": "string", "description": "常驻房间的 API Key，只在生成或重置时返回这一次：bot 用 Authorization: Bearer <Key> 调用 /api/room 下的接口"}
+      },
+      "required": ["key"]
+    },
+    "StoredMedia": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {"type": "string", "description": "曲目 ID 的 SHA-256（十六进制），用于删除；链接曲目的 ID 是规范化之后的链接"},
+        "source": {"$ref": "#/$defs/Source"},
+        "link": {"type": "string", "description": "这首歌的页面：链接曲目是链接本身，B 站的歌是视频页面"},
+        "title": {"type": "string"},
+        "size": {"type": "integer", "description": "音频文件的字节数"},
+        "storedAtMs": {"type": "integer"},
+        "lastPlayedAtMs": {"anyOf": [{"type": "integer"}, {"type": "null"}], "description": "没有播放过时为 null"}
+      },
+      "required": ["key", "source", "link", "title", "size", "storedAtMs", "lastPlayedAtMs"]
+    },
+    "SourceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "description": "音源平台的账号 ID，用字符串避免大整数精度丢失"},
+        "name": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "账号昵称，未知时为 null"},
+        "vip": {"anyOf": [{"type": "boolean"}, {"type": "null"}], "description": "会员状态，未知时为 null"},
+        "verified": {"type": "boolean", "description": "是否由上游实时查询确认；仅从本地凭据识别时为 false"}
+      },
+      "required": ["id", "name", "vip", "verified"]
+    },
+    "QQLoginType": {
+      "type": "string",
+      "description": "qq 是用 QQ 扫码，wx 是用微信扫码",
+      "enum": ["qq", "wx"]
+    },
+    "QRLogin": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {"type": "string", "description": "查询扫码结果时原样带上，只放在请求体中：有效期内它相当于这次登录的凭证"},
+        "qrImage": {"type": "string", "description": "可以直接显示的二维码图片：data: URI 或 https 地址"},
+        "expiresAtMs": {"type": "integer"}
+      },
+      "required": ["key", "qrImage", "expiresAtMs"]
+    },
+    "QRLoginStatus": {
+      "type": "string",
+      "description": "success 时服务端已经保存了登录状态",
+      "enum": ["waiting", "scanned", "success", "expired", "failed"]
+    },
+    "QRLoginResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {"$ref": "#/$defs/QRLoginStatus"},
+        "message": {"type": "string", "description": "平台给出的说明，可能为空"}
+      },
+      "required": ["status", "message"]
+    }
+  },
+  "x-ws": {
+    "requests": [
+      {
+        "type": "hello",
+        "description": "握手，必须是连接的第一帧",
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "roomId": {"type": "string"},
+            "ticket": {"type": "string"},
+            "protocolVersion": {"type": "string"}
+          },
+          "required": ["roomId", "ticket", "protocolVersion"]
+        },
+        "response": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "member": {"$ref": "#/$defs/Member"},
+            "serverTimeMs": {"type": "integer"},
+            "room": {"$ref": "#/$defs/RoomSnapshot"}
+          },
+          "required": ["member", "serverTimeMs", "room"]
+        }
+      },
+      {
+        "type": "ping",
+        "description": "心跳，响应用来估计时钟偏移",
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "clientTimeMs": {"type": "integer"}
+          },
+          "required": ["clientTimeMs"]
+        },
+        "response": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "clientTimeMs": {"type": "integer"},
+            "serverTimeMs": {"type": "integer"}
+          },
+          "required": ["clientTimeMs", "serverTimeMs"]
+        }
+      }
+    ],
+    "events": [
+      {"type": "error", "description": "无法对应到请求的错误，只发给当前会话", "data": {"$ref": "#/$defs/ErrorInfo"}}
+    ],
+    "closeCodes": [
+      {"name": "invalidArgument", "code": 1008, "description": "握手报文不合法"},
+      {"name": "internal", "code": 1011, "description": "握手时发生内部错误"},
+      {"name": "serviceRestart", "code": 1012, "description": "服务端实例退出，或实例与 Redis 的订阅连接中断"},
+      {"name": "unavailable", "code": 1013, "description": "握手时服务暂时不可用"},
+      {"name": "unauthorized", "code": 4401, "description": "票据无效、用 API Key 握手，或房间设置、修改了密码"},
+      {"name": "notFound", "code": 4404, "description": "房间不存在，或房间已关闭、被删除"},
+      {"name": "handshakeTimeout", "code": 4408, "description": "握手超时"},
+      {"name": "clientOutdated", "code": 4426, "description": "前端与服务端的协议版本不一致"},
+      {"name": "sendQueueFull", "code": 4429, "description": "发送队列溢出"}
+    ]
+  },
+  "x-requests": [
+    {
+      "type": "room.sync",
+      "description": "获取房间快照",
+      "http": {"method": "GET", "path": "/api/room"},
+      "request": {"type": "object", "additionalProperties": false, "properties": {}},
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "room": {"$ref": "#/$defs/RoomSnapshot"}
+        },
+        "required": ["room"]
+      }
+    },
+    {
+      "type": "queue.add",
+      "description": "点歌：指定曲目，或者按关键词搜索并取第一条结果。来源为 link 的 B 站视频链接转成来源为 bilibili 的曲目",
+      "http": {"method": "POST", "path": "/api/room/queue", "status": 201, "location": true},
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "track": {"$ref": "#/$defs/Track"},
+          "source": {"$ref": "#/$defs/Source"},
+          "keyword": {"$ref": "#/$defs/Keyword"},
+          "requester": {"$ref": "#/$defs/MemberName", "description": "点歌人的名字，只有用常驻房间的 API Key 调用时才能填写，条目的点歌人显示为“<requester>（bot）”"}
+        },
+        "oneOf": [
+          {"required": ["track"], "properties": {"track": {}, "requester": {}}, "additionalProperties": false},
+          {"required": ["source", "keyword"], "properties": {"source": {}, "keyword": {}, "requester": {}}, "additionalProperties": false}
+        ]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entry": {"$ref": "#/$defs/Entry"}
+        },
+        "required": ["entry"]
+      }
+    },
+    {
+      "type": "queue.remove",
+      "description": "删除等待队列中的一首",
+      "http": {"method": "DELETE", "path": "/api/room/queue/{entryId}", "status": 204},
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entryId": {"type": "string"}
+        },
+        "required": ["entryId"]
+      },
+      "response": {"$ref": "#/$defs/Empty"}
+    },
+    {
+      "type": "queue.like",
+      "description": "给等待队列中的一首点赞",
+      "http": {"method": "POST", "path": "/api/room/queue/{entryId}/likes"},
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entryId": {"type": "string"}
+        },
+        "required": ["entryId"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "likes": {"type": "integer"}
+        },
+        "required": ["likes"]
+      }
+    },
+    {
+      "type": "playback.voteSkip",
+      "description": "投票切掉正在播放的歌",
+      "http": {"method": "POST", "path": "/api/room/skip-votes"},
+      "request": {"type": "object", "additionalProperties": false, "properties": {}},
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "votes": {"type": "integer"},
+          "required": {"type": "integer"},
+          "skipped": {"type": "boolean"}
+        },
+        "required": ["votes", "required", "skipped"]
+      }
+    },
+    {
+      "type": "settings.setPlayMode",
+      "description": "切换播放模式",
+      "http": {"method": "PATCH", "path": "/api/room/settings", "status": 204},
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "playMode": {"$ref": "#/$defs/PlayMode"}
+        },
+        "required": ["playMode"]
+      },
+      "response": {"$ref": "#/$defs/Empty"}
+    },
+    {
+      "type": "chat.send",
+      "description": "发送聊天，超过 500 个字符的部分由服务端截断",
+      "http": {"method": "POST", "path": "/api/room/messages", "status": 204},
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "content": {"type": "string"}
+        },
+        "required": ["content"]
+      },
+      "response": {"$ref": "#/$defs/Empty"}
+    },
+    {
+      "type": "search.tracks",
+      "description": "搜索歌曲",
+      "http": {"method": "GET", "path": "/api/room/search/tracks"},
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {"$ref": "#/$defs/Source"},
+          "keyword": {"$ref": "#/$defs/Keyword"},
+          "page": {"$ref": "#/$defs/Page"},
+          "pageSize": {"$ref": "#/$defs/PageSize"}
+        },
+        "required": ["source", "keyword", "page", "pageSize"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/$defs/TrackSummary"}},
+          "total": {"type": "integer"}
+        },
+        "required": ["items", "total"]
+      }
+    },
+    {
+      "type": "search.playlists",
+      "description": "搜索歌单",
+      "http": {"method": "GET", "path": "/api/room/search/playlists"},
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {"$ref": "#/$defs/Source"},
+          "keyword": {"$ref": "#/$defs/Keyword"},
+          "page": {"$ref": "#/$defs/Page"},
+          "pageSize": {"$ref": "#/$defs/PageSize"}
+        },
+        "required": ["source", "keyword", "page", "pageSize"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/$defs/PlaylistSummary"}},
+          "total": {"type": "integer"}
+        },
+        "required": ["items", "total"]
+      }
+    },
+    {
+      "type": "playlist.tracks",
+      "description": "歌单内的歌曲",
+      "http": {"method": "GET", "path": "/api/room/playlists/{source}/{playlistId}/tracks"},
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {"$ref": "#/$defs/Source"},
+          "playlistId": {"type": "string"}
+        },
+        "required": ["source", "playlistId"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/$defs/TrackSummary"}},
+          "total": {"type": "integer"}
+        },
+        "required": ["items", "total"]
+      }
+    },
+    {
+      "type": "recommend.list",
+      "description": "推荐列表",
+      "http": {"method": "GET", "path": "/api/room/recommendations"},
+      "request": {"type": "object", "additionalProperties": false, "properties": {}},
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/$defs/TrackSummary"}}
+        },
+        "required": ["items"]
+      }
+    }
+  ],
+  "x-events": [
+    {
+      "type": "playback.updated",
+      "description": "没有正在播放的歌时 nowPlaying 为 null，包括待播仍在准备中的时候",
+      "data": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nowPlaying": {"anyOf": [{"$ref": "#/$defs/NowPlaying"}, {"type": "null"}]}
+        },
+        "required": ["nowPlaying"]
+      }
+    },
+    {
+      "type": "queue.updated",
+      "description": "待播和等待队列的完整快照",
+      "data": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pending": {"anyOf": [{"$ref": "#/$defs/Entry"}, {"type": "null"}]},
+          "items": {"type": "array", "items": {"$ref": "#/$defs/Entry"}}
+        },
+        "required": ["pending", "items"]
+      }
+    },
+    {
+      "type": "members.updated",
+      "description": "在线列表",
+      "data": {"$ref": "#/$defs/Members"}
+    },
+    {
+      "type": "settings.updated",
+      "data": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "playMode": {"$ref": "#/$defs/PlayMode"}
+        },
+        "required": ["playMode"]
+      }
+    },
+    {
+      "type": "room.updated",
+      "data": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string"},
+          "description": {"type": "string"}
+        },
+        "required": ["name", "description"]
+      }
+    },
+    {
+      "type": "chat.message",
+      "data": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "member": {"$ref": "#/$defs/Member"},
+          "content": {"type": "string"},
+          "sentAtMs": {"type": "integer"}
+        },
+        "required": ["member", "content", "sentAtMs"]
+      }
+    },
+    {
+      "type": "room.activity",
+      "description": "点歌、移除、点赞、投票、投票切歌成功和准备失败；不同 kind 只填写相关字段",
+      "data": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {"$ref": "#/$defs/ActivityKind"},
+          "member": {"$ref": "#/$defs/Member"},
+          "entry": {"$ref": "#/$defs/Entry"},
+          "votes": {"type": "integer"},
+          "required": {"type": "integer"},
+          "message": {"type": "string", "description": "给人看的说明"}
+        },
+        "required": ["kind", "message"]
+      }
+    }
+  ],
+  "x-http": [
+    {
+      "name": "createMember",
+      "description": "获取成员身份",
+      "method": "POST",
+      "path": "/api/members",
+      "auth": "none",
+      "status": 201,
+      "request": {"type": "object", "additionalProperties": false, "properties": {}},
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "memberToken": {"type": "string"},
+          "member": {"$ref": "#/$defs/Member"}
+        },
+        "required": ["memberToken", "member"]
+      }
+    },
+    {
+      "name": "getMe",
+      "description": "当前成员的资料",
+      "method": "GET",
+      "path": "/api/me",
+      "auth": "member",
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "member": {"$ref": "#/$defs/Member"}
+        },
+        "required": ["member"]
+      }
+    },
+    {
+      "name": "updateMe",
+      "description": "修改昵称和头像；email 只用来计算头像哈希，空字符串表示清除头像",
+      "method": "PATCH",
+      "path": "/api/me",
+      "auth": "member",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"$ref": "#/$defs/MemberName"},
+          "email": {"type": "string", "maxLength": 320}
+        }
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "member": {"$ref": "#/$defs/Member"}
+        },
+        "required": ["member"]
+      }
+    },
+    {
+      "name": "listRooms",
+      "description": "房间列表",
+      "method": "GET",
+      "path": "/api/rooms",
+      "auth": "none",
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/$defs/RoomListing"}}
+        },
+        "required": ["items"]
+      }
+    },
+    {
+      "name": "getRoom",
+      "description": "按 UUID 或别名查找房间",
+      "method": "GET",
+      "path": "/api/rooms/{ref}",
+      "auth": "none",
+      "response": {"$ref": "#/$defs/RoomListing"}
+    },
+    {
+      "name": "createRoom",
+      "description": "创建临时房间",
+      "method": "POST",
+      "path": "/api/rooms",
+      "auth": "none",
+      "status": 201,
+      "location": true,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"$ref": "#/$defs/RoomName"},
+          "description": {"$ref": "#/$defs/RoomDescription"},
+          "password": {"type": "string"}
+        },
+        "required": ["name", "description"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string"}
+        },
+        "required": ["id"]
+      }
+    },
+    {
+      "name": "createTicket",
+      "description": "换取进房票据；没有密码的房间可以不填 password",
+      "method": "POST",
+      "path": "/api/rooms/{id}/tickets",
+      "auth": "member",
+      "status": 201,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "password": {"type": "string"}
+        }
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ticket": {"type": "string"}
+        },
+        "required": ["ticket"]
+      }
+    },
+    {
+      "name": "getSite",
+      "description": "品牌名；没有设置过时是 Alisten",
+      "method": "GET",
+      "path": "/api/site",
+      "auth": "none",
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "brandName": {"type": "string"}
+        },
+        "required": ["brandName"]
+      }
+    },
+    {
+      "name": "adminListRooms",
+      "description": "全部常驻房间",
+      "method": "GET",
+      "path": "/api/admin/rooms",
+      "auth": "admin",
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/$defs/RoomListing"}}
+        },
+        "required": ["items"]
+      }
+    },
+    {
+      "name": "adminCreateRoom",
+      "description": "创建常驻房间",
+      "method": "POST",
+      "path": "/api/admin/rooms",
+      "auth": "admin",
+      "status": 201,
+      "location": true,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"$ref": "#/$defs/RoomName"},
+          "description": {"$ref": "#/$defs/RoomDescription"},
+          "slug": {"type": "string", "pattern": "^[a-z0-9-]{1,32}$"},
+          "password": {"type": "string"}
+        },
+        "required": ["name", "description"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string"}
+        },
+        "required": ["id"]
+      }
+    },
+    {
+      "name": "adminUpdateRoom",
+      "description": "修改常驻房间；slug 或 password 为空字符串表示取消别名或密码",
+      "method": "PATCH",
+      "path": "/api/admin/rooms/{id}",
+      "auth": "admin",
+      "status": 204,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"$ref": "#/$defs/RoomName"},
+          "description": {"$ref": "#/$defs/RoomDescription"},
+          "slug": {"type": "string", "pattern": "^[a-z0-9-]{0,32}$"},
+          "password": {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "adminDeleteRoom",
+      "description": "删除常驻房间",
+      "method": "DELETE",
+      "path": "/api/admin/rooms/{id}",
+      "auth": "admin",
+      "status": 204
+    },
+    {
+      "name": "adminGetRoomApiKey",
+      "description": "常驻房间是否已经生成 API Key 及生成的时间，不返回 Key",
+      "method": "GET",
+      "path": "/api/admin/rooms/{id}/api-key",
+      "auth": "admin",
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "set": {"type": "boolean", "description": "是否已经生成了 Key"},
+          "createdAtMs": {"type": "integer", "description": "Key 的生成时间；还没有 Key 时为 0"}
+        },
+        "required": ["set", "createdAtMs"]
+      }
+    },
+    {
+      "name": "adminResetRoomApiKey",
+      "description": "生成或重置常驻房间的 API Key：旧 Key 立即失效，新 Key 只在这次响应中返回",
+      "method": "POST",
+      "path": "/api/admin/rooms/{id}/api-key",
+      "auth": "admin",
+      "status": 201,
+      "location": true,
+      "request": {"type": "object", "additionalProperties": false, "properties": {}},
+      "response": {"$ref": "#/$defs/APIKey"}
+    },
+    {
+      "name": "adminGetNeteaseCredential",
+      "description": "网易云登录凭据是否存在及账号资料，不返回 Cookie",
+      "method": "GET",
+      "path": "/api/admin/credentials/netease",
+      "auth": "admin",
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "set": {"type": "boolean", "description": "是否保存了登录凭据，不代表凭据仍然有效"},
+          "account": {"anyOf": [{"$ref": "#/$defs/SourceAccount"}, {"type": "null"}]}
+        },
+        "required": ["set", "account"]
+      }
+    },
+    {
+      "name": "adminGetQqCredential",
+      "description": "QQ 音乐的登录凭据是否存在及账号资料，不返回 Cookie",
+      "method": "GET",
+      "path": "/api/admin/credentials/qq",
+      "auth": "admin",
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "set": {"type": "boolean", "description": "是否保存了登录凭据，不代表凭据仍然有效"},
+          "account": {"anyOf": [{"$ref": "#/$defs/SourceAccount"}, {"type": "null"}]}
+        },
+        "required": ["set", "account"]
+      }
+    },
+    {
+      "name": "adminStartNeteaseLogin",
+      "description": "生成网易云音乐的登录二维码",
+      "method": "POST",
+      "path": "/api/admin/credentials/netease/qr-logins",
+      "auth": "admin",
+      "status": 201,
+      "request": {"type": "object", "additionalProperties": false, "properties": {}},
+      "response": {"$ref": "#/$defs/QRLogin"}
+    },
+    {
+      "name": "adminCheckNeteaseLogin",
+      "description": "查询网易云音乐扫码登录的结果",
+      "method": "POST",
+      "path": "/api/admin/credentials/netease/qr-logins/status",
+      "auth": "admin",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {"type": "string", "minLength": 1}
+        },
+        "required": ["key"]
+      },
+      "response": {"$ref": "#/$defs/QRLoginResult"}
+    },
+    {
+      "name": "adminStartQqLogin",
+      "description": "生成 QQ 音乐的登录二维码，用 QQ 或微信扫码",
+      "method": "POST",
+      "path": "/api/admin/credentials/qq/qr-logins",
+      "auth": "admin",
+      "status": 201,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {"$ref": "#/$defs/QQLoginType"}
+        },
+        "required": ["type"]
+      },
+      "response": {"$ref": "#/$defs/QRLogin"}
+    },
+    {
+      "name": "adminCheckQqLogin",
+      "description": "查询 QQ 音乐扫码登录的结果，type 与生成二维码时相同",
+      "method": "POST",
+      "path": "/api/admin/credentials/qq/qr-logins/status",
+      "auth": "admin",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {"$ref": "#/$defs/QQLoginType"},
+          "key": {"type": "string", "minLength": 1}
+        },
+        "required": ["type", "key"]
+      },
+      "response": {"$ref": "#/$defs/QRLoginResult"}
+    },
+    {
+      "name": "adminGetBilibiliCredential",
+      "description": "B 站登录凭据是否存在及账号资料，不返回 Cookie",
+      "method": "GET",
+      "path": "/api/admin/credentials/bilibili",
+      "auth": "admin",
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "set": {"type": "boolean", "description": "是否保存了登录凭据，不代表凭据仍然有效"},
+          "account": {"anyOf": [{"$ref": "#/$defs/SourceAccount"}, {"type": "null"}]}
+        },
+        "required": ["set", "account"]
+      }
+    },
+    {
+      "name": "adminStartBilibiliLogin",
+      "description": "生成 B 站的登录二维码",
+      "method": "POST",
+      "path": "/api/admin/credentials/bilibili/qr-logins",
+      "auth": "admin",
+      "status": 201,
+      "request": {"type": "object", "additionalProperties": false, "properties": {}},
+      "response": {"$ref": "#/$defs/QRLogin"}
+    },
+    {
+      "name": "adminCheckBilibiliLogin",
+      "description": "查询 B 站扫码登录的结果",
+      "method": "POST",
+      "path": "/api/admin/credentials/bilibili/qr-logins/status",
+      "auth": "admin",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {"type": "string", "minLength": 1}
+        },
+        "required": ["key"]
+      },
+      "response": {"$ref": "#/$defs/QRLoginResult"}
+    },
+    {
+      "name": "adminGetYoutubeCredential",
+      "description": "YouTube cookies 是否已设置及最近一次填写的时间，不返回 cookies",
+      "method": "GET",
+      "path": "/api/admin/credentials/youtube",
+      "auth": "admin",
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "set": {"type": "boolean", "description": "是否保存了 cookies"},
+          "updatedAtMs": {"type": "integer", "description": "最近一次填写的时间；未设置时为 0"}
+        },
+        "required": ["set", "updatedAtMs"]
+      }
+    },
+    {
+      "name": "adminSetYoutubeCredential",
+      "description": "写入或覆盖 YouTube cookies，不返回 cookies",
+      "method": "PUT",
+      "path": "/api/admin/credentials/youtube",
+      "auth": "admin",
+      "status": 204,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cookies": {"type": "string", "minLength": 1}
+        },
+        "required": ["cookies"]
+      }
+    },
+    {
+      "name": "adminDeleteYoutubeCredential",
+      "description": "清除 YouTube cookies",
+      "method": "DELETE",
+      "path": "/api/admin/credentials/youtube",
+      "auth": "admin",
+      "status": 204
+    },
+    {
+      "name": "adminListMedia",
+      "description": "已存储的链接曲目和 B 站的歌",
+      "method": "GET",
+      "path": "/api/admin/media",
+      "auth": "admin",
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/$defs/StoredMedia"}}
+        },
+        "required": ["items"]
+      }
+    },
+    {
+      "name": "adminDeleteMedia",
+      "description": "删除一首已存储的歌的音频和封面，并清除它的准备结果",
+      "method": "DELETE",
+      "path": "/api/admin/media/{key}",
+      "auth": "admin",
+      "status": 204
+    },
+    {
+      "name": "adminUpdateSite",
+      "description": "修改品牌名，返回存下的名字：去掉首尾空白后保存，应有 1 到 20 个字符，其中至少一个看得见，不能包含控制字符；设成 Alisten 就恢复了默认",
+      "method": "PATCH",
+      "path": "/api/admin/site",
+      "auth": "admin",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "brandName": {"type": "string"}
+        },
+        "required": ["brandName"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "brandName": {"type": "string"}
+        },
+        "required": ["brandName"]
+      }
+    }
+  ]
+}
