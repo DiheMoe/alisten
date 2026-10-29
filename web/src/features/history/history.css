@@ -1,0 +1,14 @@
+.history-panel { flex: 1; min-height: 0; padding: 8px 16px 24px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.history-panel::-webkit-scrollbar { display: none; }
+.history-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.history-list { list-style: none; margin: 0; padding: 0; }
+.history-date { padding: 24px 8px 8px; }
+.history-panel .history-date { padding-top: 16px; }
+.history-time { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.history-panel .song-row { gap: 8px; }
+.history-panel .icon-button { width: 28px; height: 32px; }
+.load-more { display: flex; margin: 24px auto 0; }
+@media (max-width: 767px) {
+  .history-toolbar { gap: 4px; }
+  .history-toolbar .search-field { margin-right: 4px; }
+}

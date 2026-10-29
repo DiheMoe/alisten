@@ -1,0 +1,35 @@
+.admin-page { container: admin / inline-size; max-width: 1040px; }
+.admin-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.admin-sign-in { max-width: 420px; }
+.admin-sign-in > .button-primary { align-self: flex-start; }
+.admin-field { display: flex; flex-direction: column; gap: 6px; overflow-wrap: anywhere; }
+.admin-field > .error-text { margin: 0; }
+.admin-section + .admin-section { margin-top: 40px; }
+.admin-list { list-style: none; margin: 0; padding: 0 20px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.admin-row { display: flex; align-items: center; gap: 8px; min-height: 68px; padding: 12px 0; }
+.admin-row + .admin-row { border-top: 1px solid var(--color-border); }
+.admin-row-copy { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.admin-row-title { font-weight: 600; }
+.admin-row-meta { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.admin-row-actions { display: flex; align-items: center; gap: 8px; }
+.admin-brand-name { width: 240px; }
+.admin-link { color: var(--color-foreground-subtle); }
+.admin-link:hover { color: var(--color-brand); }
+.admin-empty { padding: 8px 0; }
+.admin-steps { display: flex; flex-direction: column; gap: 6px; margin: 0; padding-left: 1.25em; list-style: decimal; }
+.admin-steps ul { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 0; padding-left: 1.25em; list-style: disc; }
+.admin-failed { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.admin-qr { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.admin-qr-image { width: 200px; height: 200px; padding: 8px; border-radius: 8px; background: #fff; image-rendering: pixelated; }
+.admin-qr-switch { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--color-input); }
+.admin-qr-switch > button { min-height: 32px; padding: 6px 16px; border: 0; border-radius: 999px; background: transparent; color: var(--color-foreground-subtle); }
+.admin-qr-switch > button:hover:not(:disabled) { color: var(--color-foreground); }
+.admin-qr-switch > button[aria-pressed='true'], .admin-qr-switch > button[aria-pressed='true']:hover:not(:disabled) { background: var(--color-foreground); color: var(--color-popover); }
+@media (max-width: 767px) {
+  .admin-list { padding: 0 16px; }
+}
+@container admin (max-width: 600px) {
+  .admin-row { flex-wrap: wrap; }
+  .admin-row-actions { flex-basis: 100%; }
+  .admin-brand-name { flex: 1; width: auto; }
+}

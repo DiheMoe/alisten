@@ -1,0 +1,9 @@
+.queue-panel { padding: 24px 16px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; flex: 1; min-height: 0; scrollbar-width: none; }
+.queue-panel::-webkit-scrollbar { display: none; }
+.queue-mode { width: auto; flex-shrink: 0; padding: 6px 10px; }
+.queue-current { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; padding: 12px; background: var(--color-accent); border-radius: 12px; }
+.queue-current .artwork { width: 48px; }
+.queue-pending { background: var(--color-surface); }
+.queue-panel .song-index, .queue-panel .song-album, .queue-panel .song-duration { display: none; }
+.queue-panel .song-row { gap: 8px; }
+.queue-panel .icon-button { width: 28px; height: 32px; }

@@ -1,0 +1,135 @@
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --text-ui-xl: calc(var(--ui-font-size) + 14px);
+  --text-ui-lg: calc(var(--ui-font-size) + 4px);
+  --text-ui-base: var(--ui-font-size);
+  --text-ui-caption: calc(var(--ui-font-size) - 1px);
+  --text-ui-sm: calc(var(--ui-font-size) - 2px);
+  --text-ui-xs: calc(var(--ui-font-size) - 4px);
+  /* iOS 在输入框字号小于 16px 时，聚焦会放大页面。 */
+  --text-mobile-input-safe: 16px;
+}
+
+@utility muted {
+  color: var(--color-foreground-subtle);
+}
+
+@utility accent {
+  color: var(--color-brand);
+}
+
+:root {
+  --ui-font-size: 14px;
+  --color-brand: #68d268;
+  --color-primary: #68d268;
+  --color-primary-foreground: #122412;
+  --color-background: #1c1c1e;
+  --color-frame: #000;
+  --color-content: #121212;
+  --color-panel: #121212;
+  --color-card: #181818;
+  --color-card-hover: #232326;
+  --color-surface: #232326;
+  --color-surface-hover: #2c2c30;
+  --color-popover: #242427;
+  --color-input: #29292d;
+  --color-input-focused: #303034;
+  --color-search-box: #1f1f1f;
+  --color-foreground: #f4f4f5;
+  --color-foreground-subtle: #a6a6af;
+  --color-foreground-subtlest: #90909a;
+  --color-border: #333337;
+  --color-border-hover: #585860;
+  --color-input-border: #414148;
+  --color-input-border-focused: #68d268;
+  --color-hover: #303034;
+  --color-frame-hover: #303034;
+  --color-frame-surface: #232326;
+  --color-selected: #3b3b3e;
+  --color-accent: #203320;
+  --color-destructive: #ff929a;
+  --color-destructive-foreground: #34151b;
+  --color-success: #8cc9a5;
+  --color-toast: #303034;
+  --color-overlay: rgb(0 0 0 / 55%);
+  --color-shadow: rgb(0 0 0 / 24%);
+  color-scheme: dark;
+  font-synthesis: none;
+}
+:root[data-theme='light'] {
+  --color-brand: #217521;
+  --color-frame: #e8e8ed;
+  --color-background: #fff;
+  --color-content: #fff;
+  --color-panel: #fff;
+  --color-card: #f3f3f6;
+  --color-card-hover: #e8e8ed;
+  --color-surface: #f3f3f6;
+  --color-surface-hover: #ededf0;
+  --color-popover: #fff;
+  --color-input: #f3f3f6;
+  --color-input-focused: #fff;
+  --color-search-box: #fff;
+  --color-foreground: #202024;
+  --color-foreground-subtle: #64646e;
+  --color-foreground-subtlest: #6e6e78;
+  --color-border: #e6e6eb;
+  --color-border-hover: #b9b9c2;
+  --color-input-border: #d4d4dc;
+  --color-input-border-focused: #217521;
+  --color-hover: #e8e8ed;
+  --color-frame-hover: #d4d4dc;
+  --color-frame-surface: #fff;
+  --color-selected: #e4e4e8;
+  --color-accent: #e7f6e7;
+  --color-destructive: #b22638;
+  --color-destructive-foreground: #fff;
+  --color-success: #287144;
+  --color-toast: #fff;
+  --color-shadow: rgb(30 30 45 / 12%);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme='system'] {
+    --color-brand: #217521;
+    --color-frame: #e8e8ed;
+    --color-background: #fff;
+    --color-content: #fff;
+    --color-panel: #fff;
+    --color-card: #f3f3f6;
+    --color-card-hover: #e8e8ed;
+    --color-surface: #f3f3f6;
+    --color-surface-hover: #ededf0;
+    --color-popover: #fff;
+    --color-input: #f3f3f6;
+    --color-input-focused: #fff;
+    --color-search-box: #fff;
+    --color-foreground: #202024;
+    --color-foreground-subtle: #64646e;
+    --color-foreground-subtlest: #6e6e78;
+    --color-border: #e6e6eb;
+    --color-border-hover: #b9b9c2;
+    --color-input-border: #d4d4dc;
+    --color-input-border-focused: #217521;
+    --color-hover: #e8e8ed;
+    --color-frame-hover: #d4d4dc;
+    --color-frame-surface: #fff;
+    --color-selected: #e4e4e8;
+    --color-accent: #e7f6e7;
+    --color-destructive: #b22638;
+    --color-destructive-foreground: #fff;
+    --color-success: #287144;
+    --color-toast: #fff;
+    --color-shadow: rgb(30 30 45 / 12%);
+    color-scheme: light;
+  }
+}
+
+@keyframes popover-in {
+  from { opacity: 0; transform: translateY(-8px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

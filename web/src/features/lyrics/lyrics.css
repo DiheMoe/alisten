@@ -1,0 +1,16 @@
+.listen-page { display: flex; height: 100%; min-height: 0; padding: 24px 32px; }
+.lyrics-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.lyrics-scroll { flex: 1; min-height: 0; overflow-y: auto; position: relative; scrollbar-width: none; overscroll-behavior: contain; mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent); }
+.lyrics-scroll::-webkit-scrollbar { display: none; }
+/* 使首行和末行也能滚动到容器中央。 */
+.lyrics-scroll:not(:has(.empty-state))::before, .lyrics-scroll:not(:has(.empty-state))::after { content: ''; display: block; height: 50%; }
+/* 用 transform 而不是 font-size 区分层级，切换时不触发重排。 */
+.lyric-line { max-width: 880px; margin: 0 auto; padding: 8px 32px; line-height: 1.5; text-align: center; color: var(--color-foreground-subtle); opacity: .78; font-weight: 600; overflow-wrap: anywhere; transform: translateY(4px) scale(.7); transform-origin: center; transition: transform 420ms cubic-bezier(.2, .8, .2, 1), opacity 300ms ease, color 300ms ease; }
+.lyric-line.near-lyric { opacity: .9; transform: translateY(2px) scale(.8); }
+.lyric-line.active-lyric { color: var(--color-foreground); opacity: 1; transform: translateY(0) scale(1.18); }
+.lyrics-scroll:has(.empty-state) { display: grid; place-items: center; }
+:root[data-performance='low'] .lyric-line { transition: opacity 160ms ease; }
+:root[data-performance='off'] .lyrics-scroll { mask-image: none; }
+@media (max-width: 767px) {
+  .listen-page { padding: 16px; }
+}
