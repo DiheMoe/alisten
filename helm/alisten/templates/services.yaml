@@ -1,0 +1,38 @@
+{{- range $component := list "serve" "web" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "alisten.fullname" $ }}-{{ $component }}
+  labels:
+    {{- include "alisten.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  selector:
+    {{- include "alisten.selectorLabels" (dict "root" $ "component" $component) | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    - name: ops
+      port: 9090
+      targetPort: ops
+{{- end }}
+{{- if .Values.serviceMonitor.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "alisten.fullname" . }}-worker
+  labels:
+    {{- include "alisten.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  clusterIP: None
+  selector:
+    {{- include "alisten.selectorLabels" (dict "root" . "component" "worker") | nindent 4 }}
+  ports:
+    - name: ops
+      port: 9090
+      targetPort: ops
+{{- end }}

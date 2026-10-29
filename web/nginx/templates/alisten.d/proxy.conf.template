@@ -1,0 +1,36 @@
+# 主机名放在变量中，nginx 才会在每个请求时解析：serve 有两个副本且重启后地址会变，启动时上游也不必已经存在。
+resolver 127.0.0.11 valid=5s;
+set $serve serve:8080;
+set $rustfs rustfs:9000;
+proxy_http_version 1.1;
+absolute_redirect off;
+
+# default.conf 中有匹配以 / 结尾的路径的正则 location，只有带 ^~ 的前缀 location 才能优先于它。
+location ^~ /api/ {
+    # 不小于 serve 的请求体上限，请求体就不会写入临时文件，也就不会因此输出纯文本的 warn 日志。
+    client_body_buffer_size 64k;
+    proxy_pass http://$serve;
+}
+location ^~ /media/ {
+    proxy_pass http://$serve;
+}
+# 空闲连接由 serve 断开，这里的超时只作兜底。
+location = /ws {
+    proxy_pass http://$serve;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 1h;
+    proxy_send_timeout 1h;
+}
+# 只转发 link/ 下的读取请求：RustFS 的其他接口也在同一端口上。对象来自用户提交的链接且与页面同源，依靠这两个响应头阻止其中的脚本运行。
+# 用 return 而不用 limit_except：拒绝时不写纯文本的错误日志。关闭缓冲：缓冲时超出内存缓冲区的响应会写入 /tmp 的 tmpfs。
+location ^~ /storage/${STORAGE_BUCKET_NAME}/link/ {
+    if ($request_method !~ ^(GET|HEAD)$) {
+        return 405;
+    }
+    rewrite ^/storage(/.*)$ $1 break;
+    proxy_pass http://$rustfs;
+    proxy_buffering off;
+    add_header Content-Security-Policy "sandbox; default-src 'none'" always;
+    add_header X-Content-Type-Options nosniff always;
+}

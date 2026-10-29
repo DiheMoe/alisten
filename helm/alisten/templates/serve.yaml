@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "alisten.fullname" . }}-serve
+  labels:
+    {{- include "alisten.labels" . | nindent 4 }}
+    app.kubernetes.io/component: serve
+spec:
+  {{- if not .Values.serve.autoscaling.enabled }}
+  replicas: {{ .Values.serve.replicas }}
+  {{- end }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "alisten.selectorLabels" (dict "root" . "component" "serve") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "alisten.labels" . | nindent 8 }}
+        app.kubernetes.io/component: serve
+      {{- with include "alisten.secretChecksum" . }}
+      annotations:
+        {{- . | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "alisten.podSecurityContext" . | nindent 8 }}
+      # serve 退出最长需要 27 秒。
+      terminationGracePeriodSeconds: 30
+      initContainers:
+        - name: migrate
+          image: {{ include "alisten.image" (dict "root" . "image" .Values.serve.image) }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args: [migrate]
+          env:
+            {{- include "alisten.databaseEnv" . | nindent 12 }}
+            {{- include "alisten.storageEnv" . | nindent 12 }}
+            - name: ALISTEN_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+          securityContext:
+            {{- include "alisten.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.serve.resources | nindent 12 }}
+      containers:
+        - name: serve
+          image: {{ include "alisten.image" (dict "root" . "image" .Values.serve.image) }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args: [serve]
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: ops
+              containerPort: 9090
+          env:
+            - name: ALISTEN_PUBLIC_URL
+              value: {{ printf "https://%s" (include "alisten.domain" .) | quote }}
+            - name: ALISTEN_ALLOWED_ORIGINS
+              value: {{ .Values.allowedOrigins | quote }}
+            - name: STORAGE_PUBLIC_URL
+              value: {{ required "storage.publicUrl 不能为空" .Values.storage.publicUrl | quote }}
+            {{- include "alisten.databaseEnv" . | nindent 12 }}
+            {{- include "alisten.redisEnv" . | nindent 12 }}
+            {{- include "alisten.storageEnv" . | nindent 12 }}
+            {{- include "alisten.secretEnv" (dict "root" . "name" "ALISTEN_ADMIN_TOKEN" "optional" true) | nindent 12 }}
+            - name: ALISTEN_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            {{- with .Values.otlpEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ . | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: ops
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: ops
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            {{- include "alisten.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.serve.resources | nindent 12 }}

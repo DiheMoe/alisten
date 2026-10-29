@@ -1,0 +1,10 @@
+Alisten 部署在 https://{{ .Values.domain }}。
+{{- if .Values.existingSecret }}
+
+后台需要 Secret {{ .Values.existingSecret }} 中有 ALISTEN_ADMIN_TOKEN。修改这个 Secret 之后重启 serve：
+  kubectl --namespace {{ .Release.Namespace }} rollout restart deployment/{{ include "alisten.fullname" . }}-serve
+{{- else if not .Values.secrets.adminToken }}
+
+没有设置管理 token，后台不可用。设置之后 serve 会重建：
+  helm upgrade {{ .Release.Name }} helm/alisten --namespace {{ .Release.Namespace }} --reuse-values --set secrets.adminToken="$(openssl rand -hex 32)"
+{{- end }}

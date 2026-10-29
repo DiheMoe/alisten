@@ -1,0 +1,7 @@
+apiVersion: v2
+name: alisten
+description: Alisten 的服务端、yt-dlp worker 和前端
+type: application
+kubeVersion: ">=1.30.0-0"
+version: 0.0.0
+appVersion: latest

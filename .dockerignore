@@ -1,0 +1,11 @@
+.git
+.codegraph
+.superpowers
+.worktrees
+.tmp
+.playwright-mcp
+.env
+**/node_modules
+**/dist
+**/*_test.go
+**/testdata

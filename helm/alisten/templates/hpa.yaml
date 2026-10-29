@@ -1,0 +1,23 @@
+{{- if .Values.serve.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "alisten.fullname" . }}-serve
+  labels:
+    {{- include "alisten.labels" . | nindent 4 }}
+    app.kubernetes.io/component: serve
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "alisten.fullname" . }}-serve
+  minReplicas: {{ .Values.serve.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.serve.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.serve.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

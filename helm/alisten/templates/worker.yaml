@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "alisten.fullname" . }}-worker
+  labels:
+    {{- include "alisten.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "alisten.selectorLabels" (dict "root" . "component" "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "alisten.labels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+      {{- with include "alisten.secretChecksum" . }}
+      annotations:
+        {{- . | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "alisten.podSecurityContext" . | nindent 8 }}
+      # worker 退出最长需要 27 秒。
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: worker
+          image: {{ include "alisten.image" (dict "root" . "image" .Values.worker.image) }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args: [worker]
+          ports:
+            - name: ops
+              containerPort: 9090
+          env:
+            {{- include "alisten.databaseEnv" . | nindent 12 }}
+            {{- include "alisten.redisEnv" . | nindent 12 }}
+            {{- include "alisten.storageEnv" . | nindent 12 }}
+            - name: ALISTEN_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            {{- with .Values.otlpEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ . | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: ops
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: ops
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            {{- include "alisten.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /var/cache/alisten
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.worker.tmpSizeLimit | quote }}
+        - name: cache
+          emptyDir: {}

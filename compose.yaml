@@ -1,0 +1,137 @@
+x-alisten-env: &alisten-env
+  ALISTEN_LOG_LEVEL: ${ALISTEN_LOG_LEVEL}
+  DATABASE_HOST: ${DATABASE_HOST}
+  DATABASE_PORT: ${DATABASE_PORT}
+  DATABASE_NAME: ${DATABASE_NAME}
+  DATABASE_USERNAME: ${DATABASE_USERNAME}
+  DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+  DATABASE_SSLMODE: ${DATABASE_SSLMODE}
+  REDIS_HOST: ${REDIS_HOST}
+  REDIS_PORT: ${REDIS_PORT}
+  REDIS_DB: ${REDIS_DB}
+  REDIS_PASSWORD: ${REDIS_PASSWORD}
+  STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL}
+  STORAGE_REGION: ${STORAGE_REGION}
+  STORAGE_BUCKET_NAME: ${STORAGE_BUCKET_NAME}
+  STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID}
+  STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+
+services:
+  migrate:
+    image: ghcr.io/dihemoe/alisten/server:latest
+    command: migrate
+    environment: *alisten-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+      rustfs:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      disable: true
+
+  serve:
+    image: ghcr.io/dihemoe/alisten/server:latest
+    command: serve
+    restart: unless-stopped
+    environment:
+      <<: *alisten-env
+      ALISTEN_PUBLIC_URL: ${ALISTEN_PUBLIC_URL}
+      ALISTEN_ALLOWED_ORIGINS: ${ALISTEN_ALLOWED_ORIGINS}
+      ALISTEN_ADMIN_TOKEN: ${ALISTEN_ADMIN_TOKEN}
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL}
+      GOMAXPROCS: "2"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+        required: false
+    deploy:
+      replicas: 2
+    stop_grace_period: 30s
+
+  worker:
+    image: ghcr.io/dihemoe/alisten/worker:latest
+    command: worker
+    restart: unless-stopped
+    environment: *alisten-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+        required: false
+    tmpfs:
+      - /tmp:size=${ALISTEN_WORKER_TMP_SIZE}
+    volumes:
+      - worker-cache:/var/cache/alisten
+    stop_grace_period: 30s
+
+  web:
+    image: ghcr.io/dihemoe/alisten/web:latest
+    restart: unless-stopped
+    ports:
+      - "${ALISTEN_HOST}:${ALISTEN_PORT}:8080"
+    tmpfs:
+      - /tmp:size=64m
+    environment:
+      NGINX_ENVSUBST_TEMPLATE_DIR: /etc/nginx/alisten-templates
+      NGINX_ENVSUBST_OUTPUT_DIR: /tmp
+      STORAGE_BUCKET_NAME: ${STORAGE_BUCKET_NAME}
+
+  postgres:
+    image: postgres:18-trixie
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "--host=127.0.0.1", "--username=${DATABASE_USERNAME}", "--dbname=${DATABASE_NAME}"]
+      start_period: 30s
+      start_interval: 1s
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  redis:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "", "--appendonly", "no", "--requirepass", "${REDIS_PASSWORD}"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      start_period: 30s
+      start_interval: 1s
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  rustfs:
+    image: rustfs/rustfs:1.0.3
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: ${STORAGE_ACCESS_KEY_ID}
+      RUSTFS_SECRET_KEY: ${STORAGE_SECRET_ACCESS_KEY}
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_OBS_LOG_DIRECTORY: ""
+    volumes:
+      - rustfs-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--output", "/dev/null", "http://127.0.0.1:9000/health/ready"]
+      start_period: 30s
+      start_interval: 1s
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  postgres-data:
+  rustfs-data:
+  worker-cache:

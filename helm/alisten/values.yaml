@@ -1,0 +1,96 @@
+domain: ""
+allowedOrigins: ""
+logLevel: info
+otlpEndpoint: ""
+database:
+  host: ""
+  port: 5432
+  username: ""
+  name: ""
+  sslmode: prefer
+redis:
+  host: ""
+  port: 6379
+  db: 0
+storage:
+  endpointUrl: ""
+  region: us-east-1
+  bucketName: alisten
+  publicUrl: ""
+existingSecret: ""
+secrets:
+  databasePassword: ""
+  redisPassword: ""
+  storageAccessKeyId: ""
+  storageSecretAccessKey: ""
+  adminToken: ""
+
+serve:
+  image:
+    repository: ghcr.io/dihemoe/alisten/server
+    tag: ""
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "2"
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 80
+
+worker:
+  image:
+    repository: ghcr.io/dihemoe/alisten/worker
+    tag: ""
+  replicas: 1
+  tmpSizeLimit: 2Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+web:
+  image:
+    repository: ghcr.io/dihemoe/alisten/web
+    tag: ""
+  replicas: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+
+imagePullPolicy: IfNotPresent
+imagePullSecrets: []
+
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  tlsSecretName: ""
+
+httpRoute:
+  enabled: false
+  parentRefs: []
+
+serviceMonitor:
+  enabled: false
+  labels: {}
+  interval: 30s
+
+networkPolicy:
+  enabled: false
+  egress: []
+  privateCIDRs:
+    - 10.0.0.0/8
+    - 100.64.0.0/10
+    - 169.254.0.0/16
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - fc00::/7
+    - fe80::/10
+    - 64:ff9b::/96
+    - 64:ff9b:1::/48
