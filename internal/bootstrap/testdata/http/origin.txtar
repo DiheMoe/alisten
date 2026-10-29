@@ -1,0 +1,57 @@
+带 Origin 的请求只接受显式允许列表中的来源；不带 Origin 的请求不检查。
+
+-- request --
+POST /api/rooms
+Origin: https://evil.example
+
+{"name": "钓鱼", "description": ""}
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "服务器不接受从这个网址发出的操作，请用网站的正式地址打开。"}}
+
+-- request --
+GET /api/rooms
+Origin: http://alisten.example
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "服务器不接受从这个网址发出的操作，请用网站的正式地址打开。"}}
+
+-- request --
+POST /api/rooms
+Origin: https://alisten.example
+
+{"name": "同源", "description": ""}
+-- response --
+201
+Location: /api/rooms/$sameOrigin
+{"id": "$sameOrigin"}
+
+-- request --
+POST /api/rooms
+Origin: http://localhost:9876
+
+{"name": "本机", "description": ""}
+-- response --
+201
+Location: /api/rooms/$local
+{"id": "$local"}
+
+-- request --
+POST /api/rooms
+
+{"name": "bot", "description": ""}
+-- response --
+201
+Location: /api/rooms/$bot
+{"id": "$bot"}
+
+-- request --
+GET /api/rooms
+Origin: https://alisten.example
+-- response --
+200
+{"items": [
+  {"id": "$sameOrigin", "slug": null, "name": "同源", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0},
+  {"id": "$local", "slug": null, "name": "本机", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0},
+  {"id": "$bot", "slug": null, "name": "bot", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0}
+]}

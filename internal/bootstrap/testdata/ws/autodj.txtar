@@ -1,0 +1,103 @@
+AutoDJ 自动补歌：网易云的歌开播时，等待队列为空、有人在听、10 秒内没有人点歌，就按房间的播放记录推荐一首相似的歌，
+以 AutoDJ 的名义入队并准备。《片头》只有 15 秒，它放完、晴天开播时，晴天已经是 15 秒前点的了：比 10 秒多出的 5 秒，
+是点晴天的消息从发出到房间收到可以耽搁的时间。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/admin/rooms
+Authorization: Bearer admin-secret
+
+{"name": "大厅", "description": ""}
+-- response --
+201
+Location: /api/rooms/$room
+{"id": "$room"}
+
+-- request --
+POST /api/rooms/$room/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+201
+{"ticket": "$ticket"}
+
+-- connect alice --
+-- send alice --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$room", "ticket": "$ticket", "protocolVersion": "$protocolVersion"}}
+-- receive alice --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 1, "room": {"id": "$room", "name": "大厅", "description": "", "kind": "persistent"},
+    "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
+
+-- send alice --
+{"kind": "request", "type": "queue.add", "id": "a1", "data": {"track": {"source": "netease", "id": "1100"}}}
+-- receive alice --
+{"kind": "event", "type": "room.activity", "term": 1, "seq": 2, "data": {"kind": "added", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "entry": {"id": "1", "track": {"source": "netease", "id": "1100"}, "meta": {"title": "片头", "artist": "无名", "album": "", "coverUrl": "", "pageUrl": "https://music.163.com/#/song?id=1100", "durationMs": 15000},
+    "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"},
+  "message": "点了《片头》"}}
+-- receive alice --
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 3, "data": {"items": [],
+  "pending": {"id": "1", "track": {"source": "netease", "id": "1100"}, "meta": {"title": "片头", "artist": "无名", "album": "", "coverUrl": "", "pageUrl": "https://music.163.com/#/song?id=1100", "durationMs": 15000},
+    "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}}
+-- receive alice --
+{"kind": "response", "type": "queue.add", "id": "a1", "data": {"entry": {"id": "1", "track": {"source": "netease", "id": "1100"}, "meta": {"title": "片头", "artist": "无名", "album": "", "coverUrl": "", "pageUrl": "https://music.163.com/#/song?id=1100", "durationMs": 15000},
+    "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}}
+-- receive alice --
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 4, "data": {"pending": null, "items": []}}
+-- receive alice --
+{"kind": "event", "type": "playback.updated", "term": 1, "seq": 5, "data": {"nowPlaying": {
+  "entry": {"id": "1", "track": {"source": "netease", "id": "1100"}, "meta": {"title": "片头", "artist": "无名", "album": "", "coverUrl": "", "pageUrl": "https://music.163.com/#/song?id=1100", "durationMs": 15000},
+    "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "ready"},
+  "mediaUrl": "/media/netease/1100", "startedAtMs": 1, "durationMs": 15000, "gain": 1, "lyric": ""}}}
+
+-- send alice --
+{"kind": "request", "type": "queue.add", "id": "a2", "data": {"track": {"source": "netease", "id": "186016"}}}
+-- receive alice --
+{"kind": "event", "type": "room.activity", "term": 1, "seq": 6, "data": {"kind": "added", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "entry": {"id": "2", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+    "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"},
+  "message": "点了《晴天》"}}
+-- receive alice --
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 7, "data": {"pending": null,
+  "items": [{"id": "2", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+    "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}]}}
+-- receive alice --
+{"kind": "response", "type": "queue.add", "id": "a2", "data": {"entry": {"id": "2", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+    "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}}
+-- receive alice --
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 8, "data": {"pending": null,
+  "items": [{"id": "2", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500},
+    "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "ready"}]}}
+
+-- receive alice --
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 9, "data": {"pending": null, "items": []}}
+-- receive alice --
+{"kind": "event", "type": "playback.updated", "term": 1, "seq": 10, "data": {"nowPlaying": {
+  "entry": {"id": "2", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500},
+    "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "ready"},
+  "mediaUrl": "/media/netease/186016", "startedAtMs": 1, "durationMs": 269500, "gain": 1, "lyric": "[00:01.00]故事的小黄花"}}}
+-- receive alice --
+{"kind": "event", "type": "room.activity", "term": 1, "seq": 11, "data": {"kind": "added",
+  "entry": {"id": "3", "track": {"source": "netease", "id": "185811"}, "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000},
+    "by": null, "auto": true, "likes": 0, "status": "preparing"},
+  "message": "点了《七里香》"}}
+-- receive alice --
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 12, "data": {"pending": null,
+  "items": [{"id": "3", "track": {"source": "netease", "id": "185811"}, "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000},
+    "by": null, "auto": true, "likes": 0, "status": "preparing"}]}}
+-- receive alice --
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 13, "data": {"pending": null,
+  "items": [{"id": "3", "track": {"source": "netease", "id": "185811"}, "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000},
+    "by": null, "auto": true, "likes": 0, "status": "ready"}]}}

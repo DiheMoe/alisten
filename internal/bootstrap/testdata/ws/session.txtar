@@ -1,0 +1,125 @@
+WebSocket 会话：握手、心跳、聊天、快照和在线列表。加入时的在线列表已包含在握手的快照中；
+断开的会话离开房间，房间列表的在线人数随之变化；修改资料后，所在房间广播新的在线列表。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$bob", "member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""}}
+
+-- request --
+POST /api/rooms
+
+{"name": "临时", "description": "随便听听"}
+-- response --
+201
+Location: /api/rooms/$room
+{"id": "$room"}
+
+-- request --
+POST /api/rooms/$room/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+201
+{"ticket": "$aliceTicket"}
+
+-- request --
+POST /api/rooms/$room/tickets
+Authorization: Bearer $bob
+
+{}
+-- response --
+201
+{"ticket": "$bobTicket"}
+
+-- connect alice --
+-- send alice --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$room", "ticket": "$aliceTicket", "protocolVersion": "$protocolVersion"}}
+-- receive alice --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 1, "room": {"id": "$room", "name": "临时", "description": "随便听听", "kind": "ephemeral"},
+    "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
+
+-- send alice --
+{"kind": "request", "type": "ping", "id": "p1", "data": {"clientTimeMs": 1234}}
+-- receive alice --
+{"kind": "response", "type": "ping", "id": "p1", "data": {"clientTimeMs": 1234, "serverTimeMs": 1}}
+
+-- connect bob --
+-- send bob --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$room", "ticket": "$bobTicket", "protocolVersion": "$protocolVersion"}}
+-- receive bob --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 2, "room": {"id": "$room", "name": "临时", "description": "随便听听", "kind": "ephemeral"},
+    "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}], "onlineCount": 2}}}}
+-- receive alice --
+{"kind": "event", "type": "members.updated", "term": 1, "seq": 2, "data": {
+  "sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}], "onlineCount": 2}}
+
+-- request --
+GET /api/rooms/$room
+-- response --
+200
+{"id": "$room", "slug": null, "name": "临时", "description": "随便听听", "kind": "ephemeral", "hasPassword": false, "onlineCount": 2}
+
+-- send alice --
+{"kind": "request", "type": "chat.send", "id": "c1", "data": {"content": "大家好"}}
+-- receive alice --
+{"kind": "event", "type": "chat.message", "term": 1, "seq": 3, "data": {"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "content": "大家好", "sentAtMs": 1}}
+-- receive alice --
+{"kind": "response", "type": "chat.send", "id": "c1", "data": {}}
+-- receive bob --
+{"kind": "event", "type": "chat.message", "term": 1, "seq": 3, "data": {"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "content": "大家好", "sentAtMs": 1}}
+
+-- send bob --
+{"kind": "request", "type": "room.sync", "id": "s1", "data": {}}
+-- receive bob --
+{"kind": "response", "type": "room.sync", "id": "s1", "data": {"room": {"term": 1, "seq": 3, "room": {"id": "$room", "name": "临时", "description": "随便听听", "kind": "ephemeral"},
+  "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+  "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}], "onlineCount": 2}}}}
+
+-- disconnect bob --
+-- receive alice --
+{"kind": "event", "type": "members.updated", "term": 1, "seq": 4, "data": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer $alice
+
+{"name": "甲"}
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "甲", "avatarHash": ""}}
+-- receive alice --
+{"kind": "event", "type": "members.updated", "term": 1, "seq": 5, "data": {"sessions": [{"id": "$aliceId", "name": "甲", "avatarHash": ""}], "onlineCount": 1}}
+
+-- send alice --
+{"kind": "request", "type": "chat.send", "id": "c2", "data": {"content": "改名了"}}
+-- receive alice --
+{"kind": "event", "type": "chat.message", "term": 1, "seq": 6, "data": {"member": {"id": "$aliceId", "name": "甲", "avatarHash": ""}, "content": "改名了", "sentAtMs": 1}}
+-- receive alice --
+{"kind": "response", "type": "chat.send", "id": "c2", "data": {}}
+
+-- request --
+GET /api/rooms
+-- response --
+200
+{"items": [{"id": "$room", "slug": null, "name": "临时", "description": "随便听听", "kind": "ephemeral", "hasPassword": false, "onlineCount": 1}]}

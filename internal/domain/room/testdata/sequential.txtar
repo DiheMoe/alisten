@@ -1,0 +1,43 @@
+顺序播放：点歌后准备，开播；播完接着播下一首；队列播空后进入空闲。
+-- 01 --
+> restore persistent
+-- 02 --
+> 0s join s1 m1
+emit 1.1 members [s1=m1]
+-- 03 --
+> 1s enqueue m1 netease:a
+persist mode=sequential entrySeq=1 current=- pending=#1(netease:a) waiting=[]
+emit 1.2 activity added m1 #1(netease:a)
+emit 1.3 queue pending=#1(netease:a) waiting=[]
+reply q03 enqueued #1(netease:a)
+prepare netease:a
+-- 04 --
+> 2s enqueue m2 netease:b
+persist mode=sequential entrySeq=2 current=- pending=#1(netease:a) waiting=[#2(netease:b)]
+emit 1.4 activity added m2 #2(netease:b)
+emit 1.5 queue pending=#1(netease:a) waiting=[#2(netease:b)]
+reply q04 enqueued #2(netease:b)
+prepare netease:b
+-- 05 --
+> 3s prepared netease:b 1m
+persist mode=sequential entrySeq=2 current=- pending=#1(netease:a) waiting=[#2(netease:b,ready)]
+emit 1.6 queue pending=#1(netease:a) waiting=[#2(netease:b,ready)]
+-- 06 --
+> 4s prepared netease:a 2m
+persist mode=sequential entrySeq=2 current=#1(netease:a,ready)@4.2s pending=- waiting=[#2(netease:b,ready)]
+emit 1.7 queue pending=- waiting=[#2(netease:b,ready)]
+emit 1.8 playback #1(netease:a,ready)@4.2s
+schedule 1 2m4.2s
+-- 07 --
+> 2m4.2s timer 1
+persist mode=sequential entrySeq=2 current=#2(netease:b,ready)@2m4.4s pending=- waiting=[]
+record #1(netease:a,ready) 4.2s-2m4.2s
+emit 1.9 queue pending=- waiting=[]
+emit 1.10 playback #2(netease:b,ready)@2m4.4s
+schedule 2 3m4.4s
+recommend 3
+-- 08 --
+> 3m4.4s timer 2
+persist mode=sequential entrySeq=2 current=- pending=- waiting=[]
+record #2(netease:b,ready) 2m4.4s-3m4.4s
+emit 1.11 playback -

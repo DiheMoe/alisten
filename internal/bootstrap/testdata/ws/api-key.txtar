@@ -1,0 +1,192 @@
+常驻房间的 API Key：管理员先看到还没有 Key，生成时拿到 Key，之后只看到已经生成；bot 用它通过 HTTP 点歌并代填点歌人，
+条目的点歌人是“张三（bot）”；普通成员不能代填；Key 不能建立 WebSocket 会话。重置之后旧 Key 返回 401；
+设置密码之后成员的会话以 4401 断开，Key 照常可用。临时房间没有 Key。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/admin/rooms
+Authorization: Bearer admin-secret
+
+{"name": "大厅", "description": ""}
+-- response --
+201
+Location: /api/rooms/$hall
+{"id": "$hall"}
+
+-- request --
+POST /api/rooms/$hall/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+201
+{"ticket": "$ticket"}
+
+-- connect alice --
+-- send alice --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$hall", "ticket": "$ticket", "protocolVersion": "$protocolVersion"}}
+-- receive alice --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 1, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent"},
+    "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
+
+-- request --
+GET /api/admin/rooms/$hall/api-key
+Authorization: Bearer admin-secret
+-- response --
+200
+{"set": false, "createdAtMs": 0}
+
+-- request --
+POST /api/admin/rooms/$hall/api-key
+Authorization: Bearer admin-secret
+
+{}
+-- response --
+201
+Location: /api/admin/rooms/$hall/api-key
+{"key": "$key"}
+
+-- request --
+GET /api/admin/rooms/$hall/api-key
+Authorization: Bearer admin-secret
+-- response --
+200
+{"set": true, "createdAtMs": 1}
+
+-- request --
+POST /api/room/queue
+Authorization: Bearer $key
+
+{"source": "netease", "keyword": "晴天", "requester": "张三"}
+-- response --
+201
+Location: /api/room/queue/1
+{"entry": {"id": "1", "track": {"source": "netease", "id": "186016"},
+  "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+  "by": {"id": "$botId", "name": "张三（bot）", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}
+-- receive alice --
+{"kind": "event", "type": "room.activity", "term": 1, "seq": 2, "data": {"kind": "added", "member": {"id": "$botId", "name": "张三（bot）", "avatarHash": ""},
+  "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+    "by": {"id": "$botId", "name": "张三（bot）", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"},
+  "message": "点了《晴天》"}}
+-- receive alice --
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 3, "data": {"items": [],
+  "pending": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+    "by": {"id": "$botId", "name": "张三（bot）", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}}
+-- receive alice --
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 4, "data": {"pending": null, "items": []}}
+-- receive alice --
+{"kind": "event", "type": "playback.updated", "term": 1, "seq": 5, "data": {"nowPlaying": {
+  "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500},
+    "by": {"id": "$botId", "name": "张三（bot）", "avatarHash": ""}, "auto": false, "likes": 0, "status": "ready"},
+  "mediaUrl": "/media/netease/186016", "startedAtMs": 1, "durationMs": 269500, "gain": 1, "lyric": "[00:01.00]故事的小黄花"}}}
+
+-- request --
+GET /api/room
+Authorization: Bearer $key
+-- response --
+200
+{"room": {"term": 1, "seq": 5, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent"},
+  "playMode": "sequential",
+  "nowPlaying": {
+    "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500},
+      "by": {"id": "$botId", "name": "张三（bot）", "avatarHash": ""}, "auto": false, "likes": 0, "status": "ready"},
+    "mediaUrl": "/media/netease/186016", "startedAtMs": 1, "durationMs": 269500, "gain": 1, "lyric": "[00:01.00]故事的小黄花"},
+  "pending": null, "items": [],
+  "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}
+
+-- send alice --
+{"kind": "request", "type": "queue.add", "id": "a1", "data": {"track": {"source": "netease", "id": "185811"}, "requester": "李四"}}
+-- receive alice --
+{"kind": "response", "type": "queue.add", "id": "a1", "data": {}, "error": {"code": "INVALID_ARGUMENT", "message": "requester：只有用常驻房间的 API Key 点歌时才能填写"}}
+
+-- connect bot --
+-- send bot --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$hall", "ticket": "$key", "protocolVersion": "$protocolVersion"}}
+-- receive bot --
+{"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "UNAUTHORIZED", "message": "API Key 只能用于 HTTP 接口"}}
+-- closed bot --
+4401
+
+-- request --
+POST /api/admin/rooms/$hall/api-key
+Authorization: Bearer admin-secret
+
+{}
+-- response --
+201
+Location: /api/admin/rooms/$hall/api-key
+{"key": "$resetKey"}
+
+-- request --
+POST /api/room/messages
+Authorization: Bearer $key
+
+{"content": "旧 Key"}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "票据无效"}}
+
+-- request --
+POST /api/room/messages
+Authorization: Bearer $resetKey
+
+{"content": "新 Key"}
+-- response --
+204
+-- receive alice --
+{"kind": "event", "type": "chat.message", "term": 1, "seq": 6, "data": {"member": {"id": "$botId", "name": "bot", "avatarHash": ""}, "content": "新 Key", "sentAtMs": 1}}
+
+-- request --
+PATCH /api/admin/rooms/$hall
+Authorization: Bearer admin-secret
+
+{"password": "芝麻开门"}
+-- response --
+204
+-- closed alice --
+4401
+
+-- request --
+POST /api/room/messages
+Authorization: Bearer $resetKey
+
+{"content": "改密码之后"}
+-- response --
+204
+
+-- request --
+POST /api/rooms
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$temp
+{"id": "$temp"}
+
+-- request --
+GET /api/admin/rooms/$temp/api-key
+Authorization: Bearer admin-secret
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+
+-- request --
+POST /api/admin/rooms/$temp/api-key
+Authorization: Bearer admin-secret
+
+{}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}

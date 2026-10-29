@@ -1,0 +1,200 @@
+后台修改和删除常驻房间。修改名称和描述后，房间广播新的房间信息；设置密码之后旧票据作废，会话以 4401 断开；
+删除房间之后会话以 4404 断开，房间和它的票据一起删除。临时房间不归后台管理。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/admin/rooms
+Authorization: Bearer admin-secret
+
+{"name": "大厅", "description": "常驻", "slug": "hall"}
+-- response --
+201
+Location: /api/rooms/$hall
+{"id": "$hall"}
+
+-- request --
+POST /api/admin/rooms
+Authorization: Bearer admin-secret
+
+{"name": "二厅", "description": ""}
+-- response --
+201
+Location: /api/rooms/$lounge
+{"id": "$lounge"}
+
+-- request --
+POST /api/rooms
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$temp
+{"id": "$temp"}
+
+-- request --
+POST /api/rooms/$hall/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+201
+{"ticket": "$hallTicket"}
+
+-- request --
+POST /api/rooms/$lounge/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+201
+{"ticket": "$loungeTicket"}
+
+-- connect alice --
+-- send alice --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$hall", "ticket": "$hallTicket", "protocolVersion": "$protocolVersion"}}
+-- receive alice --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 1, "room": {"id": "$hall", "name": "大厅", "description": "常驻", "kind": "persistent"},
+    "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
+
+-- request --
+PATCH /api/admin/rooms/$hall
+Authorization: Bearer admin-secret
+
+{"name": "新大厅"}
+-- response --
+204
+-- receive alice --
+{"kind": "event", "type": "room.updated", "term": 1, "seq": 2, "data": {"name": "新大厅", "description": "常驻"}}
+
+-- request --
+PATCH /api/admin/rooms/$hall
+Authorization: Bearer admin-secret
+
+{"description": "换了描述", "slug": ""}
+-- response --
+204
+-- receive alice --
+{"kind": "event", "type": "room.updated", "term": 1, "seq": 3, "data": {"name": "新大厅", "description": "换了描述"}}
+
+-- request --
+GET /api/rooms/hall
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+
+-- request --
+GET /api/rooms/$hall
+-- response --
+200
+{"id": "$hall", "slug": null, "name": "新大厅", "description": "换了描述", "kind": "persistent", "hasPassword": false, "onlineCount": 1}
+
+-- request --
+PATCH /api/admin/rooms/$hall
+Authorization: Bearer admin-secret
+
+{"slug": "Hall"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "slug：格式不正确"}}
+
+-- request --
+PATCH /api/admin/rooms/$hall
+
+{"name": "无权修改"}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
+
+-- request --
+PATCH /api/admin/rooms/hall
+Authorization: Bearer admin-secret
+
+{"name": "别名不是房间 ID"}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+
+-- request --
+PATCH /api/admin/rooms/$temp
+Authorization: Bearer admin-secret
+
+{"name": "改名"}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+
+-- request --
+DELETE /api/admin/rooms/$temp
+Authorization: Bearer admin-secret
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+
+-- request --
+PATCH /api/admin/rooms/$hall
+Authorization: Bearer admin-secret
+
+{"password": "芝麻开门"}
+-- response --
+204
+-- closed alice --
+4401
+
+-- connect again --
+-- send again --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$hall", "ticket": "$hallTicket", "protocolVersion": "$protocolVersion"}}
+-- receive again --
+{"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "UNAUTHORIZED", "message": "票据无效"}}
+-- closed again --
+4401
+
+-- connect lounge --
+-- send lounge --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$lounge", "ticket": "$loungeTicket", "protocolVersion": "$protocolVersion"}}
+-- receive lounge --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 1, "room": {"id": "$lounge", "name": "二厅", "description": "", "kind": "persistent"},
+    "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
+
+-- request --
+DELETE /api/admin/rooms/$lounge
+Authorization: Bearer admin-secret
+-- response --
+204
+-- closed lounge --
+4404
+
+-- request --
+GET /api/rooms/$lounge
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+
+-- connect gone --
+-- send gone --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$lounge", "ticket": "$loungeTicket", "protocolVersion": "$protocolVersion"}}
+-- receive gone --
+{"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+-- closed gone --
+4404
+
+-- request --
+DELETE /api/admin/rooms/$lounge
+Authorization: Bearer admin-secret
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}

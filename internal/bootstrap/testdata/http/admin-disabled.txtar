@@ -1,0 +1,98 @@
+没有配置管理 token 时，管理接口一律返回 FORBIDDEN，不看凭证和请求体。
+
+-- env --
+ALISTEN_ADMIN_TOKEN=
+
+-- request --
+GET /api/admin/rooms
+Authorization: Bearer admin-secret
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+POST /api/admin/rooms
+
+不是 JSON
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+GET /api/admin/rooms/01a15778-1911-7a28-8b2e-e08c2a25f388/api-key
+Authorization: Bearer admin-secret
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+POST /api/admin/rooms/01a15778-1911-7a28-8b2e-e08c2a25f388/api-key
+Authorization: Bearer admin-secret
+
+不是 JSON
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+GET /api/admin/credentials/netease
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+GET /api/admin/credentials/qq
+Authorization: Bearer admin-secret
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+POST /api/admin/credentials/netease/qr-logins
+Authorization: Bearer admin-secret
+
+{}
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+POST /api/admin/credentials/netease/qr-logins/status
+Authorization: Bearer admin-secret
+
+不是 JSON
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+POST /api/admin/credentials/qq/qr-logins
+Authorization: Bearer
+
+{"type": "qq"}
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+POST /api/admin/credentials/qq/qr-logins/status
+Authorization: Bearer admin-secret
+
+{"type": "wx", "key": "wx-1"}
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+GET /api/admin/media
+Authorization: Bearer admin-secret
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+DELETE /api/admin/media/66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391
+Authorization: Bearer admin-secret
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}

@@ -1,0 +1,258 @@
+bot 用进房票据调用 /api/room 下的接口，响应与 WebSocket 上的相同：读操作用 GET，参数放在路径和查询串中
+（keyword=%E5%91%A8%E6%9D%B0%E4%BC%A6 是“周杰伦”）；点歌返回 201 和新条目的地址，删歌、切换播放模式和聊天返回 204，
+没有字段的请求可以不带请求体。bot 没有会话，不出现在在线列表中；它用事件流等第一首歌开播，再投票切歌。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$bot", "member": {"id": "$botId", "name": "$botName", "avatarHash": ""}}
+
+-- request --
+POST /api/rooms
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$room
+{"id": "$room"}
+
+-- request --
+POST /api/rooms/$room/tickets
+Authorization: Bearer $bot
+
+{}
+-- response --
+201
+{"ticket": "$ticket"}
+
+-- request --
+GET /api/room
+Authorization: Bearer $ticket
+-- response --
+200
+{"room": {"term": 1, "seq": 0, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
+  "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+  "members": {"sessions": [], "onlineCount": 0}}}
+
+-- request --
+GET /api/room?verbose=1
+Authorization: Bearer $ticket
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "verbose：未知参数"}}
+
+-- request --
+POST /api/room/skip-votes
+Authorization: Bearer $ticket
+-- response --
+409
+{"error": {"code": "NOTHING_PLAYING", "message": "现在没有在放的歌。"}}
+
+-- stream bot --
+Authorization: Bearer $ticket
+-- event bot --
+event: snapshot
+data: {"room": {"term": 1, "seq": 0, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
+  "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+  "members": {"sessions": [], "onlineCount": 0}}}
+
+-- request --
+POST /api/room/messages
+Authorization: Bearer $ticket
+
+{"content": "机器人报到"}
+-- response --
+204
+-- event bot --
+event: chat.message
+id: 1
+data: {"kind": "event", "type": "chat.message", "term": 1, "seq": 1, "data": {"member": {"id": "$botId", "name": "$botName", "avatarHash": ""}, "content": "机器人报到", "sentAtMs": 1}}
+
+-- request --
+PATCH /api/room/settings
+Authorization: Bearer $ticket
+
+{"playMode": "shuffle"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "playMode：取值应为 sequential、random、rotation 之一"}}
+
+-- request --
+PATCH /api/room/settings
+Authorization: Bearer $ticket
+
+{"playMode": "rotation"}
+-- response --
+204
+-- event bot --
+event: settings.updated
+id: 2
+data: {"kind": "event", "type": "settings.updated", "term": 1, "seq": 2, "data": {"playMode": "rotation"}}
+
+-- request --
+POST /api/room/queue
+Authorization: Bearer $ticket
+
+{"track": {"source": "netease", "id": "186016"}}
+-- response --
+201
+Location: /api/room/queue/1
+{"entry": {"id": "1", "track": {"source": "netease", "id": "186016"},
+  "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+  "by": {"id": "$botId", "name": "$botName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}
+-- event bot --
+event: room.activity
+id: 3
+data: {"kind": "event", "type": "room.activity", "term": 1, "seq": 3, "data": {"kind": "added", "member": {"id": "$botId", "name": "$botName", "avatarHash": ""},
+  "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+    "by": {"id": "$botId", "name": "$botName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"},
+  "message": "点了《晴天》"}}
+-- event bot --
+event: queue.updated
+id: 4
+data: {"kind": "event", "type": "queue.updated", "term": 1, "seq": 4, "data": {"items": [],
+  "pending": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+    "by": {"id": "$botId", "name": "$botName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}}
+-- event bot --
+event: queue.updated
+id: 5
+data: {"kind": "event", "type": "queue.updated", "term": 1, "seq": 5, "data": {"pending": null, "items": []}}
+-- event bot --
+event: playback.updated
+id: 6
+data: {"kind": "event", "type": "playback.updated", "term": 1, "seq": 6, "data": {"nowPlaying": {
+  "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500},
+    "by": {"id": "$botId", "name": "$botName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "ready"},
+  "mediaUrl": "/media/netease/186016", "startedAtMs": 1, "durationMs": 269500, "gain": 1, "lyric": "[00:01.00]故事的小黄花"}}}
+
+-- request --
+POST /api/room/queue
+Authorization: Bearer $ticket
+
+{"track": {"source": "netease", "id": "185811"}}
+-- response --
+201
+Location: /api/room/queue/2
+{"entry": {"id": "2", "track": {"source": "netease", "id": "185811"},
+  "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000},
+  "by": {"id": "$botId", "name": "$botName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}
+
+-- request --
+POST /api/room/queue/2/likes
+Authorization: Bearer $ticket
+-- response --
+200
+{"likes": 1}
+
+-- request --
+POST /api/room/queue/2/likes
+Authorization: Bearer $ticket
+
+{"entryId": "2"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "entryId：未知字段"}}
+
+-- request --
+POST /api/room/queue/99/likes
+Authorization: Bearer $ticket
+
+{}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "这首歌已经不在播放列表里了。"}}
+
+-- request --
+DELETE /api/room/queue/2
+Authorization: Bearer $ticket
+-- response --
+204
+
+-- request --
+DELETE /api/room/queue/99
+Authorization: Bearer $ticket
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "这首歌已经不在播放列表里了。"}}
+
+-- request --
+POST /api/room/skip-votes
+Authorization: Bearer $ticket
+
+{}
+-- response --
+200
+{"votes": 1, "required": 1, "skipped": true}
+
+-- request --
+GET /api/room/search/tracks?source=netease&keyword=%E5%91%A8%E6%9D%B0%E4%BC%A6&page=1&pageSize=1
+Authorization: Bearer $ticket
+-- response --
+200
+{"total": 2, "items": [
+  {"track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000}}]}
+
+-- request --
+GET /api/room/search/tracks?source=netease&keyword=%E5%91%A8%E6%9D%B0%E4%BC%A6&page=one&pageSize=1
+Authorization: Bearer $ticket
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "page：应为整数"}}
+
+-- request --
+GET /api/room/search/tracks?source=netease&keyword=%E5%91%A8%E6%9D%B0%E4%BC%A6&page=1&pageSize=1&sort=hot
+Authorization: Bearer $ticket
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "sort：未知参数"}}
+
+-- request --
+GET /api/room/search/playlists?source=netease&keyword=%E5%91%A8%E6%9D%B0%E4%BC%A6&page=1&pageSize=10
+Authorization: Bearer $ticket
+-- response --
+200
+{"total": 1, "items": [{"source": "netease", "id": "3778678", "name": "周杰伦精选", "coverUrl": "https://p1.music.126.net/jay.jpg",
+  "creator": "alice", "description": "", "trackCount": 2, "playCount": 100}]}
+
+-- request --
+GET /api/room/playlists/netease/3778678/tracks
+Authorization: Bearer $ticket
+-- response --
+200
+{"total": 2, "items": [
+  {"track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000}},
+  {"track": {"source": "netease", "id": "185811"}, "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000}}]}
+
+-- request --
+POST /api/room/hello
+Authorization: Bearer $ticket
+
+{}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "接口不存在"}}
+
+-- request --
+POST /api/room/queue
+Authorization: Bearer $ticket
+
+{"keyword": "晴天"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "只能提供以下字段组合之一：track；source、keyword"}}
+
+-- request --
+GET /api/room
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "票据无效"}}
+
+-- request --
+GET /api/room
+Authorization: Bearer $bot
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "票据无效"}}

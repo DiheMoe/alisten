@@ -1,0 +1,74 @@
+获取成员身份，读取和修改昵称、头像。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$guestName", "avatarHash": ""}}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$bob", "member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""}}
+
+-- request --
+GET /api/me
+Authorization: Bearer $alice
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "$guestName", "avatarHash": ""}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer $alice
+
+{"name": "甲", "email": " Alice@Example.COM "}
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "甲", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer $alice
+
+{}
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "甲", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer $alice
+
+{"email": ""}
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "甲", "avatarHash": ""}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer $bob
+
+{"name": "乙"}
+-- response --
+200
+{"member": {"id": "$bobId", "name": "乙", "avatarHash": ""}}
+
+-- request --
+GET /api/me
+Authorization: Bearer $alice
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "甲", "avatarHash": ""}}
+
+-- request --
+GET /api/me
+Authorization: Bearer $bob
+-- response --
+200
+{"member": {"id": "$bobId", "name": "乙", "avatarHash": ""}}

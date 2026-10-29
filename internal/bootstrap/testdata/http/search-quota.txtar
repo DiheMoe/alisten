@@ -1,0 +1,116 @@
+临时房间的搜索与推荐列表共用一个额度：突发 10 次，之后每分钟恢复 1 次。额度用完、预计要等 30 秒以上时直接返回 RATE_LIMITED。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$bot", "member": {"id": "$botId", "name": "$botName", "avatarHash": ""}}
+
+-- request --
+POST /api/rooms
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$room
+{"id": "$room"}
+
+-- request --
+POST /api/rooms/$room/tickets
+Authorization: Bearer $bot
+
+{}
+-- response --
+201
+{"ticket": "$ticket"}
+
+-- request --
+GET /api/room/search/playlists?source=netease&keyword=no-such-playlist&page=1&pageSize=10
+Authorization: Bearer $ticket
+-- response --
+200
+{"items": [], "total": 0}
+
+-- request --
+GET /api/room/search/playlists?source=netease&keyword=no-such-playlist&page=1&pageSize=10
+Authorization: Bearer $ticket
+-- response --
+200
+{"items": [], "total": 0}
+
+-- request --
+GET /api/room/search/playlists?source=netease&keyword=no-such-playlist&page=1&pageSize=10
+Authorization: Bearer $ticket
+-- response --
+200
+{"items": [], "total": 0}
+
+-- request --
+GET /api/room/search/playlists?source=netease&keyword=no-such-playlist&page=1&pageSize=10
+Authorization: Bearer $ticket
+-- response --
+200
+{"items": [], "total": 0}
+
+-- request --
+GET /api/room/search/playlists?source=netease&keyword=no-such-playlist&page=1&pageSize=10
+Authorization: Bearer $ticket
+-- response --
+200
+{"items": [], "total": 0}
+
+-- request --
+GET /api/room/search/playlists?source=netease&keyword=no-such-playlist&page=1&pageSize=10
+Authorization: Bearer $ticket
+-- response --
+200
+{"items": [], "total": 0}
+
+-- request --
+GET /api/room/search/playlists?source=netease&keyword=no-such-playlist&page=1&pageSize=10
+Authorization: Bearer $ticket
+-- response --
+200
+{"items": [], "total": 0}
+
+-- request --
+GET /api/room/search/playlists?source=netease&keyword=no-such-playlist&page=1&pageSize=10
+Authorization: Bearer $ticket
+-- response --
+200
+{"items": [], "total": 0}
+
+-- request --
+GET /api/room/search/playlists?source=netease&keyword=no-such-playlist&page=1&pageSize=10
+Authorization: Bearer $ticket
+-- response --
+200
+{"items": [], "total": 0}
+
+-- request --
+GET /api/room/recommendations
+Authorization: Bearer $ticket
+-- response --
+200
+{"items": []}
+
+-- request --
+GET /api/room/search/playlists?source=netease&keyword=no-such-playlist&page=1&pageSize=10
+Authorization: Bearer $ticket
+-- response --
+429
+{"error": {"code": "RATE_LIMITED", "message": "搜索过于频繁，请稍后再试。"}}
+
+-- request --
+POST /api/room/queue
+Authorization: Bearer $ticket
+
+{"source": "netease", "keyword": "晴天"}
+-- response --
+201
+Location: /api/room/queue/1
+{"entry": {"id": "1", "track": {"source": "netease", "id": "186016"},
+  "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+  "by": {"id": "$botId", "name": "$botName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}

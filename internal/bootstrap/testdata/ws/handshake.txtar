@@ -1,0 +1,127 @@
+握手：第一帧必须是 hello。失败时先回复错误，再以对应的关闭码断开；先检查房间是否存在，再检查票据。
+列表外来源的握手以 HTTP 403 拒绝升级。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/rooms
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$room
+{"id": "$room"}
+
+-- request --
+POST /api/rooms
+
+{"name": "隔壁", "description": ""}
+-- response --
+201
+Location: /api/rooms/$other
+{"id": "$other"}
+
+-- request --
+POST /api/rooms/$room/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+201
+{"ticket": "$ticket"}
+
+-- connect evil --
+Origin: https://evil.example
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "服务器不接受从这个网址发出的操作，请用网站的正式地址打开。"}}
+
+-- connect early --
+-- send early --
+{"kind": "request", "type": "room.sync", "id": "r1", "data": {}}
+-- receive early --
+{"kind": "response", "type": "room.sync", "id": "r1", "data": {}, "error": {"code": "INVALID_ARGUMENT", "message": "第一帧必须是 hello"}}
+-- closed early --
+1008
+
+-- connect garbage --
+-- send garbage --
+hello
+-- receive garbage --
+{"kind": "event", "type": "error", "data": {"code": "INVALID_ARGUMENT", "message": "消息必须是 JSON 对象"}}
+-- closed garbage --
+1008
+
+-- connect outdated --
+-- send outdated --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$room", "ticket": "$ticket", "protocolVersion": "0000000000000000"}}
+-- receive outdated --
+{"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "CLIENT_OUTDATED", "message": "前端与服务端的协议版本不一致，请刷新页面"}}
+-- closed outdated --
+4426
+
+-- connect slug --
+-- send slug --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "hall", "ticket": "$ticket", "protocolVersion": "$protocolVersion"}}
+-- receive slug --
+{"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+-- closed slug --
+4404
+
+-- connect missing --
+-- send missing --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "01a15778-1911-7a28-8b2e-e08c2a25f388", "ticket": "不存在的票据", "protocolVersion": "$protocolVersion"}}
+-- receive missing --
+{"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+-- closed missing --
+4404
+
+-- connect forged --
+-- send forged --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$room", "ticket": "不存在的票据", "protocolVersion": "$protocolVersion"}}
+-- receive forged --
+{"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "UNAUTHORIZED", "message": "票据无效"}}
+-- closed forged --
+4401
+
+-- connect elsewhere --
+-- send elsewhere --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$other", "ticket": "$ticket", "protocolVersion": "$protocolVersion"}}
+-- receive elsewhere --
+{"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "UNAUTHORIZED", "message": "票据无效"}}
+-- closed elsewhere --
+4401
+
+-- connect alice --
+Origin: https://alisten.example
+-- send alice --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$room", "ticket": "$ticket", "protocolVersion": "$protocolVersion"}}
+-- receive alice --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 1, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
+    "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
+-- send alice --
+{"kind": "request", "type": "hello", "id": "h2", "data": {"roomId": "$room", "ticket": "$ticket", "protocolVersion": "$protocolVersion"}}
+-- receive alice --
+{"kind": "response", "type": "hello", "id": "h2", "data": {}, "error": {"code": "INVALID_ARGUMENT", "message": "已经完成握手"}}
+-- send alice --
+{"kind": "request", "type": "queue.clear", "id": "x1", "data": {}}
+-- receive alice --
+{"kind": "response", "type": "queue.clear", "id": "x1", "data": {}, "error": {"code": "INVALID_ARGUMENT", "message": "type：未知的请求类型"}}
+-- send alice --
+{"kind": "request", "type": "chat.send", "data": {"content": "没有 id"}}
+-- receive alice --
+{"kind": "event", "type": "error", "data": {"code": "INVALID_ARGUMENT", "message": "id：应为 1–128 个字符的字符串"}}
+-- send alice --
+{"kind": "request", "type": "ping", "id": "p1", "data": {"clientTimeMs": 1}}
+-- receive alice --
+{"kind": "response", "type": "ping", "id": "p1", "data": {"clientTimeMs": 1, "serverTimeMs": 1}}

@@ -1,0 +1,350 @@
+后台：常驻房间的列表和新建、按别名查找房间、音源账号的登录状态和扫码登录（包括 B 站）、YouTube cookies 的填写、清除和状态（不返回内容，空的 cookies 不能填写）、已存储的媒体。
+
+-- request --
+GET /api/admin/rooms
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
+
+-- request --
+GET /api/admin/rooms
+Authorization: Bearer wrong-token
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
+
+-- request --
+GET /api/admin/rooms
+Authorization: Bearer admin-secret
+-- response --
+200
+{"items": []}
+
+-- request --
+POST /api/admin/rooms
+Authorization: Bearer admin-secret
+
+{"name": "大厅", "description": "常驻", "slug": "hall", "password": "芝麻开门"}
+-- response --
+201
+Location: /api/rooms/$hall
+{"id": "$hall"}
+
+-- request --
+POST /api/admin/rooms
+Authorization: Bearer admin-secret
+
+{"name": "二厅", "description": ""}
+-- response --
+201
+Location: /api/rooms/$second
+{"id": "$second"}
+
+-- request --
+POST /api/admin/rooms
+Authorization: Bearer admin-secret
+
+{"name": "三厅", "description": "", "slug": "hall"}
+-- response --
+409
+{"error": {"code": "CONFLICT", "message": "别名已被占用"}}
+
+-- request --
+POST /api/admin/rooms
+Authorization: Bearer admin-secret
+
+{"name": "三厅", "description": "", "slug": "Hall"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "slug：格式不正确"}}
+
+-- request --
+POST /api/rooms
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$open
+{"id": "$open"}
+
+-- request --
+GET /api/admin/rooms
+Authorization: Bearer admin-secret
+-- response --
+200
+{"items": [
+  {"id": "$hall", "slug": "hall", "name": "大厅", "description": "常驻", "kind": "persistent", "hasPassword": true, "onlineCount": 0},
+  {"id": "$second", "slug": null, "name": "二厅", "description": "", "kind": "persistent", "hasPassword": false, "onlineCount": 0}
+]}
+
+-- request --
+GET /api/rooms
+-- response --
+200
+{"items": [
+  {"id": "$hall", "slug": "hall", "name": "大厅", "description": "常驻", "kind": "persistent", "hasPassword": true, "onlineCount": 0},
+  {"id": "$second", "slug": null, "name": "二厅", "description": "", "kind": "persistent", "hasPassword": false, "onlineCount": 0},
+  {"id": "$open", "slug": null, "name": "临时", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0}
+]}
+
+-- request --
+GET /api/rooms/hall
+-- response --
+200
+{"id": "$hall", "slug": "hall", "name": "大厅", "description": "常驻", "kind": "persistent", "hasPassword": true, "onlineCount": 0}
+
+-- request --
+GET /api/rooms/HALL
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$guestName", "avatarHash": ""}}
+
+-- request --
+POST /api/rooms/hall/tickets
+Authorization: Bearer $alice
+
+{"password": "芝麻开门"}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+
+-- request --
+POST /api/rooms/$hall/tickets
+Authorization: Bearer $alice
+
+{"password": "芝麻开门"}
+-- response --
+201
+{"ticket": "$ticket"}
+
+-- request --
+GET /api/admin/credentials/netease
+Authorization: Bearer admin-secret
+-- response --
+200
+{"set": false, "account": null}
+
+-- request --
+GET /api/admin/credentials/qq
+Authorization: Bearer admin-secret
+-- response --
+200
+{"set": false, "account": null}
+
+-- request --
+PUT /api/admin/credentials/netease
+Authorization: Bearer admin-secret
+
+{}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "接口不存在"}}
+
+-- request --
+POST /api/admin/credentials/netease/qr-logins
+Authorization: Bearer admin-secret
+
+{}
+-- response --
+201
+{"key": "$neteaseKey", "qrImage": "$neteaseImage", "expiresAtMs": 1}
+
+-- request --
+POST /api/admin/credentials/netease/qr-logins/status
+Authorization: Bearer admin-secret
+
+{"key": "$neteaseKey"}
+-- response --
+200
+{"status": "waiting", "message": ""}
+
+-- request --
+POST /api/admin/credentials/netease/qr-logins/status
+Authorization: Bearer admin-secret
+
+{"key": ""}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "key：长度不能少于 1 个字符"}}
+
+-- request --
+POST /api/admin/credentials/qq/qr-logins
+Authorization: Bearer admin-secret
+
+{"type": "qq"}
+-- response --
+201
+{"key": "$qqKey", "qrImage": "data:image/png;base64,iVBORw0KGgo=", "expiresAtMs": 1}
+
+-- request --
+POST /api/admin/credentials/qq/qr-logins
+Authorization: Bearer admin-secret
+
+{"type": "wx"}
+-- response --
+201
+{"key": "$wxKey", "qrImage": "https://wx.example/qr.png", "expiresAtMs": 1}
+
+-- request --
+POST /api/admin/credentials/qq/qr-logins
+Authorization: Bearer admin-secret
+
+{"type": "wechat"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "type：取值应为 qq、wx 之一"}}
+
+-- request --
+POST /api/admin/credentials/qq/qr-logins/status
+Authorization: Bearer admin-secret
+
+{"type": "wx", "key": "$wxKey"}
+-- response --
+200
+{"status": "waiting", "message": ""}
+
+-- request --
+POST /api/admin/credentials/qq/qr-logins/status
+Authorization: Bearer admin-secret
+
+{"type": "qq", "key": "$wxKey"}
+-- response --
+200
+{"status": "expired", "message": ""}
+
+-- request --
+POST /api/admin/credentials/qq/qr-logins
+Authorization: Bearer $alice
+
+{"type": "qq"}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
+
+-- request --
+GET /api/admin/credentials/bilibili
+Authorization: Bearer admin-secret
+-- response --
+200
+{"set": false, "account": null}
+
+-- request --
+POST /api/admin/credentials/bilibili/qr-logins
+Authorization: Bearer admin-secret
+
+{}
+-- response --
+201
+{"key": "$bilibiliKey", "qrImage": "$bilibiliImage", "expiresAtMs": 1}
+
+-- request --
+POST /api/admin/credentials/bilibili/qr-logins/status
+Authorization: Bearer admin-secret
+
+{"key": "$bilibiliKey"}
+-- response --
+200
+{"status": "waiting", "message": ""}
+
+-- request --
+GET /api/admin/credentials/youtube
+Authorization: Bearer admin-secret
+-- response --
+200
+{"set": false, "updatedAtMs": 0}
+
+-- request --
+PUT /api/admin/credentials/youtube
+Authorization: Bearer admin-secret
+
+{"cookies": "session=fictional"}
+-- response --
+204
+
+-- request --
+GET /api/admin/credentials/youtube
+Authorization: Bearer admin-secret
+-- response --
+200
+{"set": true, "updatedAtMs": 1}
+
+-- request --
+PUT /api/admin/credentials/youtube
+Authorization: Bearer admin-secret
+
+{"cookies": "fictional"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "不是能识别的 cookies：请粘贴扩展导出的 cookies.txt，或开发者工具里请求头 cookie 的值。"}}
+
+-- request --
+GET /api/admin/credentials/youtube
+Authorization: Bearer admin-secret
+-- response --
+200
+{"set": true, "updatedAtMs": 1}
+
+-- request --
+PUT /api/admin/credentials/youtube
+Authorization: Bearer admin-secret
+
+{"cookies": ""}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "cookies：长度不能少于 1 个字符"}}
+
+-- request --
+GET /api/admin/credentials/youtube
+Authorization: Bearer admin-secret
+-- response --
+200
+{"set": true, "updatedAtMs": 1}
+
+-- request --
+DELETE /api/admin/credentials/youtube
+Authorization: Bearer admin-secret
+-- response --
+204
+
+-- request --
+GET /api/admin/credentials/youtube
+Authorization: Bearer admin-secret
+-- response --
+200
+{"set": false, "updatedAtMs": 0}
+
+-- request --
+GET /api/admin/media
+Authorization: Bearer admin-secret
+-- response --
+200
+{"items": []}
+
+-- request --
+DELETE /api/admin/media/66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391
+Authorization: Bearer admin-secret
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "媒体不存在"}}
+
+-- request --
+DELETE /api/admin/media/not-a-key
+Authorization: Bearer admin-secret
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "媒体不存在"}}
+
+-- request --
+GET /api/admin/media
+Authorization: Bearer $alice
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}

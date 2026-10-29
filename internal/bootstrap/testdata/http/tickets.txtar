@@ -1,0 +1,107 @@
+成员用成员 token 换取进房票据；有密码的房间先校验密码。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$guestName", "avatarHash": ""}}
+
+-- request --
+POST /api/rooms
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$open
+{"id": "$open"}
+
+-- request --
+POST /api/rooms
+
+{"name": "上锁", "description": "", "password": "芝麻开门"}
+-- response --
+201
+Location: /api/rooms/$locked
+{"id": "$locked"}
+
+-- request --
+POST /api/rooms/$open/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+201
+{"ticket": "$openTicket"}
+
+-- request --
+POST /api/rooms/$open/tickets
+Authorization: Bearer $alice
+
+{"password": "用不到"}
+-- response --
+201
+{"ticket": "$secondTicket"}
+
+-- request --
+POST /api/rooms/$locked/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "房间密码错误"}}
+
+-- request --
+POST /api/rooms/$locked/tickets
+Authorization: Bearer $alice
+
+{"password": "芝麻关门"}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "房间密码错误"}}
+
+-- request --
+POST /api/rooms/$locked/tickets
+Authorization: Bearer $alice
+
+{"password": "芝麻开门"}
+-- response --
+201
+{"ticket": "$lockedTicket"}
+
+-- request --
+POST /api/rooms/$locked/tickets
+
+{"password": "芝麻开门"}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "成员 token 无效"}}
+
+-- request --
+POST /api/rooms/01a15778-1911-7a28-8b2e-e08c2a25f388/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+
+-- request --
+POST /api/rooms/%00/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+
+-- request --
+POST /api/rooms/$locked/tickets
+Authorization: Bearer $alice
+
+{"password": 1}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "password：应为字符串"}}

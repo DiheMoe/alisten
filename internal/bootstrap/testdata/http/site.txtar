@@ -1,0 +1,63 @@
+站点：品牌名默认是 Alisten；后台修改时返回存下的名字，首尾的空白已经去掉，之后读到的也是它；空的、超过 20 个字符的和看不见的名字不能保存；修改品牌名要管理 token。
+
+-- request --
+GET /api/site
+-- response --
+200
+{"brandName": "Alisten"}
+
+-- request --
+PATCH /api/admin/site
+Authorization: Bearer admin-secret
+
+{"brandName": "  周末听歌会  "}
+-- response --
+200
+{"brandName": "周末听歌会"}
+
+-- request --
+GET /api/site
+-- response --
+200
+{"brandName": "周末听歌会"}
+
+-- request --
+PATCH /api/admin/site
+Authorization: Bearer admin-secret
+
+{"brandName": ""}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "brandName：去掉首尾空白后应有 1 到 20 个字符，其中至少一个看得见，不能包含控制字符"}}
+
+-- request --
+PATCH /api/admin/site
+Authorization: Bearer admin-secret
+
+{"brandName": "一二三四五六七八九十一二三四五六七八九十一"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "brandName：去掉首尾空白后应有 1 到 20 个字符，其中至少一个看得见，不能包含控制字符"}}
+
+-- request --
+PATCH /api/admin/site
+Authorization: Bearer admin-secret
+
+{"brandName": "\u200b\u3000\u200b"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "brandName：去掉首尾空白后应有 1 到 20 个字符，其中至少一个看得见，不能包含控制字符"}}
+
+-- request --
+PATCH /api/admin/site
+
+{"brandName": "别人的名字"}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
+
+-- request --
+GET /api/site
+-- response --
+200
+{"brandName": "周末听歌会"}

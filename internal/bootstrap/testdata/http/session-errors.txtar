@@ -1,0 +1,73 @@
+成员 token 无效时返回 UNAUTHORIZED；请求体不合法时返回 INVALID_ARGUMENT。
+
+-- request --
+POST /api/members
+
+{"name": "甲"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "name：未知字段"}}
+
+-- request --
+POST /api/members
+
+null
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "应为 JSON 对象"}}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$guestName", "avatarHash": ""}}
+
+-- request --
+GET /api/me
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "成员 token 无效"}}
+
+-- request --
+GET /api/me
+Authorization: Bearer not-a-member-token
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "成员 token 无效"}}
+
+-- request --
+PATCH /api/me
+
+{"name": "乙"}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "成员 token 无效"}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer not-a-member-token
+
+{"name": "乙"}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "成员 token 无效"}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer $alice
+
+{"name": ""}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "name：长度不能少于 1 个字符"}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer $alice
+
+{"name": "甲\u0000"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "name：不能包含 U+0000"}}

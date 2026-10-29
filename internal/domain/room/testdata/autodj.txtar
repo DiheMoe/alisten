@@ -1,0 +1,39 @@
+AutoDJ：开播时等待队列为空、有人在听、10 秒内没人点歌，就补一首推荐的歌。
+-- 01 --
+> restore ephemeral
+schedule 1 5m0s
+-- 02 --
+> 0s join s1 m1
+emit 1.1 members [s1=m1]
+-- 03 --
+> 0s enqueue m1 netease:a
+persist mode=sequential entrySeq=1 current=- pending=#1(netease:a) waiting=[]
+emit 1.2 activity added m1 #1(netease:a)
+emit 1.3 queue pending=#1(netease:a) waiting=[]
+reply q03 enqueued #1(netease:a)
+prepare netease:a
+-- 04 --
+> 20s prepared netease:a 3m
+persist mode=sequential entrySeq=1 current=#1(netease:a,ready)@20.2s pending=- waiting=[]
+emit 1.4 queue pending=- waiting=[]
+emit 1.5 playback #1(netease:a,ready)@20.2s
+schedule 2 3m20.2s
+recommend 3
+-- 05 --
+> 21s recommended 3 netease:b
+persist mode=sequential entrySeq=2 current=#1(netease:a,ready)@20.2s pending=- waiting=[#2(netease:b,auto)]
+emit 1.6 activity added - #2(netease:b,auto)
+emit 1.7 queue pending=- waiting=[#2(netease:b,auto)]
+prepare netease:b
+-- 06 --
+> 22s prepared netease:b 2m
+persist mode=sequential entrySeq=2 current=#1(netease:a,ready)@20.2s pending=- waiting=[#2(netease:b,ready,auto)]
+emit 1.8 queue pending=- waiting=[#2(netease:b,ready,auto)]
+-- 07 --
+> 3m20.2s timer 2
+persist mode=sequential entrySeq=2 current=#2(netease:b,ready,auto)@3m20.4s pending=- waiting=[]
+record #1(netease:a,ready) 20.2s-3m20.2s
+emit 1.9 queue pending=- waiting=[]
+emit 1.10 playback #2(netease:b,ready,auto)@3m20.4s
+schedule 4 5m20.4s
+recommend 5

@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sample",
+  "$defs": {
+    "Empty": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": ["INVALID_ARGUMENT", "NOT_FOUND", "CLIENT_OUTDATED"],
+      "x-httpStatus": {"INVALID_ARGUMENT": 400, "NOT_FOUND": 404}
+    },
+    "ErrorInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {"$ref": "#/$defs/ErrorCode"},
+        "message": {"type": "string"}
+      },
+      "required": ["code", "message"]
+    },
+    "Keyword": {"type": "string", "minLength": 1, "maxLength": 500},
+    "Limit": {"type": "integer", "description": "条数上限", "minimum": 1, "maximum": 100},
+    "Website": {"type": "string", "maxLength": 200, "x-maxBytes": 600, "x-url": true},
+    "Member": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"}
+      },
+      "required": ["id", "name"]
+    },
+    "Room": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "房间",
+      "properties": {
+        "gain": {"type": "number"},
+        "id": {"type": "string"},
+        "members": {"type": "array", "items": {"$ref": "#/$defs/Member"}},
+        "open": {"type": "boolean"},
+        "slug": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+      },
+      "required": ["gain", "id", "members", "open", "slug"]
+    },
+    "Source": {
+      "type": "string",
+      "enum": ["netease", "qq", "link"]
+    },
+    "Track": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "source": {"$ref": "#/$defs/Source"}
+      },
+      "required": ["id", "source"],
+      "allOf": [
+        {
+          "if": {"properties": {"source": {"const": "link"}}, "required": ["source"]},
+          "then": {"properties": {"id": {"pattern": "^https?://\\S+$", "x-maxBytes": 2048}}}
+        },
+        {
+          "if": {"properties": {"source": {"const": "netease"}}, "required": ["source"]},
+          "then": {"properties": {"id": {"pattern": "^[0-9]+$"}}}
+        }
+      ]
+    }
+  },
+  "x-ws": {
+    "requests": [
+      {
+        "type": "hello",
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "clientTimeMs": {"type": "integer", "minimum": 0},
+            "roomId": {"type": "string"}
+          },
+          "required": ["clientTimeMs", "roomId"]
+        },
+        "response": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "owner": {"anyOf": [{"$ref": "#/$defs/Member"}, {"type": "null"}]},
+            "room": {"$ref": "#/$defs/Room"}
+          },
+          "required": ["owner", "room"]
+        }
+      }
+    ],
+    "events": [
+      {"type": "error", "data": {"$ref": "#/$defs/ErrorInfo"}}
+    ],
+    "closeCodes": [
+      {"name": "invalidArgument", "code": 1008},
+      {"name": "clientOutdated", "code": 4426}
+    ]
+  },
+  "x-requests": [
+    {
+      "type": "room.sync",
+      "description": "获取房间快照",
+      "http": {"method": "GET", "path": "/api/room"},
+      "request": {"type": "object", "additionalProperties": false, "properties": {}},
+      "response": {"$ref": "#/$defs/Room"}
+    },
+    {
+      "type": "queue.add",
+      "http": {"method": "POST", "path": "/api/room/queue", "status": 201, "location": true},
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "keyword": {"$ref": "#/$defs/Keyword"},
+          "requester": {"type": "string", "minLength": 1},
+          "source": {"$ref": "#/$defs/Source"},
+          "track": {"$ref": "#/$defs/Track"}
+        },
+        "oneOf": [
+          {"required": ["track"], "properties": {"track": {}, "requester": {}}, "additionalProperties": false},
+          {"required": ["source", "keyword"], "properties": {"source": {}, "keyword": {}, "requester": {}}, "additionalProperties": false}
+        ]
+      },
+      "response": {"$ref": "#/$defs/Empty"}
+    },
+    {
+      "type": "queue.remove",
+      "http": {"method": "DELETE", "path": "/api/room/queue/{entryId}", "status": 204},
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entryId": {"type": "string"}
+        },
+        "required": ["entryId"]
+      },
+      "response": {"$ref": "#/$defs/Empty"}
+    },
+    {
+      "type": "queue.move",
+      "http": {"method": "PATCH", "path": "/api/room/queue/{entryId}", "status": 204},
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entryId": {"type": "string"},
+          "position": {"type": "integer", "minimum": 1}
+        },
+        "required": ["entryId", "position"]
+      },
+      "response": {"$ref": "#/$defs/Empty"}
+    },
+    {
+      "type": "search.tracks",
+      "http": {"method": "GET", "path": "/api/room/search/tracks"},
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "keyword": {"$ref": "#/$defs/Keyword"},
+          "limit": {"$ref": "#/$defs/Limit"},
+          "source": {"$ref": "#/$defs/Source"}
+        },
+        "required": ["keyword", "source"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "total": {"type": "integer"}
+        },
+        "required": ["total"]
+      }
+    }
+  ],
+  "x-events": [
+    {
+      "type": "members.updated",
+      "data": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "members": {"type": "array", "items": {"$ref": "#/$defs/Member"}},
+          "note": {"type": "string"}
+        },
+        "required": ["members"]
+      }
+    }
+  ],
+  "x-http": [
+    {
+      "name": "createMember",
+      "description": "创建成员",
+      "method": "POST",
+      "path": "/api/members",
+      "auth": "none",
+      "status": 201,
+      "request": {"type": "object", "additionalProperties": false, "properties": {}},
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "member": {"$ref": "#/$defs/Member"},
+          "token": {"type": "string"}
+        },
+        "required": ["member", "token"]
+      }
+    },
+    {
+      "name": "getRoom",
+      "method": "GET",
+      "path": "/api/rooms/{ref}",
+      "auth": "none",
+      "response": {"$ref": "#/$defs/Room"}
+    },
+    {
+      "name": "createRoom",
+      "method": "POST",
+      "path": "/api/rooms",
+      "auth": "none",
+      "status": 201,
+      "location": true,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string", "minLength": 1}
+        },
+        "required": ["name"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string"}
+        },
+        "required": ["id"]
+      }
+    },
+    {
+      "name": "getSeat",
+      "description": "座位上的成员，<b>座位号</b> 从 1 开始 & 不超过 8",
+      "method": "GET",
+      "path": "/api/rooms/{ref}/seats/{seat}",
+      "auth": "member",
+      "response": {"$ref": "#/$defs/Member"}
+    },
+    {
+      "name": "adminUpdateRoom",
+      "method": "PATCH",
+      "path": "/api/admin/rooms/{id}",
+      "auth": "admin",
+      "status": 204,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "homepage": {"$ref": "#/$defs/Website"},
+          "limit": {"$ref": "#/$defs/Limit", "description": "一页最多返回的条数"},
+          "name": {"type": "string", "minLength": 1, "maxLength": 80},
+          "note": {"type": "string", "pattern": "^[^`]*$"},
+          "slug": {"type": "string", "pattern": "^[a-z0-9-]{0,32}$"}
+        }
+      }
+    }
+  ]
+}

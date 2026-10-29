@@ -1,0 +1,55 @@
+等待队列：点赞改变顺序，删除只针对等待队列；准备失败的条目移出队列，待播准备失败时选下一首。
+-- 01 --
+> restore persistent
+-- 02 --
+> 0s join s1 m1
+emit 1.1 members [s1=m1]
+-- 03 --
+> 0s enqueue m1 netease:a
+persist mode=sequential entrySeq=1 current=- pending=#1(netease:a) waiting=[]
+emit 1.2 activity added m1 #1(netease:a)
+emit 1.3 queue pending=#1(netease:a) waiting=[]
+reply q03 enqueued #1(netease:a)
+prepare netease:a
+-- 04 --
+> 0s enqueue m2 netease:b
+persist mode=sequential entrySeq=2 current=- pending=#1(netease:a) waiting=[#2(netease:b)]
+emit 1.4 activity added m2 #2(netease:b)
+emit 1.5 queue pending=#1(netease:a) waiting=[#2(netease:b)]
+reply q04 enqueued #2(netease:b)
+prepare netease:b
+-- 05 --
+> 0s enqueue m3 netease:c
+persist mode=sequential entrySeq=3 current=- pending=#1(netease:a) waiting=[#2(netease:b) #3(netease:c)]
+emit 1.6 activity added m3 #3(netease:c)
+emit 1.7 queue pending=#1(netease:a) waiting=[#2(netease:b) #3(netease:c)]
+reply q05 enqueued #3(netease:c)
+prepare netease:c
+-- 06 --
+> 1s like m2 3
+persist mode=sequential entrySeq=3 current=- pending=#1(netease:a) waiting=[#3(netease:c,likes=1) #2(netease:b)]
+emit 1.8 activity liked m2 #3(netease:c,likes=1)
+emit 1.9 queue pending=#1(netease:a) waiting=[#3(netease:c,likes=1) #2(netease:b)]
+reply q06 liked 1
+-- 07 --
+> 2s remove m3 1
+reply q07 error not-found 这首歌已经不在播放列表里了。
+-- 08 --
+> 2s remove m3 2
+persist mode=sequential entrySeq=3 current=- pending=#1(netease:a) waiting=[#3(netease:c,likes=1)]
+emit 1.10 activity removed m3 #2(netease:b)
+emit 1.11 queue pending=#1(netease:a) waiting=[#3(netease:c,likes=1)]
+reply q08 done
+-- 09 --
+> 3s failed netease:a 歌曲已下架
+persist mode=sequential entrySeq=3 current=- pending=#3(netease:c,likes=1) waiting=[]
+emit 1.12 activity failed - #1(netease:a) 歌曲已下架
+emit 1.13 queue pending=#3(netease:c,likes=1) waiting=[]
+-- 10 --
+> 4s failed netease:c 没有版权
+persist mode=sequential entrySeq=3 current=- pending=- waiting=[]
+emit 1.14 activity failed - #3(netease:c,likes=1) 没有版权
+emit 1.15 queue pending=- waiting=[]
+-- 11 --
+> 5s sync m1
+reply q11 sync term=1 seq=15 sessions=1

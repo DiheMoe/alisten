@@ -1,0 +1,136 @@
+房间的事件流：bot 用常驻房间的 API Key 打开事件流，先收到快照，点歌之后收到与 WebSocket 相同的房间事件；事件流不加入房间，
+快照中的在线列表一直为空。管理员重置 Key 之后，bot 的事件流收到 4401 的 close 并结束；成员用票据打开的事件流不受影响。
+房间的 5 条事件流都用了这张票据之后，再用它打开时顶替最早的一条：被顶替的事件流收到 4409 的 close 并结束。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/admin/rooms
+Authorization: Bearer admin-secret
+
+{"name": "大厅", "description": ""}
+-- response --
+201
+Location: /api/rooms/$hall
+{"id": "$hall"}
+
+-- request --
+POST /api/rooms/$hall/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+201
+{"ticket": "$ticket"}
+
+-- request --
+POST /api/admin/rooms/$hall/api-key
+Authorization: Bearer admin-secret
+
+{}
+-- response --
+201
+Location: /api/admin/rooms/$hall/api-key
+{"key": "$key"}
+
+-- stream bot --
+Authorization: Bearer $key
+-- event bot --
+event: snapshot
+data: {"room": {"term": 1, "seq": 0, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent"},
+  "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+  "members": {"sessions": [], "onlineCount": 0}}}
+
+-- request --
+POST /api/room/queue
+Authorization: Bearer $key
+
+{"source": "netease", "keyword": "晴天", "requester": "张三"}
+-- response --
+201
+Location: /api/room/queue/1
+{"entry": {"id": "1", "track": {"source": "netease", "id": "186016"},
+  "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+  "by": {"id": "$botId", "name": "张三（bot）", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}
+-- event bot --
+event: room.activity
+id: 1
+data: {"kind": "event", "type": "room.activity", "term": 1, "seq": 1, "data": {"kind": "added", "member": {"id": "$botId", "name": "张三（bot）", "avatarHash": ""},
+  "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+    "by": {"id": "$botId", "name": "张三（bot）", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"},
+  "message": "点了《晴天》"}}
+-- event bot --
+event: queue.updated
+id: 2
+data: {"kind": "event", "type": "queue.updated", "term": 1, "seq": 2, "data": {"items": [],
+  "pending": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+    "by": {"id": "$botId", "name": "张三（bot）", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}}
+-- event bot --
+event: queue.updated
+id: 3
+data: {"kind": "event", "type": "queue.updated", "term": 1, "seq": 3, "data": {"pending": null, "items": []}}
+-- event bot --
+event: playback.updated
+id: 4
+data: {"kind": "event", "type": "playback.updated", "term": 1, "seq": 4, "data": {"nowPlaying": {
+  "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500},
+    "by": {"id": "$botId", "name": "张三（bot）", "avatarHash": ""}, "auto": false, "likes": 0, "status": "ready"},
+  "mediaUrl": "/media/netease/186016", "startedAtMs": 1, "durationMs": 269500, "gain": 1, "lyric": "[00:01.00]故事的小黄花"}}}
+
+-- stream alice --
+Authorization: Bearer $ticket
+-- event alice --
+event: snapshot
+data: {"room": {"term": 1, "seq": 4, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent"},
+  "playMode": "sequential",
+  "nowPlaying": {
+    "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500},
+      "by": {"id": "$botId", "name": "张三（bot）", "avatarHash": ""}, "auto": false, "likes": 0, "status": "ready"},
+    "mediaUrl": "/media/netease/186016", "startedAtMs": 1, "durationMs": 269500, "gain": 1, "lyric": "[00:01.00]故事的小黄花"},
+  "pending": null, "items": [],
+  "members": {"sessions": [], "onlineCount": 0}}}
+
+-- request --
+POST /api/admin/rooms/$hall/api-key
+Authorization: Bearer admin-secret
+
+{}
+-- response --
+201
+Location: /api/admin/rooms/$hall/api-key
+{"key": "$resetKey"}
+-- event bot --
+event: close
+data: {"code": 4401, "message": "凭证已失效：房间设置或修改了密码，或者 API Key 已重置"}
+
+-- request --
+POST /api/room/messages
+Authorization: Bearer $ticket
+
+{"content": "还在"}
+-- response --
+204
+-- event alice --
+event: chat.message
+id: 5
+data: {"kind": "event", "type": "chat.message", "term": 1, "seq": 5, "data": {"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "content": "还在", "sentAtMs": 1}}
+
+-- stream alice2 --
+Authorization: Bearer $ticket
+-- stream alice3 --
+Authorization: Bearer $ticket
+-- stream alice4 --
+Authorization: Bearer $ticket
+-- stream alice5 --
+Authorization: Bearer $ticket
+-- stream alice6 --
+Authorization: Bearer $ticket
+-- event alice --
+event: close
+data: {"code": 4409, "message": "同一凭证打开了新的事件流"}
