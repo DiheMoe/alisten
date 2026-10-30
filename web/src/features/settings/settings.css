@@ -18,7 +18,11 @@
 .settings-row-control select:disabled, .settings-row-control input:disabled { opacity: .5; cursor: not-allowed; }
 .settings-row-field .settings-row-control { width: 280px; }
 .settings-volume-control { display: flex; align-items: center; gap: 16px; width: 100%; }
-.settings-volume-control output { min-width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
+.settings-volume-input-control { display: flex; align-items: center; gap: 4px; }
+.settings-volume-input { -moz-appearance: textfield; }
+.settings-volume-input::-webkit-inner-spin-button, .settings-volume-input::-webkit-outer-spin-button { margin: 0; -webkit-appearance: none; }
+.settings-volume-input { box-sizing: border-box; width: 5ch; padding: 6px 4px; text-align: center; font-variant-numeric: tabular-nums; }
+.settings-volume-unit { color: var(--color-foreground-subtle); font-size: var(--text-ui-xs); }
 .settings-switch[type='checkbox'] { appearance: none; position: relative; width: 40px; height: 24px; margin: 0; border: 1px solid var(--color-border-hover); border-radius: 999px; background: var(--color-selected); cursor: pointer; }
 .settings-switch[type='checkbox']::before { content: ''; display: block; width: 18px; height: 18px; margin: 2px; border-radius: 50%; background: var(--color-foreground); transform: translateX(0); transition: transform 150ms ease; }
 .settings-switch[type='checkbox']:checked { border-color: var(--color-primary); background: var(--color-primary); }

@@ -13,13 +13,18 @@
 .progress-track { height: 3px; flex: 1; background: var(--color-border-hover); border-radius: 4px; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--color-foreground); transform: scaleX(0); transform-origin: left; }
 .player-tools { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
-.player-tools .volume-slider { width: 90px; margin-right: 16px; accent-color: var(--color-foreground); }
+.player-tools .volume-control { display: flex; align-items: center; gap: 6px; margin-right: 16px; }
+.player-tools .volume-slider { width: 90px; accent-color: var(--color-foreground); }
+.player-tools .volume-input { box-sizing: border-box; width: 4.5ch; min-width: 0; padding: 4px 3px; text-align: center; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+.player-tools .volume-input::-webkit-inner-spin-button, .player-tools .volume-input::-webkit-outer-spin-button { margin: 0; -webkit-appearance: none; }
+.player-tools .volume-unit { color: var(--color-foreground-subtle); font-size: var(--text-ui-xs); }
 .player-panel-toggle { color: var(--color-foreground-subtle); }
 .player-panel-toggle:hover:not(:disabled), .player-panel-toggle:focus-visible:not(:disabled), .player-panel-toggle[aria-pressed='true'] { color: var(--color-brand); background: transparent; }
 .player-panel-toggle:active:not(:disabled) { color: var(--color-brand); background: transparent; transform: none; }
 @media (max-width: 1100px) {
   .player-bar { gap: 12px; }
-  .player-tools .volume-slider { width: 60px; margin-right: 4px; }
+  .player-tools .volume-control { margin-right: 4px; }
+  .player-tools .volume-slider { width: 60px; }
 }
 @media (max-width: 767px) {
   /* 窄屏的播放器栏由内容撑开高度；内容比封面矮时（比如出错提示），仍保持封面加上下内边距的高度。 */

@@ -209,8 +209,25 @@ export function SettingsPage() {
                 <div className="settings-group">
                   <SettingRow id="settings-volume" title="音量" description="只调整这台设备的播放音量。" field>
                     <div className="settings-volume-control">
-                      <input id="settings-volume" aria-describedby="settings-volume-description" type="range" min="0" max="100" value={draft.volume} onChange={event => update('volume', Number(event.target.value))} />
-                      <output htmlFor="settings-volume" className="text-ui-caption muted">{`${draft.volume}%`}</output>
+                      <input id="settings-volume" aria-describedby="settings-volume-description" type="range" min="0" max="100" value={draft.volume} aria-label="音量滑块" onChange={event => update('volume', Number(event.target.value))} />
+                      <div className="settings-volume-input-control">
+                        <input
+                          className="settings-volume-input"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          inputMode="numeric"
+                          value={draft.volume}
+                          aria-label="音量百分比"
+                          onChange={(event) => {
+                            const value = Number(event.target.value)
+                            if (Number.isFinite(value))
+                              update('volume', Math.min(100, Math.max(0, Math.round(value))))
+                          }}
+                        />
+                        <span className="settings-volume-unit" aria-hidden="true">%</span>
+                      </div>
                     </div>
                   </SettingRow>
                   <SettingRow id="settings-muted" title="静音" description="暂时关闭这台设备的声音。">
