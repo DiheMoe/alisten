@@ -1,5 +1,5 @@
 import { ListMusic, MessageCircle, SkipForward, Volume2, VolumeX } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { roomStore } from '@/core/room'
 import { sourceName } from '@/features/queue'
 import { bookTitle } from '@/shared/lib/book-title'
@@ -65,7 +65,26 @@ export function PlayerBar({ onSkip, onLyrics, onQueue, onChat, queueOpen, chatOp
   const connected = useStore(roomStore, s => s.status === 'open')
   const volume = useStore(volumeStore, s => s.volume)
   const muted = useStore(volumeStore, s => s.muted)
+  const [volumeDraft, setVolumeDraft] = useState(String(volume))
+  const volumeEditingRef = useRef(false)
   const meta = nowPlaying?.entry.meta
+  useEffect(() => {
+    if (!volumeEditingRef.current)
+      setVolumeDraft(String(volume))
+  }, [volume])
+  const commitVolumeDraft = () => {
+    const parsed = Number(volumeDraft)
+    if (volumeDraft.trim() === '' || !Number.isFinite(parsed)) {
+      setVolumeDraft(String(volume))
+      return
+    }
+    const next = Math.min(100, Math.max(0, Math.round(parsed)))
+    volumeStore.setVolume(next)
+    setVolumeDraft(String(next))
+    if (muted && next > 0)
+      volumeStore.setMuted(false)
+  }
+
   const source = nowPlaying && sourceName(nowPlaying.entry.track)
   return (
     <section className="player-bar" aria-label="播放器">
@@ -95,20 +114,49 @@ export function PlayerBar({ onSkip, onLyrics, onQueue, onChat, queueOpen, chatOp
         </div>
         <div className="player-tools">
           <IconButton icon={muted ? VolumeX : Volume2} label={muted ? '取消静音' : '静音'} onClick={() => volumeStore.setMuted(!muted)} />
-          <input
-            className="volume-slider"
-            type="range"
-            min="0"
-            max="100"
-            value={muted ? 0 : volume}
-            aria-label="音量"
-            onChange={(event) => {
-              const next = Number(event.target.value)
-              volumeStore.setVolume(next)
-              if (muted && next > 0)
-                volumeStore.setMuted(false)
-            }}
-          />
+          <div className="volume-control">
+            <input
+              className="volume-slider"
+              type="range"
+              min="0"
+              max="100"
+              value={muted ? 0 : volume}
+              aria-label="音量"
+              onChange={(event) => {
+                const next = Number(event.target.value)
+                volumeStore.setVolume(next)
+                setVolumeDraft(String(next))
+                if (muted && next > 0)
+                  volumeStore.setMuted(false)
+              }}
+            />
+            <input
+              className="volume-input"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              inputMode="numeric"
+              value={volumeDraft}
+              aria-label="音量百分比"
+              onFocus={() => {
+                volumeEditingRef.current = true
+              }}
+              onChange={event => setVolumeDraft(event.target.value)}
+              onBlur={() => {
+                volumeEditingRef.current = false
+                commitVolumeDraft()
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter')
+                  return
+                event.preventDefault()
+                commitVolumeDraft()
+                event.currentTarget.blur()
+              }}
+            />
+            <span className="volume-unit" aria-hidden="true">%</span>
+          </div>
           <IconButton icon={MessageCircle} label="房间聊天" className="player-panel-toggle" disabled={!canOpenPanels} aria-pressed={chatOpen} onClick={onChat} />
           <IconButton icon={ListMusic} label="播放列表" className="player-panel-toggle" disabled={!canOpenPanels} aria-pressed={queueOpen} onClick={onQueue} />
         </div>
