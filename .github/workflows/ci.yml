@@ -100,3 +100,65 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  helm-release:
+    needs: images
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: v3.20.0
+      - name: Package release chart
+        shell: bash
+        run: |
+          set -euo pipefail
+          chart_version="${GITHUB_REF_NAME#v}"
+          app_version="${GITHUB_REF_NAME}+${GITHUB_SHA}"
+          chart_dir="${RUNNER_TEMP}/alisten-chart"
+          package_dir="${RUNNER_TEMP}/helm-packages"
+          mkdir -p "$chart_dir" "$package_dir"
+          cp -R helm/alisten/. "$chart_dir/"
+          sed -i \
+            -e "s/^version: .*/version: ${chart_version}/" \
+            -e "s/^appVersion: .*/appVersion: ${app_version}/" \
+            "$chart_dir/Chart.yaml"
+          sed -i "s|tag: \"\"|tag: \"${chart_version}\"|g" "$chart_dir/values.yaml"
+          helm lint "$chart_dir" \
+            --set domain=alisten.example \
+            --set database.host=postgres \
+            --set database.username=alisten \
+            --set database.name=alisten \
+            --set redis.host=valkey \
+            --set storage.endpointUrl=http://rustfs:9000 \
+            --set storage.publicUrl=https://s3.example/alisten \
+            --set secrets.databasePassword=test \
+            --set secrets.storageAccessKeyId=test \
+            --set secrets.storageSecretAccessKey=test
+          helm template alisten "$chart_dir" \
+            --set domain=alisten.example \
+            --set database.host=postgres \
+            --set database.username=alisten \
+            --set database.name=alisten \
+            --set redis.host=valkey \
+            --set storage.endpointUrl=http://rustfs:9000 \
+            --set storage.publicUrl=https://s3.example/alisten \
+            --set secrets.databasePassword=test \
+            --set secrets.storageAccessKeyId=test \
+            --set secrets.storageSecretAccessKey=test \
+            >/dev/null
+          helm package "$chart_dir" --destination "$package_dir"
+      - name: Publish chart to GHCR
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          chart_version="${GITHUB_REF_NAME#v}"
+          repository="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          printf '%s' "$GITHUB_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          helm push "${RUNNER_TEMP}/helm-packages/alisten-${chart_version}.tgz" "oci://ghcr.io/${repository}/charts"
