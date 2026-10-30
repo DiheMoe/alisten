@@ -33,6 +33,16 @@ services:
       retries: 3
     security_opt:
       - no-new-privileges:true
+    labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.hsts.headers.stsSeconds=31536000
+      - traefik.http.middlewares.security-headers.headers.frameDeny=true
+      - traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.security-headers.headers.referrerPolicy=strict-origin-when-cross-origin
+      - traefik.http.middlewares.admin-ratelimit.ratelimit.average=2
+      - traefik.http.middlewares.admin-ratelimit.ratelimit.burst=10
+      - traefik.http.middlewares.admin-ratelimit.ratelimit.period=1s
+      - traefik.http.middlewares.admin-ratelimit.ratelimit.sourcecriterion.ipstrategy.depth=1
 
   migrate:
     networks:
@@ -52,7 +62,13 @@ services:
       - traefik.http.services.serve.loadbalancer.server.port=8080
       - traefik.http.routers.serve.rule=Host(`${ALISTEN_DOMAIN}`) && (PathPrefix(`/api/`) || Path(`/ws`) || PathPrefix(`/media/`))
       - traefik.http.routers.serve.entrypoints=websecure
+      - traefik.http.routers.serve.middlewares=hsts,security-headers@docker
       - traefik.http.routers.serve.service=serve
+      - traefik.http.routers.admin.rule=Host(`${ALISTEN_DOMAIN}`) && PathPrefix(`/api/admin/`)
+      - traefik.http.routers.admin.entrypoints=websecure
+      - traefik.http.routers.admin.priority=100
+      - traefik.http.routers.admin.middlewares=hsts,security-headers,admin-ratelimit@docker
+      - traefik.http.routers.admin.service=serve
       - traefik.http.services.serve.loadbalancer.healthcheck.path=/readyz
       - traefik.http.services.serve.loadbalancer.healthcheck.port=9090
       - traefik.http.services.serve.loadbalancer.healthcheck.interval=1s
@@ -72,6 +88,7 @@ services:
       - traefik.enable=true
       - traefik.http.routers.web.rule=Host(`${ALISTEN_DOMAIN}`)
       - traefik.http.routers.web.entrypoints=websecure
+      - traefik.http.routers.web.middlewares=hsts,security-headers@docker
       - traefik.http.services.web.loadbalancer.server.port=8080
 
   postgres:
@@ -90,7 +107,7 @@ services:
       - traefik.enable=true
       - traefik.http.routers.storage.rule=Host(`${STORAGE_DOMAIN}`) && PathPrefix(`/${STORAGE_BUCKET_NAME}/link/`) && (Method(`GET`) || Method(`HEAD`))
       - traefik.http.routers.storage.entrypoints=websecure
-      - traefik.http.routers.storage.middlewares=storage-headers
+      - traefik.http.routers.storage.middlewares=storage-headers,hsts@docker
       - traefik.http.middlewares.storage-headers.headers.contentsecuritypolicy=sandbox; default-src 'none'
       - traefik.http.middlewares.storage-headers.headers.contenttypenosniff=true
       - traefik.http.services.storage.loadbalancer.server.port=9000
