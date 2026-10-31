@@ -118,7 +118,7 @@ jobs:
         run: |
           set -euo pipefail
           chart_version="${GITHUB_REF_NAME#v}"
-          app_version="${GITHUB_REF_NAME}+${GITHUB_SHA}"
+          app_version="${chart_version}"
           chart_dir="${RUNNER_TEMP}/alisten-chart"
           package_dir="${RUNNER_TEMP}/helm-packages"
           mkdir -p "$chart_dir" "$package_dir"
