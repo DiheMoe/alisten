@@ -6,7 +6,7 @@ import { errorMessage } from '@/core/errors'
 import { historyStore, searchLimits } from '@/features/history'
 import { reminderStore, requestNotificationPermission, systemNotificationsSupported, volumeStore } from '@/features/playback'
 import { useStore } from '@/shared/lib/use-store'
-import { notificationStore } from '@/shared/ui'
+import { notificationStore, VolumeInput } from '@/shared/ui'
 import { appearanceStore, fontSizes, themes } from './appearance-store'
 import { performanceLevels, performanceStore } from './performance-store'
 import { profileStore } from './profile-store'
@@ -208,27 +208,7 @@ export function SettingsPage() {
                 <h2 id="settings-playback-title" className="text-ui-lg">播放</h2>
                 <div className="settings-group">
                   <SettingRow id="settings-volume" title="音量" description="只调整这台设备的播放音量。" field>
-                    <div className="settings-volume-control">
-                      <input id="settings-volume" aria-describedby="settings-volume-description" type="range" min="0" max="100" value={draft.volume} aria-label="音量滑块" onChange={event => update('volume', Number(event.target.value))} />
-                      <div className="settings-volume-input-control">
-                        <input
-                          className="settings-volume-input"
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="1"
-                          inputMode="numeric"
-                          value={draft.volume}
-                          aria-label="音量百分比"
-                          onChange={(event) => {
-                            const value = Number(event.target.value)
-                            if (Number.isFinite(value))
-                              update('volume', Math.min(100, Math.max(0, Math.round(value))))
-                          }}
-                        />
-                        <span className="settings-volume-unit" aria-hidden="true">%</span>
-                      </div>
-                    </div>
+                    <VolumeInput id="settings-volume" className="settings-volume-control" volume={draft.volume} onCommit={next => update('volume', next)} />
                   </SettingRow>
                   <SettingRow id="settings-muted" title="静音" description="暂时关闭这台设备的声音。">
                     <input id="settings-muted" aria-describedby="settings-muted-description" className="settings-switch" type="checkbox" role="switch" checked={draft.muted} onChange={event => update('muted', event.target.checked)} />
