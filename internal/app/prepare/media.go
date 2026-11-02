@@ -41,6 +41,9 @@ func (r *MediaRunner) Run(ctx context.Context, t track.Track) (err error) {
 		return err
 	}
 	defer release()
+	if d, err = limitSizes(d); err != nil {
+		return err
+	}
 
 	key := media.Key(t.ID)
 	if err := r.clear(ctx, key); err != nil {
@@ -110,6 +113,36 @@ func (r *MediaRunner) downloadBilibili(ctx context.Context, id string) (port.Lin
 		releaseMP3()
 		release()
 	}, nil
+}
+
+// 下载和转码只能尽量限制文件的大小，上传之前要再检查一次。封面不影响播放，超过上限就当作没有封面，不让整首歌准备失败。
+func limitSizes(d port.LinkDownload) (port.LinkDownload, error) {
+	size, err := fileSize(d.Audio)
+	if err != nil {
+		return d, err
+	}
+	if size > port.MaxAudioSize {
+		return d, &port.RejectedError{Err: port.ErrAudioTooLarge}
+	}
+	if d.Cover == nil {
+		return d, nil
+	}
+	if size, err = fileSize(d.Cover); err != nil {
+		return d, err
+	}
+	if size > port.MaxCoverSize {
+		d.Cover, d.CoverExt = nil, ""
+	}
+	return d, nil
+}
+
+func fileSize(file port.LinkFile) (int64, error) {
+	f, err := file.Open()
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = f.Close() }()
+	return f.Seek(0, io.SeekEnd)
 }
 
 func pageURL(t track.Track) string {

@@ -9,7 +9,8 @@ import (
 type BilibiliSource interface {
 	// CoverURL 和 PageURL 留空：平台的图片有防盗链，封面在准备时下载存储；页面地址由调用方按 ID 拼出。
 	TrackMeta(ctx context.Context, id string) (track.Meta, error)
-	// 读完文件之后调用 release 删除它们；返回错误时没有要删除的文件。视频不存在、需要付费或地区受限时返回 *RejectedError。
+	// 读完文件之后调用 release 删除它们；返回错误时没有要删除的文件。视频不存在、需要付费、地区受限，
+	// 或者下载时发现音频超过 MaxAudioSize 时返回 *RejectedError。
 	Download(ctx context.Context, id string) (d BilibiliDownload, release func(), err error)
 }
 
@@ -35,7 +36,7 @@ type BilibiliQRLoginSource interface {
 	CredentialStatus(context.Context) (CredentialStatus, error)
 }
 
-// 只读本地文件，不访问网络。读完 mp3 之后调用 release 删除它；返回错误时没有要删除的文件。
+// 只读本地文件，不访问网络。读完 mp3 之后调用 release 删除它；返回错误时没有要删除的文件。输入超过 MaxAudioSize 时返回 *RejectedError。
 type Transcoder interface {
 	ToMP3(ctx context.Context, audio LinkFile) (mp3 LinkFile, release func(), err error)
 }

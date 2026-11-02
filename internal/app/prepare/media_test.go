@@ -123,6 +123,43 @@ func TestLinkRunnerSkipsCoverOfOtherFormats(t *testing.T) {
 	}
 }
 
+// 元数据里有时长：没有检查大小时，内容全是零的音频会按元数据的时长准备成功，而不是因为无法分析而失败。
+func TestLinkRunnerRejectsAudioOverLimit(t *testing.T) {
+	d := &downloader{meta: track.Meta{Title: "晴天", Duration: 3 * time.Second}, audio: make([]byte, port.MaxAudioSize+1), cover: []byte("jpeg"), coverExt: "jpg"}
+	store := porttest.NewMediaStore()
+	tracks, err := runLink(t, d, store, link)
+	var rejected *port.RejectedError
+	if !errors.As(err, &rejected) || err.Error() != port.ErrAudioTooLarge.Error() {
+		t.Errorf("音频超过上限时 = %v，期望不能准备，原因是 %q", err, port.ErrAudioTooLarge)
+	}
+	if keys := store.Keys(); len(keys) != 0 {
+		t.Errorf("上传了 %q，期望什么都不上传", keys)
+	}
+	if _, ok := tracks.row(link); ok {
+		t.Error("不能准备的歌不应写入曲目表")
+	}
+}
+
+func TestLinkRunnerDropsCoverOverLimit(t *testing.T) {
+	cover := media.CoverObject(media.Key(link.ID), "jpg")
+	for _, tt := range []struct {
+		size int
+		kept bool
+	}{{port.MaxCoverSize, true}, {port.MaxCoverSize + 1, false}} {
+		d := &downloader{meta: track.Meta{Title: "晴天"}, audio: porttest.SilentWAV(time.Second), cover: make([]byte, tt.size), coverExt: "jpg"}
+		store := porttest.NewMediaStore()
+		tracks, err := runLink(t, d, store, link)
+		if err != nil {
+			t.Fatalf("封面 %d 字节时 = %v，期望准备成功", tt.size, err)
+		}
+		_, uploaded := store.Object(cover)
+		got, _ := tracks.row(link)
+		if uploaded != tt.kept || (got.Meta.CoverKey != "") != tt.kept {
+			t.Errorf("封面 %d 字节时上传了封面 = %v、曲目表中的封面 = %q，期望保留封面 = %v", tt.size, uploaded, got.Meta.CoverKey, tt.kept)
+		}
+	}
+}
+
 func TestLinkRunnerFallsBackWhenAudioCannotBeAnalyzed(t *testing.T) {
 	d := &downloader{meta: track.Meta{Title: "晴天", Duration: 3 * time.Second}, audio: []byte("不是音频")}
 	tracks, err := runLink(t, d, porttest.NewMediaStore(), link)

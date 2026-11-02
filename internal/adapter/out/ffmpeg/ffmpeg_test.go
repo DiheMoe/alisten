@@ -252,6 +252,60 @@ func TestToMP3FailsWithoutAudio(t *testing.T) {
 	}
 }
 
+func TestToMP3RejectsInputOverLimit(t *testing.T) {
+	tests := []struct {
+		size     int
+		rejected bool
+		logged   int
+	}{
+		// 内容全是零，复制完之后 ffmpeg 认不出格式：转码失败，但不是因为超过上限。
+		{port.MaxAudioSize, false, 1},
+		// 超过上限时不运行 ffmpeg，也就没有转码失败的日志。
+		{port.MaxAudioSize + 1, true, 0},
+	}
+	for _, tt := range tests {
+		root := t.TempDir()
+		logger, records := recorder()
+		_, release, err := New(root, logger).ToMP3(t.Context(), porttest.LinkFile(make([]byte, tt.size)))
+		if err == nil {
+			release()
+			t.Fatalf("%d 字节的零转码成功了", tt.size)
+		}
+		var rejected *port.RejectedError
+		if errors.As(err, &rejected) != tt.rejected || tt.rejected && err.Error() != port.ErrAudioTooLarge.Error() {
+			t.Errorf("输入 %d 字节时 = %v，期望不能准备 = %v，原因是 %q", tt.size, err, tt.rejected, port.ErrAudioTooLarge)
+		}
+		requireEmpty(t, root)
+		if got := records(t); len(got) != tt.logged {
+			t.Errorf("输入 %d 字节时的日志 = %+v，期望 %d 条", tt.size, got, tt.logged)
+		}
+	}
+}
+
+// 把 -fs 换成很小的值，看真实的 ffmpeg 怎样处理：截断时正常退出，输出不少于 -fs 的字节数。
+func TestOutputStopsAtFileSizeLimit(t *testing.T) {
+	input := generate(t, "long.m4a", "-f", "lavfi", "-i", "sine=frequency=440:duration=10", "-c:a", "aac")
+	output := filepath.Join(t.TempDir(), "audio.mp3")
+	argv := args(input, output)
+	i := slices.Index(argv, "-fs")
+	if i < 0 || argv[i+1] != strconv.Itoa(port.MaxAudioSize+1) {
+		t.Fatalf("参数 = %q，期望 -fs %d", argv, port.MaxAudioSize+1)
+	}
+	// 10 秒的 mp3 大约 40 KB。
+	const limit = 10000
+	argv[i+1] = strconv.Itoa(limit)
+	if stderr, err := run(t.Context(), argv); err != nil {
+		t.Fatalf("ffmpeg 截断输出时失败：%v\n%s", err, stderr)
+	}
+	info, err := os.Stat(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() < limit || info.Size() > 2*limit {
+		t.Errorf("截断的输出有 %d 字节，期望不少于 -fs 的 %d 字节，并且在它附近截断", info.Size(), limit)
+	}
+}
+
 // 握手完成的连接留在 accept 队列里，不必先 Accept 也不会漏掉。
 func listenLocal(t *testing.T) (address string, connected func() bool) {
 	t.Helper()

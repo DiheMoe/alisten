@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/dihemoe/alisten/internal/app/port"
@@ -55,7 +56,10 @@ func (t *Transcoder) ToMP3(ctx context.Context, audio port.LinkFile) (port.LinkF
 func (t *Transcoder) transcode(ctx context.Context, audio port.LinkFile, dir string) (port.LinkFile, error) {
 	// 先复制成文件再交给 ffmpeg：MP4 的 moov 可能在文件末尾，从管道读不了。文件名不带扩展名，ffmpeg 只能按内容识别格式。
 	input := filepath.Join(dir, "input")
-	if err := copyFile(input, audio); err != nil {
+	switch err := copyFile(input, audio); {
+	case errors.Is(err, port.ErrAudioTooLarge):
+		return nil, &port.RejectedError{Err: err}
+	case err != nil:
 		return nil, fmt.Errorf("复制输入的音频：%w", err)
 	}
 	output := filepath.Join(dir, "audio.mp3")
@@ -83,6 +87,16 @@ func copyFile(dst string, src port.LinkFile) error {
 		return err
 	}
 	defer func() { _ = in.Close() }()
+	size, err := in.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+	if size > port.MaxAudioSize {
+		return port.ErrAudioTooLarge
+	}
+	if _, err := in.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
 	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
@@ -105,6 +119,8 @@ func args(input, output string) []string {
 		"-map_metadata", "-1", "-map_chapters", "-1",
 		// 与 yt-dlp 的 --audio-format mp3 默认质量一致。
 		"-c:a", "libmp3lame", "-q:a", "5",
+		// ffmpeg 写到不少于 -fs 的字节数就停止并正常退出。多一个字节，截断的输出才一定超过上限，由准备流程拒绝。
+		"-fs", strconv.Itoa(port.MaxAudioSize + 1),
 		output,
 	}
 }

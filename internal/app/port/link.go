@@ -2,6 +2,7 @@ package port
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/dihemoe/alisten/internal/domain/track"
@@ -22,8 +23,19 @@ type LinkFile interface {
 	Open() (io.ReadSeekCloser, error)
 }
 
+// 准备流程在上传之前拒绝超过 MaxAudioSize 的音频，把超过 MaxCoverSize 的封面当作没有封面。
+// 下载和转码也要在发现音频超过上限时尽早中止，免得超限的文件先占满临时目录。
+const (
+	MaxAudioSize = 200 << 20
+	MaxCoverSize = 10 << 20
+)
+
+// 音频超过 MaxAudioSize 时用 &RejectedError{Err: ErrAudioTooLarge} 拒绝。
+var ErrAudioTooLarge = fmt.Errorf("音频文件超过 %d MB", MaxAudioSize>>20)
+
 type LinkDownloader interface {
-	// 读完文件之后调用 release 删除它们；返回错误时没有要删除的文件。链接不受支持或指向非公网地址时返回 *RejectedError。
+	// 读完文件之后调用 release 删除它们；返回错误时没有要删除的文件。链接不受支持、指向非公网地址，
+	// 或者下载时发现音频超过 MaxAudioSize 时返回 *RejectedError。
 	Download(ctx context.Context, link string) (d LinkDownload, release func(), err error)
 }
 

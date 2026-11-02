@@ -95,8 +95,8 @@ func TestYtdlpDownloadsAudioAndCover(t *testing.T) {
 	if requests.Load() < 3 {
 		t.Errorf("网站收到 %d 个请求，期望网页、音频和封面都经代理请求", requests.Load())
 	}
-	if entries, _ := os.ReadDir(dir); len(entries) != 2 {
-		t.Errorf("目录中有 %d 个文件，期望只有音频和封面", len(entries))
+	if entries, _ := os.ReadDir(dir); len(entries) != 3 {
+		t.Errorf("目录中有 %d 个文件，期望只有音频、封面和元数据", len(entries))
 	}
 }
 
@@ -128,6 +128,41 @@ func TestYtdlpRejectsUnsupportedLink(t *testing.T) {
 	var rejected *port.RejectedError
 	if failure != failureUnsupported || !errors.As(err, &rejected) {
 		t.Errorf("没有媒体的网页 = %q, %v，期望不支持\n%s", failure, err, stderr)
+	}
+}
+
+type zeros struct{}
+
+func (zeros) ReadAt(p []byte, _ int64) (int, error) {
+	clear(p)
+	return len(p), nil
+}
+
+// 音频的内容全是零：yt-dlp 如果没有在看到长度时中止，就会下载完再转码失败。
+func TestYtdlpRejectsAudioOverLimit(t *testing.T) {
+	link, _ := startPaths(t, map[string]http.Handler{
+		"/page": http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = io.WriteString(w, `<!doctype html><html><head><title>太长</title></head><body><audio src="/big.wav"></audio></body></html>`)
+		}),
+		"/big.wav": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "audio/wav")
+			http.ServeContent(w, r, "big.wav", time.Time{}, io.NewSectionReader(zeros{}, 0, port.MaxAudioSize+1))
+		}),
+	})
+	p := siteProxy(t)
+	dir := t.TempDir()
+	stdout, stderr, err := run(t.Context(), dir, args(link("/page"), dir, p.url, ""))
+	if err == nil {
+		_, err = collect(dir, stdout)
+	}
+	failure, err := classify(t.Context(), err, stderr, p.wasRefused())
+	var rejected *port.RejectedError
+	if failure != failureTooLarge || !errors.As(err, &rejected) || err.Error() != port.ErrAudioTooLarge.Error() {
+		t.Errorf("音频超过上限时 = %q, %v，期望不能准备，原因是 %q\nstdout:\n%s\nstderr:\n%s", failure, err, port.ErrAudioTooLarge, stdout, stderr)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Errorf("目录中有 %v，期望 yt-dlp 什么都没写", entries)
 	}
 }
 
@@ -175,7 +210,7 @@ func fakeYtdlp(t *testing.T, script string) {
 }
 
 func TestDownloadKeepsFilesUntilReleased(t *testing.T) {
-	fakeYtdlp(t, "#!/bin/sh\nprintf mp3 > audio.mp3\necho '{}'\n")
+	fakeYtdlp(t, "#!/bin/sh\nprintf mp3 > audio.mp3\necho '{}' > meta.json\n")
 	root := t.TempDir()
 	d, release, err := New(root, net.DefaultResolver, noCookies{}, func(time.Duration, string) {}, slog.New(slog.DiscardHandler)).Download(t.Context(), "https://example.com/page")
 	if err != nil {
@@ -283,6 +318,14 @@ func TestArgsEndWithLink(t *testing.T) {
 	}
 }
 
+// 转出超限的 mp3 要几百 MB 的输入，测不起；ffmpeg 遇到 -fs 时怎样截断由 ffmpeg 适配器的测试确认。
+func TestArgsCapExtractedAudio(t *testing.T) {
+	want := "ExtractAudio+ffmpeg_o:-map_metadata -1 -fs " + strconv.Itoa(port.MaxAudioSize+1)
+	if got := args("http://example.com/a", "/tmp/d", "http://127.0.0.1:1", ""); !slices.Contains(got, want) {
+		t.Errorf("参数 = %q，期望转码时限制 mp3 的大小：%q", got, want)
+	}
+}
+
 func TestClassify(t *testing.T) {
 	exited := errors.New("exit status 1")
 	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
@@ -302,6 +345,7 @@ func TestClassify(t *testing.T) {
 		{t.Context(), exited, "ERROR: [generic] a: HTTP Error 403: Forbidden\n", true, failureBlocked, true, "链接指向的地址不是公网地址，不能下载"},
 		{t.Context(), exited, "WARNING: x\nERROR: Unsupported URL: http://example.com/\n", false, failureUnsupported, true, "yt-dlp 不支持这个链接"},
 		{t.Context(), errNoAudio, "", false, failureUnsupported, true, "yt-dlp 不支持这个链接"},
+		{t.Context(), port.ErrAudioTooLarge, "", false, failureTooLarge, true, port.ErrAudioTooLarge.Error()},
 		{t.Context(), exited, "ERROR: 第一条\nWARNING: x\nERROR: [youtube] x: Video unavailable\n", false, failureError, false, "yt-dlp 下载失败：[youtube] x: Video unavailable"},
 		{t.Context(), exited, "ERROR: " + long, false, failureError, false, "yt-dlp 下载失败：" + strings.Repeat("长", reasonLimit) + "…"},
 		{t.Context(), exited, "", false, failureError, false, "yt-dlp 下载失败：exit status 1"},
@@ -317,21 +361,31 @@ func TestClassify(t *testing.T) {
 
 func TestCollect(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := collect(dir, []byte(`{"title": "晴天"}`)); !errors.Is(err, errNoAudio) {
-		t.Errorf("没有音频时 = %v", err)
-	}
-	for _, name := range []string{"audio.mp3", "cover.WEBP"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
+	writeFile := func(name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	d, err := collect(dir, []byte("{\"title\": \"晴天\", \"uploader\": \"周杰伦\", \"album\": \"叶惠美\", \"duration\": 269.5}\n"))
+	writeFile(metaFile, `{"title": "晴天"}`)
+	if _, err := collect(dir, nil); !errors.Is(err, errNoAudio) {
+		t.Errorf("没有音频时 = %v", err)
+	}
+	if _, err := collect(dir, []byte("[info] x: Downloading 1 format(s): 0\n\r[download] File is larger than max-filesize (209715201 bytes > 209715200 bytes). Aborting.\n")); !errors.Is(err, port.ErrAudioTooLarge) {
+		t.Errorf("因为音频超过上限没有下载时 = %v", err)
+	}
+	writeFile("audio.mp3", "x")
+	writeFile("cover.WEBP", "x")
+	writeFile(metaFile, "{\"title\": \"晴天\", \"uploader\": \"周杰伦\", \"album\": \"叶惠美\", \"duration\": 269.5}\n")
+	// 屏幕输出里页面可控的标题可能伪造出 JSON 行，元数据只从文件读取。
+	d, err := collect(dir, []byte("[download] Downloading playlist: x\n{\"title\": \"伪造\"}\n"))
 	want := port.LinkDownload{Audio: file(filepath.Join(dir, "audio.mp3")), Cover: file(filepath.Join(dir, "cover.WEBP")), CoverExt: "webp"}
 	want.Meta.Title, want.Meta.Artist, want.Meta.Album, want.Meta.Duration = "晴天", "周杰伦", "叶惠美", 269500*time.Millisecond
 	if err != nil || d != want {
 		t.Errorf("collect = %+v, %v\n期望 %+v", d, err, want)
 	}
-	if d, _ := collect(dir, []byte(`{"title": "晴天", "artist": "周杰伦、方文山", "uploader": "JVR Music"}`)); d.Meta.Artist != "周杰伦、方文山" {
+	writeFile(metaFile, `{"title": "晴天", "artist": "周杰伦、方文山", "uploader": "JVR Music"}`)
+	if d, _ := collect(dir, nil); d.Meta.Artist != "周杰伦、方文山" {
 		t.Errorf("有歌手时 Artist = %q，期望取歌手而不是上传者", d.Meta.Artist)
 	}
 }
@@ -414,7 +468,7 @@ func recordedArgs(t *testing.T, root string) []string {
 }
 
 func TestDownloadPassesCookiesFile(t *testing.T) {
-	fakeYtdlp(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\nprintf mp3 > audio.mp3\necho '{}'\n")
+	fakeYtdlp(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\nprintf mp3 > audio.mp3\necho '{}' > meta.json\n")
 	root := t.TempDir()
 	cookies := &fakeCookies{path: filepath.Join(t.TempDir(), "cookies.txt"), ok: true}
 	_, release, err := New(root, net.DefaultResolver, cookies, func(time.Duration, string) {}, slog.New(slog.DiscardHandler)).Download(t.Context(), "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
@@ -435,7 +489,7 @@ func TestDownloadPassesCookiesFile(t *testing.T) {
 }
 
 func TestDownloadOmitsCookiesWhenNotOffered(t *testing.T) {
-	fakeYtdlp(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\nprintf mp3 > audio.mp3\necho '{}'\n")
+	fakeYtdlp(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\nprintf mp3 > audio.mp3\necho '{}' > meta.json\n")
 	root := t.TempDir()
 	cookies := &fakeCookies{}
 	_, release, err := New(root, net.DefaultResolver, cookies, func(time.Duration, string) {}, slog.New(slog.DiscardHandler)).Download(t.Context(), "https://example.com/page")
@@ -467,7 +521,7 @@ func TestDownloadReleasesCookiesOnFailure(t *testing.T) {
 }
 
 func TestDownloadFailsWhenCookiesUnavailable(t *testing.T) {
-	fakeYtdlp(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\nprintf mp3 > audio.mp3\necho '{}'\n")
+	fakeYtdlp(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\nprintf mp3 > audio.mp3\necho '{}' > meta.json\n")
 	root := t.TempDir()
 	cookies := &fakeCookies{err: errors.New("数据库不可用")}
 	_, _, err := New(root, net.DefaultResolver, cookies, func(time.Duration, string) {}, slog.New(slog.DiscardHandler)).Download(t.Context(), "https://www.youtube.com/watch?v=dQw4w9WgXcQ")

@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -31,12 +32,14 @@ const (
 	waitDelay   = 5 * time.Second
 	outputLimit = 64 << 10
 	reasonLimit = 300
+	metaFile    = "meta.json"
 )
 
 // 下载失败的原因，用作指标的标签。
 const (
 	failureUnsupported = "unsupported"
 	failureBlocked     = "blocked"
+	failureTooLarge    = "too_large"
 	failureTimeout     = "timeout"
 	failureError       = "error"
 )
@@ -127,17 +130,22 @@ func args(link, dir, proxy, cookies string) []string {
 		"--postprocessor-args", "FixupM4a+ffmpeg_i:-protocol_whitelist file",
 		// 来源文件里的标签是用户提交的内容，转码时 ffmpeg 默认把它们复制成 mp3 的标签，所以不复制。
 		// 来源已经是 mp3 时 yt-dlp 不转码，文件连同标签原样保留，存储的音频仍然不可信。
-		"--postprocessor-args", "ExtractAudio+ffmpeg_o:-map_metadata -1",
+		// 转出的 mp3 写到上限多一个字节就停止，截断的文件由准备流程拒绝。
+		"--postprocessor-args", "ExtractAudio+ffmpeg_o:-map_metadata -1 -fs " + strconv.Itoa(port.MaxAudioSize+1),
 		// --no-playlist 只对同时指向视频和播放列表的链接有效；对播放列表本身，--playlist-items 1 只下载第一项。
 		"--no-playlist", "--playlist-items", "1",
 		"--format", "bestaudio/best",
+		// 只在服务端给出 Content-Length 时生效；准备流程上传之前还会检查大小。
+		"--max-filesize", strconv.Itoa(port.MaxAudioSize),
 		"--extract-audio", "--audio-format", "mp3",
 		"--write-thumbnail",
 		"--paths", dir,
 		"--output", "audio.%(ext)s",
 		"--output", "thumbnail:cover.%(ext)s",
 		"--no-progress",
-		"--print", "after_move:%(.{title,artist,uploader,album,duration})j",
+		// 屏幕输出里有页面可控的标题，元数据混在其中无法可靠地取出，所以写进单独的文件。不用 --print 也是因为它带上 --quiet，
+		// --max-filesize 中止下载时的提示就不会输出。
+		"--print-to-file", "after_move:%(.{title,artist,uploader,album,duration})j", metaFile,
 		// 链接以 - 开头时会被当作选项。
 		"--", link,
 	}
@@ -217,10 +225,18 @@ var errNoAudio = errors.New("yt-dlp 没有下载到音频")
 func collect(dir string, stdout []byte) (port.LinkDownload, error) {
 	audio := filepath.Join(dir, "audio.mp3")
 	if _, err := os.Stat(audio); err != nil {
+		// 服务端给出的长度超过 --max-filesize 时，yt-dlp 只输出这条提示就结束，退出码为 0。
+		if bytes.Contains(stdout, []byte("File is larger than max-filesize")) {
+			return port.LinkDownload{}, port.ErrAudioTooLarge
+		}
 		return port.LinkDownload{}, errNoAudio
 	}
+	meta, err := os.ReadFile(filepath.Join(dir, metaFile))
+	if err != nil {
+		return port.LinkDownload{}, fmt.Errorf("读取 yt-dlp 输出的元数据：%w", err)
+	}
 	var i info
-	if err := json.Unmarshal(bytes.TrimSpace(stdout), &i); err != nil {
+	if err := json.Unmarshal(bytes.TrimSpace(meta), &i); err != nil {
 		return port.LinkDownload{}, fmt.Errorf("解析 yt-dlp 输出的元数据：%w", err)
 	}
 	d := port.LinkDownload{
@@ -254,6 +270,8 @@ func classify(ctx context.Context, err error, stderr []byte, refused bool) (stri
 		return failureTimeout, fmt.Errorf("yt-dlp 下载超时：%w", ctx.Err())
 	case refused:
 		return failureBlocked, &port.RejectedError{Err: errors.New("链接指向的地址不是公网地址，不能下载")}
+	case errors.Is(err, port.ErrAudioTooLarge):
+		return failureTooLarge, &port.RejectedError{Err: port.ErrAudioTooLarge}
 	case errors.Is(err, errNoAudio) || bytes.Contains(stderr, []byte("ERROR: Unsupported URL: ")):
 		return failureUnsupported, &port.RejectedError{Err: errors.New("yt-dlp 不支持这个链接")}
 	}

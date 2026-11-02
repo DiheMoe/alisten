@@ -101,7 +101,7 @@ func newWorkerMetrics(reg prometheus.Registerer) *workerMetrics {
 		}),
 		downloadFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "alisten_ytdlp_download_failures_total",
-			Help: "yt-dlp 下载失败的次数，reason 为 unsupported（链接不受支持）、blocked（指向非公网地址）、timeout（超过任务的期限）或 error（其他错误）。",
+			Help: "yt-dlp 下载失败的次数，reason 为 unsupported（链接不受支持）、blocked（指向非公网地址）、too_large（音频超过大小上限）、timeout（超过任务的期限）或 error（其他错误）。",
 		}, []string{"reason"}),
 		waitingJobs: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "alisten_ytdlp_jobs_waiting",
