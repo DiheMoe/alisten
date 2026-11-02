@@ -4,6 +4,9 @@ import { reconnectDelay } from './backoff'
 import { CloseCode, PROTOCOL_VERSION } from './protocol.gen'
 
 const requestTimeoutMs = 60_000
+// 服务端从接受连接起 10 秒内准备不好握手响应就会以 4408 断开，但响应带着完整的房间快照，传给客户端的时间不受这个限制。
+// 这里留足余量，只用于服务端的关闭到不了客户端的情况。
+const helloTimeoutMs = 30_000
 const pingIntervalMs = 5000
 // 半开的连接上写入不会出错，要等 TCP 重传超时才会关闭，所以 ping 收不到回包就当作连接已失效。
 const pongTimeoutMs = 3 * pingIntervalMs
@@ -124,7 +127,7 @@ export class Connection {
   }
 
   #hello(socket: WebSocket): void {
-    this.#send('hello', { roomId: this.#roomId, ticket: this.#ticket, protocolVersion: PROTOCOL_VERSION }).then((response) => {
+    this.#send('hello', { roomId: this.#roomId, ticket: this.#ticket, protocolVersion: PROTOCOL_VERSION }, helloTimeoutMs).then((response) => {
       if (socket !== this.#socket)
         return
       this.#ready = true
