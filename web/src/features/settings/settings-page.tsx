@@ -184,7 +184,7 @@ export function SettingsPage() {
                       ? <button type="button" className="button-secondary" aria-describedby="settings-name-description" onClick={loadProfile}>重试</button>
                       : <input id="settings-name" aria-describedby="settings-name-description" value={draft.name} onChange={event => update('name', event.target.value)} disabled={!member} required maxLength={80} autoComplete="nickname" />}
                   </SettingRow>
-                  <SettingRow id="settings-email" title="邮箱" description="只用来显示 Gravatar 头像，服务器不会保存邮箱地址；留空就不显示头像。" field>
+                  <SettingRow id="settings-email" title="邮箱" description="只用来显示 Gravatar 头像，访问不到 Gravatar 时改用镜像 WeAvatar 或 Cravatar；服务器不会保存邮箱地址，留空就不显示头像。" field>
                     <input id="settings-email" aria-describedby="settings-email-description" type="email" value={draft.email} onChange={event => update('email', event.target.value)} disabled={!member} maxLength={320} autoComplete="email" placeholder="name@example.com" />
                   </SettingRow>
                 </div>
