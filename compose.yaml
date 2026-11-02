@@ -19,7 +19,7 @@ x-alisten-env: &alisten-env
 
 services:
   migrate:
-    image: ghcr.io/dihemoe/alisten/server:latest
+    image: ghcr.io/dihemoe/alisten/server:${ALISTEN_VERSION:-latest}
     command: migrate
     environment: *alisten-env
     depends_on:
@@ -33,7 +33,7 @@ services:
       disable: true
 
   serve:
-    image: ghcr.io/dihemoe/alisten/server:latest
+    image: ghcr.io/dihemoe/alisten/server:${ALISTEN_VERSION:-latest}
     command: serve
     restart: unless-stopped
     environment:
@@ -54,7 +54,7 @@ services:
     stop_grace_period: 30s
 
   worker:
-    image: ghcr.io/dihemoe/alisten/worker:latest
+    image: ghcr.io/dihemoe/alisten/worker:${ALISTEN_VERSION:-latest}
     command: worker
     restart: unless-stopped
     environment: *alisten-env
@@ -71,7 +71,7 @@ services:
     stop_grace_period: 30s
 
   web:
-    image: ghcr.io/dihemoe/alisten/web:latest
+    image: ghcr.io/dihemoe/alisten/web:${ALISTEN_VERSION:-latest}
     restart: unless-stopped
     ports:
       - "${ALISTEN_HOST}:${ALISTEN_PORT}:8080"

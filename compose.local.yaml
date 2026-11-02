@@ -1,19 +1,24 @@
+# 本地构建的镜像打上 local 标签，不覆盖本机拉取的同版本正式镜像。
 services:
   migrate:
+    image: ghcr.io/dihemoe/alisten/server:local
     pull_policy: never
 
   serve:
+    image: ghcr.io/dihemoe/alisten/server:local
     pull_policy: never
     build:
       context: .
 
   worker:
+    image: ghcr.io/dihemoe/alisten/worker:local
     pull_policy: never
     build:
       context: .
       dockerfile: worker.Dockerfile
 
   web:
+    image: ghcr.io/dihemoe/alisten/web:local
     pull_policy: never
     build:
       context: .

@@ -14,7 +14,7 @@
 
 ```bash
 cp .env.example .env
-# 在 .env 中设置后台 token
+# 在 .env 中设置后台 token 和部署的版本号
 docker compose up -d --wait
 ```
 
@@ -34,8 +34,9 @@ docker compose \
 更新：
 
 ```bash
-docker compose pull
-# 然后使用你原来的启动命令重新启动
+vim .env
+# 将 ALISTEN_VERSION 修改为目标版本号
+# 然后使用原来的部署命令重新启动
 ```
 
 修改源代码后，自行构建和启动：
@@ -61,6 +62,20 @@ helm install alisten \
   --namespace alisten \
   --create-namespace \
   -f values.yaml
+```
+
+更新：
+
+```bash
+# 命令中的 <release-version> 替换为真实的版本号
+helm upgrade alisten \
+  oci://ghcr.io/dihemoe/alisten/charts/alisten \
+  --version <release-version> \
+  --namespace alisten \
+  -f values.yaml \
+  --atomic \
+  --wait \
+  --timeout 6m
 ```
 
 ## 使用与版权
