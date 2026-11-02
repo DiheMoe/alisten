@@ -2,7 +2,7 @@ import type { AdminUpdateRoomRequest } from '@/core/api'
 import type { RoomListing } from '@/core/realtime'
 import { useId, useState } from 'react'
 import { api } from '@/core/api'
-import { Modal } from '@/shared/ui'
+import { Modal, Select } from '@/shared/ui'
 import { adminStore } from './admin-store'
 
 type PasswordChange = 'keep' | 'set' | 'remove'
@@ -71,11 +71,15 @@ export function RoomFormDialog({ room, onSaved, onClose }: { room: RoomListing |
         {room && (
           <label>
             密码
-            <select value={passwordChange} onChange={event => setPasswordChange(event.target.value as PasswordChange)}>
-              <option value="keep">{room.hasPassword ? '保持现有密码' : '保持无密码'}</option>
-              <option value="set">{room.hasPassword ? '修改密码' : '设置密码'}</option>
-              {room.hasPassword && <option value="remove">取消密码</option>}
-            </select>
+            <Select
+              value={passwordChange}
+              onChange={value => setPasswordChange(value as PasswordChange)}
+              options={[
+                { value: 'keep', label: room.hasPassword ? '保持现有密码' : '保持无密码' },
+                { value: 'set', label: room.hasPassword ? '修改密码' : '设置密码' },
+                ...(room.hasPassword ? [{ value: 'remove', label: '取消密码' }] : []),
+              ]}
+            />
           </label>
         )}
         {passwordChange === 'set' && (

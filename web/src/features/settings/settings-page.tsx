@@ -6,7 +6,7 @@ import { errorMessage } from '@/core/errors'
 import { historyStore, searchLimits } from '@/features/history'
 import { reminderStore, requestNotificationPermission, systemNotificationsSupported, volumeStore } from '@/features/playback'
 import { useStore } from '@/shared/lib/use-store'
-import { notificationStore, VolumeInput } from '@/shared/ui'
+import { notificationStore, Select, VolumeInput } from '@/shared/ui'
 import { appearanceStore, fontSizes, themes } from './appearance-store'
 import { performanceLevels, performanceStore } from './performance-store'
 import { profileStore } from './profile-store'
@@ -193,14 +193,22 @@ export function SettingsPage() {
                 <h2 id="settings-appearance-title" className="text-ui-lg">外观</h2>
                 <div className="settings-group">
                   <SettingRow id="settings-theme" title="主题" description="选择界面的明暗外观。">
-                    <select id="settings-theme" aria-describedby="settings-theme-description" value={draft.theme} onChange={event => update('theme', themes.find(value => value === event.target.value) ?? draft.theme)}>
-                      {themes.map(value => <option key={value} value={value}>{themeNames[value]}</option>)}
-                    </select>
+                    <Select
+                      id="settings-theme"
+                      ariaDescribedBy="settings-theme-description"
+                      value={draft.theme}
+                      onChange={value => update('theme', themes.find(theme => theme === value) ?? draft.theme)}
+                      options={themes.map(value => ({ value, label: themeNames[value] }))}
+                    />
                   </SettingRow>
                   <SettingRow id="settings-font-size" title="界面字号" description="调整文字大小，布局和间距保持不变。">
-                    <select id="settings-font-size" aria-describedby="settings-font-size-description" value={draft.fontSize} onChange={event => update('fontSize', Number(event.target.value))}>
-                      {fontSizes.map(size => <option key={size} value={size}>{`${size} px`}</option>)}
-                    </select>
+                    <Select
+                      id="settings-font-size"
+                      ariaDescribedBy="settings-font-size-description"
+                      value={String(draft.fontSize)}
+                      onChange={value => update('fontSize', Number(value))}
+                      options={fontSizes.map(size => ({ value: String(size), label: `${size} px` }))}
+                    />
                   </SettingRow>
                 </div>
               </section>
@@ -227,9 +235,13 @@ export function SettingsPage() {
                 <h2 id="settings-performance-title" className="text-ui-lg">性能</h2>
                 <div className="settings-group">
                   <SettingRow id="settings-performance" title="性能模式" description={levelNames[draft.level].description}>
-                    <select id="settings-performance" aria-describedby="settings-performance-description" value={draft.level} onChange={event => update('level', performanceLevels.find(value => value === event.target.value) ?? draft.level)}>
-                      {performanceLevels.map(value => <option key={value} value={value}>{levelNames[value].name}</option>)}
-                    </select>
+                    <Select
+                      id="settings-performance"
+                      ariaDescribedBy="settings-performance-description"
+                      value={draft.level}
+                      onChange={value => update('level', performanceLevels.find(level => level === value) ?? draft.level)}
+                      options={performanceLevels.map(value => ({ value, label: levelNames[value].name }))}
+                    />
                   </SettingRow>
                   <SettingRow id="settings-reduced-motion" title="减少动态效果" description="关闭界面动画和歌词的平滑滚动。">
                     <input id="settings-reduced-motion" aria-describedby="settings-reduced-motion-description" className="settings-switch" type="checkbox" role="switch" checked={draft.reducedMotion} onChange={event => update('reducedMotion', event.target.checked)} />
@@ -243,9 +255,14 @@ export function SettingsPage() {
                     <input id="settings-search-history" aria-describedby="settings-search-history-description" className="settings-switch" type="checkbox" role="switch" checked={draft.searchesEnabled} onChange={event => update('searchesEnabled', event.target.checked)} />
                   </SettingRow>
                   <SettingRow id="settings-search-limit" title="搜索记录数量" description="最多保留的搜索记录条数。">
-                    <select id="settings-search-limit" aria-describedby="settings-search-limit-description" value={draft.searchLimit} disabled={!draft.searchesEnabled} onChange={event => update('searchLimit', Number(event.target.value))}>
-                      {searchLimits.map(limit => <option key={limit} value={limit}>{`${limit} 条`}</option>)}
-                    </select>
+                    <Select
+                      id="settings-search-limit"
+                      ariaDescribedBy="settings-search-limit-description"
+                      value={String(draft.searchLimit)}
+                      disabled={!draft.searchesEnabled}
+                      onChange={value => update('searchLimit', Number(value))}
+                      options={searchLimits.map(limit => ({ value: String(limit), label: `${limit} 条` }))}
+                    />
                   </SettingRow>
                   <SettingRow id="settings-play-history" title="记录播放历史" description="把房间播放过的歌曲保存在这台设备上。">
                     <input id="settings-play-history" aria-describedby="settings-play-history-description" className="settings-switch" type="checkbox" role="switch" checked={draft.playsEnabled} onChange={event => update('playsEnabled', event.target.checked)} />
