@@ -34,6 +34,19 @@ func TestEphemeralRoomLimits(t *testing.T) {
 	wantError(t, r.Handle(at(13*time.Minute), enqueue(alice, netease("z"))), QueueFull)
 }
 
+func TestPersistentRoomQueueLimit(t *testing.T) {
+	r := newRoom(t, Persistent)
+	// 每分钟点一首，额度不会用完；第一首成为待播，之后 200 首进入等待队列。
+	for i := range 201 {
+		if res := reply(t, r.Handle(at(time.Duration(i+1)*time.Minute), enqueue(alice, netease(fmt.Sprint(i))))); res.Err != nil {
+			t.Fatalf("第 %d 首点歌失败：%#v", i+1, res)
+		}
+	}
+	if res := reply(t, r.Handle(at(203*time.Minute), enqueue(alice, netease("z")))); res.Err != errPersistentQueueFull {
+		t.Errorf("等待队列满 200 首后再点歌 = %#v，期望 errPersistentQueueFull", res.Err)
+	}
+}
+
 func TestRateLimitsByRoomKind(t *testing.T) {
 	cases := []struct {
 		name  string

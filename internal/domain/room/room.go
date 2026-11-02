@@ -16,7 +16,9 @@ const (
 	EphemeralBurst      = 5
 	persistentBurst     = 30
 	ephemeralQueueLimit = 10
-	chatLimit           = 500
+	// 等待队列每次变化都要整体落盘，并向所有会话广播完整的队列，所以常驻房间也要有上限。
+	persistentQueueLimit = 200
+	chatLimit            = 500
 )
 
 // Room 内部没有锁，同一个 Room 的 Handle 必须由调用方串行调用。

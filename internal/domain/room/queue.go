@@ -40,6 +40,13 @@ func (r *Room) burst() int {
 	return EphemeralBurst
 }
 
+func (r *Room) queueLimit() (int, *Error) {
+	if r.info.Kind == Persistent {
+		return persistentQueueLimit, errPersistentQueueFull
+	}
+	return ephemeralQueueLimit, errEphemeralQueueFull
+}
+
 func (r *Room) enqueue(b *batch, by member.Member, a Enqueue) (Result, *Error) {
 	if !r.pickLimit.allow(b.now, r.burst(), RefillInterval) {
 		return nil, ErrRateLimited
@@ -47,8 +54,8 @@ func (r *Room) enqueue(b *batch, by member.Member, a Enqueue) (Result, *Error) {
 	if a.Track.Source == track.Link && r.info.Kind == Ephemeral {
 		return nil, errLinkForbidden
 	}
-	if r.info.Kind == Ephemeral && len(r.waiting) >= ephemeralQueueLimit {
-		return nil, errQueueFull
+	if limit, full := r.queueLimit(); len(r.waiting) >= limit {
+		return nil, full
 	}
 	if r.queued(a.Track) {
 		return nil, errDuplicatePick
