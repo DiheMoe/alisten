@@ -44,9 +44,11 @@ func (h history) AutoDJExclusions(context.Context, string) ([]track.Track, error
 }
 
 type quota struct {
-	mu    sync.Mutex
-	waits []time.Duration
-	calls int
+	mu        sync.Mutex
+	waits     []time.Duration
+	calls     int
+	pickWait  time.Duration
+	pickCalls int
 }
 
 func (q *quota) TakeSearch(_ context.Context, _ string, burst int, refill time.Duration) (time.Duration, error) {
@@ -62,6 +64,16 @@ func (q *quota) TakeSearch(_ context.Context, _ string, burst int, refill time.D
 	wait := q.waits[0]
 	q.waits = q.waits[1:]
 	return wait, nil
+}
+
+func (q *quota) TakePick(_ context.Context, _ string, burst int, refill time.Duration) (time.Duration, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if burst != 5 || refill != time.Minute {
+		return 0, errors.New("临时房间的点歌额度与房间的点歌限流相同：突发 5 次，之后每分钟恢复 1 次")
+	}
+	q.pickCalls++
+	return q.pickWait, nil
 }
 
 type fixture struct {
@@ -170,6 +182,32 @@ func TestSearchQuota(t *testing.T) {
 		}
 		if f.quota.calls != calls {
 			t.Error("常驻房间的搜索和按关键词点歌都不消耗额度")
+		}
+	})
+}
+
+func TestTakePick(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f := newFixture(t, history{})
+		if err := f.svc.TakePick(t.Context(), f.ephemeral); err != nil || f.quota.pickCalls != 1 {
+			t.Fatalf("临时房间 = %v，取了 %d 次点歌额度，期望取到 1 次", err, f.quota.pickCalls)
+		}
+
+		f.quota.pickWait = time.Minute
+		start := time.Now()
+		if err := f.svc.TakePick(t.Context(), f.ephemeral); !errors.Is(err, room.ErrRateLimited) {
+			t.Errorf("点歌额度用完时的错误 = %v，期望 room.ErrRateLimited", err)
+		}
+		if waited := time.Since(start); waited != 0 {
+			t.Errorf("等了 %v，期望与房间的点歌限流一样立即拒绝", waited)
+		}
+
+		calls := f.quota.pickCalls
+		if err := f.svc.TakePick(t.Context(), f.persistent); err != nil || f.quota.pickCalls != calls {
+			t.Errorf("常驻房间 = %v，取了 %d 次点歌额度，期望不取", err, f.quota.pickCalls-calls)
+		}
+		if f.quota.calls != 0 {
+			t.Errorf("取了 %d 次搜索额度，点歌只取点歌额度", f.quota.calls)
 		}
 	})
 }

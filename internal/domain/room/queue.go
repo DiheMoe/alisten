@@ -37,12 +37,12 @@ func (r *Room) burst() int {
 	if r.info.Kind == Persistent {
 		return persistentBurst
 	}
-	return ephemeralBurst
+	return EphemeralBurst
 }
 
 func (r *Room) enqueue(b *batch, by member.Member, a Enqueue) (Result, *Error) {
-	if !r.pickLimit.allow(b.now, r.burst(), refillInterval) {
-		return nil, errRateLimited
+	if !r.pickLimit.allow(b.now, r.burst(), RefillInterval) {
+		return nil, ErrRateLimited
 	}
 	if a.Track.Source == track.Link && r.info.Kind == Ephemeral {
 		return nil, errLinkForbidden
@@ -61,8 +61,8 @@ func (r *Room) enqueue(b *batch, by member.Member, a Enqueue) (Result, *Error) {
 }
 
 func (r *Room) remove(b *batch, by member.Member, a Remove) (Result, *Error) {
-	if !r.pickLimit.allow(b.now, r.burst(), refillInterval) {
-		return nil, errRateLimited
+	if !r.pickLimit.allow(b.now, r.burst(), RefillInterval) {
+		return nil, ErrRateLimited
 	}
 	i := r.waitingIndex(a.Entry)
 	if i < 0 {
@@ -75,8 +75,8 @@ func (r *Room) remove(b *batch, by member.Member, a Remove) (Result, *Error) {
 }
 
 func (r *Room) like(b *batch, by member.Member, a Like) (Result, *Error) {
-	if !r.likeLimit.allow(b.now, r.burst(), refillInterval) {
-		return nil, errRateLimited
+	if !r.likeLimit.allow(b.now, r.burst(), RefillInterval) {
+		return nil, ErrRateLimited
 	}
 	i := r.waitingIndex(a.Entry)
 	if i < 0 {

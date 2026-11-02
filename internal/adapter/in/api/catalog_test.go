@@ -46,6 +46,10 @@ func (q *quota) TakeSearch(context.Context, string, int, time.Duration) (time.Du
 	return 0, nil
 }
 
+func (q *quota) TakePick(context.Context, string, int, time.Duration) (time.Duration, error) {
+	return 0, nil
+}
+
 var rain = port.Song{
 	Track: track.Track{Source: track.NetEase, ID: "185811"},
 	Meta:  track.Meta{Title: "七里香", Artist: "周杰伦", Album: "七里香", PageURL: "https://music.163.com/#/song?id=185811", Duration: 299 * time.Second},

@@ -39,10 +39,10 @@ type Service struct {
 	tracks   port.Tracks
 	history  port.PlayHistory
 	rooms    port.RoomDirectory
-	quota    port.SearchQuota
+	quota    port.RoomQuota
 }
 
-func New(netease port.NetEaseSource, qq port.Source, bilibili port.BilibiliSource, links port.BilibiliLinks, tracks port.Tracks, history port.PlayHistory, rooms port.RoomDirectory, quota port.SearchQuota) *Service {
+func New(netease port.NetEaseSource, qq port.Source, bilibili port.BilibiliSource, links port.BilibiliLinks, tracks port.Tracks, history port.PlayHistory, rooms port.RoomDirectory, quota port.RoomQuota) *Service {
 	return &Service{netease: netease, qq: qq, bilibili: bilibili, links: links, tracks: tracks, history: history, rooms: rooms, quota: quota}
 }
 
@@ -209,15 +209,27 @@ func (s *Service) candidates(ctx context.Context, roomID string, includeQueue bo
 	return picks[:min(len(picks), autoDJLimit)], nil
 }
 
-func (s *Service) take(ctx context.Context, roomID string) error {
-	readCtx, cancel := context.WithTimeout(ctx, storeTimeout)
-	r, err := s.rooms.FindRoom(readCtx, roomID)
-	cancel()
+// 点歌要先向上游查询曲目，房间的点歌限流却在收到命令之后才判断，所以查询之前按同样的规则预扣一次，
+// 房间仍按自己的限流做最终裁决。
+func (s *Service) TakePick(ctx context.Context, roomID string) error {
+	ephemeral, err := s.ephemeral(ctx, roomID)
+	if err != nil || !ephemeral {
+		return err
+	}
+	wait, err := s.quota.TakePick(ctx, roomID, room.EphemeralBurst, room.RefillInterval)
 	if err != nil {
 		return err
 	}
-	if r.Info.Kind == room.Persistent {
-		return nil
+	if wait > 0 {
+		return room.ErrRateLimited
+	}
+	return nil
+}
+
+func (s *Service) take(ctx context.Context, roomID string) error {
+	ephemeral, err := s.ephemeral(ctx, roomID)
+	if err != nil || !ephemeral {
+		return err
 	}
 	for {
 		wait, err := s.quota.TakeSearch(ctx, roomID, searchBurst, searchRefill)
@@ -238,6 +250,16 @@ func (s *Service) take(ctx context.Context, roomID string) error {
 			return ctx.Err()
 		}
 	}
+}
+
+func (s *Service) ephemeral(ctx context.Context, roomID string) (bool, error) {
+	readCtx, cancel := context.WithTimeout(ctx, storeTimeout)
+	defer cancel()
+	r, err := s.rooms.FindRoom(readCtx, roomID)
+	if err != nil {
+		return false, err
+	}
+	return r.Info.Kind != room.Persistent, nil
 }
 
 func (s *Service) metaSource(source track.Source) (func(context.Context, string) (track.Meta, error), error) {

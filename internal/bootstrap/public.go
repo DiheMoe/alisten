@@ -64,7 +64,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 		return public{}, fmt.Errorf("创建 River client：%w", err)
 	}
 	preparer := prepare.New(media.NewTracks(store, objects), queue.New(jobs), logger)
-	music := catalog.New(src.netease, src.qq, src.bilibili, src.bilibiliLinks, store, store, store, redis.NewSearchQuota(rdb))
+	music := catalog.New(src.netease, src.qq, src.bilibili, src.bilibiliLinks, store, store, store, redis.NewRoomQuota(rdb))
 	leases := redis.NewLeases(rdb, instance)
 	cluster := realtime.Cluster{
 		Instance: instance,

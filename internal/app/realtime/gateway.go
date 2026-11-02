@@ -277,12 +277,15 @@ type Pick struct {
 }
 
 // by 是发出请求的成员，bot 表示他是常驻房间的 bot 成员。返回的成员是条目的点歌人，房间命令以他的名义发出。
-func (g *Gateway) Resolve(ctx context.Context, by member.Member, bot bool, p Pick) (room.Enqueue, member.Member, error) {
+func (g *Gateway) Resolve(ctx context.Context, roomID string, by member.Member, bot bool, p Pick) (room.Enqueue, member.Member, error) {
 	if p.Requester != "" {
 		if !bot {
 			return room.Enqueue{}, member.Member{}, ErrRequesterNotAllowed
 		}
 		by = member.Member{ID: by.ID, Name: p.Requester + "（bot）"}
+	}
+	if err := g.catalog.TakePick(ctx, roomID); err != nil {
+		return room.Enqueue{}, member.Member{}, err
 	}
 	switch {
 	case p.Keyword != "":

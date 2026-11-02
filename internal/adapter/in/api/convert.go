@@ -25,12 +25,12 @@ var roomErrorCodes = map[room.ErrorKind]protocol.ErrorCode{
 }
 
 // bot 表示 by 是常驻房间的 bot 成员。返回的成员是房间命令的发起人，bot 代填了点歌人时换成那个名字。
-func (s *server) action(ctx context.Context, by member.Member, bot bool, data any) (room.Action, member.Member, error) {
+func (s *server) action(ctx context.Context, roomID string, by member.Member, bot bool, data any) (room.Action, member.Member, error) {
 	switch d := data.(type) {
 	case protocol.RoomSyncRequest:
 		return room.Sync{}, by, nil
 	case protocol.QueueAddRequest:
-		return s.Gateway.Resolve(ctx, by, bot, pick(d))
+		return s.Gateway.Resolve(ctx, roomID, by, bot, pick(d))
 	case protocol.QueueRemoveRequest:
 		return room.Remove{Entry: entryID(d.EntryID)}, by, nil
 	case protocol.QueueLikeRequest:

@@ -198,7 +198,7 @@ func (s *server) perform(ctx context.Context, sess *realtime.Session, tag reques
 		return err
 	}
 	// 握手拒绝了 API Key，会话的成员不是 bot，房间命令总以会话的成员发出。
-	a, _, err := s.action(ctx, sess.Member(), false, data)
+	a, _, err := s.action(ctx, sess.Room(), sess.Member(), false, data)
 	if err != nil {
 		sess.Fail(tag, err)
 		return err

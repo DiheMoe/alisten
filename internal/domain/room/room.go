@@ -12,8 +12,8 @@ const (
 	startLead           = 200 * time.Millisecond
 	closeDelay          = 5 * time.Minute
 	autoDJQuiet         = 10 * time.Second
-	refillInterval      = time.Minute
-	ephemeralBurst      = 5
+	RefillInterval      = time.Minute
+	EphemeralBurst      = 5
 	persistentBurst     = 30
 	ephemeralQueueLimit = 10
 	chatLimit           = 500

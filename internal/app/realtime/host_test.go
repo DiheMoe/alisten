@@ -66,10 +66,14 @@ type songs struct {
 	preparer *porttest.Preparer
 }
 
+// 只有网关点歌（Resolve）要按房间预扣点歌额度，用到房间目录和额度；不点歌的测试用 newSongs。
 func newSongs() *songs {
+	return newPickingSongs(nil, nil)
+}
+
+func newPickingSongs(rooms port.RoomDirectory, quota port.RoomQuota) *songs {
 	netease, bilibili := porttest.NewSource(track.NetEase), porttest.NewBilibili()
-	// 网关和房间宿主只用到 TrackMeta、ResolveLink、FirstMatch 和 Recommend，用不到房间目录和搜索额度。
-	music := catalog.New(netease, porttest.NewSource(track.QQ), bilibili, bilibili, noTracks{}, noHistory{}, nil, nil)
+	music := catalog.New(netease, porttest.NewSource(track.QQ), bilibili, bilibili, noTracks{}, noHistory{}, rooms, quota)
 	return &songs{netease: netease, bilibili: bilibili, music: music, preparer: porttest.NewPreparer()}
 }
 

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -88,14 +89,32 @@ type gatewayFixture struct {
 	store *porttest.Store
 	redis *porttest.Redis
 	songs *songs
+	quota *quota
 }
 
 func newGatewayFixture(t *testing.T, snapshots port.RoomSnapshots, store *porttest.Store) *gatewayFixture {
 	t.Helper()
-	songs := newSongs()
+	q := &quota{}
+	songs := newPickingSongs(store, q)
 	songs.add(sunny, sunnyM, sunnyP)
 	redis := porttest.NewRedis()
-	return &gatewayFixture{instance: startInstance(t, redis, "a", snapshots, store, songs), store: store, redis: redis, songs: songs}
+	return &gatewayFixture{instance: startInstance(t, redis, "a", snapshots, store, songs), store: store, redis: redis, songs: songs, quota: q}
+}
+
+// quota 的点歌额度可以耗尽，耗尽之后要等一分钟；搜索额度总能取到。
+type quota struct {
+	exhausted atomic.Bool
+}
+
+func (q *quota) TakeSearch(context.Context, string, int, time.Duration) (time.Duration, error) {
+	return 0, nil
+}
+
+func (q *quota) TakePick(context.Context, string, int, time.Duration) (time.Duration, error) {
+	if q.exhausted.Load() {
+		return time.Minute, nil
+	}
+	return 0, nil
 }
 
 func createRoom(t *testing.T, store *porttest.Store, kind room.Kind) string {
@@ -375,6 +394,7 @@ func TestResolvePick(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()
 		f := newGatewayFixture(t, store, store)
+		id := createRoom(t, store, room.Ephemeral)
 		link := track.Track{Source: track.Link, ID: "https://www.youtube.com/watch?v=x"}
 		video := track.Track{Source: track.Bilibili, ID: "BV1xx411c7mD"}
 		videoM := track.Meta{Title: "晴天（钢琴版）", PageURL: "https://www.bilibili.com/video/BV1xx411c7mD"}
@@ -392,7 +412,7 @@ func TestResolvePick(t *testing.T) {
 			{Pick{Source: track.NetEase, Keyword: "晴"}, room.Enqueue{Track: sunny, Meta: sunnyM}, nil},
 		}
 		for _, tt := range tests {
-			got, _, err := f.gateway.Resolve(t.Context(), alice, false, tt.pick)
+			got, _, err := f.gateway.Resolve(t.Context(), id, alice, false, tt.pick)
 			if got != tt.want || !errors.Is(err, tt.err) {
 				t.Errorf("Resolve(%+v) = %+v, %v，期望 %+v, %v", tt.pick, got, err, tt.want, tt.err)
 			}
@@ -404,15 +424,34 @@ func TestOnlyBotsFillInRequester(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()
 		f := newGatewayFixture(t, store, store)
+		id := createRoom(t, store, room.Persistent)
 		bot := member.Member{ID: "00000000-0000-7000-8000-0000000000b0", Name: "bot"}
 		for requester, want := range map[string]member.Member{"张三": {ID: bot.ID, Name: "张三（bot）"}, "": bot} {
-			got, by, err := f.gateway.Resolve(t.Context(), bot, true, Pick{Track: sunny, Requester: requester})
+			got, by, err := f.gateway.Resolve(t.Context(), id, bot, true, Pick{Track: sunny, Requester: requester})
 			if err != nil || got.Track != sunny || by != want {
 				t.Errorf("bot 点歌时代填 %q = %+v, %+v, %v，期望点歌人 %+v", requester, got, by, err, want)
 			}
 		}
-		if _, _, err := f.gateway.Resolve(t.Context(), alice, false, Pick{Track: sunny, Requester: "张三"}); !errors.Is(err, ErrRequesterNotAllowed) {
+		if _, _, err := f.gateway.Resolve(t.Context(), id, alice, false, Pick{Track: sunny, Requester: "张三"}); !errors.Is(err, ErrRequesterNotAllowed) {
 			t.Errorf("普通成员代填点歌人的错误 = %v，期望 ErrRequesterNotAllowed", err)
+		}
+	})
+}
+
+func TestPickQuotaBeforeUpstream(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		f := newGatewayFixture(t, store, store)
+		ephemeral, persistent := createRoom(t, store, room.Ephemeral), createRoom(t, store, room.Persistent)
+		f.quota.exhausted.Store(true)
+		f.songs.netease.Fail(errors.New("上游不可用"))
+		for _, p := range []Pick{{Track: sunny}, {Source: track.NetEase, Keyword: "晴"}} {
+			if _, _, err := f.gateway.Resolve(t.Context(), ephemeral, alice, false, p); !errors.Is(err, room.ErrRateLimited) {
+				t.Errorf("临时房间的点歌额度用完时 Resolve(%+v) 的错误 = %v，期望查询上游之前就以 room.ErrRateLimited 拒绝", p, err)
+			}
+		}
+		if _, _, err := f.gateway.Resolve(t.Context(), persistent, alice, false, Pick{Track: sunny}); !errors.Is(err, port.ErrProviderFailed) {
+			t.Errorf("常驻房间 Resolve 的错误 = %v，期望不预扣点歌额度，直接查询上游", err)
 		}
 	})
 }

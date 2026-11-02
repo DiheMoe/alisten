@@ -12,20 +12,28 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port"
 )
 
-var _ port.SearchQuota = (*SearchQuota)(nil)
+var _ port.RoomQuota = (*RoomQuota)(nil)
 
-type SearchQuota struct {
+type RoomQuota struct {
 	limiter *redis_rate.Limiter
 }
 
-func NewSearchQuota(client *goredis.Client) *SearchQuota {
-	return &SearchQuota{limiter: redis_rate.NewLimiter(client)}
+func NewRoomQuota(client *goredis.Client) *RoomQuota {
+	return &RoomQuota{limiter: redis_rate.NewLimiter(client)}
 }
 
-func (q *SearchQuota) TakeSearch(ctx context.Context, roomID string, burst int, refill time.Duration) (time.Duration, error) {
-	res, err := q.limiter.Allow(ctx, "room:"+roomID+":search", redis_rate.Limit{Rate: 1, Burst: burst, Period: refill})
+func (q *RoomQuota) TakeSearch(ctx context.Context, roomID string, burst int, refill time.Duration) (time.Duration, error) {
+	return q.take(ctx, roomID, "search", "搜索", burst, refill)
+}
+
+func (q *RoomQuota) TakePick(ctx context.Context, roomID string, burst int, refill time.Duration) (time.Duration, error) {
+	return q.take(ctx, roomID, "pick", "点歌", burst, refill)
+}
+
+func (q *RoomQuota) take(ctx context.Context, roomID, bucket, what string, burst int, refill time.Duration) (time.Duration, error) {
+	res, err := q.limiter.Allow(ctx, "room:"+roomID+":"+bucket, redis_rate.Limit{Rate: 1, Burst: burst, Period: refill})
 	if err != nil {
-		return 0, fmt.Errorf("取房间 %s 的搜索额度：%w", roomID, err)
+		return 0, fmt.Errorf("取房间 %s 的%s额度：%w", roomID, what, err)
 	}
 	if res.Allowed > 0 {
 		return 0, nil

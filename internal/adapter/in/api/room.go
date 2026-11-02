@@ -28,7 +28,7 @@ func (s *server) roomRequest(route protocol.RoomRoute) handlerFunc {
 		if resp, handled, err := s.answer(ctx, c.roomID, data); handled {
 			return resp, err
 		}
-		a, by, err := s.action(ctx, c.member, c.bot, data)
+		a, by, err := s.action(ctx, c.roomID, c.member, c.bot, data)
 		if err != nil {
 			return nil, err
 		}
