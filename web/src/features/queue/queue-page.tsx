@@ -4,7 +4,7 @@ import { Heart, ListMusic, Trash2 } from 'lucide-react'
 import { roomStore } from '@/core/room'
 import { bookTitle } from '@/shared/lib/book-title'
 import { useStore } from '@/shared/lib/use-store'
-import { EmptyState, SongArtwork, SongList } from '@/shared/ui'
+import { EmptyState, Select, SongArtwork, SongList } from '@/shared/ui'
 import { likeEntry, removeEntry, setPlayMode } from './actions'
 import { sourceName } from './source'
 import './queue.css'
@@ -53,11 +53,18 @@ export function QueuePage({ compact = false }: { compact?: boolean }) {
           播放列表
           <span className="text-ui-sm muted">{items.length}</span>
         </h1>
-        <select className="queue-mode" aria-label="播放顺序" value={playMode} disabled={!connected} onChange={event => void setPlayMode(event.target.value as PlayMode)}>
-          <option value="sequential">顺序播放</option>
-          <option value="rotation" title="按点歌人轮流播放">轮流播放</option>
-          <option value="random">随机播放</option>
-        </select>
+        <Select
+          className="queue-mode"
+          ariaLabel="播放顺序"
+          value={playMode}
+          disabled={!connected}
+          onChange={value => void setPlayMode(value as PlayMode)}
+          options={[
+            { value: 'sequential', label: '顺序播放' },
+            { value: 'rotation', label: '轮流播放' },
+            { value: 'random', label: '随机播放' },
+          ]}
+        />
       </div>
       {nowPlaying && <QueueCard label="正在播放" entry={nowPlaying.entry} />}
       {pending && <QueueCard label="下一首" entry={pending} className="queue-pending" />}

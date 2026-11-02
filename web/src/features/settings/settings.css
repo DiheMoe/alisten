@@ -14,8 +14,9 @@
 .settings-row-title { display: block; font-weight: 600; }
 .settings-row-copy p { margin-top: 4px; overflow-wrap: anywhere; }
 .settings-row-control { display: flex; justify-content: flex-end; align-items: center; min-width: 0; max-width: 320px; }
-.settings-row-control select { width: auto; max-width: 100%; min-width: 128px; padding: 8px 12px; }
-.settings-row-control select:disabled, .settings-row-control input:disabled { opacity: .5; cursor: not-allowed; }
+.settings-row-control .select { width: auto; max-width: 100%; min-width: 128px; }
+.settings-row-control .select-trigger { padding: 8px 12px; }
+.settings-row-control .select-trigger:disabled, .settings-row-control input:disabled { opacity: .5; cursor: not-allowed; }
 .settings-row-field .settings-row-control { width: 280px; }
 .settings-volume-control { display: flex; align-items: center; gap: 16px; width: 100%; }
 .settings-volume-control .volume-input-control { display: flex; align-items: center; gap: 4px; }
@@ -40,7 +41,8 @@
   .settings-group { padding: 0 16px; }
   .settings-row { gap: 16px; min-height: 80px; padding: 16px 0; }
   .settings-row-control { max-width: 160px; }
-  .settings-row-control select { min-width: 100px; padding: 8px; }
+  .settings-row-control .select { min-width: 100px; }
+  .settings-row-control .select-trigger { padding: 8px; }
   .settings-row-field { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .settings-row-field .settings-row-control { width: 100%; max-width: none; }
   .settings-page-footer { gap: 12px; padding: 12px 20px 16px; }

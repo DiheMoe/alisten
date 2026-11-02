@@ -1,0 +1,24 @@
+.select { position: relative; min-width: 0; }
+.select-trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; min-height: 40px; padding: 9px 12px; border: 1px solid var(--color-input-border); border-radius: 8px; background: var(--color-input); color: var(--color-foreground); text-align: left; }
+.select-trigger:hover:not(:disabled) { border-color: var(--color-border-hover); background: var(--color-input-focused); }
+.select-trigger[aria-expanded='true'], .select-trigger[aria-expanded='true']:hover:not(:disabled) { border-color: var(--color-input-border-focused); background: var(--color-input-focused); }
+.select-trigger:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 3px; }
+.select-trigger > svg { flex-shrink: 0; color: var(--color-foreground-subtle); transition: transform 150ms ease; }
+.select-trigger[aria-expanded='true'] > svg { transform: rotate(180deg); }
+.select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select-menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; display: flex; flex-direction: column; gap: 2px; min-width: 100%; width: max-content; max-width: min(320px, calc(100vw - 32px)); max-height: min(320px, calc(100dvh - 32px)); padding: 6px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-popover); box-shadow: 0 12px 32px var(--color-shadow); transform-origin: top center; animation: popover-in 200ms cubic-bezier(.2, .8, .2, 1) both; }
+.select-option { display: flex; align-items: center; justify-content: space-between; gap: 20px; width: 100%; min-width: 0; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--color-foreground); text-align: left; white-space: nowrap; }
+.select-option:hover, .select-option[data-active='true'] { background: var(--color-hover); }
+.select-option[aria-selected='true'] { color: var(--color-brand); }
+.select-option > span { overflow: hidden; text-overflow: ellipsis; }
+.select-option > svg { flex-shrink: 0; }
+.select-trigger:disabled { cursor: not-allowed; }
+:root[data-performance='low'] .select-trigger > svg { transition: none; }
+:root[data-performance='low'] .select-menu { animation: fade-in 160ms ease both; }
+@media (prefers-reduced-motion: reduce) {
+  .select-trigger > svg { transition: none; }
+  .select-menu { animation: none; }
+}
+@media (max-width: 767px) {
+  .select-menu { max-width: calc(100vw - 32px); }
+}

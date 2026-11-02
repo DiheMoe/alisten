@@ -8,7 +8,7 @@ import { historyStore } from '@/features/history'
 import { enqueue } from '@/features/queue'
 import { bookTitle } from '@/shared/lib/book-title'
 import { useStore } from '@/shared/lib/use-store'
-import { Artwork, AsyncIconButton, EmptyState, IconButton, Skeleton, SongArtwork, SongList } from '@/shared/ui'
+import { Artwork, AsyncIconButton, EmptyState, IconButton, Select, Skeleton, SongArtwork, SongList } from '@/shared/ui'
 import { SearchBox } from './search-box'
 import { canOpenPlaylists, keywordSearch, pageSize, recordSearch, searchStore } from './search-store'
 import './search.css'
@@ -290,16 +290,17 @@ export function SearchPage({ inlineSearchClassName, onSearch, onOpenPlaylist }: 
           </button>
         </div>
         {view !== 'recommend' && (
-          <select
+          <Select
             className="search-source text-ui-caption"
-            aria-label="音乐平台"
+            ariaLabel="音乐平台"
             value={source}
             disabled={!connected}
-            onChange={event => searchAgain(keywordSearch(keyword, event.target.value === 'qq' ? 'qq' : 'netease', view))}
-          >
-            <option value="qq">QQ 音乐</option>
-            <option value="netease">网易云音乐</option>
-          </select>
+            onChange={value => searchAgain(keywordSearch(keyword, value === 'qq' ? 'qq' : 'netease', view))}
+            options={[
+              { value: 'qq', label: 'QQ 音乐' },
+              { value: 'netease', label: '网易云音乐' },
+            ]}
+          />
         )}
       </div>
       <header className="search-page-heading">

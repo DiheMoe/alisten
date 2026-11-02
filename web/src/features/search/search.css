@@ -20,7 +20,8 @@
 .search-chip { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 7px 14px; border: 0; border-radius: 999px; background: var(--color-surface); color: var(--color-foreground); white-space: nowrap; }
 .search-chip:hover:not(:disabled) { background: var(--color-hover); }
 .search-chip[aria-pressed='true'], .search-chip[aria-pressed='true']:hover:not(:disabled) { background: var(--color-foreground); color: var(--color-content); }
-.search-source { width: auto; max-width: 144px; flex-shrink: 0; padding: 7px 12px; border-radius: 999px; background: transparent; }
+.search-source { width: auto; max-width: 144px; flex-shrink: 0; }
+.search-source .select-trigger { padding: 7px 12px; border-radius: 999px; background: transparent; }
 .search-page-heading { margin: 16px 0 28px; }
 .search-page-heading p { margin-top: 6px; overflow-wrap: anywhere; }
 .search-recommend-hint { display: none; align-items: center; gap: 6px; }

@@ -1,3 +1,4 @@
+import './select.css'
 import './ui.css'
 
 export { Artwork } from './artwork'
@@ -8,6 +9,8 @@ export { lazyPage } from './lazy-page'
 export { Modal } from './modal'
 export { notificationStore } from './notification-store'
 export { Notifications } from './notifications'
+export { Select } from './select'
+export type { SelectOption } from './select'
 export { Skeleton } from './skeleton'
 export { SongArtwork } from './song-artwork'
 export { SongList } from './song-list'
