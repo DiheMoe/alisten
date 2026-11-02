@@ -5,6 +5,8 @@ import { CloseCode, PROTOCOL_VERSION } from './protocol.gen'
 
 const requestTimeoutMs = 60_000
 const pingIntervalMs = 5000
+// 半开的连接上写入不会出错，要等 TCP 重传超时才会关闭，所以 ping 收不到回包就当作连接已失效。
+const pongTimeoutMs = 3 * pingIntervalMs
 
 const stopCodes = new Set<number>([CloseCode.invalidArgument, CloseCode.unauthorized, CloseCode.notFound, CloseCode.clientOutdated])
 
@@ -77,14 +79,13 @@ export class Connection {
     return this.#send(type, data)
   }
 
-  // 不以收不到回包作为断线的依据：连接已失效时，写入 ping 会触发 close 或 error。
   readonly check = (): void => {
     if (this.#status === 'stopped')
       return
     const socket = this.#socket
     if (socket?.readyState === WebSocket.OPEN) {
       if (this.#ready)
-        this.#ping()
+        this.#ping(socket)
       return
     }
     if (socket?.readyState === WebSocket.CONNECTING)
@@ -131,8 +132,8 @@ export class Connection {
       clock.reset()
       this.#setStatus('open')
       this.#handlers.hello(response)
-      this.#ping()
-      this.#pingTimer = setInterval(() => this.#ping(), pingIntervalMs)
+      this.#ping(socket)
+      this.#pingTimer = setInterval(() => this.#ping(socket), pingIntervalMs)
     }, (error: RequestError) => {
       if (socket !== this.#socket)
         return
@@ -144,15 +145,18 @@ export class Connection {
     })
   }
 
-  #ping(): void {
+  #ping(socket: WebSocket): void {
     const sentAt = clock.now()
     // 服务端只接受整数毫秒，而 performance.now() 带小数。
-    this.#send('ping', { clientTimeMs: Math.round(sentAt) }).then((response) => {
+    this.#send('ping', { clientTimeMs: Math.round(sentAt) }, pongTimeoutMs).then((response) => {
       clock.addSample(sentAt, clock.now(), response.serverTimeMs)
-    }, () => {})
+    }, (error: RequestError) => {
+      if (!error.code)
+        this.#lost(socket, abnormalClosure)
+    })
   }
 
-  #send<T extends RequestType>(type: T, data: RequestDataMap[T]): Promise<ResponseDataMap[T]> {
+  #send<T extends RequestType>(type: T, data: RequestDataMap[T], timeoutMs = requestTimeoutMs): Promise<ResponseDataMap[T]> {
     const socket = this.#socket
     if (!socket)
       return Promise.reject(new RequestError('还没有连上房间，连上之后再试一次。', null))
@@ -161,7 +165,7 @@ export class Connection {
       const timer = setTimeout(() => {
         this.#pending.delete(id)
         reject(new RequestError('服务器没有及时响应，请稍后再试。', null))
-      }, requestTimeoutMs)
+      }, timeoutMs)
       this.#pending.set(id, { resolve: resolve as (data: unknown) => void, reject, timer })
       const message: RequestMessage<T> = { kind: 'request', type, id, data }
       socket.send(JSON.stringify(message))
