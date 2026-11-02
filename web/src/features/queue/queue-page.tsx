@@ -34,7 +34,7 @@ function QueueCard({ label, entry, className = '' }: { label: string, entry: Ent
       <div className="song-copy">
         <span className="text-ui-xs accent">{song.badge ? `${label} · ${song.badge}` : label}</span>
         <strong className="text-ui-base truncate">{song.title}</strong>
-        <span className="text-ui-sm muted truncate">{song.sourceName ? `${song.artist} · ${song.sourceName}` : song.artist}</span>
+        <span className="text-ui-sm muted truncate">{[song.artist, song.sourceName, song.note].filter(Boolean).join(' · ')}</span>
       </div>
     </div>
   )
