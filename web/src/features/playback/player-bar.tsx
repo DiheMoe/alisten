@@ -2,7 +2,6 @@ import { ListMusic, MessageCircle, SkipForward, Volume2, VolumeX } from 'lucide-
 import { useEffect, useRef } from 'react'
 import { roomStore } from '@/core/room'
 import { sourceName } from '@/features/queue'
-import { bookTitle } from '@/shared/lib/book-title'
 import { formatDuration } from '@/shared/lib/time'
 import { useStore } from '@/shared/lib/use-store'
 import { Artwork, AsyncIconButton, IconButton, VolumeInput } from '@/shared/ui'
@@ -66,7 +65,9 @@ export function PlayerBar({ onSkip, onLyrics, onQueue, onChat, queueOpen, chatOp
   const volume = useStore(volumeStore, s => s.volume)
   const muted = useStore(volumeStore, s => s.muted)
   const meta = nowPlaying?.entry.meta
-  const source = nowPlaying && sourceName(nowPlaying.entry.track)
+  const artist = meta?.artist || '未知艺术家'
+  const source = nowPlaying ? sourceName(nowPlaying.entry.track) : undefined
+  const note = nowPlaying?.entry.by ? `${nowPlaying.entry.by.name} 点的歌` : undefined
   return (
     <section className="player-bar" aria-label="播放器">
       <button type="button" className="player-artwork" onClick={onLyrics} aria-label="查看歌词">
@@ -77,13 +78,7 @@ export function PlayerBar({ onSkip, onLyrics, onQueue, onChat, queueOpen, chatOp
           <span className="song-copy">
             <strong className="text-ui-lg truncate">{meta?.title ?? '暂无歌曲'}</strong>
             <span className="text-ui-caption muted truncate">
-              {meta?.artist || '未知艺术家'}
-              {source && meta?.pageUrl && (
-                <>
-                  {' · '}
-                  <a className="player-source" href={meta.pageUrl} target="_blank" rel="noopener noreferrer" aria-label={`在${source}打开${bookTitle(meta.title)}（新标签页）`} title={`在${source}打开（新标签页）`}>{source}</a>
-                </>
-              )}
+              {[artist, source, note].filter(Boolean).join(' · ')}
             </span>
           </span>
         </div>
