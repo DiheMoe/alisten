@@ -37,7 +37,7 @@ func checkPlayURLRequest(t *testing.T, r *http.Request) {
 		t.Errorf("播放地址请求的方法和模块 = %q %q", payload.Req1.Method, payload.Req1.Module)
 	}
 	wantFilenames := []string{"F000idid.flac", "M800idid.mp3", "M500idid.mp3"}
-	if !slices.Equal(payload.Req1.Param.Filenames, wantFilenames) || !slices.Equal(payload.Req1.Param.SongMIDs, []string{"id"}) {
+	if !slices.Equal(payload.Req1.Param.Filenames, wantFilenames) || !slices.Equal(payload.Req1.Param.SongMIDs, []string{"id", "id", "id"}) {
 		t.Errorf("播放地址请求的参数 = %#v", payload.Req1.Param)
 	}
 }

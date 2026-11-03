@@ -49,6 +49,9 @@ func (c *Client) PlayURL(ctx context.Context, songMID string) (string, error) {
 		"M800" + songMID + songMID + ".mp3",
 		"M500" + songMID + songMID + ".mp3",
 	}
+	// vkey 接口按下标配对 filename 和 songmid，不配对的文件一律返回不存在。
+	songmids := []string{songMID, songMID, songMID}
+	songtypes := []int{0, 0, 0}
 	payload, err := json.Marshal(map[string]any{
 		"req_1": map[string]any{
 			"module": "music.vkey.GetVkey",
@@ -56,8 +59,8 @@ func (c *Client) PlayURL(ctx context.Context, songMID string) (string, error) {
 			"param": map[string]any{
 				"filename":  filenames,
 				"guid":      "0",
-				"songmid":   []string{songMID},
-				"songtype":  []int{0},
+				"songmid":   songmids,
+				"songtype":  songtypes,
 				"uin":       "0",
 				"loginflag": 1,
 				"platform":  "20",
