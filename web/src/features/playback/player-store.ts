@@ -1,9 +1,11 @@
 import type { NowPlaying } from '@/core/realtime'
 import { brandStore } from '@/core/brand'
 import { clock } from '@/core/clock'
+import { reconnectDelay } from '@/core/realtime'
 import { roomStore } from '@/core/room'
 import { Emitter } from '@/shared/lib/emitter'
 import { Store } from '@/shared/lib/store'
+import { notificationStore } from '@/shared/ui'
 import { documentTitle } from './document-title'
 import { setMediaSessionHandlers, showMediaSession } from './media-session'
 import { driftSeekPosition, startPlan } from './timeline'
@@ -11,6 +13,9 @@ import { volumeStore } from './volume-store'
 
 const driftCheckIntervalMs = 2000
 const maxGain = 1.5
+// 音源解析持续失败时，房间里的每个客户端都在请求上游，所以重试要有上限。
+const maxMediaRetries = 5
+const mediaNoticeMs = 8000
 
 function sameTrack(a: NowPlaying, b: NowPlaying): boolean {
   return a.entry.id === b.entry.id && a.startedAtMs === b.startedAtMs
@@ -22,9 +27,10 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
   #audio: HTMLAudioElement | null = null
   #current: NowPlaying | null = null
   #load = 0
-  #reloaded = false
+  #failures = 0
   #awaitingClock = false
   #startTimer: ReturnType<typeof setTimeout> | undefined
+  #retryTimer: ReturnType<typeof setTimeout> | undefined
   #driftTimer: ReturnType<typeof setInterval> | undefined
   #frame: number | undefined
 
@@ -88,7 +94,11 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
     if (!current)
       return
     this.setState({ needsGesture: false })
-    this.#start()
+    // 出错的音频元素调用 play() 一定失败，只能重新加载。
+    if (this.#audio?.error)
+      this.#reload(current)
+    else
+      this.#start()
     // 恢复播放时重新获取快照；即使快照没有变化，也按应在位置重新定位一次。
     void roomStore.sync().then(() => {
       if (this.#current && sameTrack(this.#current, current))
@@ -113,10 +123,15 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
       this.#stop()
       return
     }
-    if (previous && sameTrack(previous, next))
+    if (previous && sameTrack(previous, next)) {
+      // 同一首歌的新快照来自重连的握手或 room.sync：连接恢复了，不等下一次重试；重试用完之后也靠它恢复。
+      if (this.#audio?.error)
+        this.#reload(next)
       return
+    }
     clearTimeout(this.#startTimer)
-    this.#reloaded = false
+    clearTimeout(this.#retryTimer)
+    this.#failures = 0
     this.#loadSource(next.mediaUrl, ++this.#load)
   }
 
@@ -135,6 +150,11 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
     }, { once: true })
     audio.src = url
     audio.load()
+  }
+
+  #reload(current: NowPlaying): void {
+    clearTimeout(this.#retryTimer)
+    this.#loadSource(current.mediaUrl, ++this.#load)
   }
 
   #start(): void {
@@ -175,14 +195,24 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
 
   #onError = (): void => {
     const current = this.#current
-    if (!current || this.#reloaded)
+    if (!current)
       return
-    this.#reloaded = true
-    // /media 在同一实例内复用 1 分钟内取到的播放地址，所以只有取到 1 分钟以后才失效的地址，这次重试才能换到新地址。
-    this.#loadSource(current.mediaUrl, ++this.#load)
+    this.#failures += 1
+    if (this.#failures === 1) {
+      // /media 在同一实例内复用 1 分钟内取到的播放地址，所以只有取到 1 分钟以后才失效的地址，这次重试才能换到新地址。
+      this.#reload(current)
+      return
+    }
+    if (this.#failures === 2)
+      notificationStore.error('这首歌暂时放不了，正在重试。', mediaNoticeMs)
+    if (this.#failures <= maxMediaRetries)
+      this.#retryTimer = setTimeout(() => this.#reload(current), reconnectDelay(this.#failures - 1))
+    else if (this.#failures === maxMediaRetries + 1)
+      notificationStore.error('这首歌没能加载，已停止重试。', mediaNoticeMs)
   }
 
   #onPlaying = (): void => {
+    this.#failures = 0
     this.setState({ needsGesture: false })
     cancelAnimationFrame(this.#frame ?? 0)
     this.#frame = requestAnimationFrame(this.#tick)
@@ -241,6 +271,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
   #stop(): void {
     ++this.#load
     clearTimeout(this.#startTimer)
+    clearTimeout(this.#retryTimer)
     this.#awaitingClock = false
     this.setState({ needsGesture: false })
     const audio = this.#audio

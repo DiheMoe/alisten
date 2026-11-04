@@ -17,12 +17,14 @@ class FakeAudio extends EventTarget {
   seeking = false
   playError: Error | null = null
   loadError: Error | null = null
+  error: { code: number } | null = null
 
   load(): void {
     const error = this.loadError
     this.loadError = null
     if (error)
       throw error
+    this.error = null
     this.loads += 1
   }
 
@@ -45,6 +47,12 @@ class FakeAudio extends EventTarget {
 
   emit(type: string): void {
     this.dispatchEvent(new Event(type))
+  }
+
+  fail(): void {
+    this.paused = true
+    this.error = { code: 4 }
+    this.emit('error')
   }
 }
 
@@ -425,6 +433,206 @@ describe('播放过程中', () => {
     audio.paused = true
     nextFrame()
     expect(positions).toEqual([])
+  })
+})
+
+describe('音频出错之后', () => {
+  async function notices() {
+    const { notificationStore } = await import('@/shared/ui')
+    return () => notificationStore.state.notifications.map(({ tone, message }) => ({ tone, message }))
+  }
+
+  const retrying = { tone: 'error', message: '这首歌暂时放不了，正在重试。' }
+  const gaveUp = { tone: 'error', message: '这首歌没能加载，已停止重试。' }
+
+  // 第一次出错立刻重试，之后等 3、6、12、24 秒（随机数为 0.5 时）。
+  async function exhaust(): Promise<void> {
+    audio.fail()
+    audio.fail()
+    for (const delayMs of [3000, 6000, 12_000, 24_000]) {
+      await vi.advanceTimersByTimeAsync(delayMs)
+      audio.fail()
+    }
+  }
+
+  beforeEach(() => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('第一次出错立刻重试，不提示：放到一半地址过期时马上就能换到新地址', async () => {
+    await attached()
+    const shown = await notices()
+    setPlaying(song('a'))
+    audio.src = 'https://cdn.test/expired'
+    audio.fail()
+    expect(audio.src).toBe('/media/netease/a')
+    expect(audio.loads).toBe(2)
+    expect(shown()).toEqual([])
+  })
+
+  it('立刻重试也失败时提示一次，通知显示 8 秒', async () => {
+    await attached()
+    const shown = await notices()
+    setPlaying(song('a'))
+    audio.fail()
+    audio.fail()
+    expect(shown()).toEqual([retrying])
+
+    await vi.advanceTimersByTimeAsync(7999)
+    expect(shown()).toEqual([retrying])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(shown()).toEqual([])
+  })
+
+  it('之后按退避的间隔重试，一共重试 5 次', async () => {
+    await attached()
+    setPlaying(song('a'))
+    audio.fail()
+    audio.fail()
+    expect(audio.loads).toBe(2)
+    for (const [delayMs, loads] of [[3000, 3], [6000, 4], [12_000, 5], [24_000, 6]] as const) {
+      await vi.advanceTimersByTimeAsync(delayMs - 1)
+      expect(audio.loads).toBe(loads - 1)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(audio.loads).toBe(loads)
+      audio.fail()
+    }
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(audio.loads).toBe(6)
+  })
+
+  it('重试用完时再提示一次，不再请求', async () => {
+    await attached()
+    const shown = await notices()
+    setPlaying(song('a'))
+    await exhaust()
+    expect(shown()).toContainEqual(gaveUp)
+    expect(vi.getTimerCount()).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(8000)
+    expect(shown()).toEqual([])
+    audio.fail()
+    expect(shown()).toEqual([])
+  })
+
+  it('恢复之后从应在的位置接着放', async () => {
+    await attached()
+    setPlaying(song('a'))
+    audio.emit('canplay')
+    audio.fail()
+    audio.fail()
+    clock.nowMs = startedAtMs + 20_000
+    await vi.advanceTimersByTimeAsync(3000)
+    audio.emit('canplay')
+    expect(audio.currentTime).toBe(20)
+    expect(audio.paused).toBe(false)
+  })
+
+  it('播放成功之后重新计数，这首歌后面再出错还能立刻重试', async () => {
+    await attached()
+    const shown = await notices()
+    setPlaying(song('a'))
+    audio.fail()
+    audio.emit('playing')
+    audio.fail()
+    expect(audio.loads).toBe(3)
+    expect(shown()).toEqual([])
+  })
+
+  it('换歌时取消等待中的重试并重新计数', async () => {
+    await attached()
+    const shown = await notices()
+    setPlaying(song('a'))
+    audio.fail()
+    audio.fail()
+    setPlaying(song('b'))
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(audio.src).toBe('/media/netease/b')
+    expect(audio.loads).toBe(3)
+
+    audio.fail()
+    expect(audio.loads).toBe(4)
+    expect(shown()).toEqual([retrying])
+  })
+
+  it('没有在播的歌时取消等待中的重试，也不再理会错误', async () => {
+    await attached()
+    setPlaying(song('a'))
+    audio.fail()
+    audio.fail()
+    setPlaying(null)
+    const { loads } = audio
+    await vi.advanceTimersByTimeAsync(8000)
+    audio.fail()
+    expect(audio.loads).toBe(loads)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('卸载时取消等待中的重试', async () => {
+    const playerStore = await attached()
+    const shown = await notices()
+    setPlaying(song('a'))
+    audio.fail()
+    audio.fail()
+    await vi.advanceTimersByTimeAsync(8000)
+    expect(shown()).toEqual([])
+    playerStore.detach()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('收到新快照时说明连接恢复了，不等下一次重试', async () => {
+    await attached()
+    setPlaying(song('a'))
+    audio.fail()
+    audio.fail()
+    setPlaying(song('a'))
+    expect(audio.loads).toBe(3)
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(audio.loads).toBe(3)
+  })
+
+  it('重试用完之后，收到新快照时再试一次，失败也不再提示', async () => {
+    await attached()
+    const shown = await notices()
+    setPlaying(song('a'))
+    await exhaust()
+    await vi.advanceTimersByTimeAsync(8000)
+    const { loads } = audio
+
+    setPlaying(song('a'))
+    expect(audio.loads).toBe(loads + 1)
+    audio.fail()
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(audio.loads).toBe(loads + 1)
+    expect(shown()).toEqual([])
+  })
+
+  it('点播放时重新加载：出错的音频元素调用 play() 一定失败', async () => {
+    const playerStore = await attached()
+    setPlaying(song('a'))
+    await exhaust()
+    const { loads, plays } = audio
+
+    playerStore.resume()
+    expect(audio.loads).toBe(loads + 1)
+    expect(audio.plays).toBe(plays)
+    audio.emit('canplay')
+    expect(audio.plays).toBe(plays + 1)
+  })
+
+  it('点播放时取消等待中的重试，不重复加载', async () => {
+    const playerStore = await attached()
+    setPlaying(song('a'))
+    audio.fail()
+    audio.fail()
+    playerStore.resume()
+    const { loads } = audio
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(audio.loads).toBe(loads)
   })
 })
 
