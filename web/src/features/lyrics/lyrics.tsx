@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { LyricWord } from './lrc'
 import { AlignLeft } from 'lucide-react'
 import { useEffect, useRef } from 'react'
@@ -5,9 +6,21 @@ import { playerStore } from '@/features/playback'
 import { performanceStore } from '@/features/settings'
 import { useStore } from '@/shared/lib/use-store'
 import { EmptyState } from '@/shared/ui'
-import { wordProgress } from './lrc'
+import { wordEmphasis, wordProgress } from './lrc'
 import { lyricsStore } from './lyrics-store'
 import './lyrics.css'
+
+// 字是 inline-block 才能位移和缩放，而 inline-block 会折叠首尾的空格，所以空格放在字的外面。
+function LyricWordText({ word }: { word: LyricWord }) {
+  const emphasis = wordEmphasis(word)
+  return (
+    <>
+      {/^\s/.test(word.text) && ' '}
+      <span className="lyric-word" style={emphasis ? { '--lyric-emphasis': emphasis } as CSSProperties : undefined}>{word.text.trim()}</span>
+      {/\s$/.test(word.text) && ' '}
+    </>
+  )
+}
 
 // 空白行不渲染节点：当前行为空白行时，滚动到前后两行的中间。
 function centerLine(container: HTMLElement, nodes: Map<number, HTMLElement>, index: number, smooth: boolean): void {
@@ -91,6 +104,8 @@ export function Lyrics() {
         if (fill !== item.fill) {
           item.fill = fill
           item.node.style.setProperty('--lyric-fill', String(fill))
+          item.node.classList.toggle('lyric-sung', smooth && fill > 0)
+          item.node.classList.toggle('lyric-held', smooth && fill > 0 && fill < 1 && wordEmphasis(item.word) > 0)
         }
       }
     }
@@ -122,7 +137,7 @@ export function Lyrics() {
         {lines.some(line => line.text)
           ? lines.map((line, index) => line.text && (
               <p className="lyric-line text-ui-xl" data-lyric-index={index} key={`${line.timeMs}:${line.text}`}>
-                {line.words?.map(word => <span className="lyric-word" key={`${word.startMs}:${word.text}`}>{word.text}</span>) ?? line.text}
+                {line.words?.map(word => <LyricWordText key={`${word.startMs}:${word.text}`} word={word} />) ?? line.text}
                 {line.translation && <span className="lyric-translation">{line.translation}</span>}
               </p>
             ))

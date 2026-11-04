@@ -40,11 +40,15 @@ export function parseYrc(yrc: string): LyricLine[] {
     if (!head)
       continue
     const tags = [...row.matchAll(yrcWordTag)]
-    const words = tags.map((tag, i) => ({
-      startMs: Number(tag[1]),
-      durationMs: Number(tag[2]),
-      text: row.slice(tag.index + tag[0].length, tags[i + 1]?.index),
-    }))
+    const words: LyricWord[] = []
+    for (const [i, tag] of tags.entries()) {
+      const text = row.slice(tag.index + tag[0].length, tags[i + 1]?.index)
+      if (text.trim())
+        words.push({ startMs: Number(tag[1]), durationMs: Number(tag[2]), text })
+      // 字独立绘制：只含空格的字单独成字时，它两侧的空格不会合并，词间距会变成两倍。
+      else if (words.length)
+        words[words.length - 1].text += text
+    }
     const text = words.map(word => word.text).join('').trim()
     const timeMs = Number(head[1])
     if (text)
@@ -59,6 +63,12 @@ export function parseYrc(yrc: string): LyricLine[] {
 
 export function wordProgress({ startMs, durationMs }: LyricWord, positionMs: number): number {
   return Math.min(Math.max((positionMs - startMs) / Math.max(durationMs, 1), 0), 1)
+}
+
+// 唱得久的短词才强调：短音节一闪而过看不出来，长词放大会挤到相邻的字。
+export function wordEmphasis({ durationMs, text }: LyricWord): number {
+  const { length } = text.trim()
+  return durationMs > 1000 && length > 0 && length < 8 ? Math.min(durationMs, 2000) / 1000 - 1 : 0
 }
 
 // 由翻译找行，而不是由行找翻译：否则没有翻译的行会借用相邻行的翻译。

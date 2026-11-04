@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLines, lineIndexAt, parseLrc, parseYrc, withTranslations, wordProgress } from './lrc'
+import { buildLines, lineIndexAt, parseLrc, parseYrc, withTranslations, wordEmphasis, wordProgress } from './lrc'
 
 describe('parseLrc', () => {
   it('解析分、秒和不同精度的小数部分', () => {
@@ -64,6 +64,15 @@ describe('parseYrc', () => {
     expect(lines[0].words).toEqual([{ startMs: 1000, durationMs: 500, text: '词' }])
   })
 
+  it('只含空格的字并入前一个字，行首的空白丢弃', () => {
+    const [line] = parseYrc('[0,1500](0,500,0) (500,500,0)Hello(1000,0,0) (1000,500,0)love')
+    expect(line.words).toEqual([
+      { startMs: 500, durationMs: 500, text: 'Hello ' },
+      { startMs: 1000, durationMs: 500, text: 'love' },
+    ])
+    expect(line.text).toBe('Hello love')
+  })
+
   it('按行起始时间排序', () => {
     const lines = parseYrc('[2000,500](2000,500,0)二\n[1000,500](1000,500,0)一')
     expect(lines.filter(line => line.text).map(line => line.text)).toEqual(['一', '二'])
@@ -96,6 +105,27 @@ describe('wordProgress', () => {
     expect(wordProgress(instant, 999)).toBe(0)
     expect(wordProgress(instant, 1000)).toBe(0)
     expect(wordProgress(instant, 1001)).toBe(1)
+  })
+})
+
+describe('wordEmphasis', () => {
+  const word = (durationMs: number, text = '爱') => ({ startMs: 0, durationMs, text })
+
+  it('持续不超过 1 秒的字不强调', () => {
+    expect(wordEmphasis(word(400))).toBe(0)
+    expect(wordEmphasis(word(1000))).toBe(0)
+  })
+
+  it('强调的程度随时长增加，到 2 秒封顶', () => {
+    expect(wordEmphasis(word(1500))).toBe(0.5)
+    expect(wordEmphasis(word(2000))).toBe(1)
+    expect(wordEmphasis(word(6000))).toBe(1)
+  })
+
+  it('太长的词和空白不强调，两端的空格不算长度', () => {
+    expect(wordEmphasis(word(2000, 'Forevers'))).toBe(0)
+    expect(wordEmphasis(word(2000, 'Forever '))).toBe(1)
+    expect(wordEmphasis(word(2000, '  '))).toBe(0)
   })
 })
 
