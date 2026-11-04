@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/domain/member"
 	"github.com/dihemoe/alisten/internal/domain/room"
+	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
 // 只有同一构建版本的实例互相通信，格式不需要跨版本兼容。
@@ -109,7 +111,7 @@ func encodeRoomMessage(m port.RoomMessage) (string, json.RawMessage, error) {
 	case port.Emitted:
 		w := wireEmit{Term: m.Emit.Term, Seq: m.Emit.Seq}
 		var err error
-		if w.Event, w.Data, err = events.encode(m.Emit.Event); err != nil {
+		if w.Event, w.Data, err = events.encode(lightEvent(m.Emit.Event)); err != nil {
 			return "", nil, err
 		}
 		data, err := json.Marshal(w)
@@ -118,7 +120,7 @@ func encodeRoomMessage(m port.RoomMessage) (string, json.RawMessage, error) {
 		w := wireReply{RequestID: m.Reply.RequestID, Err: m.Reply.Err}
 		if m.Reply.Err == nil {
 			var err error
-			if w.Result, w.Data, err = results.encode(m.Reply.Result); err != nil {
+			if w.Result, w.Data, err = results.encode(lightResult(m.Reply.Result)); err != nil {
 				return "", nil, err
 			}
 		}
@@ -126,6 +128,40 @@ func encodeRoomMessage(m port.RoomMessage) (string, json.RawMessage, error) {
 		return kindReplied, data, err
 	}
 	return roomMessages.encode(m)
+}
+
+// 收到消息的实例只用正在播放的条目的准备结果。其他条目如果也带上，队列每次变化都要把整个队列的歌词发给所有实例。
+func lightEvent(e room.Event) room.Event {
+	switch e := e.(type) {
+	case room.QueueChanged:
+		e.Pending, e.Waiting = withoutPrep(e.Pending, e.Waiting)
+		return e
+	case room.Activity:
+		e.Entry.Prep = track.Prepared{}
+		return e
+	}
+	return e
+}
+
+func lightResult(r room.Result) room.Result {
+	if s, ok := r.(room.SyncResult); ok {
+		s.View.Snapshot.Pending, s.View.Snapshot.Waiting = withoutPrep(s.View.Snapshot.Pending, s.View.Snapshot.Waiting)
+		return s
+	}
+	return r
+}
+
+func withoutPrep(pending *room.Entry, waiting []room.Entry) (*room.Entry, []room.Entry) {
+	if pending != nil {
+		p := *pending
+		p.Prep = track.Prepared{}
+		pending = &p
+	}
+	waiting = slices.Clone(waiting)
+	for i := range waiting {
+		waiting[i].Prep = track.Prepared{}
+	}
+	return pending, waiting
 }
 
 func decodeRoomMessage(kind string, data json.RawMessage) (port.RoomMessage, error) {

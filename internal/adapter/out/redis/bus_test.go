@@ -104,10 +104,10 @@ var (
 	waiting = room.Entry{
 		ID: 12, Track: sunny, By: alice, Likes: 2, Ready: true, AddedAt: when,
 		Meta: track.Meta{Title: "晴天", Artist: "周杰伦", Album: "叶惠美", CoverURL: "https://p1.music.126.net/example.jpg", PageURL: "https://music.163.com/#/song?id=186016", Duration: 269 * time.Second},
-		Prep: track.Prepared{Duration: 269500 * time.Millisecond, Gain: 0.75, Lyric: "[00:01.00]故事的小黄花"},
 	}
+	playing = withPrep(waiting)
 	link    = room.Entry{ID: 13, Track: track.Track{Source: track.Link, ID: "https://www.youtube.com/watch?v=x"}, Meta: track.Meta{Title: "https://www.youtube.com/watch?v=x"}, Auto: true, AddedAt: when}
-	current = room.NowPlaying{Entry: waiting, StartedAt: when.Add(time.Minute)}
+	current = room.NowPlaying{Entry: playing, StartedAt: when.Add(time.Minute)}
 	view    = room.View{
 		Term: 3, Seq: 128,
 		Snapshot: room.Snapshot{
@@ -121,6 +121,11 @@ var (
 		Sessions: []room.Session{{ID: "a/s1", Member: alice}},
 	}
 )
+
+func withPrep(e room.Entry) room.Entry {
+	e.Prep = track.Prepared{Duration: 269500 * time.Millisecond, Gain: 0.75, Lyric: "[00:01.00]故事的小黄花"}
+	return e
+}
 
 func roomMessageSamples() []port.RoomMessage {
 	return []port.RoomMessage{
@@ -164,6 +169,40 @@ func TestRoomMessagesArriveInOrder(t *testing.T) {
 		if !reflect.DeepEqual(got, port.RoomDelivery{Room: roomID, Message: want}) {
 			t.Errorf("收到 %#v\n期望 %#v", got, want)
 		}
+	}
+}
+
+func TestOnlyPlayingEntryKeepsPreparedResultAcrossInstances(t *testing.T) {
+	client := newClient(t)
+	a, b := newBus(t, client, "v1"), newBus(t, client, "v1")
+	roomID := randomRoom()
+	if err := b.bus.SubscribeRoom(t.Context(), roomID); err != nil {
+		t.Fatal(err)
+	}
+	pending, queue := playing, []room.Entry{link, playing}
+	sentView, wantView := view, view
+	sentView.Snapshot.Pending, sentView.Snapshot.Waiting = &pending, queue
+	wantView.Snapshot.Waiting = []room.Entry{link, waiting}
+	emitted := func(e room.Event) port.RoomMessage { return port.Emitted{Emit: room.Emit{Term: 3, Seq: 1, Event: e}} }
+	replied := func(v room.View) port.RoomMessage {
+		return port.Replied{Reply: room.Reply{RequestID: "a/r1", Result: room.SyncResult{View: v}}}
+	}
+	for _, c := range []struct{ sent, want port.RoomMessage }{
+		{emitted(room.PlaybackChanged{Current: &current}), emitted(room.PlaybackChanged{Current: &current})},
+		{emitted(room.QueueChanged{Pending: &pending, Waiting: queue}), emitted(room.QueueChanged{Pending: &waiting, Waiting: []room.Entry{link, waiting}})},
+		{emitted(room.Activity{Kind: room.ActivityLiked, Member: alice, Entry: playing}), emitted(room.Activity{Kind: room.ActivityLiked, Member: alice, Entry: waiting})},
+		{replied(sentView), replied(wantView)},
+	} {
+		if err := a.bus.PublishRoom(t.Context(), roomID, c.sent); err != nil {
+			t.Fatalf("发布 %T：%v", c.sent, err)
+		}
+		if got, want := b.next(t), (port.RoomDelivery{Room: roomID, Message: c.want}); !reflect.DeepEqual(got, want) {
+			t.Errorf("收到 %#v\n期望 %#v", got, want)
+		}
+	}
+	// 房间状态和 effect 共用这些切片和指针。
+	if pending != playing || !slices.Equal(queue, []room.Entry{link, playing}) {
+		t.Error("编码时改写了房间状态")
 	}
 }
 
