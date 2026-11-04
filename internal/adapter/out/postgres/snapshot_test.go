@@ -72,7 +72,7 @@ func TestSavedSnapshotIsRestored(t *testing.T) {
 	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
 	term, _ := takeRoom(t, store, id)
 
-	playing := track.Prepared{Duration: 3 * time.Minute, Gain: 0.8, Lyric: "[00:00.00]歌词"}
+	playing := track.Prepared{Duration: 3 * time.Minute, Gain: 0.8, Lyric: "[00:00.00]歌词", LyricWords: "[0,500](0,250,0)歌(250,250,0)词", LyricTrans: "[00:00.00]Lyrics"}
 	queued := track.Prepared{Duration: 2*time.Minute + 500*time.Millisecond, Gain: 1.2}
 	link := track.Track{Source: track.Link, ID: "https://example.com/a.mp3"}
 	meta := track.Meta{Title: "歌", Artist: "人", Album: "专辑", CoverURL: "https://p.example/c.jpg", PageURL: "https://music.163.com/#/song?id=1", Duration: playing.Duration}

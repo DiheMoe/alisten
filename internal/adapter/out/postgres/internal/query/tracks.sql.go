@@ -10,7 +10,7 @@ import (
 )
 
 const preparedTrack = `-- name: PreparedTrack :one
-SELECT title, artist, album, cover_url, cover_key, page_url, duration_ms, gain, lyric, media_key, media_size FROM tracks
+SELECT title, artist, album, cover_url, cover_key, page_url, duration_ms, gain, lyric, lyric_words, lyric_trans, media_key, media_size FROM tracks
 WHERE source = $1 AND track_id = $2
 `
 
@@ -29,6 +29,8 @@ type PreparedTrackRow struct {
 	DurationMs int64
 	Gain       float64
 	Lyric      *string
+	LyricWords *string
+	LyricTrans *string
 	MediaKey   *string
 	MediaSize  *int64
 }
@@ -46,6 +48,8 @@ func (q *Queries) PreparedTrack(ctx context.Context, arg PreparedTrackParams) (P
 		&i.DurationMs,
 		&i.Gain,
 		&i.Lyric,
+		&i.LyricWords,
+		&i.LyricTrans,
 		&i.MediaKey,
 		&i.MediaSize,
 	)
@@ -53,12 +57,13 @@ func (q *Queries) PreparedTrack(ctx context.Context, arg PreparedTrackParams) (P
 }
 
 const savePreparedTrack = `-- name: SavePreparedTrack :exec
-INSERT INTO tracks (source, track_id, title, artist, album, cover_url, cover_key, page_url, duration_ms, gain, lyric, media_key, media_size)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+INSERT INTO tracks (source, track_id, title, artist, album, cover_url, cover_key, page_url, duration_ms, gain, lyric, lyric_words, lyric_trans, media_key, media_size)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 ON CONFLICT (source, track_id) DO UPDATE SET
     title = excluded.title, artist = excluded.artist, album = excluded.album, cover_url = excluded.cover_url,
     cover_key = excluded.cover_key, page_url = excluded.page_url, duration_ms = excluded.duration_ms, gain = excluded.gain,
-    lyric = excluded.lyric, media_key = excluded.media_key, media_size = excluded.media_size,
+    lyric = excluded.lyric, lyric_words = excluded.lyric_words, lyric_trans = excluded.lyric_trans,
+    media_key = excluded.media_key, media_size = excluded.media_size,
     prepared_at = now()
 `
 
@@ -74,6 +79,8 @@ type SavePreparedTrackParams struct {
 	DurationMs int64
 	Gain       float64
 	Lyric      *string
+	LyricWords *string
+	LyricTrans *string
 	MediaKey   *string
 	MediaSize  *int64
 }
@@ -92,6 +99,8 @@ func (q *Queries) SavePreparedTrack(ctx context.Context, arg SavePreparedTrackPa
 		arg.DurationMs,
 		arg.Gain,
 		arg.Lyric,
+		arg.LyricWords,
+		arg.LyricTrans,
 		arg.MediaKey,
 		arg.MediaSize,
 	)

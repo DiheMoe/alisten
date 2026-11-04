@@ -21,7 +21,10 @@ func TestPreparedTrackRoundTrip(t *testing.T) {
 			Title: "晴天", Artist: "周杰伦", Album: "叶惠美", CoverURL: "https://y.gtimg.cn/c.jpg",
 			PageURL: "https://y.qq.com/n/ryqq/songDetail/0039MnYb0qxYhV", Duration: 269 * time.Second,
 		},
-		Result: track.Prepared{Duration: 269500 * time.Millisecond, Gain: 0.75, Lyric: "[00:01.00]故事的小黄花"},
+		Result: track.Prepared{
+			Duration: 269500 * time.Millisecond, Gain: 0.75, Lyric: "[00:01.00]故事的小黄花",
+			LyricWords: "[1000,500](1000,250,0)故(1250,250,0)事", LyricTrans: "[00:01.00]The story",
+		},
 	}
 	if err := store.SavePreparedTrack(t.Context(), song, saved); err != nil {
 		t.Fatal(err)
@@ -40,12 +43,12 @@ func TestPreparedTrackRoundTrip(t *testing.T) {
 func TestSavePreparedTrackOverwritesResult(t *testing.T) {
 	store, pool := newStore(t)
 	song := netease("1")
-	addTrack(t, store, song, track.Meta{Title: "旧"}, track.Prepared{Duration: time.Minute, Gain: 1})
+	addTrack(t, store, song, track.Meta{Title: "旧"}, track.Prepared{Duration: time.Minute, Gain: 1, LyricWords: "旧逐字", LyricTrans: "旧翻译"})
 	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
 	term, snap := takeRoom(t, store, id)
 	saveRoom(t, store, term, snap, room.RecordPlay{Entry: room.Entry{ID: 1, Track: song, By: alice}, StartedAt: t0, EndedAt: t0.Add(time.Minute)})
 
-	again := port.PreparedTrack{Meta: track.Meta{Title: "新"}, Result: track.Prepared{Duration: 2 * time.Minute, Gain: 0.5, Lyric: "词"}}
+	again := port.PreparedTrack{Meta: track.Meta{Title: "新"}, Result: track.Prepared{Duration: 2 * time.Minute, Gain: 0.5, Lyric: "词", LyricWords: "新逐字", LyricTrans: "新翻译"}}
 	addTrack(t, store, song, again.Meta, again.Result)
 	got, _, err := store.PreparedTrack(t.Context(), song)
 	if err != nil {
@@ -75,13 +78,14 @@ func TestPreparedTrackStoresMissingValuesAsNull(t *testing.T) {
 	}
 	var missing string
 	err := pool.QueryRow(t.Context(), `SELECT concat_ws(',', CASE WHEN artist IS NULL THEN 'artist' END, CASE WHEN album IS NULL THEN 'album' END,
-		CASE WHEN cover_url IS NULL THEN 'cover_url' END, CASE WHEN cover_key IS NULL THEN 'cover_key' END, CASE WHEN lyric IS NULL THEN 'lyric' END)
+		CASE WHEN cover_url IS NULL THEN 'cover_url' END, CASE WHEN cover_key IS NULL THEN 'cover_key' END, CASE WHEN lyric IS NULL THEN 'lyric' END,
+		CASE WHEN lyric_words IS NULL THEN 'lyric_words' END, CASE WHEN lyric_trans IS NULL THEN 'lyric_trans' END)
 		FROM tracks WHERE track_id = '1'`).Scan(&missing)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if missing != "artist,album,cover_url,cover_key,lyric" {
-		t.Errorf("为 NULL 的列 = %s，期望 artist,album,cover_url,cover_key,lyric", missing)
+	if want := "artist,album,cover_url,cover_key,lyric,lyric_words,lyric_trans"; missing != want {
+		t.Errorf("为 NULL 的列 = %s，期望 %s", missing, want)
 	}
 	if got, ok, err := store.PreparedTrack(t.Context(), song); err != nil || !ok || got != saved {
 		t.Errorf("读出 %#v, %v, %v\n期望 %#v", got, ok, err, saved)

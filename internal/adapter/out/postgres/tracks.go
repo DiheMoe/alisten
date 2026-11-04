@@ -23,7 +23,7 @@ func (s *Store) PreparedTrack(ctx context.Context, t track.Track) (port.Prepared
 	if err != nil {
 		return port.PreparedTrack{}, false, fmt.Errorf("读取曲目 %s %s 的准备结果：%w", t.Source, t.ID, err)
 	}
-	meta, result := prepared(row.Title, orEmpty(row.Artist), orEmpty(row.Album), orEmpty(row.CoverURL), orEmpty(row.CoverKey), row.PageURL, row.DurationMs, row.Gain, orEmpty(row.Lyric))
+	meta, result := prepared(row.Title, orEmpty(row.Artist), orEmpty(row.Album), orEmpty(row.CoverURL), orEmpty(row.CoverKey), row.PageURL, row.DurationMs, row.Gain, orEmpty(row.Lyric), orEmpty(row.LyricWords), orEmpty(row.LyricTrans))
 	return port.PreparedTrack{Meta: meta, Result: result, MediaKey: orEmpty(row.MediaKey), MediaSize: orZero(row.MediaSize)}, true, nil
 }
 
@@ -40,6 +40,8 @@ func (s *Store) SavePreparedTrack(ctx context.Context, t track.Track, p port.Pre
 		DurationMs: p.Result.Duration.Milliseconds(),
 		Gain:       p.Result.Gain,
 		Lyric:      nullable(p.Result.Lyric),
+		LyricWords: nullable(p.Result.LyricWords),
+		LyricTrans: nullable(p.Result.LyricTrans),
 	}
 	if p.MediaKey != "" {
 		params.MediaKey, params.MediaSize = &p.MediaKey, &p.MediaSize
@@ -50,10 +52,10 @@ func (s *Store) SavePreparedTrack(ctx context.Context, t track.Track, p port.Pre
 	return nil
 }
 
-func prepared(title, artist, album, coverURL, coverKey, pageURL string, durationMs int64, gain float64, lyric string) (track.Meta, track.Prepared) {
+func prepared(title, artist, album, coverURL, coverKey, pageURL string, durationMs int64, gain float64, lyric, lyricWords, lyricTrans string) (track.Meta, track.Prepared) {
 	d := time.Duration(durationMs) * time.Millisecond
 	return track.Meta{Title: title, Artist: artist, Album: album, CoverURL: coverURL, CoverKey: track.ObjectKey(coverKey), PageURL: pageURL, Duration: d},
-		track.Prepared{Duration: d, Gain: gain, Lyric: lyric}
+		track.Prepared{Duration: d, Gain: gain, Lyric: lyric, LyricWords: lyricWords, LyricTrans: lyricTrans}
 }
 
 func orZero(p *int64) int64 {
