@@ -129,8 +129,34 @@ func TestSnapshotsKeepEntriesWhenStorageFails(t *testing.T) {
 	if !snap.Pending.Ready || !snap.Waiting[0].Ready {
 		t.Error("对象存储出错时，条目应按曲目表恢复")
 	}
-	if n := strings.Count(logs.String(), "检查曲目的音频失败"); n != 1 {
-		t.Errorf("日志中记录了 %d 次失败，期望出错后不再检查其余条目：\n%s", n, logs.String())
+	if n := strings.Count(logs.String(), "检查曲目的音频失败"); n != 1 || !strings.Contains(logs.String(), `"failed":3`) {
+		t.Errorf("日志中记录了 %d 次失败，期望只记一次，并写明 3 个条目没有检查到：\n%s", n, logs.String())
+	}
+}
+
+type failingObject struct {
+	port.MediaStore
+	object string
+}
+
+func (s failingObject) Exists(ctx context.Context, object string) (bool, error) {
+	if object == s.object {
+		return false, errors.New("连接被重置")
+	}
+	return s.MediaStore.Exists(ctx, object)
+}
+
+func TestSnapshotsCheckRemainingEntriesAfterFailure(t *testing.T) {
+	store := failingObject{porttest.NewMediaStore(), AudioObject(Key(link.ID))}
+	_, snap, err := NewSnapshots(snapshots{snap: restoredSnapshot()}, store, slog.New(slog.DiscardHandler)).TakeRoom(t.Context(), "room")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !snap.Pending.Ready {
+		t.Error("检查出错的条目应按曲目表恢复")
+	}
+	if snap.Waiting[0].Ready {
+		t.Error("某个条目检查出错之后，音频已丢失的条目仍应改回准备中")
 	}
 }
 

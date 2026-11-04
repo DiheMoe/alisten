@@ -51,7 +51,7 @@ func NewSnapshots(snapshots port.RoomSnapshots, store port.MediaStore, logger *s
 	return &Snapshots{RoomSnapshots: snapshots, store: store, logger: logger}
 }
 
-// 对象存储出错时，其余条目按曲目表恢复：对象存储不可用时房间仍要能被接管。任期已经加 1，所以这里不再返回错误。
+// 检查出错的条目按曲目表恢复：对象存储不可用时房间仍要能被接管。任期已经加 1，所以这里不再返回错误。
 func (s *Snapshots) TakeRoom(ctx context.Context, id string) (uint32, room.Snapshot, error) {
 	term, snap, err := s.RoomSnapshots.TakeRoom(ctx, id)
 	if err != nil {
@@ -66,18 +66,22 @@ func (s *Snapshots) TakeRoom(ctx context.Context, id string) (uint32, room.Snaps
 	for i := range snap.Waiting {
 		entries = append(entries, &snap.Waiting[i])
 	}
+	var errs []error
 	for _, e := range entries {
 		if !e.Ready || !Stored(e.Track.Source) {
 			continue
 		}
 		exists, err := s.store.Exists(ctx, AudioObject(Key(e.Track.ID)))
 		if err != nil {
-			s.logger.WarnContext(ctx, "检查曲目的音频失败，其余条目按曲目表恢复", "source", e.Track.Source, "track_id", e.Track.ID, "error", err)
-			break
+			errs = append(errs, err)
+			continue
 		}
 		if !exists {
 			e.Ready, e.Prep = false, track.Prepared{}
 		}
+	}
+	if len(errs) > 0 {
+		s.logger.WarnContext(ctx, "检查曲目的音频失败，这些条目按曲目表恢复", "failed", len(errs), "error", errs[0])
 	}
 	return term, snap, nil
 }
