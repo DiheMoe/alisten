@@ -86,4 +86,4 @@ helm upgrade alisten \
 
 ## 许可证
 
-本项目采用 [GPL-3.0](LICENSE) 许可证。
+本项目采用 [MIT](LICENSE) 许可证。
