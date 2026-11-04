@@ -332,6 +332,78 @@ func TestLinkRunnerClearsStaleObjects(t *testing.T) {
 	}
 }
 
+func preparedLink(t *testing.T, store *porttest.MediaStore) (*tracksTable, port.PreparedTrack) {
+	t.Helper()
+	key := media.Key(link.ID)
+	if err := store.Put(t.Context(), media.AudioObject(key), strings.NewReader("old"), "audio/mpeg"); err != nil {
+		t.Fatal(err)
+	}
+	row := port.PreparedTrack{Meta: track.Meta{Title: "晴天"}, Result: track.Prepared{Duration: time.Second, Gain: 1}, MediaKey: key, MediaSize: 3}
+	tracks := newTracks()
+	tracks.rows[link] = row
+	return tracks, row
+}
+
+func TestLinkRunnerKeepsMediaAlreadyPrepared(t *testing.T) {
+	store := porttest.NewMediaStore()
+	tracks, row := preparedLink(t, store)
+	d := &downloader{audio: porttest.SilentWAV(time.Second)}
+	if err := newLinkRunner(d, store, tracks, discard()).Run(t.Context(), link); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.links) != 0 {
+		t.Errorf("下载了 %q，结果和音频都在时不用再下载", d.links)
+	}
+	if got, ok := store.Object(media.AudioObject(row.MediaKey)); !ok || string(got.Data) != "old" {
+		t.Errorf("音频有 %d 字节, %v，期望保留房间正在使用的音频", len(got.Data), ok)
+	}
+	if got, ok := tracks.row(link); !ok || got != row {
+		t.Errorf("曲目表中的结果 = %+v, %v，期望不变", got, ok)
+	}
+}
+
+func TestLinkRunnerPreparesAgainWhenAudioIsGone(t *testing.T) {
+	store := porttest.NewMediaStore()
+	tracks, row := preparedLink(t, store)
+	if err := store.Delete(t.Context(), media.AudioObject(row.MediaKey)); err != nil {
+		t.Fatal(err)
+	}
+	audio := porttest.SilentWAV(2 * time.Second)
+	d := &downloader{meta: track.Meta{Title: "晴天"}, audio: audio}
+	if err := newLinkRunner(d, store, tracks, discard()).Run(t.Context(), link); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := store.Object(media.AudioObject(row.MediaKey)); !ok || string(got.Data) != string(audio) {
+		t.Errorf("音频 = %d 字节, %v，期望重新下载", len(got.Data), ok)
+	}
+	if got, ok := tracks.row(link); !ok || got.MediaSize != int64(len(audio)) {
+		t.Errorf("曲目表中的结果 = %+v, %v，期望写入这一次的结果", got, ok)
+	}
+}
+
+func TestLinkRunnerKeepsMediaWhenPreparedResultCannotBeRead(t *testing.T) {
+	for name, fail := range map[string]func(*tracksTable, *porttest.MediaStore){
+		"database":       func(tracks *tracksTable, _ *porttest.MediaStore) { tracks.failures = 1 },
+		"object_storage": func(_ *tracksTable, store *porttest.MediaStore) { store.Fail(errors.New("连接被拒绝")) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			store := porttest.NewMediaStore()
+			tracks, row := preparedLink(t, store)
+			fail(tracks, store)
+			d := &downloader{audio: porttest.SilentWAV(time.Second)}
+			if err := newLinkRunner(d, store, tracks, discard()).Run(t.Context(), link); err == nil {
+				t.Fatal("读取结果失败时任务要失败，由 River 重试")
+			}
+			if len(d.links) != 0 {
+				t.Errorf("下载了 %q，读取结果失败时不应继续", d.links)
+			}
+			if got, ok := store.Object(media.AudioObject(row.MediaKey)); !ok || string(got.Data) != "old" {
+				t.Errorf("音频有 %d 字节, %v，期望保留", len(got.Data), ok)
+			}
+		})
+	}
+}
+
 func TestLinkRunnerRemovesUploadedObjectsOnFailure(t *testing.T) {
 	key := media.Key(link.ID)
 	cover := media.CoverObject(key, "jpg")

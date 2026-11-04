@@ -32,10 +32,14 @@ type MediaRunner struct {
 }
 
 func NewMediaRunner(links port.LinkDownloader, bilibili port.BilibiliSource, transcoder port.Transcoder, store port.MediaStore, tracks port.Tracks, logger *slog.Logger) *MediaRunner {
-	return &MediaRunner{links: links, bilibili: bilibili, transcoder: transcoder, store: store, tracks: tracks, logger: logger}
+	return &MediaRunner{links: links, bilibili: bilibili, transcoder: transcoder, store: store, tracks: media.NewTracks(tracks, store), logger: logger}
 }
 
 func (r *MediaRunner) Run(ctx context.Context, t track.Track) (err error) {
+	// 任务可能在写入结果之后、River 记录完成之前中断，再次执行时结果仍然有效：往下走的话，clear 会删掉房间正在使用的音频。
+	if done, err := r.prepared(ctx, t); done || err != nil {
+		return err
+	}
 	d, release, err := r.download(ctx, t)
 	if err != nil {
 		return err
@@ -78,6 +82,13 @@ func (r *MediaRunner) Run(ctx context.Context, t track.Track) (err error) {
 	ctx, cancel := context.WithTimeout(ctx, storeTimeout)
 	defer cancel()
 	return r.tracks.SavePreparedTrack(ctx, t, port.PreparedTrack{Meta: meta, Result: result, MediaKey: key, MediaSize: size})
+}
+
+func (r *MediaRunner) prepared(ctx context.Context, t track.Track) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, storeTimeout)
+	defer cancel()
+	_, ok, err := r.tracks.PreparedTrack(ctx, t)
+	return ok, err
 }
 
 // 任务参数来自 River 的任务表，不一定经过网关的校验。

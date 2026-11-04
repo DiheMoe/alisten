@@ -88,7 +88,7 @@ func (p *Preparer) prepared(ctx context.Context, t track.Track) (port.PreparedTr
 }
 
 // 返回之后要跟进的任务，提交失败时为 0。任务已经完成时返回 again，由调用方重新读取曲目表：结果可能是任务在刚才读取曲目表之后才写入的，
-// 若直接重新提交，链接曲目的任务会先删掉已存储的音频再重新下载。
+// 这时不用再提交任务。
 func (p *Preparer) follow(ctx context.Context, t track.Track, job int64) (int64, string, bool) {
 	if job != 0 {
 		state, reason, err := p.status(ctx, job)
