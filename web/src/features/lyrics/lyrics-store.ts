@@ -2,7 +2,7 @@ import type { LyricLine } from './lrc'
 import { roomStore } from '@/core/room'
 import { playerStore } from '@/features/playback'
 import { Store } from '@/shared/lib/store'
-import { lineIndexAt, parseLrc } from './lrc'
+import { buildLines, lineIndexAt } from './lrc'
 
 class LyricsStore extends Store<{ lines: LyricLine[], index: number }> {
   #track = ''
@@ -22,7 +22,7 @@ class LyricsStore extends Store<{ lines: LyricLine[], index: number }> {
     if (track === this.#track)
       return
     this.#track = track
-    const lines = parseLrc(nowPlaying?.lyric ?? '')
+    const lines = nowPlaying ? buildLines(nowPlaying.lyric, nowPlaying.lyricWords, nowPlaying.lyricTrans) : []
     // 换歌时新歌尚未开始播放，播放器给出的仍是上一首的位置：先按歌曲开头计算，开始播放后再由每帧的位置更新。
     this.setState({ lines, index: lineIndexAt(lines, 0) })
   }

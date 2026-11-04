@@ -8,6 +8,8 @@
 .lyric-line { max-width: 880px; margin: 0 auto; padding: 8px 32px; line-height: 1.5; text-align: center; color: var(--color-foreground-subtle); opacity: .78; font-weight: 600; overflow-wrap: anywhere; transform: translateY(4px) scale(.7); transform-origin: center; transition: transform 420ms cubic-bezier(.2, .8, .2, 1), opacity 300ms ease, color 300ms ease; }
 .lyric-line.near-lyric { opacity: .9; transform: translateY(2px) scale(.8); }
 .lyric-line.active-lyric { color: var(--color-foreground); opacity: 1; transform: translateY(0) scale(1.18); }
+.lyric-line.active-lyric .lyric-word { color: transparent; background-image: linear-gradient(90deg, var(--color-foreground) calc(var(--lyric-fill, 0) * 100%), var(--color-foreground-subtle) 0); -webkit-background-clip: text; background-clip: text; }
+.lyric-translation { display: block; margin-top: 2px; color: var(--color-foreground-subtle); font-size: .62em; font-weight: 500; }
 .lyrics-scroll:has(.empty-state) { display: grid; place-items: center; }
 :root[data-performance='low'] .lyric-line { transition: opacity 160ms ease; }
 :root[data-performance='off'] .lyrics-scroll { mask-image: none; }

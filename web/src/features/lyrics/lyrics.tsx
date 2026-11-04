@@ -1,8 +1,11 @@
+import type { LyricWord } from './lrc'
 import { AlignLeft } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { playerStore } from '@/features/playback'
 import { performanceStore } from '@/features/settings'
 import { useStore } from '@/shared/lib/use-store'
 import { EmptyState } from '@/shared/ui'
+import { wordProgress } from './lrc'
 import { lyricsStore } from './lyrics-store'
 import './lyrics.css'
 
@@ -39,6 +42,7 @@ export function Lyrics() {
     }
     let active = -2
     let near: Element[] = []
+    let activeWords: { node: HTMLElement, word: LyricWord, fill?: number }[] = []
     let frame: number | null = null
     const highlight = () => {
       const index = lyricsStore.state.index
@@ -51,6 +55,10 @@ export function Lyrics() {
       previous?.classList.remove('active-lyric')
       previous?.removeAttribute('aria-current')
       const current = nodes.get(index)
+      const words = lines[index]?.words
+      activeWords = current && words
+        ? Array.from(current.querySelectorAll<HTMLElement>('.lyric-word'), (node, i) => ({ node, word: words[i] }))
+        : []
       if (current) {
         current.classList.add('active-lyric')
         current.setAttribute('aria-current', 'true')
@@ -74,6 +82,18 @@ export function Lyrics() {
         node.classList.add('near-lyric')
       active = index
     }
+    const paintWords = (positionMs: number) => {
+      const smooth = performanceStore.smoothMotion()
+      for (const item of activeWords) {
+        const progress = wordProgress(item.word, positionMs)
+        // 不需要流畅动效时按字切换，每帧不用重绘。
+        const fill = smooth ? progress : Math.ceil(progress)
+        if (fill !== item.fill) {
+          item.fill = fill
+          item.node.style.setProperty('--lyric-fill', String(fill))
+        }
+      }
+    }
     const onChange = () => {
       highlight()
       frame ??= requestAnimationFrame(() => {
@@ -82,11 +102,14 @@ export function Lyrics() {
       })
     }
     highlight()
+    paintWords(playerStore.positionMs())
     centerLine(container, nodes, lyricsStore.state.index, false)
     const resizeObserver = new ResizeObserver(() => centerLine(container, nodes, lyricsStore.state.index, false))
     resizeObserver.observe(container)
     lyricsStore.addEventListener('change', onChange)
+    const stopPainting = playerStore.frames.on(paintWords)
     return () => {
+      stopPainting()
       resizeObserver.disconnect()
       lyricsStore.removeEventListener('change', onChange)
       if (frame !== null)
@@ -98,7 +121,10 @@ export function Lyrics() {
       <div className="lyrics-scroll" ref={scrollRef}>
         {lines.some(line => line.text)
           ? lines.map((line, index) => line.text && (
-              <p className="lyric-line text-ui-xl" data-lyric-index={index} key={`${line.timeMs}:${line.text}`}>{line.text}</p>
+              <p className="lyric-line text-ui-xl" data-lyric-index={index} key={`${line.timeMs}:${line.text}`}>
+                {line.words?.map(word => <span className="lyric-word" key={`${word.startMs}:${word.text}`}>{word.text}</span>) ?? line.text}
+                {line.translation && <span className="lyric-translation">{line.translation}</span>}
+              </p>
             ))
           : <EmptyState icon={AlignLeft} title="歌词随音乐浮现">播放带有歌词的歌曲时，会在这里同步显示。</EmptyState>}
       </div>
