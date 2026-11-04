@@ -87,7 +87,10 @@ type (
 	Resolved struct {
 		Meta  track.Meta
 		Lyric string
-		Audio io.ReadCloser
+		// 逐字歌词与翻译歌词，格式同 track.Prepared 的对应字段，可为空。
+		LyricWords string
+		LyricTrans string
+		Audio      io.ReadCloser
 	}
 )
 

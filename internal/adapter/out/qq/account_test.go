@@ -12,7 +12,7 @@ import (
 
 func accountTestClient(cookie string, loadErr error) *Client {
 	load := func(context.Context) (string, error) { return cookie, loadErr }
-	return New(&http.Client{}, load, nil, (&observed{}).record)
+	return New(&http.Client{}, load, nil, (&observed{}).record, testLogger)
 }
 
 func TestCurrentAccount(t *testing.T) {

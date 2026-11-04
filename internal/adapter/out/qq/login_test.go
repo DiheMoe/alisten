@@ -52,6 +52,7 @@ func serveQQQRLogin(t *testing.T, routes map[string]http.HandlerFunc, store func
 			func(context.Context) (string, error) { return testCookie, nil },
 			store,
 			obs.record,
+			testLogger,
 		)
 	}, obs
 }
@@ -1079,6 +1080,7 @@ func TestWeChatMusicLoginFallsBackAcrossEndpoints(t *testing.T) {
 		func(context.Context) (string, error) { return "", nil },
 		func(context.Context, string) error { return nil },
 		func(string, string, time.Duration, error) {},
+		testLogger,
 	)
 	cookie, err := c.completeWeChatLogin(t.Context(), c.api, testWeChatCode)
 	if err != nil {

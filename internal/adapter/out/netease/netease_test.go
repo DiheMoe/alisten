@@ -29,6 +29,8 @@ import (
 )
 
 // 测试服务器按路径返回 testdata 中录制的网易云响应，Client 的所有请求都转到它。
+var testLogger = slog.New(slog.DiscardHandler)
+
 func serve(t *testing.T, routes map[string]http.HandlerFunc) (*Client, *observed) {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +50,7 @@ func serve(t *testing.T, routes map[string]http.HandlerFunc) (*Client, *observed
 	}
 	obs := &observed{}
 	cookie := func(context.Context) (string, error) { return "MUSIC_U=secret", nil }
-	return New(&http.Client{Transport: redirect{target}}, cookie, func(context.Context, string) error { return nil }, obs.record), obs
+	return New(&http.Client{Transport: redirect{target}}, cookie, func(context.Context, string) error { return nil }, obs.record, testLogger), obs
 }
 
 type redirect struct{ target *url.URL }
@@ -251,14 +253,14 @@ func TestTrackMeta(t *testing.T) {
 func TestTextDropsNUL(t *testing.T) {
 	c, _ := serve(t, map[string]http.HandlerFunc{
 		"/weapi/v3/song/detail": body(`{"songs":[{"name":"晴\u0000天","id":1,"ar":[{"name":"周\u0000杰伦"}],"al":{"name":"叶\u0000惠美","picUrl":"https://p1.music.126.net/a\u0000.jpg"},"dt":1000}],"code":200}`),
-		"/weapi/song/lyric":     body(`{"lrc":{"lyric":"[00:01.00]故\u0000事"},"code":200}`),
+		"/weapi/song/lyric/v1":  body(`{"lrc":{"lyric":"[00:01.00]故\u0000事"},"code":200}`),
 	})
 	want := track.Meta{Title: "晴天", Artist: "周杰伦", Album: "叶惠美", CoverURL: "https://p1.music.126.net/a.jpg", PageURL: "https://music.163.com/#/song?id=1", Duration: time.Second}
 	if got, err := c.TrackMeta(t.Context(), "1"); err != nil || got != want {
 		t.Errorf("元数据 = %#v, %v，期望 %#v", got, err, want)
 	}
-	if got, err := c.lyric(t.Context(), "1"); err != nil || got != "[00:01.00]故事" {
-		t.Errorf("歌词 = %q, %v", got, err)
+	if got, err := c.lyric(t.Context(), "1"); err != nil || got.LRC != "[00:01.00]故事" {
+		t.Errorf("歌词 = %q, %v", got.LRC, err)
 	}
 }
 
@@ -285,7 +287,7 @@ const audioPath = "/song.mp3"
 func resolveRoutes(t *testing.T) map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
 		"/weapi/v3/song/detail": fixture(t, "song-detail.json"),
-		"/weapi/song/lyric":     fixture(t, "lyric.json"),
+		"/weapi/song/lyric/v1":  fixture(t, "lyric.json"),
 		audioPath: func(w http.ResponseWriter, r *http.Request) {
 			// 音频来自 CDN，网易云的 Cookie 不能发给它。
 			if got := r.Header.Get("Cookie"); got != "" {
@@ -336,7 +338,9 @@ func TestResolve(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Meta != cover.Meta || got.Lyric != "[00:16.35]故事的小黄花\n[00:20.16]从出生那年就飘着\n" {
+	wantWords := "[16350,3810](16350,600,0)故(16950,600,0)事(17550,600,0)的(18150,600,0)小(18750,600,0)黄(19350,600,0)花(19950,210,0)\n[20160,4000](20160,500,0)从(20660,500,0)出(21160,500,0)生(21660,500,0)那(22160,500,0)年(22660,500,0)就(23160,500,0)飘(23660,500,0)着(24160,500,0)\n"
+	wantTrans := "[00:16.35]Story of the flower\n[00:20.16]Floating since birth\n"
+	if got.Meta != cover.Meta || got.Lyric != "[00:16.35]故事的小黄花\n[00:20.16]从出生那年就飘着\n" || got.LyricWords != wantWords || got.LyricTrans != wantTrans {
 		t.Errorf("解析结果 = %#v", got)
 	}
 	if audio := readAudio(t, got); audio != "ID3 音频" {
@@ -576,7 +580,7 @@ func TestCookieIsNotSentOverPlainHTTPAfterRedirect(t *testing.T) {
 	}
 	obs := &observed{}
 	cookie := func(context.Context) (string, error) { return "MUSIC_U=secret", nil }
-	c := New(&http.Client{Transport: split{secure: secureURL, plain: plainURL, transport: secure.Client().Transport}}, cookie, func(context.Context, string) error { return nil }, obs.record)
+	c := New(&http.Client{Transport: split{secure: secureURL, plain: plainURL, transport: secure.Client().Transport}}, cookie, func(context.Context, string) error { return nil }, obs.record, testLogger)
 
 	if _, err := c.TrackMeta(t.Context(), "3387653989"); err == nil || !strings.Contains(err.Error(), "HTTP 307") {
 		t.Errorf("接口重定向时的错误 = %v，期望 HTTP 307", err)
@@ -618,6 +622,7 @@ func TestDownloadErrorDoesNotExposeSignedURL(t *testing.T) {
 		func(context.Context) (string, error) { return "", nil },
 		func(context.Context, string) error { return nil },
 		func(string, string, time.Duration, error) {},
+		testLogger,
 	)
 	_, err := c.download(t.Context(), signedURL)
 	if err == nil || !strings.Contains(err.Error(), "网络中断") {

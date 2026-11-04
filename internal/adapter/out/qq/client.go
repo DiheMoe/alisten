@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -32,9 +33,10 @@ type Client struct {
 	cookie  cookieCache
 	cache   *expirable.LRU[string, any]
 	observe func(source, op string, elapsed time.Duration, err error)
+	logger  *slog.Logger
 }
 
-func New(httpClient *http.Client, loadCookie func(context.Context) (string, error), saveCookie func(context.Context, string) error, observe func(source, op string, elapsed time.Duration, err error)) *Client {
+func New(httpClient *http.Client, loadCookie func(context.Context) (string, error), saveCookie func(context.Context, string) error, observe func(source, op string, elapsed time.Duration, err error), logger *slog.Logger) *Client {
 	api := *httpClient
 	api.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &Client{
@@ -43,8 +45,16 @@ func New(httpClient *http.Client, loadCookie func(context.Context) (string, erro
 		cookie:  cookieCache{load: loadCookie, store: saveCookie},
 		cache:   expirable.NewLRU[string, any](cacheSize, nil, cacheTTL),
 		observe: observe,
+		logger:  logger,
 	}
 }
+
+// interfaceError 表示接口本身失败：网络错误、HTTP 非 200、上游返回错误码。
+// 这类失败重试可能成功；响应解析失败、解密失败不属于此类，重试结果不会变。
+type interfaceError struct{ err error }
+
+func (e *interfaceError) Error() string { return e.err.Error() }
+func (e *interfaceError) Unwrap() error { return e.err }
 
 type cookieCache struct {
 	load    func(context.Context) (string, error)
@@ -138,11 +148,11 @@ func (c *Client) fetch(ctx context.Context, target string, header http.Header, o
 	chinaip.Set(req.Header)
 	resp, err := c.api.Do(req)
 	if err != nil {
-		return requestError(req.URL.Host, err)
+		return &interfaceError{requestError(req.URL.Host, err)}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s 返回 HTTP %d", req.URL.Host, resp.StatusCode)
+		return &interfaceError{fmt.Errorf("%s 返回 HTTP %d", req.URL.Host, resp.StatusCode)}
 	}
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 		return fmt.Errorf("解析 %s 的响应：%w", req.URL.Host, err)

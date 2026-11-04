@@ -37,6 +37,7 @@ func (r *Runner) Run(ctx context.Context, t track.Track) error {
 	if err != nil {
 		return err
 	}
+	result.LyricWords, result.LyricTrans = resolved.LyricWords, resolved.LyricTrans
 	ctx, cancel := context.WithTimeout(ctx, storeTimeout)
 	defer cancel()
 	return r.tracks.SavePreparedTrack(ctx, t, port.PreparedTrack{Meta: resolved.Meta, Result: result})

@@ -2,9 +2,10 @@ package qq
 
 import (
 	"context"
-	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -23,6 +25,8 @@ import (
 )
 
 const testCookie = "qq_test_cookie=fictitious"
+
+var testLogger = slog.New(slog.DiscardHandler)
 
 // 测试服务器按路径返回 testdata 中录制的响应，Client 的所有请求都转到它。
 func serve(t *testing.T, routes map[string]http.HandlerFunc) (*Client, *observed) {
@@ -48,6 +52,7 @@ func serve(t *testing.T, routes map[string]http.HandlerFunc) (*Client, *observed
 		func(context.Context) (string, error) { return testCookie, nil },
 		func(context.Context, string) error { return nil },
 		obs.record,
+		testLogger,
 	), obs
 }
 
@@ -185,46 +190,75 @@ func TestTrackMeta(t *testing.T) {
 	}
 }
 
-// 歌曲的元数据和歌词会写入 PostgreSQL，text 类型不能存储 U+0000，歌词是 base64 编码的，要在解码之后清除。
+// 歌曲的元数据和歌词会写入 PostgreSQL，text 类型不能存储 U+0000，要在解密之后清除。
 func TestTextDropsNUL(t *testing.T) {
-	lyric := base64.StdEncoding.EncodeToString([]byte("[00:01.00]故\x00事"))
 	c, _ := serve(t, map[string]http.HandlerFunc{
-		"/v8/fcg-bin/fcg_play_single_song.fcg":    body(`{"code":0,"data":[{"mid":"004Fs2FP1EvZYc","title":"晴\u0000天","interval":249,"album":{"mid":"004fXS\u0000yj3bWTMN","name":"叶\u0000惠美"},"singer":[{"name":"周\u0000杰伦"}]}]}`),
-		"/lyric/fcgi-bin/fcg_query_lyric_new.fcg": body(`{"code":0,"lyric":"` + lyric + `"}`),
+		"/v8/fcg-bin/fcg_play_single_song.fcg": body(`{"code":0,"data":[{"mid":"004Fs2FP1EvZYc","title":"晴\u0000天","interval":249,"album":{"mid":"004fXS\u0000yj3bWTMN","name":"叶\u0000惠美"},"singer":[{"name":"周\u0000杰伦"}]}]}`),
+		"/cgi-bin/musicu.fcg":                  fixture(t, "lyric-nul.json"),
 	})
 	want := wantSong("004Fs2FP1EvZYc", "晴天", "叶惠美", "004fXSyj3bWTMN", 249).Meta
 	if got, err := c.TrackMeta(t.Context(), "004Fs2FP1EvZYc"); err != nil || got != want {
 		t.Errorf("元数据 = %#v, %v，期望 %#v", got, err, want)
 	}
-	if got, err := c.lyric(t.Context(), "004Fs2FP1EvZYc"); err != nil || got != "[00:01.00]故事" {
-		t.Errorf("歌词 = %q, %v", got, err)
+	if got, err := c.lyric(t.Context(), "004Fs2FP1EvZYc"); err != nil || got.LRC != "[00:01.00]故事\n" {
+		t.Errorf("歌词 = %q, %v", got.LRC, err)
 	}
 }
 
-// 歌词是 base64 编码的字节，不保证是 UTF-8，比如 GBK 编码的歌词；PostgreSQL 的 text 类型拒绝不合法的 UTF-8，
+// 解密后的歌词不保证是 UTF-8，比如 GBK 编码的歌词；PostgreSQL 的 text 类型拒绝不合法的 UTF-8，
 // 这样的歌词存不进去，准备任务每次都失败。
 func TestLyricReplacesInvalidUTF8(t *testing.T) {
-	lyric := base64.StdEncoding.EncodeToString([]byte("[00:01.00]\xb9\xca\xca\xc2\n[00:02.00]晴天"))
 	c, _ := serve(t, map[string]http.HandlerFunc{
-		"/lyric/fcgi-bin/fcg_query_lyric_new.fcg": body(`{"code":0,"lyric":"` + lyric + `"}`),
+		"/cgi-bin/musicu.fcg": fixture(t, "lyric-gbk.json"),
 	})
-	if got, err := c.lyric(t.Context(), "004Fs2FP1EvZYc"); err != nil || got != "[00:01.00]\uFFFD\n[00:02.00]晴天" {
-		t.Errorf("歌词 = %q, %v，期望不合法的字节替换为 U+FFFD", got, err)
+	if got, err := c.lyric(t.Context(), "004Fs2FP1EvZYc"); err != nil || got.LRC != "[00:01.00]\uFFFD\n[00:02.00]晴天" {
+		t.Errorf("歌词 = %q, %v，期望不合法的字节替换为 U+FFFD", got.LRC, err)
 	}
 }
 
 const audioPath = "/qq/80456317.flac"
 
+// musicu 网关同时承载歌词和播放地址：按请求里的 req_1（播放地址）有无分发打桩。
+func musicu(t *testing.T, playResponse string) http.HandlerFunc {
+	return musicuLyric(t, playResponse, fixture(t, "lyric.json"))
+}
+
+func musicuLyric(t *testing.T, playResponse string, lyric http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Cookie"); got != testCookie {
+			t.Errorf("musicu 接口的 Cookie = %q，期望虚构 QQ Cookie", got)
+		}
+		var payload struct {
+			Req1 *struct {
+				Module string `json:"module"`
+			} `json:"req_1"`
+		}
+		if err := json.Unmarshal([]byte(r.URL.Query().Get("data")), &payload); err != nil {
+			t.Errorf("解析 musicu 请求：%v", err)
+		}
+		if payload.Req1 != nil {
+			body(playResponse)(w, r)
+			return
+		}
+		lyric(w, r)
+	}
+}
+
+// playRequest 只把播放地址请求转给打桩，歌词仍走固定件。
+func playRequest(t *testing.T, handle http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Query().Get("data"), "req_1") {
+			handle(w, r)
+			return
+		}
+		fixture(t, "lyric.json")(w, r)
+	}
+}
+
 func resolveRoutes(t *testing.T) map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
-		"/v8/fcg-bin/fcg_play_single_song.fcg":    fixture(t, "song-detail.json"),
-		"/lyric/fcgi-bin/fcg_query_lyric_new.fcg": fixture(t, "lyric.json"),
-		"/cgi-bin/musicu.fcg": func(w http.ResponseWriter, r *http.Request) {
-			if got := r.Header.Get("Cookie"); got != testCookie {
-				t.Errorf("QQ 播放地址接口的 Cookie = %q，期望虚构 QQ Cookie", got)
-			}
-			body(`{"code":0,"req_1":{"code":0,"data":{"midurlinfo":[]}}}`)(w, r)
-		},
+		"/v8/fcg-bin/fcg_play_single_song.fcg": fixture(t, "song-detail.json"),
+		"/cgi-bin/musicu.fcg":                  musicu(t, `{"code":0,"req_1":{"code":0,"data":{"midurlinfo":[]}}}`),
 		audioPath: func(w http.ResponseWriter, r *http.Request) {
 			if got := r.Header.Get("Cookie"); got != "" {
 				t.Errorf("音频 CDN 收到了 Cookie %q", got)
@@ -236,19 +270,17 @@ func resolveRoutes(t *testing.T) map[string]http.HandlerFunc {
 
 func TestResolve(t *testing.T) {
 	routes := resolveRoutes(t)
-	routes["/cgi-bin/musicu.fcg"] = func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Cookie"); got != testCookie {
-			t.Errorf("QQ 播放地址接口的 Cookie = %q，期望虚构 QQ Cookie", got)
-		}
-		body(`{"code":0,"req_1":{"code":0,"data":{"midurlinfo":[{"filename":"F000004Fs2FP1EvZYc004Fs2FP1EvZYc.flac","purl":"`+audioPath[1:]+`"}]}}}`)(w, r)
-	}
+	routes["/cgi-bin/musicu.fcg"] = musicu(t, `{"code":0,"req_1":{"code":0,"data":{"midurlinfo":[{"filename":"F000004Fs2FP1EvZYc004Fs2FP1EvZYc.flac","purl":"`+audioPath[1:]+`"}]}}}`)
 	c, obs := serve(t, routes)
 	got, err := c.Resolve(t.Context(), "004Fs2FP1EvZYc")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = got.Audio.Close() }()
-	if got.Meta != live.Meta || got.Lyric != "[ti:晴天]\n[ar:周杰伦]\n[00:00.00]晴天 - 周杰伦 (Jay Chou)\n" {
+	wantLyric := "[ti:逐字测试]\n[ar:歌手]\n[00:01.00]你好世\n[00:03.00]再见\n"
+	wantWords := "[1000,1500](1000,500,0)你(1500,500,0)好(2000,500,0)世\n[3000,1000](3000,500,0)再(3500,500,0)见\n"
+	wantTrans := "[00:01.00]你好世界\n[00:03.00]再见\n"
+	if got.Meta != live.Meta || got.Lyric != wantLyric || got.LyricWords != wantWords || got.LyricTrans != wantTrans {
 		t.Errorf("解析结果 = %#v", got)
 	}
 	if b, err := io.ReadAll(got.Audio); err != nil || string(b) != "ID3 音频" {
@@ -268,7 +300,7 @@ func TestResolveRejects(t *testing.T) {
 func TestResolveRetriesUpstreamFailures(t *testing.T) {
 	var rejected *port.RejectedError
 	routes := resolveRoutes(t)
-	routes["/cgi-bin/musicu.fcg"] = func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusBadGateway) }
+	routes["/cgi-bin/musicu.fcg"] = playRequest(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusBadGateway) })
 	c, obs := serve(t, routes)
 	if _, err := c.Resolve(t.Context(), "004Fs2FP1EvZYc"); err == nil || errors.As(err, &rejected) {
 		t.Errorf("QQ 原生播放接口出错时的错误 = %v，期望可以重试的错误", err)
@@ -277,9 +309,9 @@ func TestResolveRetriesUpstreamFailures(t *testing.T) {
 }
 
 func TestLyricMissing(t *testing.T) {
-	c, _ := serve(t, map[string]http.HandlerFunc{"/lyric/fcgi-bin/fcg_query_lyric_new.fcg": fixture(t, "lyric-missing.json")})
-	if got, err := c.lyric(t.Context(), "000000000000xx"); err != nil || got != "" {
-		t.Errorf("没有歌词的歌 = %q, %v，期望空字符串", got, err)
+	c, _ := serve(t, map[string]http.HandlerFunc{"/cgi-bin/musicu.fcg": fixture(t, "lyric-missing.json")})
+	if got, err := c.lyric(t.Context(), "000000000000xx"); err != nil || got != (lyricResult{}) {
+		t.Errorf("没有歌词的歌 = %#v, %v，期望空结果", got, err)
 	}
 }
 
@@ -363,5 +395,13 @@ func TestCookiePutUpdatesCache(t *testing.T) {
 	}
 	if saved != testCookie || loads != 0 {
 		t.Errorf("保存的 Cookie = %q，重新加载了 %d 次", saved, loads)
+	}
+}
+
+func TestCleanTransDropsTagsAndPlaceholders(t *testing.T) {
+	in := "[ti:标题]\n[00:00.00]//\n[00:01.00]第一句\n[00:02.00] // \n[00:03.00]第二句\n"
+	want := "[00:01.00]第一句\n[00:03.00]第二句\n"
+	if got := cleanTrans(in); got != want {
+		t.Errorf("清理后的翻译 = %q，期望 %q", got, want)
 	}
 }

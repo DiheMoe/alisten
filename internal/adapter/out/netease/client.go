@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -34,9 +35,10 @@ type Client struct {
 	cookie  cookieCache
 	cache   *expirable.LRU[string, any]
 	observe func(source, op string, elapsed time.Duration, err error)
+	logger  *slog.Logger
 }
 
-func New(httpClient *http.Client, cookie func(context.Context) (string, error), saveCookie func(context.Context, string) error, observe func(source, op string, elapsed time.Duration, err error)) *Client {
+func New(httpClient *http.Client, cookie func(context.Context) (string, error), saveCookie func(context.Context, string) error, observe func(source, op string, elapsed time.Duration, err error), logger *slog.Logger) *Client {
 	api := *httpClient
 	api.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &Client{
@@ -45,8 +47,16 @@ func New(httpClient *http.Client, cookie func(context.Context) (string, error), 
 		cookie:  cookieCache{load: cookie, store: saveCookie},
 		cache:   expirable.NewLRU[string, any](cacheSize, nil, cacheTTL),
 		observe: observe,
+		logger:  logger,
 	}
 }
+
+// interfaceError 表示接口本身失败：网络错误、HTTP 非 200、上游返回错误码。
+// 这类失败重试可能成功；响应解析失败不属于此类，重试结果不会变。
+type interfaceError struct{ err error }
+
+func (e *interfaceError) Error() string { return e.err.Error() }
+func (e *interfaceError) Unwrap() error { return e.err }
 
 type cookieCache struct {
 	load    func(context.Context) (string, error)
@@ -114,7 +124,7 @@ func (c *Client) call(ctx context.Context, op, endpoint string, form url.Values,
 	start := time.Now()
 	err = c.post(ctx, endpoint, form, cookie, out)
 	if err == nil && out.status() != http.StatusOK {
-		err = fmt.Errorf("网易云的接口 %s 返回错误码 %d", op, out.status())
+		err = &interfaceError{fmt.Errorf("网易云的接口 %s 返回错误码 %d", op, out.status())}
 	}
 	c.observe("netease", op, time.Since(start), err)
 	return err
@@ -134,11 +144,11 @@ func (c *Client) post(ctx context.Context, endpoint string, form url.Values, coo
 	}
 	resp, err := c.api.Do(req)
 	if err != nil {
-		return requestError(req.URL.Host, err)
+		return &interfaceError{requestError(req.URL.Host, err)}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("网易云返回 HTTP %d", resp.StatusCode)
+		return &interfaceError{fmt.Errorf("网易云返回 HTTP %d", resp.StatusCode)}
 	}
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 		return fmt.Errorf("解析网易云的响应：%w", err)

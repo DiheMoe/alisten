@@ -2,15 +2,17 @@ package qq
 
 import (
 	"context"
-	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/dihemoe/alisten/internal/adapter/out/qq/qrc"
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
@@ -19,7 +21,6 @@ const (
 	searchAPI         = "https://c.y.qq.com/soso/fcgi-bin/search_for_qq_cp"
 	searchPlaylistAPI = "https://c.y.qq.com/soso/fcgi-bin/client_music_search_songlist"
 	detailAPI         = "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg"
-	lyricAPI          = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg"
 )
 
 var (
@@ -149,7 +150,7 @@ func (c *Client) Resolve(ctx context.Context, id string) (port.Resolved, error) 
 	if err != nil {
 		return port.Resolved{}, err
 	}
-	lyric, err := c.lyric(ctx, id)
+	lyric, err := c.lyricOrDegrade(ctx, id)
 	if err != nil {
 		return port.Resolved{}, err
 	}
@@ -161,35 +162,138 @@ func (c *Client) Resolve(ctx context.Context, id string) (port.Resolved, error) 
 	if err != nil {
 		return port.Resolved{}, err
 	}
-	return port.Resolved{Meta: meta, Lyric: lyric, Audio: audio}, nil
+	return port.Resolved{Meta: meta, Lyric: lyric.LRC, LyricWords: lyric.Words, LyricTrans: lyric.Trans, Audio: audio}, nil
 }
 
-type lyricResponse struct {
-	Code  int    `json:"code"`
-	Lyric string `json:"lyric"`
+type lyricResult struct {
+	// 行级 LRC 原文、逐字歌词（YRC 语法）、行级翻译 LRC，后两者可为空。
+	LRC   string
+	Words string
+	Trans string
 }
 
-func (lyricResponse) check() error { return nil }
+type playLyricResponse struct {
+	Code    *int `json:"code"`
+	Request struct {
+		Code *int `json:"code"`
+		Data struct {
+			Lyric string `json:"lyric"`
+			Trans string `json:"trans"`
+		} `json:"data"`
+	} `json:"request"`
+}
 
-func (c *Client) lyric(ctx context.Context, id string) (string, error) {
-	return cached(c, "lyric "+id, func() (string, error) {
-		var resp lyricResponse
-		query := url.Values{
-			"songmid": {id}, "loginUin": {"0"}, "hostUin": {"0"}, "format": {"json"}, "inCharset": {"utf8"},
-			"outCharset": {"utf-8"}, "notice": {"0"}, "platform": {"y.qq.json"}, "needNewCode": {"0"},
+func (r playLyricResponse) check() error {
+	if r.Code == nil || r.Request.Code == nil {
+		return errors.New("QQ 音乐歌词响应的 code 或 request.code 缺失或为 null")
+	}
+	if *r.Code != 0 {
+		return &interfaceError{fmt.Errorf("QQ 音乐返回错误码 %d", *r.Code)}
+	}
+	if *r.Request.Code != 0 {
+		return &interfaceError{fmt.Errorf("QQ 音乐歌词请求返回错误码 %d", *r.Request.Code)}
+	}
+	return nil
+}
+
+// lyricOrDegrade 让歌词问题不阻塞播放：接口失败就地重试一次，仍失败（或解析、解密失败）则降级为无歌词并记 WARN。
+// 曲目表里有记录的歌不会重新准备，网络抖动后直接降级会让这首歌永久没有歌词，所以先重试。
+// 调用方的 ctx 被取消或超时不降级：任务退出时中断，不能把空歌词写进曲目表。
+func (c *Client) lyricOrDegrade(ctx context.Context, id string) (lyricResult, error) {
+	r, err := c.lyric(ctx, id)
+	if err == nil || ctx.Err() != nil {
+		return r, err
+	}
+	var iface *interfaceError
+	if errors.As(err, &iface) {
+		r, err = c.lyric(ctx, id)
+		if err == nil || ctx.Err() != nil {
+			return r, err
 		}
-		if err := c.get(ctx, "qq", "lyric", lyricAPI, query, lyricHeader, &resp); err != nil {
-			return "", err
-		}
-		if resp.Code != 0 || resp.Lyric == "" {
-			return "", nil
-		}
-		b, err := base64.StdEncoding.DecodeString(resp.Lyric)
+	}
+	c.logger.WarnContext(ctx, "歌词获取失败，按无歌词处理", "source", "qq", "track_id", id, "error", err)
+	return lyricResult{}, nil
+}
+
+func (c *Client) lyric(ctx context.Context, id string) (lyricResult, error) {
+	return cached(c, "lyric "+id, func() (lyricResult, error) {
+		payload, err := json.Marshal(map[string]any{
+			"comm": map[string]any{"ct": 11, "cv": "1003006", "platform": "yqq.json", "needNewCode": 0},
+			"request": map[string]any{
+				"module": "music.musichallSong.PlayLyricInfo",
+				"method": "GetPlayLyricInfo",
+				"param": map[string]any{
+					"songMID": id, "songID": 0, "songName": "", "singerName": "", "albumName": "",
+					"crypt": 1, "ct": 19, "cv": 2111, "interval": 0, "type": 0,
+					"qrc": 1, "qrc_t": 0, "trans": 1, "trans_t": 0, "roma": 0, "roma_t": 0, "lrc_t": 0,
+				},
+			},
+		})
 		if err != nil {
-			return "", fmt.Errorf("解码 QQ 音乐的歌词：%w", err)
+			return lyricResult{}, err
 		}
-		return text(string(b)), nil
+		var resp playLyricResponse
+		query := url.Values{"data": {string(payload)}}
+		if err := c.get(ctx, "qq", "lyric", musicuAPI, query, lyricHeader, &resp); err != nil {
+			return lyricResult{}, err
+		}
+		return parsePlayLyric(resp.Request.Data.Lyric, resp.Request.Data.Trans)
 	})
+}
+
+func parsePlayLyric(lyricHex, transHex string) (lyricResult, error) {
+	var out lyricResult
+	if lyricHex != "" {
+		plain, err := qrc.DecryptHex(lyricHex)
+		if err != nil {
+			return lyricResult{}, fmt.Errorf("解密 QQ 音乐的歌词：%w", err)
+		}
+		tags, lines := qrc.Parse(plain)
+		if len(lines) == 0 {
+			// 没有逐字数据时 LyricContent 里直接是行级 LRC。
+			out.LRC = text(plain)
+		} else {
+			out.LRC = text(qrc.RenderLRC(tags, lines))
+			if hasWordTimings(lines) {
+				out.Words = qrc.RenderYRC(lines)
+			}
+		}
+	}
+	if transHex != "" {
+		// 翻译解密后是行级 LRC；翻译是增强信息，解密失败只丢翻译。
+		if plain, err := qrc.DecryptHex(transHex); err == nil {
+			out.Trans = cleanTrans(plain)
+		}
+	}
+	return out, nil
+}
+
+var transLineRe = regexp.MustCompile(`^\[\d+:\d+(?:\.\d+)?\](.*)$`)
+
+// 翻译里的标签行和 // 占位行（该行无翻译）不参与前端配对。
+func cleanTrans(lrc string) string {
+	var b strings.Builder
+	for _, row := range strings.Split(lrc, "\n") {
+		m := transLineRe.FindStringSubmatch(strings.TrimSpace(row))
+		if m == nil {
+			continue
+		}
+		if body := strings.TrimSpace(m[1]); body == "" || body == "//" {
+			continue
+		}
+		b.WriteString(row)
+		b.WriteByte('\n')
+	}
+	return text(b.String())
+}
+
+func hasWordTimings(lines []qrc.Line) bool {
+	for _, l := range lines {
+		if len(l.Words) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func song(mid, title string, singers []singer, album, albumMID string, seconds int64) port.Song {

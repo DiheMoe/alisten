@@ -58,4 +58,8 @@ type Prepared struct {
 	Duration time.Duration
 	Gain     float64
 	Lyric    string
+	// 逐字歌词，YRC 语法：[行起始ms,行时长ms](字起始ms,字时长ms,0)字…，绝对毫秒，无头部标签行。可为空。
+	LyricWords string
+	// 翻译歌词，行级 LRC，时间戳与 Lyric/LyricWords 的行起点对应（允许毫秒级偏差）。可为空。
+	LyricTrans string
 }

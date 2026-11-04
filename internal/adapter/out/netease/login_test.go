@@ -39,7 +39,7 @@ func serveLoginWithStore(t *testing.T, routes map[string]http.HandlerFunc, store
 	}
 	obs := &observed{}
 	load := func(context.Context) (string, error) { return "MUSIC_U=loaded", nil }
-	return New(&http.Client{Transport: redirect{target}}, load, store, obs.record), obs
+	return New(&http.Client{Transport: redirect{target}}, load, store, obs.record, testLogger), obs
 }
 
 func TestCreateQRLogin(t *testing.T) {

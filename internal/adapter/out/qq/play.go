@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	playURLAPI = "https://u.y.qq.com/cgi-bin/musicu.fcg"
+	musicuAPI  = "https://u.y.qq.com/cgi-bin/musicu.fcg"
 	playURLCDN = "https://ws.stream.qqmusic.qq.com/"
 )
 
@@ -72,7 +72,7 @@ func (c *Client) PlayURL(ctx context.Context, songMID string) (string, error) {
 	}
 	var resp playURLResponse
 	query := url.Values{"data": {string(payload)}}
-	if err := c.get(ctx, "qq", "play_url", playURLAPI, query, desktopHeader, &resp); err != nil {
+	if err := c.get(ctx, "qq", "play_url", musicuAPI, query, desktopHeader, &resp); err != nil {
 		return "", err
 	}
 	for _, filename := range filenames {

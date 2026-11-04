@@ -128,7 +128,7 @@ func TestResolveDoesNotFallbackForInvalidPlayURLResponses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			routes := resolveRoutes(t)
-			routes["/cgi-bin/musicu.fcg"] = body(tt.response)
+			routes["/cgi-bin/musicu.fcg"] = playRequest(t, body(tt.response))
 			c, obs := serve(t, routes)
 			got, err := c.Resolve(t.Context(), "004Fs2FP1EvZYc")
 			if got.Audio != nil {
@@ -206,6 +206,7 @@ func TestDownloadErrorDoesNotExposeSignedURL(t *testing.T) {
 		func(context.Context) (string, error) { return "", nil },
 		func(context.Context, string) error { return nil },
 		func(string, string, time.Duration, error) {},
+		testLogger,
 	)
 	_, err := c.download(t.Context(), signedURL)
 	if err == nil || !strings.Contains(err.Error(), "网络中断") {
