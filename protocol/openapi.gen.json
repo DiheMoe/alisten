@@ -631,6 +631,14 @@
           "lyric": {
             "type": "string"
           },
+          "lyricTrans": {
+            "description": "翻译歌词，行级 LRC，时间戳与原文的行起点对应",
+            "type": "string"
+          },
+          "lyricWords": {
+            "description": "逐字歌词，每行形如 [行起始ms,行时长ms](字起始ms,字时长ms,0)字，时间为绝对毫秒",
+            "type": "string"
+          },
           "mediaUrl": {
             "type": "string"
           },
@@ -1335,7 +1343,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "09dbf7ea495db969"
+    "version": "473ee31f5ef912b4"
   },
   "openapi": "3.1.0",
   "paths": {

@@ -71,6 +71,16 @@ func TestSnapshotDTO(t *testing.T) {
 	}
 }
 
+func TestNowPlayingCarriesWordAndTranslatedLyrics(t *testing.T) {
+	s := &server{}
+	entry := sunnyEntry
+	entry.Prep.LyricWords, entry.Prep.LyricTrans = "[1000,500](1000,500,0)故", "[00:01.00]The story"
+	got := s.nowPlaying(&room.NowPlaying{Entry: entry})
+	if got.LyricWords == nil || *got.LyricWords != entry.Prep.LyricWords || got.LyricTrans == nil || *got.LyricTrans != entry.Prep.LyricTrans {
+		t.Errorf("lyricWords = %v, lyricTrans = %v", got.LyricWords, got.LyricTrans)
+	}
+}
+
 func TestEventDTO(t *testing.T) {
 	s := &server{}
 	sentAt := time.UnixMilli(1760000000456)

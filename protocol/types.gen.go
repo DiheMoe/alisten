@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "09dbf7ea495db969"
+const Version = "473ee31f5ef912b4"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -255,6 +255,8 @@ type NowPlaying struct {
 	Entry       Entry   `json:"entry"`
 	Gain        float64 `json:"gain"`
 	Lyric       string  `json:"lyric"`
+	LyricTrans  *string `json:"lyricTrans,omitempty"`
+	LyricWords  *string `json:"lyricWords,omitempty"`
 	MediaURL    string  `json:"mediaUrl"`
 	StartedAtMs int64   `json:"startedAtMs"`
 }

@@ -171,7 +171,9 @@
         "startedAtMs": {"type": "integer"},
         "durationMs": {"type": "integer", "description": "准备结果中的时长"},
         "gain": {"type": "number", "description": "线性增益系数"},
-        "lyric": {"type": "string"}
+        "lyric": {"type": "string"},
+        "lyricWords": {"type": "string", "description": "逐字歌词，每行形如 [行起始ms,行时长ms](字起始ms,字时长ms,0)字，时间为绝对毫秒"},
+        "lyricTrans": {"type": "string", "description": "翻译歌词，行级 LRC，时间戳与原文的行起点对应"}
       },
       "required": ["entry", "mediaUrl", "startedAtMs", "durationMs", "gain", "lyric"]
     },

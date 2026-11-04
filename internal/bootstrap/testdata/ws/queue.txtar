@@ -126,7 +126,7 @@ Authorization: Bearer $alice
 {"kind": "event", "type": "playback.updated", "term": 1, "seq": 13, "data": {"nowPlaying": {
   "entry": {"id": "2", "track": {"source": "netease", "id": "185811"}, "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000},
     "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 1, "status": "ready"},
-  "mediaUrl": "/media/netease/185811", "startedAtMs": 1, "durationMs": 299000, "gain": 1, "lyric": ""}}}
+  "mediaUrl": "/media/netease/185811", "startedAtMs": 1, "durationMs": 299000, "gain": 1, "lyric": "", "lyricWords": "[1000,500](1000,500,0)窗", "lyricTrans": "[00:01.00]Window"}}}
 -- receive alice --
 {"kind": "response", "type": "playback.voteSkip", "id": "v1", "data": {"votes": 1, "required": 1, "skipped": true}}
 

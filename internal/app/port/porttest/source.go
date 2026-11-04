@@ -27,11 +27,13 @@ type Source struct {
 }
 
 type sourceSong struct {
-	id     string
-	meta   track.Meta
-	lyric  string
-	audio  []byte
-	reject string
+	id         string
+	meta       track.Meta
+	lyric      string
+	lyricWords string
+	lyricTrans string
+	audio      []byte
+	reject     string
 }
 
 type sourcePlaylist struct {
@@ -54,6 +56,16 @@ func (s *Source) Add(id string, m track.Meta, lyric string, audio []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.songs = append(s.songs, sourceSong{id: id, meta: m, lyric: lyric, audio: audio})
+}
+
+func (s *Source) SetLyrics(id, words, trans string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.songs {
+		if s.songs[i].id == id {
+			s.songs[i].lyricWords, s.songs[i].lyricTrans = words, trans
+		}
+	}
 }
 
 func (s *Source) Reject(id, reason string) {
@@ -164,7 +176,7 @@ func (s *Source) Resolve(_ context.Context, id string) (port.Resolved, error) {
 	case song.reject != "":
 		return port.Resolved{}, &port.RejectedError{Err: errors.New(song.reject)}
 	}
-	return port.Resolved{Meta: song.meta, Lyric: song.lyric, Audio: io.NopCloser(bytes.NewReader(song.audio))}, nil
+	return port.Resolved{Meta: song.meta, Lyric: song.lyric, LyricWords: song.lyricWords, LyricTrans: song.lyricTrans, Audio: io.NopCloser(bytes.NewReader(song.audio))}, nil
 }
 
 func (s *Source) PlayURL(_ context.Context, id string) (string, error) {

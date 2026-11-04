@@ -156,6 +156,7 @@ func contractSources() sources {
 		"[00:01.00]故事的小黄花", porttest.SilentWAV(269500*time.Millisecond))
 	netease.Add("185811", track.Meta{Title: "七里香", Artist: "周杰伦", Album: "七里香", CoverURL: "https://p1.music.126.net/qilixiang.jpg", PageURL: "https://music.163.com/#/song?id=185811", Duration: 299 * time.Second},
 		"", porttest.SilentWAV(299*time.Second))
+	netease.SetLyrics("185811", "[1000,500](1000,500,0)窗", "[00:01.00]Window")
 	netease.Add("1100", track.Meta{Title: "片头", Artist: "无名", PageURL: "https://music.163.com/#/song?id=1100", Duration: 15 * time.Second},
 		"", porttest.SilentWAV(15*time.Second))
 	netease.Add("404", track.Meta{Title: "不能播放的歌", Artist: "无名", PageURL: "https://music.163.com/#/song?id=404", Duration: time.Minute}, "", nil)

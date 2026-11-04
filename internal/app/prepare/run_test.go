@@ -69,6 +69,20 @@ func checkDecodeWarning(t *testing.T, logs *bytes.Buffer, tr track.Track, decode
 	}
 }
 
+func TestRunSavesWordAndTranslatedLyrics(t *testing.T) {
+	source := porttest.NewSource(track.NetEase)
+	source.Add("186016", meta, "[00:01.00]故事", []byte("不是音频"))
+	source.SetLyrics("186016", "[1000,500](1000,500,0)故", "[00:01.00]The story")
+	tracks, err := run(t, source, sunny)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := track.Prepared{Duration: meta.Duration, Gain: 1, Lyric: "[00:01.00]故事", LyricWords: "[1000,500](1000,500,0)故", LyricTrans: "[00:01.00]The story"}
+	if got, _ := tracks.row(sunny); got.Result != want {
+		t.Errorf("准备结果 = %+v，期望 %+v", got.Result, want)
+	}
+}
+
 func TestRunFallsBackWhenAudioCannotBeAnalyzed(t *testing.T) {
 	source := porttest.NewSource(track.NetEase)
 	source.Add("186016", meta, "", []byte("不是音频"))

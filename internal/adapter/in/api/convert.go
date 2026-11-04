@@ -126,7 +126,16 @@ func (s *server) nowPlaying(p *room.NowPlaying) *protocol.NowPlaying {
 		DurationMs:  p.Entry.Prep.Duration.Milliseconds(),
 		Gain:        p.Entry.Prep.Gain,
 		Lyric:       p.Entry.Prep.Lyric,
+		LyricWords:  optional(p.Entry.Prep.LyricWords),
+		LyricTrans:  optional(p.Entry.Prep.LyricTrans),
 	}
+}
+
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func (s *server) mediaURL(t track.Track) string {
