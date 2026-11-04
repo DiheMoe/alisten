@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: [master]
-    tags: ['v*.*.*']
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -162,31 +162,3 @@ jobs:
           repository="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
           printf '%s' "$GITHUB_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           helm push "${RUNNER_TEMP}/helm-packages/alisten-${chart_version}.tgz" "oci://ghcr.io/${repository}/charts"
-
-  release:
-    needs: helm-release
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - name: Generate release notes
-        shell: bash
-        run: |
-          set -euo pipefail
-          python scripts/generate_changelog.py --tag "$GITHUB_REF_NAME" --output release-notes.md
-          test -s release-notes.md
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          body_path: release-notes.md
-          files: protocol/idl.json
-          fail_on_unmatched_files: true

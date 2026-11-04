@@ -1,8 +1,0 @@
-{
-    "$schema": "./git-nickname-username.schema.json",
-    "$comment": "Git 昵称到 GitHub 用户名的映射，用于 generate_changelog.py 脚本",
-    "azmiao": "azmiao",
-    "AZMIAO": "azmiao",
-    "DiheChen": "DiheChen",
-    "dependabot[bot]": "dependabot[bot]"
-}
