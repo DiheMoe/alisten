@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dihemoe/alisten/internal/adapter/out/qq/qrc"
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
@@ -244,24 +243,24 @@ func (c *Client) lyric(ctx context.Context, id string) (lyricResult, error) {
 func parsePlayLyric(lyricHex, transHex string) (lyricResult, error) {
 	var out lyricResult
 	if lyricHex != "" {
-		plain, err := qrc.DecryptHex(lyricHex)
+		plain, err := decryptQRCHex(lyricHex)
 		if err != nil {
 			return lyricResult{}, fmt.Errorf("解密 QQ 音乐的歌词：%w", err)
 		}
-		tags, lines := qrc.Parse(plain)
+		tags, lines := parseQRC(plain)
 		if len(lines) == 0 {
 			// 没有逐字数据时 LyricContent 里直接是行级 LRC。
 			out.LRC = text(plain)
 		} else {
-			out.LRC = text(qrc.RenderLRC(tags, lines))
+			out.LRC = text(renderLRCLines(tags, lines))
 			if hasWordTimings(lines) {
-				out.Words = qrc.RenderYRC(lines)
+				out.Words = renderYRCLines(lines)
 			}
 		}
 	}
 	if transHex != "" {
 		// 翻译解密后是行级 LRC；翻译是增强信息，解密失败只丢翻译。
-		if plain, err := qrc.DecryptHex(transHex); err == nil {
+		if plain, err := decryptQRCHex(transHex); err == nil {
 			out.Trans = cleanTrans(plain)
 		}
 	}
@@ -287,7 +286,7 @@ func cleanTrans(lrc string) string {
 	return text(b.String())
 }
 
-func hasWordTimings(lines []qrc.Line) bool {
+func hasWordTimings(lines []qrcLine) bool {
 	for _, l := range lines {
 		if len(l.Words) > 0 {
 			return true

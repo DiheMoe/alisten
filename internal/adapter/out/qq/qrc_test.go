@@ -1,4 +1,4 @@
-package qrc
+package qq
 
 import (
 	"strings"
@@ -26,8 +26,8 @@ const syntheticPlain = `<?xml version="1.0" encoding="utf-8"?>
 </LyricInfo>
 </QrcInfos>`
 
-func TestDecryptHexGolden(t *testing.T) {
-	got, err := DecryptHex(syntheticHex)
+func TestDecryptQRCHexGolden(t *testing.T) {
+	got, err := decryptQRCHex(syntheticHex)
 	if err != nil {
 		t.Fatalf("解密失败：%v", err)
 	}
@@ -36,20 +36,20 @@ func TestDecryptHexGolden(t *testing.T) {
 	}
 }
 
-func TestDecryptHexRejectsBadInput(t *testing.T) {
-	if _, err := DecryptHex("not-hex"); err == nil {
+func TestDecryptQRCHexRejectsBadInput(t *testing.T) {
+	if _, err := decryptQRCHex("not-hex"); err == nil {
 		t.Error("非十六进制输入没有报错")
 	}
-	if _, err := DecryptHex("0011"); err == nil {
+	if _, err := decryptQRCHex("0011"); err == nil {
 		t.Error("长度不是 8 的倍数没有报错")
 	}
-	if _, err := DecryptHex(strings.Repeat("00", 16)); err == nil {
+	if _, err := decryptQRCHex(strings.Repeat("00", 16)); err == nil {
 		t.Error("非 zlib 数据没有报错")
 	}
 }
 
 func TestParseAndRender(t *testing.T) {
-	tags, lines := Parse(syntheticPlain)
+	tags, lines := parseQRC(syntheticPlain)
 	if tags["ti"] != "合成测试歌" {
 		t.Errorf("ti 标签 = %q", tags["ti"])
 	}
@@ -60,22 +60,22 @@ func TestParseAndRender(t *testing.T) {
 		t.Fatalf("解析出 %d 行，期望 3 行", len(lines))
 	}
 	line := lines[0]
-	if line.StartMs != 1000 || line.DurationMs != 1500 || line.Text() != "你好世" {
-		t.Errorf("首行 = [%d,%d]%q", line.StartMs, line.DurationMs, line.Text())
+	if line.StartMs != 1000 || line.DurationMs != 1500 || line.text() != "你好世" {
+		t.Errorf("首行 = [%d,%d]%q", line.StartMs, line.DurationMs, line.text())
 	}
-	if len(line.Words) != 3 || line.Words[0] != (Word{StartMs: 1000, DurationMs: 500, Text: "你"}) {
+	if len(line.Words) != 3 || line.Words[0] != (qrcWord{StartMs: 1000, DurationMs: 500, Text: "你"}) {
 		t.Errorf("首行逐字 = %#v", line.Words)
 	}
 	// 歌词原文里的全角圆括号不是时间标记，要保留在文本里。
-	if text := lines[1].Text(); text != "括号（内容）" {
+	if text := lines[1].text(); text != "括号（内容）" {
 		t.Errorf("含括号的行 = %q", text)
 	}
 
-	lrc := RenderLRC(tags, lines)
+	lrc := renderLRCLines(tags, lines)
 	if !strings.Contains(lrc, "[ti:合成测试歌]\n") || !strings.Contains(lrc, "[00:01.00]你好世\n") {
 		t.Errorf("LRC 渲染缺少预期行：%.120q", lrc)
 	}
-	yrc := RenderYRC(lines)
+	yrc := renderYRCLines(lines)
 	if !strings.Contains(yrc, "[1000,1500](1000,500,0)你(1500,500,0)好(2000,500,0)世\n") {
 		t.Errorf("YRC 渲染缺少预期行：%.120q", yrc)
 	}
@@ -83,7 +83,7 @@ func TestParseAndRender(t *testing.T) {
 
 // 没有逐字时间标记的内容（纯 LRC 文本）解析不出行。
 func TestParsePlainLRCYieldsNoLines(t *testing.T) {
-	_, lines := Parse("[00:01.00]普通歌词\n[00:03.00]第二行\n")
+	_, lines := parseQRC("[00:01.00]普通歌词\n[00:03.00]第二行\n")
 	if len(lines) != 0 {
 		t.Errorf("纯 LRC 解析出 %d 行，期望 0", len(lines))
 	}

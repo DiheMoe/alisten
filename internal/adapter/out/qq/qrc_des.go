@@ -1,7 +1,7 @@
-// Package qrc 解密并解析 QQ 音乐的 QRC 歌词：密文是十六进制字符串，
-// 加密为 QQ 改版 DES 的三轮 EDE，解压为 zlib。改版 DES 与标准 DES 不兼容：
-// 32 位字内字节小端、两个 S 盒条目被改动、PC-2 的 D 半区错位一位。
-package qrc
+package qq
+
+// QQ 歌词的密文是十六进制字符串，加密为 QQ 改版 DES 的三轮 EDE，解压为 zlib。
+// 改版 DES 与标准 DES 不兼容：32 位字内字节小端、两个 S 盒条目被改动、PC-2 的 D 半区错位一位。
 
 import (
 	"bytes"
@@ -14,8 +14,8 @@ import (
 
 var qrcKey = []byte("!@#)(*$%123ZXC!@!@#)(NHL")
 
-// DecryptHex 解密十六进制的 QRC 密文。
-func DecryptHex(content string) (string, error) {
+// decryptQRCHex 解密十六进制的 QRC 密文。
+func decryptQRCHex(content string) (string, error) {
 	encrypted, err := hex.DecodeString(strings.TrimSpace(content))
 	if err != nil {
 		return "", fmt.Errorf("QRC 密文不是十六进制：%w", err)
