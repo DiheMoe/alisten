@@ -3,12 +3,12 @@ import type { PlaylistSummary, TrackSummary } from '@/core/realtime'
 import type { SearchCategory, SearchSource } from '@/features/history'
 import type { SongItem } from '@/shared/ui'
 import { ArrowLeft, ArrowRight, CirclePlus, Clock3, Search, Sparkles } from 'lucide-react'
-import { roomStore } from '@/core/room'
+import { roomStore, sameTrack } from '@/core/room'
 import { historyStore } from '@/features/history'
 import { enqueue } from '@/features/queue'
 import { bookTitle } from '@/shared/lib/book-title'
 import { useStore } from '@/shared/lib/use-store'
-import { Artwork, AsyncIconButton, EmptyState, IconButton, Select, Skeleton, SongArtwork, SongList } from '@/shared/ui'
+import { Artwork, AsyncIconButton, EmptyState, IconButton, PlayingBars, Select, Skeleton, SongArtwork, SongList } from '@/shared/ui'
 import { SearchBox } from './search-box'
 import { canOpenPlaylists, keywordSearch, pageSize, recordSearch, searchStore } from './search-store'
 import './search.css'
@@ -38,9 +38,10 @@ function songItem({ track, meta }: TrackSummary): SongItem {
 }
 
 function TrackRows({ items, connected }: { items: TrackSummary[], connected: boolean }) {
+  const playing = useStore(roomStore, s => s.room?.nowPlaying?.entry.track)
   return (
     <SongList
-      songs={items.map(songItem)}
+      songs={items.map(item => ({ ...songItem(item), playing: sameTrack(item.track, playing) }))}
       actions={(song, index) => [{
         icon: CirclePlus,
         label: `点歌${bookTitle(song.title)}`,
@@ -110,6 +111,7 @@ function Overview({ tracks, playlists, connected, onCategory, onOpenPlaylist }: 
   onOpenPlaylist: (playlist: PlaylistSummary) => void
 }) {
   const featured = tracks.at(0)
+  const playing = useStore(roomStore, s => s.room?.nowPlaying?.entry.track)
   return (
     <>
       {featured && (
@@ -121,7 +123,10 @@ function Overview({ tracks, playlists, connected, onCategory, onOpenPlaylist }: 
               <h3 className="text-ui-xl truncate" title={featured.meta.title}>{featured.meta.title}</h3>
               <p className="text-ui-caption muted truncate">{featured.meta.artist || '未知艺术家'}</p>
               <div className="search-feature-footer">
-                <span className="text-ui-caption">歌曲</span>
+                <span className="search-feature-kind text-ui-caption">
+                  {sameTrack(featured.track, playing) && <PlayingBars />}
+                  歌曲
+                </span>
                 <AsyncIconButton
                   icon={CirclePlus}
                   label={`点歌${bookTitle(featured.meta.title)}`}

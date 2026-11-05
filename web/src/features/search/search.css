@@ -39,6 +39,7 @@
 .search-featured-song .artwork { width: 88px; background: var(--color-card-hover); }
 .search-featured-song h3 { margin-bottom: 4px; }
 .search-feature-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+.search-feature-kind { display: inline-flex; align-items: center; gap: 8px; }
 .search-feature-footer .icon-button { width: 36px; height: 36px; }
 .search-feature-footer .icon-button svg { width: 26px; height: 26px; }
 .search-preview .song-row { display: grid; grid-template-columns: 42px minmax(0, 1fr) 48px 36px; min-height: 64px; padding: 8px; gap: 12px; }

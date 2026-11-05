@@ -1,12 +1,12 @@
 import type { PlayRecord } from './records'
 import { CirclePlus, Download, History, Search, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { roomStore } from '@/core/room'
+import { roomStore, sameTrack } from '@/core/room'
 import { enqueue, sourceName } from '@/features/queue'
 import { bookTitle } from '@/shared/lib/book-title'
 import { formatClock } from '@/shared/lib/time'
 import { useStore } from '@/shared/lib/use-store'
-import { AsyncIconButton, EmptyState, IconButton, Modal, notificationStore, SongArtwork } from '@/shared/ui'
+import { AsyncIconButton, EmptyState, IconButton, Modal, notificationStore, PlayingBars, SongArtwork } from '@/shared/ui'
 import { historyStore } from './history-store'
 import './history.css'
 
@@ -22,15 +22,18 @@ function playedOn(ms: number): string {
   return new Date(ms).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-function HistoryRow({ record, compact, connected }: { record: PlayRecord, compact: boolean, connected: boolean }) {
+function HistoryRow({ record, compact, connected, playing }: { record: PlayRecord, compact: boolean, connected: boolean, playing: boolean }) {
   const { title, artist, album, coverUrl, pageUrl } = record.meta
   const performer = artist || '未知艺术家'
   const source = sourceName(record.track)
   return (
-    <div className="song-row">
+    <div className="song-row" data-playing={playing || undefined}>
       <SongArtwork coverUrl={coverUrl} title={title} href={pageUrl} sourceName={source} />
       <div className="song-copy">
-        <strong className="text-ui-base truncate">{title}</strong>
+        <span className="song-title">
+          {playing && <PlayingBars />}
+          <strong className="text-ui-base truncate">{title}</strong>
+        </span>
         <span className="text-ui-sm muted truncate">{[performer, source, album].filter(Boolean).join(' · ')}</span>
       </div>
       {!compact && <time className="history-time text-ui-sm muted" dateTime={new Date(record.playedAtMs).toISOString()}>{formatClock(record.playedAtMs)}</time>}
@@ -59,6 +62,7 @@ function HistoryRow({ record, compact, connected }: { record: PlayRecord, compac
 export function HistoryPage({ compact = false, filter = '', onFilter }: { compact?: boolean, filter?: string, onFilter?: (filter: string) => void }) {
   const plays = useStore(historyStore, s => s.plays)
   const connected = useStore(roomStore, s => s.status === 'open')
+  const playing = useStore(roomStore, s => s.room?.nowPlaying?.entry.track)
   const [limit, setLimit] = useState(batchSize)
   const [confirming, setConfirming] = useState(false)
   const visible = plays.filter(record => matches(record, filter))
@@ -100,7 +104,7 @@ export function HistoryPage({ compact = false, filter = '', onFilter }: { compac
                 return (
                   <li key={`${record.track.source}:${record.track.id}`}>
                     {(index === 0 || playedOn(shown[index - 1].playedAtMs) !== day) && <h2 className="history-date text-ui-sm muted">{day}</h2>}
-                    <HistoryRow record={record} compact={compact} connected={connected} />
+                    <HistoryRow record={record} compact={compact} connected={connected} playing={sameTrack(record.track, playing)} />
                   </li>
                 )
               })}

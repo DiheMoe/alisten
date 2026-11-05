@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import { formatDuration } from '@/shared/lib/time'
 import { AsyncIconButton } from './icon-button'
+import { PlayingBars } from './playing-bars'
 import { SongArtwork } from './song-artwork'
 
 export interface SongItem {
@@ -16,6 +17,7 @@ export interface SongItem {
   sourceName?: string
   note?: string
   badge?: string
+  playing?: boolean
 }
 
 export interface SongAction {
@@ -29,11 +31,12 @@ export function SongList({ songs, actions }: { songs: SongItem[], actions: (song
   return (
     <ol className="song-list">
       {songs.map((song, index) => (
-        <li className="song-row" key={song.key}>
+        <li className="song-row" data-playing={song.playing || undefined} key={song.key}>
           <span className="song-index text-ui-sm muted">{String(index + 1).padStart(2, '0')}</span>
           <SongArtwork coverUrl={song.coverUrl} title={song.title} href={song.sourceUrl} sourceName={song.sourceName} />
           <div className="song-copy">
             <span className="song-title">
+              {song.playing && <PlayingBars />}
               <strong className="text-ui-base truncate">{song.title}</strong>
               {song.badge && <span className="song-badge text-ui-xs">{song.badge}</span>}
             </span>

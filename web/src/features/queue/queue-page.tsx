@@ -4,7 +4,7 @@ import { Heart, ListMusic, Trash2 } from 'lucide-react'
 import { roomStore } from '@/core/room'
 import { bookTitle } from '@/shared/lib/book-title'
 import { useStore } from '@/shared/lib/use-store'
-import { EmptyState, Select, SongArtwork, SongList } from '@/shared/ui'
+import { EmptyState, PlayingBars, Select, SongArtwork, SongList } from '@/shared/ui'
 import { likeEntry, removeEntry, setPlayMode } from './actions'
 import { sourceName } from './source'
 import './queue.css'
@@ -26,7 +26,7 @@ function songItem(entry: Entry): SongItem {
   }
 }
 
-function QueueCard({ label, entry, className = '' }: { label: string, entry: Entry, className?: string }) {
+function QueueCard({ label, entry, className = '', playing = false }: { label: string, entry: Entry, className?: string, playing?: boolean }) {
   const song = songItem(entry)
   return (
     <div className={`queue-current ${className}`}>
@@ -36,6 +36,7 @@ function QueueCard({ label, entry, className = '' }: { label: string, entry: Ent
         <strong className="text-ui-base truncate">{song.title}</strong>
         <span className="text-ui-sm muted truncate">{[song.artist, song.sourceName, song.note].filter(Boolean).join(' · ')}</span>
       </div>
+      {playing && <PlayingBars />}
     </div>
   )
 }
@@ -66,7 +67,7 @@ export function QueuePage({ compact = false }: { compact?: boolean }) {
           ]}
         />
       </div>
-      {nowPlaying && <QueueCard label="正在播放" entry={nowPlaying.entry} />}
+      {nowPlaying && <QueueCard label="正在播放" entry={nowPlaying.entry} playing />}
       {pending && <QueueCard label="下一首" entry={pending} className="queue-pending" />}
       {items.length
         ? (
