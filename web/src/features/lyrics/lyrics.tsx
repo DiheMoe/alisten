@@ -10,6 +10,9 @@ import { lyricLeadMs, wordEmphasis, wordProgress } from './lrc'
 import { lyricsStore } from './lyrics-store'
 import './lyrics.css'
 
+const rippleDurationMs = 640
+const rippleStaggerMs = 45
+
 // 字是 inline-block 才能位移和缩放，而 inline-block 会折叠首尾的空格，所以空格放在字的外面。
 function LyricWordText({ word }: { word: LyricWord }) {
   const emphasis = wordEmphasis(word)
@@ -30,6 +33,7 @@ function neighborLine(node: Element, side: 'previousElementSibling' | 'nextEleme
 
 // 没有点的空白行不渲染节点：当前行为这种空白行时，滚动到前后两行的中间。
 function centerLine(container: HTMLElement, nodes: Map<number, HTMLElement>, index: number, smooth: boolean): void {
+  const scrolledFrom = container.scrollTop
   let before: HTMLElement | undefined
   let after: HTMLElement | undefined
   for (const [lineIndex, node] of nodes) {
@@ -45,7 +49,29 @@ function centerLine(container: HTMLElement, nodes: Map<number, HTMLElement>, ind
   if (!before || !after)
     return
   const center = (before.offsetTop + before.clientHeight / 2 + after.offsetTop + after.clientHeight / 2) / 2
-  container.scrollTo({ top: Math.max(0, center - container.clientHeight / 2), behavior: smooth ? 'smooth' : 'instant' })
+  container.scrollTo({ top: Math.max(0, center - container.clientHeight / 2), behavior: 'instant' })
+  if (smooth)
+    rippleLines(container, nodes, container.scrollTop - scrolledFrom)
+}
+
+// 容器已经滚到位，每行再从原来的位置依次移过来。动画是叠加的：上一次还没走完时换行，不会跳回起点。
+function rippleLines(container: HTMLElement, nodes: Map<number, HTMLElement>, distance: number): void {
+  const reach = Math.abs(distance)
+  // 一次跨过整屏时（比如刚进房间）没有“下一行”可言，直接到位。
+  if (!reach || reach > container.clientHeight)
+    return
+  const top = container.scrollTop - reach
+  const bottom = container.scrollTop + container.clientHeight + reach
+  const visible = [...nodes.values()].filter(node => node.offsetTop + node.clientHeight > top && node.offsetTop < bottom)
+  for (const [order, node] of (distance > 0 ? visible : visible.reverse()).entries()) {
+    node.animate({ translate: [`0 ${distance}px`, '0 0'] }, {
+      duration: rippleDurationMs,
+      delay: order * rippleStaggerMs,
+      easing: 'cubic-bezier(.22, 1, .36, 1)',
+      fill: 'backwards',
+      composite: 'add',
+    })
+  }
 }
 
 export function Lyrics() {
