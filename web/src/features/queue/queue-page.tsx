@@ -74,8 +74,8 @@ export function QueuePage({ compact = false }: { compact?: boolean }) {
             <SongList
               songs={items.map(songItem)}
               actions={song => [
-                { icon: Heart, label: `点赞${bookTitle(song.title)}`, disabled: !connected, run: () => likeEntry(song.key, song.title) },
-                { icon: Trash2, label: `移除${bookTitle(song.title)}`, disabled: !connected, run: () => removeEntry(song.key, song.title) },
+                { icon: Heart, label: `点赞${bookTitle(song.title)}`, disabled: !connected, secondary: true, run: () => likeEntry(song.key, song.title) },
+                { icon: Trash2, label: `移除${bookTitle(song.title)}`, disabled: !connected, secondary: true, run: () => removeEntry(song.key, song.title) },
               ]}
             />
           )

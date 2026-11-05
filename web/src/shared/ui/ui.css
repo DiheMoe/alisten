@@ -62,6 +62,11 @@
 .song-action:hover:not(:disabled), .song-action:focus-visible:not(:disabled) { color: var(--color-brand); background: transparent; }
 .song-action:active:not(:disabled) { color: var(--color-brand); background: transparent; transform: none; }
 .song-action[aria-busy='true'] { cursor: progress; opacity: .7; color: var(--color-brand); }
+/* 触屏没有悬停，按钮要一直显示。占位不变，出现时这一行的文字不会跳动。 */
+@media (hover: hover) {
+  .song-action-secondary { opacity: 0; transition: opacity 120ms ease; }
+  .song-row:hover .song-action-secondary, .song-row:focus-within .song-action-secondary, .song-action-secondary[aria-busy='true'] { opacity: 1; }
+}
 .song-index { width: 22px; flex-shrink: 0; }
 .song-copy { display: flex; flex-direction: column; min-width: 0; gap: 3px; flex: 1; }
 .song-title { display: flex; align-items: center; gap: 8px; min-width: 0; }

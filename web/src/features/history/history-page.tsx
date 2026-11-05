@@ -48,7 +48,7 @@ function HistoryRow({ record, compact, connected, playing }: { record: PlayRecor
       />
       <IconButton
         icon={Trash2}
-        className="song-action"
+        className="song-action song-action-secondary"
         label={`删除${bookTitle(title)}的播放记录`}
         onClick={() => {
           historyStore.removePlay(record)

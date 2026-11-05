@@ -24,6 +24,8 @@ export interface SongAction {
   icon: LucideIcon
   label: string
   disabled?: boolean
+  // 次要操作只在鼠标移到这一行时出现。
+  secondary?: boolean
   run: () => Promise<void>
 }
 
@@ -47,7 +49,7 @@ export function SongList({ songs, actions }: { songs: SongItem[], actions: (song
           <span className="song-album text-ui-sm muted truncate">{song.album}</span>
           <span className="song-duration text-ui-sm muted">{song.durationMs > 0 ? formatDuration(song.durationMs) : ''}</span>
           {actions(song, index).map(action => (
-            <AsyncIconButton key={action.label} icon={action.icon} className="song-action" label={action.label} disabled={action.disabled} onAction={action.run} />
+            <AsyncIconButton key={action.label} icon={action.icon} className={action.secondary ? 'song-action song-action-secondary' : 'song-action'} label={action.label} disabled={action.disabled} onAction={action.run} />
           ))}
         </li>
       ))}
