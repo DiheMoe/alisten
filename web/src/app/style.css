@@ -76,18 +76,23 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-:root { --detail-panel-width: 480px; --view-direction: 1; }
-:root[data-view-direction='backward'] { --view-direction: -1; }
+:root { --detail-panel-width: 480px; --view-in: translateX(100%); --view-out: translateX(-14%); --view-swap: translateX(10px); }
+:root[data-view-direction='backward'] { --view-in: translateX(-100%); --view-out: translateX(14%); --view-swap: translateX(-10px); }
+:root[data-view-direction='rise'] { --view-in: translateY(100%); --view-out: translateY(-8%); --view-swap: translateY(10px); }
+:root[data-view-direction='sink'] { --view-in: translateY(-8%); --view-out: translateY(100%); --view-swap: translateY(-10px); }
 .detail-panel { width: var(--detail-panel-width); flex-shrink: 0; position: relative; min-height: 0; display: flex; flex-direction: column; border: 0; border-radius: 12px; background: var(--color-panel); overflow: hidden; animation: detail-panel-open 240ms cubic-bezier(.2, .8, .2, 1) both; }
 .detail-panel-content { view-transition-name: detail-panel-content; width: var(--detail-panel-width); flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* 只换关键帧里的位移：换 animation-name 会让面板在切换内容时重播打开动画。 */
+.detail-panel { --detail-panel-offset: translateX(16px); }
+.detail-panel-sheet { --detail-panel-offset: translateY(100%); }
 .detail-panel-closing { pointer-events: none; animation-name: detail-panel-close; }
 @keyframes detail-panel-open {
-  from { width: 0; margin-left: -8px; opacity: 0; transform: translateX(16px); }
+  from { width: 0; margin-left: -8px; opacity: 0; transform: var(--detail-panel-offset); }
   to { width: var(--detail-panel-width); margin-left: 0; opacity: 1; transform: translateX(0); }
 }
 @keyframes detail-panel-close {
   from { width: var(--detail-panel-width); margin-left: 0; opacity: 1; transform: translateX(0); }
-  to { width: 0; margin-left: -8px; opacity: 0; transform: translateX(16px); }
+  to { width: 0; margin-left: -8px; opacity: 0; transform: var(--detail-panel-offset); }
 }
 /* 视图过渡只移动面板内容：它的过渡分组裁剪在面板内，根快照不做动画，顶栏、主内容和播放器保持不动。 */
 ::view-transition-group(root) { animation: none; overflow: clip; }
@@ -98,17 +103,20 @@
 ::view-transition-old(detail-panel-content), ::view-transition-new(detail-panel-content) { background: var(--color-panel); mix-blend-mode: normal; }
 ::view-transition-old(detail-panel-content) { animation: view-recede 300ms cubic-bezier(.2, .8, .2, 1) both; }
 ::view-transition-new(detail-panel-content) { animation: view-push-in 300ms cubic-bezier(.2, .8, .2, 1) both; }
+/* 聊天在升起和沉下时都要压在列表上面，而新视图默认才在上层。 */
+:root[data-view-direction='rise']::view-transition-new(detail-panel-content),
+:root[data-view-direction='sink']::view-transition-old(detail-panel-content) { z-index: 1; border-radius: 12px 12px 0 0; box-shadow: 0 -8px 24px var(--color-shadow); }
 @keyframes view-recede {
   from { transform: translateX(0); }
-  to { transform: translateX(calc(var(--view-direction) * -14%)); }
+  to { transform: var(--view-out); }
 }
 @keyframes view-push-in {
-  from { transform: translateX(calc(var(--view-direction) * 100%)); }
+  from { transform: var(--view-in); }
   to { transform: translateX(0); }
 }
 .detail-panel-swap { animation: detail-panel-swap-in 180ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes detail-panel-swap-in {
-  from { opacity: 0; transform: translateX(calc(var(--view-direction) * 10px)); }
+  from { opacity: 0; transform: var(--view-swap); }
   to { opacity: 1; transform: translateX(0); }
 }
 :root[data-performance='low'] .header-menu[open] .main-nav { animation: fade-in 160ms ease both; }

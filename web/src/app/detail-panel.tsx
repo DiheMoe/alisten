@@ -28,7 +28,7 @@ export function DetailPanel({ view, children }: { view: Panel | null, children: 
   return (
     <aside
       ref={panelRef}
-      className={`detail-panel${open ? '' : ' detail-panel-closing'}`}
+      className={`detail-panel${shown === 'chat' ? ' detail-panel-sheet' : ''}${open ? '' : ' detail-panel-closing'}`}
       aria-hidden={!open || undefined}
       inert={!open}
       onAnimationEnd={(event) => {

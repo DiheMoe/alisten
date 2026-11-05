@@ -19,7 +19,7 @@ import { ErrorBoundary, RegionFailed } from './error-boundary'
 import { navigationStore } from './navigation'
 import { pwaStore } from './pwa'
 import { UpdatePrompt } from './update-prompt'
-import { withViewTransition } from './view-transition'
+import { panelDirection, withViewTransition } from './view-transition'
 
 // adminStore 不在 main.tsx 中启动：静态导入会把后台页打包进入口 chunk。
 const AdminPage = lazyPage(() => import('@/features/admin').then((module) => {
@@ -218,10 +218,8 @@ export function App() {
   // 加入房间前不显示面板：底部的切换按钮此时不可用，而聊天视图的关闭按钮在 RoomGate 内，打开的聊天面板会无法关闭。
   const shownPanel = joined && panel !== page ? panel : null
   const switchPanel = (next: Panel | null) => {
-    // 侧栏 tab 里播放历史排在播放列表右边，切回播放列表时内容要从左边进来。
-    const direction = shownPanel === 'history' && next === 'queue' ? 'backward' : 'forward'
     if (shownPanel && next && next !== shownPanel && next !== page)
-      withViewTransition(() => navigationStore.setPanel(next), direction)
+      withViewTransition(() => navigationStore.setPanel(next), panelDirection(shownPanel, next))
     else
       navigationStore.setPanel(next)
   }
