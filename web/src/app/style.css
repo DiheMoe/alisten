@@ -76,7 +76,8 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-.detail-panel { --detail-panel-width: 480px; width: var(--detail-panel-width); flex-shrink: 0; position: relative; min-height: 0; display: flex; flex-direction: column; border: 0; border-radius: 12px; background: var(--color-panel); overflow: hidden; animation: detail-panel-open 240ms cubic-bezier(.2, .8, .2, 1) both; }
+:root { --detail-panel-width: 480px; }
+.detail-panel { width: var(--detail-panel-width); flex-shrink: 0; position: relative; min-height: 0; display: flex; flex-direction: column; border: 0; border-radius: 12px; background: var(--color-panel); overflow: hidden; animation: detail-panel-open 240ms cubic-bezier(.2, .8, .2, 1) both; }
 .detail-panel-content { view-transition-name: detail-panel-content; width: var(--detail-panel-width); flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .detail-panel-closing { pointer-events: none; animation-name: detail-panel-close; }
 @keyframes detail-panel-open {
@@ -124,7 +125,11 @@
 .detail-tab[aria-pressed='true'] { color: var(--color-foreground); border-bottom-color: var(--color-brand); }
 .mobile-nav { display: none; }
 @media (max-width: 1100px) {
-  .detail-panel { --detail-panel-width: 420px; }
+  :root { --detail-panel-width: 420px; }
+}
+/* 通知相对窗口居中，侧栏打开时移到内容区中间，否则会盖住侧栏。窗口太窄时内容区放不下通知，留在原位。 */
+@media (min-width: 1024px) {
+  body:has(.detail-panel:not(.detail-panel-closing)) .notifications { left: calc(50% - (var(--detail-panel-width) + 8px) / 2); }
 }
 @media (max-width: 767px) {
   .app-shell { grid-template-rows: minmax(0, 1fr) auto auto; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: 0; }
