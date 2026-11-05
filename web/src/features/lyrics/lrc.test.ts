@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLines, lineIndexAt, parseLrc, parseYrc, withTranslations, wordEmphasis, wordProgress } from './lrc'
+import { buildLines, lineIndexAt, parseLrc, parseYrc, withInterludes, withTranslations, wordEmphasis, wordProgress } from './lrc'
 
 describe('parseLrc', () => {
   it('解析分、秒和不同精度的小数部分', () => {
@@ -172,6 +172,51 @@ describe('withTranslations', () => {
   })
 })
 
+describe('withInterludes', () => {
+  const line = (timeMs: number, text: string) => ({ timeMs, text })
+
+  it('7 秒以上的间奏平分成三个点的时间', () => {
+    const [, gap] = withInterludes([line(1000, '一'), line(2000, ''), line(11_000, '二')])
+    expect(gap.dots).toEqual([
+      { startMs: 2000, durationMs: 3000, text: '' },
+      { startMs: 5000, durationMs: 3000, text: '' },
+      { startMs: 8000, durationMs: 3000, text: '' },
+    ])
+  })
+
+  it('不足 7 秒的间奏和结尾的空白行没有点', () => {
+    const lines = withInterludes([line(1000, '一'), line(2000, ''), line(8999, '二'), line(20_000, '')])
+    expect(lines.filter(({ dots }) => dots)).toEqual([])
+  })
+
+  it('两句歌词之间没有空白行时没有点', () => {
+    expect(withInterludes([line(1000, '一'), line(20_000, '二')])).toEqual([line(1000, '一'), line(20_000, '二')])
+  })
+
+  it('连续的空白行只有紧挨下一句的一行有点', () => {
+    const lines = withInterludes([line(9000, ''), line(20_000, '一')])
+    expect(lines.map(({ timeMs, dots }) => [timeMs, dots?.length])).toEqual([[0, undefined], [9000, 3], [20_000, undefined]])
+  })
+
+  it('恰好 7 秒的间奏有点', () => {
+    const lines = withInterludes([line(1000, '一'), line(2000, ''), line(9000, '二')])
+    expect(lines[1].dots).toHaveLength(3)
+  })
+
+  it('前奏足够长时从歌曲开头补一段，太短或已有开头的空白行时不补', () => {
+    const [intro] = withInterludes([line(7000, '一')])
+    expect(intro).toMatchObject({ timeMs: 0, text: '' })
+    expect(intro.dots?.at(-1)).toEqual({ startMs: 14_000 / 3, durationMs: 7000 / 3, text: '' })
+    expect(withInterludes([line(6999, '一')])).toEqual([line(6999, '一')])
+    expect(withInterludes([line(0, ''), line(9000, '一')])).toHaveLength(2)
+  })
+
+  it('没有歌词时不补前奏', () => {
+    expect(withInterludes([])).toEqual([])
+    expect(withInterludes([line(9000, '')])).toEqual([line(9000, '')])
+  })
+})
+
 describe('buildLines', () => {
   it('有逐字歌词时用逐字歌词的行，翻译配到这些行上', () => {
     const lines = buildLines('[00:01.00]行级歌词', '[1000,500](1000,500,0)逐(1250,250,0)字', '[ti:标题]\n[00:01.00]Word by word')
@@ -181,6 +226,11 @@ describe('buildLines', () => {
 
   it('没有逐字歌词时保持行级歌词，不带逐字数据', () => {
     expect(buildLines('[00:01.00]行级歌词')).toEqual([{ timeMs: 1000, text: '行级歌词' }])
+  })
+
+  it('行级歌词的长前奏和长间奏也有点', () => {
+    const lines = buildLines('[00:10.00]一\n[00:11.00]\n[00:20.00]二')
+    expect(lines.filter(({ dots }) => dots).map(({ timeMs }) => timeMs)).toEqual([0, 11_000])
   })
 
   it('逐字歌词解析不出内容时退回行级歌词', () => {

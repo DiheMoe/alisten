@@ -9,6 +9,7 @@ export interface LyricLine {
   text: string
   words?: LyricWord[]
   translation?: string
+  dots?: LyricWord[]
 }
 
 const timeTag = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/g
@@ -17,6 +18,8 @@ const yrcWordTag = /\((\d+),(\d+),\d+\)/g
 // 逐字歌词没有空白行，要靠行尾和下一行的间隔判断间奏。间隔太短就算作换气：清除高亮再点亮会闪烁。
 const interludeGapMs = 3000
 const maxTranslationGapMs = 500
+const minInterludeMs = 7000
+const interludeDots = 3
 // 字亮起和声音同时发生时，看起来反而慢半拍。
 export const lyricLeadMs = 100
 
@@ -93,9 +96,22 @@ export function withTranslations(lines: LyricLine[], translations: LyricLine[]):
   })
 }
 
+// 长间奏用点倒计时：每个点是一个不带文字的字，绘制时和逐字歌词走同一条路径。
+export function withInterludes(lines: LyricLine[]): LyricLine[] {
+  const first = lines.find(line => line.text)
+  const withIntro = first && lines[0].timeMs > 0 && first.timeMs >= minInterludeMs ? [{ timeMs: 0, text: '' }, ...lines] : lines
+  return withIntro.map((line, i) => {
+    const next = withIntro[i + 1]
+    if (line.text || !next?.text || next.timeMs - line.timeMs < minInterludeMs)
+      return line
+    const durationMs = (next.timeMs - line.timeMs) / interludeDots
+    return { ...line, dots: Array.from({ length: interludeDots }, (_, dot) => ({ startMs: line.timeMs + dot * durationMs, durationMs, text: '' })) }
+  })
+}
+
 export function buildLines(lyric: string, words = '', translation = ''): LyricLine[] {
   const wordLines = parseYrc(words)
-  return withTranslations(wordLines.length ? wordLines : parseLrc(lyric), parseLrc(translation))
+  return withInterludes(withTranslations(wordLines.length ? wordLines : parseLrc(lyric), parseLrc(translation)))
 }
 
 export function lineIndexAt(lines: LyricLine[], positionMs: number): number {

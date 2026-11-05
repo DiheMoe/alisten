@@ -22,7 +22,13 @@ function LyricWordText({ word }: { word: LyricWord }) {
   )
 }
 
-// 空白行不渲染节点：当前行为空白行时，滚动到前后两行的中间。
+// 间奏的点平时不可见，不算相邻的行。
+function neighborLine(node: Element, side: 'previousElementSibling' | 'nextElementSibling'): Element | null {
+  const neighbor = node[side]
+  return neighbor?.classList.contains('lyric-interlude') ? neighbor[side] : neighbor
+}
+
+// 没有点的空白行不渲染节点：当前行为这种空白行时，滚动到前后两行的中间。
 function centerLine(container: HTMLElement, nodes: Map<number, HTMLElement>, index: number, smooth: boolean): void {
   let before: HTMLElement | undefined
   let after: HTMLElement | undefined
@@ -68,14 +74,14 @@ export function Lyrics() {
       previous?.classList.remove('active-lyric')
       previous?.removeAttribute('aria-current')
       const current = nodes.get(index)
-      const words = lines[index]?.words
+      const words = lines[index]?.words ?? lines[index]?.dots
       activeWords = current && words
-        ? Array.from(current.querySelectorAll<HTMLElement>('.lyric-word'), (node, i) => ({ node, word: words[i] }))
+        ? Array.from(current.querySelectorAll<HTMLElement>('.lyric-word, .lyric-dot'), (node, i) => ({ node, word: words[i] }))
         : []
       if (current) {
         current.classList.add('active-lyric')
         current.setAttribute('aria-current', 'true')
-        near = [current.previousElementSibling, current.nextElementSibling].filter((node): node is Element => node !== null)
+        near = [neighborLine(current, 'previousElementSibling'), neighborLine(current, 'nextElementSibling')].filter((node): node is Element => node !== null)
       }
       else {
         let before: HTMLElement | undefined
@@ -135,12 +141,18 @@ export function Lyrics() {
     <section className="lyrics-panel" aria-label="同步歌词">
       <div className="lyrics-scroll" ref={scrollRef}>
         {lines.some(line => line.text)
-          ? lines.map((line, index) => line.text && (
-              <p className="lyric-line text-ui-xl" data-lyric-index={index} key={`${line.timeMs}:${line.text}`}>
-                {line.words?.map(word => <LyricWordText key={`${word.startMs}:${word.text}`} word={word} />) ?? line.text}
-                {line.translation && <span className="lyric-translation">{line.translation}</span>}
-              </p>
-            ))
+          ? lines.map((line, index) => line.dots
+              ? (
+                  <p className="lyric-line lyric-interlude" aria-hidden="true" data-lyric-index={index} key={`${line.timeMs}:`}>
+                    {line.dots.map(dot => <span className="lyric-dot" key={dot.startMs} />)}
+                  </p>
+                )
+              : line.text && (
+                <p className="lyric-line text-ui-xl" data-lyric-index={index} key={`${line.timeMs}:${line.text}`}>
+                  {line.words?.map(word => <LyricWordText key={`${word.startMs}:${word.text}`} word={word} />) ?? line.text}
+                  {line.translation && <span className="lyric-translation">{line.translation}</span>}
+                </p>
+              ))
           : <EmptyState icon={AlignLeft} title="歌词随音乐浮现">播放带有歌词的歌曲时，会在这里同步显示。</EmptyState>}
       </div>
     </section>
