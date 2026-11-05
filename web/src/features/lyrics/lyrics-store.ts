@@ -2,7 +2,7 @@ import type { LyricLine } from './lrc'
 import { roomStore } from '@/core/room'
 import { playerStore } from '@/features/playback'
 import { Store } from '@/shared/lib/store'
-import { buildLines, lineIndexAt } from './lrc'
+import { buildLines, lineIndexAt, lyricLeadMs } from './lrc'
 
 class LyricsStore extends Store<{ lines: LyricLine[], index: number }> {
   #track = ''
@@ -28,7 +28,7 @@ class LyricsStore extends Store<{ lines: LyricLine[], index: number }> {
   }
 
   #sync(positionMs: number): void {
-    this.setState({ index: lineIndexAt(this.state.lines, positionMs) })
+    this.setState({ index: lineIndexAt(this.state.lines, positionMs + lyricLeadMs) })
   }
 }
 

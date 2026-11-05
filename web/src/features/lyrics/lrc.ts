@@ -17,6 +17,8 @@ const yrcWordTag = /\((\d+),(\d+),\d+\)/g
 // 逐字歌词没有空白行，要靠行尾和下一行的间隔判断间奏。间隔太短就算作换气：清除高亮再点亮会闪烁。
 const interludeGapMs = 3000
 const maxTranslationGapMs = 500
+// 字亮起和声音同时发生时，看起来反而慢半拍。
+export const lyricLeadMs = 100
 
 export function parseLrc(lrc: string): LyricLine[] {
   const lines: LyricLine[] = []

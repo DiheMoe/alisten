@@ -50,6 +50,15 @@ describe('lyricsStore', () => {
     expect(lyricsStore.state.index).toBe(1)
   })
 
+  it('比播放位置提前 100ms 切换到下一行', async () => {
+    const { lyricsStore, frames, play } = await setup()
+    play(nowPlaying('1', { lyric: '[00:01.00]一\n[00:02.00]二' }))
+    frames.emit(1899)
+    expect(lyricsStore.state.index).toBe(0)
+    frames.emit(1900)
+    expect(lyricsStore.state.index).toBe(1)
+  })
+
   it('同一首歌的新快照不重建歌词行，离开房间后清空', async () => {
     const { lyricsStore, play } = await setup()
     play(nowPlaying('1'))

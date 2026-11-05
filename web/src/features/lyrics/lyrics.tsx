@@ -6,7 +6,7 @@ import { playerStore } from '@/features/playback'
 import { performanceStore } from '@/features/settings'
 import { useStore } from '@/shared/lib/use-store'
 import { EmptyState } from '@/shared/ui'
-import { wordEmphasis, wordProgress } from './lrc'
+import { lyricLeadMs, wordEmphasis, wordProgress } from './lrc'
 import { lyricsStore } from './lyrics-store'
 import './lyrics.css'
 
@@ -98,7 +98,7 @@ export function Lyrics() {
     const paintWords = (positionMs: number) => {
       const smooth = performanceStore.smoothMotion()
       for (const item of activeWords) {
-        const progress = wordProgress(item.word, positionMs)
+        const progress = wordProgress(item.word, positionMs + lyricLeadMs)
         // 不需要流畅动效时按字切换，每帧不用重绘。
         const fill = smooth ? progress : Math.ceil(progress)
         if (fill !== item.fill) {
