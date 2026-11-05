@@ -5,7 +5,8 @@ export function canPushViews(): boolean {
   return 'startViewTransition' in document && performanceStore.smoothMotion()
 }
 
-export function withViewTransition(update: () => void): void {
+export function withViewTransition(update: () => void, direction: 'forward' | 'backward'): void {
+  document.documentElement.dataset.viewDirection = direction
   if (!canPushViews()) {
     update()
     return

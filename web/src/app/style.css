@@ -76,7 +76,8 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-:root { --detail-panel-width: 480px; }
+:root { --detail-panel-width: 480px; --view-direction: 1; }
+:root[data-view-direction='backward'] { --view-direction: -1; }
 .detail-panel { width: var(--detail-panel-width); flex-shrink: 0; position: relative; min-height: 0; display: flex; flex-direction: column; border: 0; border-radius: 12px; background: var(--color-panel); overflow: hidden; animation: detail-panel-open 240ms cubic-bezier(.2, .8, .2, 1) both; }
 .detail-panel-content { view-transition-name: detail-panel-content; width: var(--detail-panel-width); flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .detail-panel-closing { pointer-events: none; animation-name: detail-panel-close; }
@@ -99,15 +100,15 @@
 ::view-transition-new(detail-panel-content) { animation: view-push-in 300ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes view-recede {
   from { transform: translateX(0); }
-  to { transform: translateX(-14%); }
+  to { transform: translateX(calc(var(--view-direction) * -14%)); }
 }
 @keyframes view-push-in {
-  from { transform: translateX(100%); }
+  from { transform: translateX(calc(var(--view-direction) * 100%)); }
   to { transform: translateX(0); }
 }
 .detail-panel-swap { animation: detail-panel-swap-in 180ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes detail-panel-swap-in {
-  from { opacity: 0; transform: translateX(10px); }
+  from { opacity: 0; transform: translateX(calc(var(--view-direction) * 10px)); }
   to { opacity: 1; transform: translateX(0); }
 }
 :root[data-performance='low'] .header-menu[open] .main-nav { animation: fade-in 160ms ease both; }

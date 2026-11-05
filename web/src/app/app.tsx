@@ -218,8 +218,10 @@ export function App() {
   // 加入房间前不显示面板：底部的切换按钮此时不可用，而聊天视图的关闭按钮在 RoomGate 内，打开的聊天面板会无法关闭。
   const shownPanel = joined && panel !== page ? panel : null
   const switchPanel = (next: Panel | null) => {
+    // 侧栏 tab 里播放历史排在播放列表右边，切回播放列表时内容要从左边进来。
+    const direction = shownPanel === 'history' && next === 'queue' ? 'backward' : 'forward'
     if (shownPanel && next && next !== shownPanel && next !== page)
-      withViewTransition(() => navigationStore.setPanel(next))
+      withViewTransition(() => navigationStore.setPanel(next), direction)
     else
       navigationStore.setPanel(next)
   }
