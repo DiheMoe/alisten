@@ -271,6 +271,42 @@ func TestDecodeRejectsUndecodableMP3(t *testing.T) {
 	}
 }
 
+func TestDecodeFLACStopsAtDeclaredSamples(t *testing.T) {
+	file, err := os.ReadFile("testdata/sine.flac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := Decode(bytes.NewReader(file))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	withTrailer := append(slices.Clone(file), 0x00, 0x01, 0x02, 0x03)
+	got, err := Decode(bytes.NewReader(withTrailer))
+	if err != nil {
+		t.Fatalf("音频之后有多余数据：%v", err)
+	}
+	if got.Frames() != want.Frames() {
+		t.Errorf("采样帧 = %d，期望 %d", got.Frames(), want.Frames())
+	}
+
+	// STREAMINFO 的总采样数占第 21 字节的低 4 位和之后的 4 个字节，全 0 表示未知。
+	undeclared := slices.Clone(file)
+	undeclared[21] &= 0xF0
+	clear(undeclared[22:26])
+	got, err = Decode(bytes.NewReader(undeclared))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Frames() != want.Frames() {
+		t.Errorf("未声明总采样数时采样帧 = %d，期望读到文件结束的 %d", got.Frames(), want.Frames())
+	}
+
+	if _, err := Decode(bytes.NewReader(file[:len(file)-200])); err == nil {
+		t.Error("音频比声明的少时应该报错")
+	}
+}
+
 func TestDamageReportsSkippedMP3Data(t *testing.T) {
 	decode := func(t *testing.T, file []byte) Decoder {
 		t.Helper()

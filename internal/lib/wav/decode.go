@@ -318,8 +318,13 @@ func newFLACDecoder(r io.Reader) (Decoder, error) {
 	info := stream.Info
 	divisor := float64(int64(1) << (info.BitsPerSample - 1))
 	d := &streamDecoder{rate: int(info.SampleRate), ch: int(info.NChannels)}
+	var decoded uint64
 	d.fill = func() error {
 		for {
+			// QQ 音乐的 FLAC 在音频之后还有数据：继续读会被当成音频帧报错，整首的分析结果都会作废。NSamples 为 0 表示文件没有声明总数。
+			if info.NSamples > 0 && decoded >= info.NSamples {
+				return io.EOF
+			}
 			frame, err := stream.ParseNext()
 			if err != nil {
 				return err // 含 io.EOF
@@ -328,6 +333,7 @@ func newFLACDecoder(r io.Reader) (Decoder, error) {
 				continue
 			}
 			n := frame.Subframes[0].NSamples
+			decoded += uint64(n)
 			ch := len(frame.Subframes)
 			out := d.q.buf[d.q.grow(n*ch):]
 			for c, sub := range frame.Subframes {
