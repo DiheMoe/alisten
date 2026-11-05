@@ -42,6 +42,9 @@ func TestAnalyzeReaderMP3MatchesReference(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if got.Damage != nil {
+				t.Errorf("完好的文件 Damage = %v，期望 nil", got.Damage.LogValue())
+			}
 			if math.Abs(got.Integrated-tt.integrated) > 0.05 {
 				t.Errorf("Integrated = %.3f LUFS，期望 %.3f", got.Integrated, tt.integrated)
 			}

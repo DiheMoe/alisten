@@ -227,7 +227,7 @@ func mp3Frame(header ...byte) []byte {
 
 var (
 	silentFrame = mp3Frame(0xFF, 0xFB, 0x90, 0x00)
-	layer2Frame = mp3Frame(0xFF, 0xFD, 0x90, 0x00)
+	layer2Frame = mp3Frame(0xFF, 0xFD, 0x80, 0x00)
 )
 
 // 准备任务在 serve 进程中解码整首歌，稳态下每次 Read 都不能分配内存。
@@ -259,8 +259,8 @@ func TestDecodeRejectsUndecodableMP3(t *testing.T) {
 		is   func(error) bool
 	}{
 		{"Layer II", bytes.Repeat(layer2Frame, 3), "不支持的 MP3 格式", asError[*gl3d.UnsupportedError]},
-		{"最后一帧被截断", bytes.Repeat(silentFrame, 4)[:3*len(silentFrame)+200], "MP3 数据被截断", asError[*gl3d.TruncatedError]},
-		{"ID3 标签声明的长度超过上限", []byte("ID3\x04\x00\x00\x7f\x7f\x7f\x7f\x00\x00"), "MP3 超出解码的资源上限", asError[*gl3d.LimitError]},
+		{"只有标签", []byte("ID3\x04\x00\x00\x00\x00\x00\x00\x00\x00"), "MP3 中没有音频帧", func(err error) bool { return errors.Is(err, gl3d.ErrNoAudio) }},
+		{"首帧之前的数据超过上限", append([]byte("ID3\x04\x00\x00\x00\x00\x00\x00"), make([]byte, 70<<10)...), "MP3 超出解码的资源上限", asError[*gl3d.LimitError]},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -268,6 +268,34 @@ func TestDecodeRejectsUndecodableMP3(t *testing.T) {
 				t.Errorf("错误 = %v，应包含 %q 并保留 gl3d 的错误", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestDamageReportsSkippedMP3Data(t *testing.T) {
+	decode := func(t *testing.T, file []byte) Decoder {
+		t.Helper()
+		dec, err := NewDecoder(bytes.NewReader(file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := drainDecoder(dec); err != nil {
+			t.Fatal(err)
+		}
+		return dec
+	}
+	if got := Damage(decode(t, bytes.Repeat(silentFrame, 4))); got != nil {
+		t.Errorf("完好的 MP3：Damage = %v，期望 nil", got.LogValue())
+	}
+	truncated := Damage(decode(t, bytes.Repeat(silentFrame, 4)[:3*len(silentFrame)+200]))
+	if truncated == nil || !strings.Contains(truncated.LogValue().String(), "truncated") {
+		t.Errorf("最后一帧被截断：Damage = %v，期望记下截断", truncated)
+	}
+	flac, err := os.ReadFile("testdata/sine.flac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Damage(decode(t, flac)); got != nil {
+		t.Errorf("FLAC：Damage = %v，期望 nil", got.LogValue())
 	}
 }
 

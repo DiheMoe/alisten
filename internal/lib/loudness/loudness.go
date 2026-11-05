@@ -5,6 +5,7 @@ package loudness
 import (
 	"errors"
 	"io"
+	"log/slog"
 	"math"
 	"time"
 
@@ -21,6 +22,7 @@ type Result struct {
 	Integrated float64 // 综合响度（LUFS），全静音时为 -Inf
 	Peak       float64 // 采样峰值（dBFS），全静音时为 -Inf
 	Duration   time.Duration
+	Damage     slog.LogValuer // 解码时跳过或容错的异常，音频完好时为 nil；此时其余字段只反映解出的部分
 }
 
 // target 的单位是 LUFS，返回的增益单位是 dB；静音时返回 0。
@@ -64,7 +66,12 @@ func AnalyzeReader(r io.Reader) (*Result, error) {
 			return nil, err
 		}
 	}
-	return an.Result()
+	result, err := an.Result()
+	if err != nil {
+		return nil, err
+	}
+	result.Damage = wav.Damage(dec)
+	return result, nil
 }
 
 // samples 是按声道交错的 PCM 采样，满刻度为 1，可以超出 [-1, 1]。

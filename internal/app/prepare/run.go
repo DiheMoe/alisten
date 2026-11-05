@@ -52,6 +52,9 @@ func analyze(ctx context.Context, logger *slog.Logger, t track.Track, audio io.R
 	prepared := track.Prepared{Duration: fallback, Gain: 1, Lyric: lyric}
 	if err == nil {
 		prepared.Duration, prepared.Gain = result.Duration, result.Coefficient()
+		if result.Damage != nil {
+			logger.WarnContext(ctx, "音频有损坏，增益和时长按解出的部分计算", "source", t.Source, "track_id", t.ID, "report", result.Damage)
+		}
 	} else {
 		logger.WarnContext(ctx, "音频无法解码，增益取 1、时长取元数据", "source", t.Source, "track_id", t.ID, "error", err)
 	}

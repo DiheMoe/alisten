@@ -180,10 +180,10 @@ func TestLinkRunnerFallsBackWhenAudioCannotBeAnalyzed(t *testing.T) {
 }
 
 func TestLinkRunnerLogsAudioThatCannotBeDecoded(t *testing.T) {
-	decodeErr := truncatedMP3Error(t)
+	decodeErr := noAudioError(t)
 	runWith := func(m track.Meta) (*bytes.Buffer, error) {
 		logs := &bytes.Buffer{}
-		d := &downloader{meta: m, audio: truncatedMP3}
+		d := &downloader{meta: m, audio: noAudioMP3}
 		err := newLinkRunner(d, porttest.NewMediaStore(), newTracks(), slog.New(slog.NewJSONHandler(logs, nil))).Run(t.Context(), link)
 		return logs, err
 	}

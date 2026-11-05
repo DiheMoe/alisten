@@ -5,7 +5,7 @@ go 1.27.1
 ignore ./web/node_modules
 
 require (
-	github.com/DiheMoe/gl3d v0.0.0-20261022172000-ae409e94c25a
+	github.com/DiheMoe/gl3d v1.0.0
 	github.com/aws/aws-sdk-go-v2 v1.47.3
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.9
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.4

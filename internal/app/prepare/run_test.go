@@ -37,11 +37,13 @@ var silentFrame = append([]byte{0xFF, 0xFB, 0x90, 0x00}, make([]byte, 413)...)
 
 var truncatedMP3 = append(bytes.Repeat(silentFrame, 3), silentFrame[:200]...)
 
-func truncatedMP3Error(t *testing.T) error {
+var noAudioMP3 = []byte("ID3\x04\x00\x00\x00\x00\x00\x00\x00\x00")
+
+func noAudioError(t *testing.T) error {
 	t.Helper()
-	_, err := loudness.AnalyzeReader(bytes.NewReader(truncatedMP3))
+	_, err := loudness.AnalyzeReader(bytes.NewReader(noAudioMP3))
 	if err == nil {
-		t.Fatal("被截断的 MP3 应该无法解码")
+		t.Fatal("没有音频帧的 MP3 应该无法解码")
 	}
 	return err
 }
@@ -83,6 +85,35 @@ func TestRunSavesWordAndTranslatedLyrics(t *testing.T) {
 	}
 }
 
+func TestRunStaysQuietForIntactAudio(t *testing.T) {
+	source := porttest.NewSource(track.NetEase)
+	source.Add("186016", meta, "", porttest.SilentWAV(time.Second))
+	if _, logs, err := runLogged(t, source, sunny); err != nil || logs.Len() != 0 {
+		t.Errorf("错误 = %v，日志 = %q，期望完好的音频不写日志", err, logs)
+	}
+}
+
+func TestRunMeasuresDamagedAudioAndWarns(t *testing.T) {
+	source := porttest.NewSource(track.NetEase)
+	source.Add("186016", meta, "", truncatedMP3)
+	tracks, logs, err := runLogged(t, source, sunny)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 3 帧、每帧 1152 个采样帧，44.1 kHz。
+	if got, _ := tracks.row(sunny); got.Result.Duration >= time.Second || got.Result.Duration <= 0 {
+		t.Errorf("时长 = %v，期望取解出的部分，而不是元数据的 %v", got.Result.Duration, meta.Duration)
+	}
+	var entry map[string]any
+	if err := json.Unmarshal(logs.Bytes(), &entry); err != nil {
+		t.Fatalf("日志 = %q：%v", logs, err)
+	}
+	report, _ := entry["report"].(map[string]any)
+	if entry["level"] != "WARN" || entry["track_id"] != sunny.ID || report["truncated"] != true {
+		t.Errorf("日志 = %v，期望一条带异常报告的 WARN", entry)
+	}
+}
+
 func TestRunFallsBackWhenAudioCannotBeAnalyzed(t *testing.T) {
 	source := porttest.NewSource(track.NetEase)
 	source.Add("186016", meta, "", []byte("不是音频"))
@@ -103,7 +134,7 @@ func TestRunFallsBackWhenAudioCannotBeAnalyzed(t *testing.T) {
 }
 
 func TestRunLogsAudioThatCannotBeDecoded(t *testing.T) {
-	decodeErr := truncatedMP3Error(t)
+	decodeErr := noAudioError(t)
 	sourceWith := func(m track.Meta, audio []byte) port.Source {
 		source := porttest.NewSource(track.NetEase)
 		source.Add("186016", m, "", audio)
@@ -111,14 +142,14 @@ func TestRunLogsAudioThatCannotBeDecoded(t *testing.T) {
 	}
 
 	t.Run("回退", func(t *testing.T) {
-		_, logs, err := runLogged(t, sourceWith(meta, truncatedMP3), sunny)
+		_, logs, err := runLogged(t, sourceWith(meta, noAudioMP3), sunny)
 		if err != nil {
 			t.Fatal(err)
 		}
 		checkDecodeWarning(t, logs, sunny, decodeErr)
 	})
 	t.Run("元数据中也没有时长", func(t *testing.T) {
-		_, _, err := runLogged(t, sourceWith(track.Meta{Title: "晴天"}, truncatedMP3), sunny)
+		_, _, err := runLogged(t, sourceWith(track.Meta{Title: "晴天"}, noAudioMP3), sunny)
 		var rejected *port.RejectedError
 		if !errors.As(err, &rejected) || err.Error() != "这首歌的音频无法播放" {
 			t.Errorf("错误 = %v，期望不能准备，原因带着解码的错误 %q", err, decodeErr)
