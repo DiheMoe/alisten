@@ -4,7 +4,7 @@ import { roomStore } from '@/core/room'
 import { sourceName } from '@/features/queue'
 import { formatDuration } from '@/shared/lib/time'
 import { useStore } from '@/shared/lib/use-store'
-import { Artwork, AsyncIconButton, IconButton, VolumeInput } from '@/shared/ui'
+import { Artwork, AsyncIconButton, IconButton } from '@/shared/ui'
 import { playerStore } from './player-store'
 import { volumeStore } from './volume-store'
 import './playback.css'
@@ -64,6 +64,7 @@ export function PlayerBar({ onSkip, onLyrics, onQueue, onChat, queueOpen, chatOp
   const connected = useStore(roomStore, s => s.status === 'open')
   const volume = useStore(volumeStore, s => s.volume)
   const muted = useStore(volumeStore, s => s.muted)
+  const audibleVolume = muted ? 0 : volume
   const meta = nowPlaying?.entry.meta
   const artist = meta?.artist || '未知艺术家'
   const source = nowPlaying ? sourceName(nowPlaying.entry.track) : undefined
@@ -90,15 +91,23 @@ export function PlayerBar({ onSkip, onLyrics, onQueue, onChat, queueOpen, chatOp
         </div>
         <div className="player-tools">
           <IconButton icon={muted ? VolumeX : Volume2} label={muted ? '取消静音' : '静音'} onClick={() => volumeStore.setMuted(!muted)} />
-          <VolumeInput
-            volume={volume}
-            sliderValue={muted ? 0 : volume}
-            onCommit={(next) => {
-              volumeStore.setVolume(next)
-              if (muted && next > 0)
-                volumeStore.setMuted(false)
-            }}
-          />
+          <div className="volume-control">
+            <input
+              className="volume-slider"
+              type="range"
+              min="0"
+              max="100"
+              value={audibleVolume}
+              aria-label="音量"
+              onChange={(event) => {
+                const next = Number(event.target.value)
+                volumeStore.setVolume(next)
+                if (muted && next > 0)
+                  volumeStore.setMuted(false)
+              }}
+            />
+            <span className="volume-readout" aria-hidden="true">{`${audibleVolume}%`}</span>
+          </div>
           <IconButton icon={MessageCircle} label="房间聊天" className="player-panel-toggle" disabled={!canOpenPanels} aria-pressed={chatOpen} onClick={onChat} />
           <IconButton icon={ListMusic} label="播放列表" className="player-panel-toggle" disabled={!canOpenPanels} aria-pressed={queueOpen} onClick={onQueue} />
         </div>

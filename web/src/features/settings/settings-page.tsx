@@ -6,10 +6,11 @@ import { errorMessage } from '@/core/errors'
 import { historyStore, searchLimits } from '@/features/history'
 import { reminderStore, requestNotificationPermission, systemNotificationsSupported, volumeStore } from '@/features/playback'
 import { useStore } from '@/shared/lib/use-store'
-import { notificationStore, Select, VolumeInput } from '@/shared/ui'
+import { notificationStore, Select } from '@/shared/ui'
 import { appearanceStore, fontSizes, themes } from './appearance-store'
 import { performanceLevels, performanceStore } from './performance-store'
 import { profileStore } from './profile-store'
+import { VolumeInput } from './volume-input'
 import './settings.css'
 
 interface SettingsDraft {
