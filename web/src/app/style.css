@@ -137,7 +137,7 @@
   :root { --detail-panel-width: 420px; }
 }
 @media (min-width: 768px) {
-  .app-shell > .player-bar { justify-self: center; margin-bottom: 12px; }
+  .app-shell > .player-bar { margin: 0 8px 8px; }
 }
 /* 通知相对窗口居中，侧栏打开时移到内容区中间，否则会盖住侧栏。窗口太窄时内容区放不下通知，留在原位。 */
 @media (min-width: 1024px) {

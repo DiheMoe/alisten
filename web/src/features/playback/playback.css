@@ -23,8 +23,11 @@
 .player-panel-toggle:active:not(:disabled) { color: var(--color-brand); background: transparent; transform: none; }
 /* 播放栏在布局里占一行，不压在页面上，所以各页面不用留出底部空间。 */
 @media (min-width: 768px) {
-  .player-bar { --color-hover: var(--color-surface-hover); width: min(920px, calc(100% - 16px)); padding: 10px 14px; border-radius: 16px; background: var(--color-panel); box-shadow: 0 8px 24px var(--color-shadow); }
+  .player-bar { --color-hover: var(--color-surface-hover); padding: 10px 14px; border-radius: 12px; background: var(--color-panel); }
   .player-artwork .artwork { width: 56px; background: var(--color-surface); }
+  .player-right .icon-button { width: 40px; height: 40px; }
+  .player-right .icon-button svg { width: 22px; height: 22px; }
+  .player-center .icon-button svg { width: 24px; height: 24px; }
 }
 @media (max-width: 1100px) {
   .player-bar { gap: 12px; }
