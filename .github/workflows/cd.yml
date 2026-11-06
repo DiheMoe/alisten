@@ -1,0 +1,57 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+concurrency:
+  group: cd-alisten
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.workflow_run.head_branch }}
+    steps:
+      - uses: azure/setup-helm@v5
+        with:
+          version: v3.20.0
+      - name: Configure k3s access
+        shell: bash
+        env:
+          K3S_KUBECONFIG: ${{ secrets.K3S_KUBECONFIG }}
+          KUBECONFIG: ${{ runner.temp }}/k3s-kubeconfig
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$K3S_KUBECONFIG" > "$KUBECONFIG"
+      - name: Upgrade alisten
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KUBECONFIG: ${{ runner.temp }}/k3s-kubeconfig
+        run: |
+          set -euo pipefail
+          chart_version="${TAG#v}"
+          repository="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          printf '%s' "$GITHUB_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          helm upgrade alisten "oci://ghcr.io/${repository}/charts/alisten" \
+            --version "$chart_version" \
+            --namespace alisten \
+            --reuse-values \
+            --set-string "serve.image.tag=${chart_version}" \
+            --set-string "worker.image.tag=${chart_version}" \
+            --set-string "web.image.tag=${chart_version}" \
+            --atomic \
+            --wait \
+            --timeout 6m
