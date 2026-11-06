@@ -55,3 +55,18 @@ jobs:
             --atomic \
             --wait \
             --timeout 6m
+      - name: Smoke test
+        shell: bash
+        env:
+          KUBECONFIG: ${{ runner.temp }}/k3s-kubeconfig
+        run: |
+          set -euo pipefail
+          kubectl port-forward --namespace alisten service/alisten-serve 18090:9090 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          curl --silent --show-error --fail \
+            --retry 10 \
+            --retry-delay 2 \
+            --retry-connrefused \
+            --max-time 10 \
+            http://127.0.0.1:18090/healthz
