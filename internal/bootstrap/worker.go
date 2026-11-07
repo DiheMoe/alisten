@@ -275,7 +275,7 @@ func (w mediaWorker) run(ctx context.Context, listener net.Listener) error {
 		}),
 	)
 	opsLogger := w.base.With("component", "ops")
-	opsServer := newHTTPServer(recoverPanics(ops.NewHandler(ready, w.metrics), opsLogger), opsLogger)
+	opsServer := newHTTPServer(recoverPanics(ops.NewHandler(ready, w.metrics, version), opsLogger), opsLogger)
 	go func() { fatal <- fmt.Errorf("运维端口异常退出：%w", opsServer.Serve(listener)) }()
 	w.logger.Info("worker 已启动", "ops_listen", listener.Addr().String(), "instance", w.instance)
 

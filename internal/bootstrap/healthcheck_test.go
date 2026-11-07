@@ -12,7 +12,7 @@ import (
 
 func TestHealthcheckFollowsReadiness(t *testing.T) {
 	var ready atomic.Bool
-	server := httptest.NewServer(ops.NewHandler(ready.Load, prometheus.NewRegistry()))
+	server := httptest.NewServer(ops.NewHandler(ready.Load, prometheus.NewRegistry(), version))
 	defer server.Close()
 	t.Setenv("ALISTEN_OPS_LISTEN", server.Listener.Addr().String())
 

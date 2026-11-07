@@ -15,7 +15,7 @@ func TestHandler(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(prometheus.NewGauge(prometheus.GaugeOpts{Name: "test_gauge", Help: "测试用指标。"}))
 	var ready atomic.Bool
-	handler := NewHandler(ready.Load, registry)
+	handler := NewHandler(ready.Load, registry, "v1.2.3+abc")
 
 	get := func(path string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
@@ -26,6 +26,12 @@ func TestHandler(t *testing.T) {
 	t.Run("未就绪时存活检查仍然成功", func(t *testing.T) {
 		if rec := get("/healthz"); rec.Code != http.StatusOK {
 			t.Errorf("/healthz 状态码 = %d，期望 200", rec.Code)
+		}
+	})
+	t.Run("version 返回构建版本", func(t *testing.T) {
+		rec := get("/version")
+		if body := rec.Body.String(); rec.Code != http.StatusOK || body != "v1.2.3+abc\n" {
+			t.Errorf("/version 状态码 = %d，响应 = %q，期望 200 和 \"v1.2.3+abc\\n\"", rec.Code, body)
 		}
 	})
 	t.Run("metrics 输出注册的指标", func(t *testing.T) {
