@@ -78,6 +78,25 @@ helm upgrade alisten \
   --timeout 6m
 ```
 
+## 开放 API
+
+常驻房间支持生成 API Key，供第三方应用（如 IM 平台机器人）调用本项目的开放接口。调用时须通过 `Authorization: Bearer <API Key>` 请求头进行身份鉴权。API Key 仅在生成或重置时返回一次，请妥善保管。
+
+完整的接口定义、请求参数与响应结构见 [OpenAPI 规范文件](protocol/openapi.gen.json)。
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/room/search/tracks` | 搜索曲目 |
+| `GET /api/room/search/playlists` | 搜索歌单 |
+| `GET /api/room/playlists/{source}/{playlistId}/tracks` | 获取歌单内的曲目 |
+| `GET /api/room/recommendations` | 获取推荐曲目 |
+| `POST /api/room/queue` | 按曲目或关键词点歌 |
+| `DELETE /api/room/queue/{entryId}` | 删除等待队列中的指定曲目 |
+| `POST /api/room/queue/{entryId}/likes` | 为等待队列中的指定曲目点赞 |
+| `POST /api/room/skip-votes` | 投票跳过当前播放的曲目 |
+| `PATCH /api/room/settings` | 设置播放模式 |
+| `POST /api/room/messages` | 发送房间聊天消息 |
+
 ## 使用与版权
 
 本项目不提供音源内容及其使用授权。音源名称、音频、封面和歌词等内容的权利归各自权利人所有。
