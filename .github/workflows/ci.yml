@@ -162,3 +162,13 @@ jobs:
           repository="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
           printf '%s' "$GITHUB_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           helm push "${RUNNER_TEMP}/helm-packages/alisten-${chart_version}.tgz" "oci://ghcr.io/${repository}/charts"
+
+  deploy:
+    needs: helm-release
+    if: github.ref_type == 'tag'
+    uses: ./.github/workflows/cd.yml
+    secrets:
+      K3S_KUBECONFIG: ${{ secrets.K3S_KUBECONFIG }}
+    permissions:
+      contents: read
+      packages: read
