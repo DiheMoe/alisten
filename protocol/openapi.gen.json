@@ -14,6 +14,22 @@
         ],
         "type": "object"
       },
+      "Account": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "账号设置了邮箱时才有",
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "username"
+        ],
+        "type": "object"
+      },
       "ActivityKind": {
         "enum": [
           "added",
@@ -24,6 +40,22 @@
           "failed"
         ],
         "type": "string"
+      },
+      "AdminAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "member": {
+            "$ref": "#/components/schemas/Member"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "member",
+          "username"
+        ],
+        "type": "object"
       },
       "AdminCheckBilibiliLoginRequest": {
         "additionalProperties": false,
@@ -246,6 +278,26 @@
         ],
         "type": "object"
       },
+      "AdminOpenRegistrationRequest": {
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "AdminResetAccountPasswordRequest": {
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "AdminResetAccountPasswordResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "type": "object"
+      },
       "AdminResetRoomApiKeyRequest": {
         "additionalProperties": false,
         "type": "object"
@@ -328,6 +380,28 @@
         },
         "required": [
           "brandName"
+        ],
+        "type": "object"
+      },
+      "ChangePasswordRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "currentPassword": {
+            "description": "账号密码",
+            "maxLength": 128,
+            "minLength": 8,
+            "type": "string"
+          },
+          "newPassword": {
+            "description": "账号密码",
+            "maxLength": 128,
+            "minLength": 8,
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
         ],
         "type": "object"
       },
@@ -479,6 +553,7 @@
         "enum": [
           "INVALID_ARGUMENT",
           "UNAUTHORIZED",
+          "INVALID_CREDENTIALS",
           "FORBIDDEN",
           "NOT_FOUND",
           "CONFLICT",
@@ -496,6 +571,7 @@
           "FORBIDDEN": 403,
           "INTERNAL": 500,
           "INVALID_ARGUMENT": 400,
+          "INVALID_CREDENTIALS": 401,
           "NOTHING_PLAYING": 409,
           "NOT_FOUND": 404,
           "PROVIDER_ERROR": 502,
@@ -537,6 +613,9 @@
       "GetMeResponse": {
         "additionalProperties": false,
         "properties": {
+          "account": {
+            "$ref": "#/components/schemas/Account"
+          },
           "member": {
             "$ref": "#/components/schemas/Member"
           }
@@ -551,10 +630,14 @@
         "properties": {
           "brandName": {
             "type": "string"
+          },
+          "registrationOpen": {
+            "type": "boolean"
           }
         },
         "required": [
-          "brandName"
+          "brandName",
+          "registrationOpen"
         ],
         "type": "object"
       },
@@ -570,6 +653,58 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "LoginRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "device": {
+            "description": "本机此前登录这个账号时拿到的凭证：有人反复猜这个账号的密码时，带上它本机仍然能登录",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "type": "string"
+          },
+          "password": {
+            "description": "账号密码",
+            "maxLength": 128,
+            "minLength": 8,
+            "type": "string"
+          },
+          "username": {
+            "description": "用户名：3 到 32 个小写字母、数字、下划线或连字符",
+            "pattern": "^[a-z0-9_-]{3,32}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "type": "object"
+      },
+      "LoginResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/Account"
+          },
+          "device": {
+            "description": "本机以后登录这个账号时要带上的凭证，退出登录之后也要保留：带来的凭证有效时原样返回，否则是新签发的",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "type": "string"
+          },
+          "member": {
+            "$ref": "#/components/schemas/Member"
+          },
+          "memberToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "memberToken",
+          "member",
+          "account",
+          "device"
         ],
         "type": "object"
       },
@@ -889,6 +1024,39 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "RegisterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "description": "账号密码",
+            "maxLength": 128,
+            "minLength": 8,
+            "type": "string"
+          },
+          "username": {
+            "description": "用户名：3 到 32 个小写字母、数字、下划线或连字符",
+            "pattern": "^[a-z0-9_-]{3,32}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "type": "object"
+      },
+      "RegisterResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/Account"
+          }
+        },
+        "required": [
+          "account"
         ],
         "type": "object"
       },
@@ -1343,10 +1511,185 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "473ee31f5ef912b4"
+    "version": "bb812527ea1133df"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/account": {
+      "post": {
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "游客注册账号：设置用户名和密码，成员和成员 token 都不变；站点关闭注册时返回 FORBIDDEN"
+      }
+    },
+    "/api/account/password": {
+      "put": {
+        "operationId": "changePassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "修改密码：账号在其他设备上的成员 token 随即失效，发出请求的这个不变；当前密码错误时返回 INVALID_CREDENTIALS"
+      }
+    },
+    "/api/admin/accounts/{username}": {
+      "get": {
+        "operationId": "adminGetAccount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAccount"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "按用户名查找账号"
+      }
+    },
+    "/api/admin/accounts/{username}/password": {
+      "post": {
+        "operationId": "adminResetAccountPassword",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminResetAccountPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminResetAccountPasswordResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "重置账号的密码：生成随机的新密码，只在这次响应中返回；账号在所有设备上的成员 token 随即失效"
+      }
+    },
     "/api/admin/credentials/bilibili": {
       "get": {
         "operationId": "adminGetBilibiliCredential",
@@ -1864,6 +2207,66 @@
         "summary": "删除一首已存储的歌的音频和封面，并清除它的准备结果"
       }
     },
+    "/api/admin/registration": {
+      "delete": {
+        "operationId": "adminCloseRegistration",
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "关闭注册：不能再注册新账号，已有账号照常登录，游客照常使用"
+      },
+      "put": {
+        "operationId": "adminOpenRegistration",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminOpenRegistrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "开放注册"
+      }
+    },
     "/api/admin/rooms": {
       "get": {
         "operationId": "adminListRooms",
@@ -2201,7 +2604,7 @@
             "memberToken": []
           }
         ],
-        "summary": "当前成员的资料"
+        "summary": "当前成员的资料；已注册的成员带上账号"
       },
       "patch": {
         "operationId": "updateMe",
@@ -2242,7 +2645,7 @@
             "memberToken": []
           }
         ],
-        "summary": "修改昵称和头像；email 只用来计算头像哈希，空字符串表示清除头像"
+        "summary": "修改昵称和头像；email 用来计算头像哈希，已注册的账号同时保存它，去掉首尾空白后应形如 name@example.com，空字符串表示清除"
       }
     },
     "/api/members": {
@@ -2973,6 +3376,75 @@
         "summary": "按 UUID 或别名查找房间"
       }
     },
+    "/api/sessions": {
+      "post": {
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "游客登录账号：返回账号的新成员 token，发出请求的游客 token 随即失效；用户名或密码错误时返回 INVALID_CREDENTIALS，已经登录了账号时返回 CONFLICT"
+      }
+    },
+    "/api/sessions/current": {
+      "delete": {
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "退出登录：发出请求的成员 token 随即失效"
+      }
+    },
     "/api/site": {
       "get": {
         "operationId": "getSite",
@@ -2999,7 +3471,7 @@
           }
         },
         "security": [],
-        "summary": "品牌名；没有设置过时是 Alisten"
+        "summary": "品牌名和是否开放注册；没有设置过品牌名时是 Alisten"
       }
     }
   }

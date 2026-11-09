@@ -1,0 +1,155 @@
+登录设备凭证：账号密码登录成功时返回这台设备的凭证，退出登录之后设备留着它。按用户名计数的额度 1 分钟内最多 5 次，被别人猜密码用完之后，
+不带凭证的登录被限流，带着这个账号的凭证仍然能登录，拿到同一个凭证。改密码之后，此前签发的凭证不再被认出，同样被限流。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/account
+Authorization: Bearer $alice
+
+{"username": "alice", "password": "correct horse"}
+-- response --
+201
+{"account": {"username": "alice"}}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$laptop", "member": {"id": "$laptopId", "name": "$laptopName", "avatarHash": ""}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $laptop
+
+{"username": "alice", "password": "correct horse"}
+-- response --
+201
+{"memberToken": "$alice2", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "device": "$device"}
+
+-- request --
+DELETE /api/sessions/current
+Authorization: Bearer $alice2
+-- response --
+204
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$attacker", "member": {"id": "$attackerId", "name": "$attackerName", "avatarHash": ""}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $attacker
+
+{"username": "alice", "password": "wrong horse 1"}
+-- response --
+401
+{"error": {"code": "INVALID_CREDENTIALS", "message": "用户名或密码错误"}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $attacker
+
+{"username": "alice", "password": "wrong horse 2"}
+-- response --
+401
+{"error": {"code": "INVALID_CREDENTIALS", "message": "用户名或密码错误"}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $attacker
+
+{"username": "alice", "password": "wrong horse 3"}
+-- response --
+401
+{"error": {"code": "INVALID_CREDENTIALS", "message": "用户名或密码错误"}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $attacker
+
+{"username": "alice", "password": "wrong horse 4"}
+-- response --
+401
+{"error": {"code": "INVALID_CREDENTIALS", "message": "用户名或密码错误"}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $attacker
+
+{"username": "alice", "password": "wrong horse 5"}
+-- response --
+429
+{"error": {"code": "RATE_LIMITED", "message": "尝试次数太多，请稍后再试。"}}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$laptop2", "member": {"id": "$laptop2Id", "name": "$laptop2Name", "avatarHash": ""}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $laptop2
+
+{"username": "alice", "password": "correct horse"}
+-- response --
+429
+{"error": {"code": "RATE_LIMITED", "message": "尝试次数太多，请稍后再试。"}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $laptop2
+
+{"username": "alice", "password": "correct horse", "device": "not a device"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "device：格式不正确"}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $laptop2
+
+{"username": "alice", "password": "correct horse", "device": "$device"}
+-- response --
+201
+{"memberToken": "$alice3", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "device": "$device"}
+
+-- request --
+PUT /api/account/password
+Authorization: Bearer $alice3
+
+{"currentPassword": "correct horse", "newPassword": "battery staple"}
+-- response --
+204
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$laptop3", "member": {"id": "$laptop3Id", "name": "$laptop3Name", "avatarHash": ""}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $laptop3
+
+{"username": "alice", "password": "battery staple", "device": "$device"}
+-- response --
+429
+{"error": {"code": "RATE_LIMITED", "message": "尝试次数太多，请稍后再试。"}}

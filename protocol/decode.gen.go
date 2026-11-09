@@ -10,6 +10,9 @@ import (
 var (
 	patternAdminCreateRoomRequestSlug = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
 	patternAdminUpdateRoomRequestSlug = regexp.MustCompile(`^[a-z0-9-]{0,32}$`)
+	patternLoginRequestDevice         = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
+	patternLoginRequestUsername       = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
+	patternRegisterRequestUsername    = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
 	patternTrackIDWhenBilibili        = regexp.MustCompile(`^BV[1-9A-HJ-NP-Za-km-z]{10}(?:/([2-9]|[1-9][0-9]{1,3}))?$`)
 )
 
@@ -72,6 +75,18 @@ func DecodeUpdateMeRequest(body []byte) (UpdateMeRequest, error) {
 	return decodeUpdateMeRequest(body, "")
 }
 
+func DecodeRegisterRequest(body []byte) (RegisterRequest, error) {
+	return decodeRegisterRequest(body, "")
+}
+
+func DecodeChangePasswordRequest(body []byte) (ChangePasswordRequest, error) {
+	return decodeChangePasswordRequest(body, "")
+}
+
+func DecodeLoginRequest(body []byte) (LoginRequest, error) {
+	return decodeLoginRequest(body, "")
+}
+
 func DecodeCreateRoomRequest(body []byte) (CreateRoomRequest, error) {
 	return decodeCreateRoomRequest(body, "")
 }
@@ -122,6 +137,14 @@ func DecodeAdminSetYoutubeCredentialRequest(body []byte) (AdminSetYoutubeCredent
 
 func DecodeAdminUpdateSiteRequest(body []byte) (AdminUpdateSiteRequest, error) {
 	return decodeAdminUpdateSiteRequest(body, "")
+}
+
+func DecodeAdminOpenRegistrationRequest(body []byte) (AdminOpenRegistrationRequest, error) {
+	return decodeAdminOpenRegistrationRequest(body, "")
+}
+
+func DecodeAdminResetAccountPasswordRequest(body []byte) (AdminResetAccountPasswordRequest, error) {
+	return decodeAdminResetAccountPasswordRequest(body, "")
 }
 
 func decodeAdminCheckBilibiliLoginRequest(raw json.RawMessage, path string) (AdminCheckBilibiliLoginRequest, error) {
@@ -223,6 +246,18 @@ func decodeAdminCreateRoomRequest(raw json.RawMessage, path string) (AdminCreate
 		v.Slug = &x
 	}
 	return v, nil
+}
+
+func decodeAdminOpenRegistrationRequest(raw json.RawMessage, path string) (AdminOpenRegistrationRequest, error) {
+	var v AdminOpenRegistrationRequest
+	_, err := decodeObject(raw, path)
+	return v, err
+}
+
+func decodeAdminResetAccountPasswordRequest(raw json.RawMessage, path string) (AdminResetAccountPasswordRequest, error) {
+	var v AdminResetAccountPasswordRequest
+	_, err := decodeObject(raw, path)
+	return v, err
 }
 
 func decodeAdminResetRoomApiKeyRequest(raw json.RawMessage, path string) (AdminResetRoomApiKeyRequest, error) {
@@ -340,6 +375,36 @@ func decodeAdminUpdateSiteRequest(raw json.RawMessage, path string) (AdminUpdate
 	return v, nil
 }
 
+func decodeChangePasswordRequest(raw json.RawMessage, path string) (ChangePasswordRequest, error) {
+	var v ChangePasswordRequest
+	m, err := decodeObject(raw, path, "currentPassword", "newPassword")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "currentPassword", "newPassword"); err != nil {
+		return v, err
+	}
+	if v.CurrentPassword, err = decodeString(m["currentPassword"], field(path, "currentPassword")); err != nil {
+		return v, err
+	}
+	if err = checkMinLength(v.CurrentPassword, field(path, "currentPassword"), 8); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.CurrentPassword, field(path, "currentPassword"), 128); err != nil {
+		return v, err
+	}
+	if v.NewPassword, err = decodeString(m["newPassword"], field(path, "newPassword")); err != nil {
+		return v, err
+	}
+	if err = checkMinLength(v.NewPassword, field(path, "newPassword"), 8); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.NewPassword, field(path, "newPassword"), 128); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
 func decodeChatSendRequest(raw json.RawMessage, path string) (ChatSendRequest, error) {
 	var v ChatSendRequest
 	m, err := decodeObject(raw, path, "content")
@@ -427,6 +492,43 @@ func decodeHelloRequest(raw json.RawMessage, path string) (HelloRequest, error) 
 		return v, err
 	}
 	if v.Ticket, err = decodeString(m["ticket"], field(path, "ticket")); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+func decodeLoginRequest(raw json.RawMessage, path string) (LoginRequest, error) {
+	var v LoginRequest
+	m, err := decodeObject(raw, path, "device", "password", "username")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "password", "username"); err != nil {
+		return v, err
+	}
+	if r, ok := m["device"]; ok {
+		x, err := decodeString(r, field(path, "device"))
+		if err != nil {
+			return v, err
+		}
+		if err = checkPattern(x, field(path, "device"), patternLoginRequestDevice); err != nil {
+			return v, err
+		}
+		v.Device = &x
+	}
+	if v.Password, err = decodeString(m["password"], field(path, "password")); err != nil {
+		return v, err
+	}
+	if err = checkMinLength(v.Password, field(path, "password"), 8); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.Password, field(path, "password"), 128); err != nil {
+		return v, err
+	}
+	if v.Username, err = decodeString(m["username"], field(path, "username")); err != nil {
+		return v, err
+	}
+	if err = checkPattern(v.Username, field(path, "username"), patternLoginRequestUsername); err != nil {
 		return v, err
 	}
 	return v, nil
@@ -581,6 +683,33 @@ func decodeRecommendListRequest(raw json.RawMessage, path string) (RecommendList
 	var v RecommendListRequest
 	_, err := decodeObject(raw, path)
 	return v, err
+}
+
+func decodeRegisterRequest(raw json.RawMessage, path string) (RegisterRequest, error) {
+	var v RegisterRequest
+	m, err := decodeObject(raw, path, "password", "username")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "password", "username"); err != nil {
+		return v, err
+	}
+	if v.Password, err = decodeString(m["password"], field(path, "password")); err != nil {
+		return v, err
+	}
+	if err = checkMinLength(v.Password, field(path, "password"), 8); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.Password, field(path, "password"), 128); err != nil {
+		return v, err
+	}
+	if v.Username, err = decodeString(m["username"], field(path, "username")); err != nil {
+		return v, err
+	}
+	if err = checkPattern(v.Username, field(path, "username"), patternRegisterRequestUsername); err != nil {
+		return v, err
+	}
+	return v, nil
 }
 
 func decodeRoomSyncRequest(raw json.RawMessage, path string) (RoomSyncRequest, error) {

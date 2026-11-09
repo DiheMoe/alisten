@@ -15,14 +15,17 @@ func TestSite(t *testing.T) {
 	brandName := func(name string) response {
 		return response{status: http.StatusOK, body: `{"brandName":"` + name + `"}`}
 	}
+	site := func(name string) response {
+		return response{status: http.StatusOK, body: `{"brandName":"` + name + `","registrationOpen":true}`}
+	}
 
-	if got := send(t, server, http.MethodGet, "/api/site", ""); got != brandName("Alisten") {
+	if got := send(t, server, http.MethodGet, "/api/site", ""); got != site("Alisten") {
 		t.Errorf("没有设置过时 GET /api/site = %#v，期望默认的 Alisten", got)
 	}
 	if got := send(t, server, http.MethodPatch, "/api/admin/site", `{"brandName":" 周末听歌会 "}`, adminHeader...); got != brandName("周末听歌会") {
 		t.Errorf("PATCH /api/admin/site = %#v，期望返回去掉首尾空白之后存下的名字", got)
 	}
-	if got := send(t, server, http.MethodGet, "/api/site", ""); got != brandName("周末听歌会") {
+	if got := send(t, server, http.MethodGet, "/api/site", ""); got != site("周末听歌会") {
 		t.Errorf("修改之后 GET /api/site = %#v，期望去掉首尾空白的新名字", got)
 	}
 
@@ -36,7 +39,7 @@ func TestSite(t *testing.T) {
 	if got := send(t, server, http.MethodPatch, "/api/admin/site", `{"brandName":"别的名字"}`); got != unauthorized {
 		t.Errorf("不带管理 token 的 PATCH = %#v，期望 %#v", got, unauthorized)
 	}
-	if got := send(t, server, http.MethodGet, "/api/site", ""); got != brandName("周末听歌会") {
+	if got := send(t, server, http.MethodGet, "/api/site", ""); got != site("周末听歌会") {
 		t.Errorf("被拒绝的修改之后 GET /api/site = %#v，期望不变", got)
 	}
 	if logs.Len() != 0 {

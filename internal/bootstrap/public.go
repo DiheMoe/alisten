@@ -78,6 +78,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 	rooms := lobby.New(store, leases)
 	services := api.Services{
 		Identity: identity.New(store, store, store, gateway),
+		Accounts: identity.NewAccounts(store, store, redis.NewAccountQuota(rdb), redis.NewDevices(rdb)),
 		Lobby:    rooms,
 		Admin:    admin.New(cfg.adminToken, rooms, store, store, store, src.neteaseLogin, src.qqLogin, src.bilibiliLogin, store, gateway),
 		Gateway:  gateway,

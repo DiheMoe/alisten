@@ -12,6 +12,7 @@
       "enum": [
         "INVALID_ARGUMENT",
         "UNAUTHORIZED",
+        "INVALID_CREDENTIALS",
         "FORBIDDEN",
         "NOT_FOUND",
         "CONFLICT",
@@ -26,6 +27,7 @@
       "x-httpStatus": {
         "INVALID_ARGUMENT": 400,
         "UNAUTHORIZED": 401,
+        "INVALID_CREDENTIALS": 401,
         "FORBIDDEN": 403,
         "NOT_FOUND": 404,
         "CONFLICT": 409,
@@ -138,6 +140,40 @@
         "avatarHash": {"type": "string", "description": "邮箱的 MD5，未设置邮箱时为空字符串"}
       },
       "required": ["id", "name", "avatarHash"]
+    },
+    "Username": {
+      "type": "string",
+      "description": "用户名：3 到 32 个小写字母、数字、下划线或连字符",
+      "pattern": "^[a-z0-9_-]{3,32}$"
+    },
+    "AccountPassword": {
+      "type": "string",
+      "description": "账号密码",
+      "minLength": 8,
+      "maxLength": 128
+    },
+    "LoginDevice": {
+      "type": "string",
+      "description": "登录设备凭证：用账号密码登录成功时发给这台设备，43 个 base64url 字符",
+      "pattern": "^[A-Za-z0-9_-]{43}$"
+    },
+    "Account": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "username": {"type": "string"},
+        "email": {"type": "string", "description": "账号设置了邮箱时才有"}
+      },
+      "required": ["username"]
+    },
+    "AdminAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "member": {"$ref": "#/$defs/Member"},
+        "username": {"type": "string"}
+      },
+      "required": ["member", "username"]
     },
     "Members": {
       "type": "object",
@@ -658,7 +694,7 @@
     },
     {
       "name": "getMe",
-      "description": "当前成员的资料",
+      "description": "当前成员的资料；已注册的成员带上账号",
       "method": "GET",
       "path": "/api/me",
       "auth": "member",
@@ -666,14 +702,15 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "member": {"$ref": "#/$defs/Member"}
+          "member": {"$ref": "#/$defs/Member"},
+          "account": {"$ref": "#/$defs/Account"}
         },
         "required": ["member"]
       }
     },
     {
       "name": "updateMe",
-      "description": "修改昵称和头像；email 只用来计算头像哈希，空字符串表示清除头像",
+      "description": "修改昵称和头像；email 用来计算头像哈希，已注册的账号同时保存它，去掉首尾空白后应形如 name@example.com，空字符串表示清除",
       "method": "PATCH",
       "path": "/api/me",
       "auth": "member",
@@ -693,6 +730,85 @@
         },
         "required": ["member"]
       }
+    },
+    {
+      "name": "register",
+      "description": "游客注册账号：设置用户名和密码，成员和成员 token 都不变；站点关闭注册时返回 FORBIDDEN",
+      "method": "POST",
+      "path": "/api/account",
+      "auth": "member",
+      "status": 201,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "username": {"$ref": "#/$defs/Username"},
+          "password": {"$ref": "#/$defs/AccountPassword"}
+        },
+        "required": ["username", "password"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "account": {"$ref": "#/$defs/Account"}
+        },
+        "required": ["account"]
+      }
+    },
+    {
+      "name": "changePassword",
+      "description": "修改密码：账号在其他设备上的成员 token 随即失效，发出请求的这个不变；当前密码错误时返回 INVALID_CREDENTIALS",
+      "method": "PUT",
+      "path": "/api/account/password",
+      "auth": "member",
+      "status": 204,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "currentPassword": {"$ref": "#/$defs/AccountPassword"},
+          "newPassword": {"$ref": "#/$defs/AccountPassword"}
+        },
+        "required": ["currentPassword", "newPassword"]
+      }
+    },
+    {
+      "name": "login",
+      "description": "游客登录账号：返回账号的新成员 token，发出请求的游客 token 随即失效；用户名或密码错误时返回 INVALID_CREDENTIALS，已经登录了账号时返回 CONFLICT",
+      "method": "POST",
+      "path": "/api/sessions",
+      "auth": "member",
+      "status": 201,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "username": {"$ref": "#/$defs/Username"},
+          "password": {"$ref": "#/$defs/AccountPassword"},
+          "device": {"$ref": "#/$defs/LoginDevice", "description": "本机此前登录这个账号时拿到的凭证：有人反复猜这个账号的密码时，带上它本机仍然能登录"}
+        },
+        "required": ["username", "password"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "memberToken": {"type": "string"},
+          "member": {"$ref": "#/$defs/Member"},
+          "account": {"$ref": "#/$defs/Account"},
+          "device": {"$ref": "#/$defs/LoginDevice", "description": "本机以后登录这个账号时要带上的凭证，退出登录之后也要保留：带来的凭证有效时原样返回，否则是新签发的"}
+        },
+        "required": ["memberToken", "member", "account", "device"]
+      }
+    },
+    {
+      "name": "logout",
+      "description": "退出登录：发出请求的成员 token 随即失效",
+      "method": "DELETE",
+      "path": "/api/sessions/current",
+      "auth": "member",
+      "status": 204
     },
     {
       "name": "listRooms",
@@ -769,7 +885,7 @@
     },
     {
       "name": "getSite",
-      "description": "品牌名；没有设置过时是 Alisten",
+      "description": "品牌名和是否开放注册；没有设置过品牌名时是 Alisten",
       "method": "GET",
       "path": "/api/site",
       "auth": "none",
@@ -777,9 +893,10 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "brandName": {"type": "string"}
+          "brandName": {"type": "string"},
+          "registrationOpen": {"type": "boolean"}
         },
-        "required": ["brandName"]
+        "required": ["brandName", "registrationOpen"]
       }
     },
     {
@@ -1096,6 +1213,55 @@
           "brandName": {"type": "string"}
         },
         "required": ["brandName"]
+      }
+    },
+    {
+      "name": "adminOpenRegistration",
+      "description": "开放注册",
+      "method": "PUT",
+      "path": "/api/admin/registration",
+      "auth": "admin",
+      "status": 204,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
+    },
+    {
+      "name": "adminCloseRegistration",
+      "description": "关闭注册：不能再注册新账号，已有账号照常登录，游客照常使用",
+      "method": "DELETE",
+      "path": "/api/admin/registration",
+      "auth": "admin",
+      "status": 204
+    },
+    {
+      "name": "adminGetAccount",
+      "description": "按用户名查找账号",
+      "method": "GET",
+      "path": "/api/admin/accounts/{username}",
+      "auth": "admin",
+      "response": {"$ref": "#/$defs/AdminAccount"}
+    },
+    {
+      "name": "adminResetAccountPassword",
+      "description": "重置账号的密码：生成随机的新密码，只在这次响应中返回；账号在所有设备上的成员 token 随即失效",
+      "method": "POST",
+      "path": "/api/admin/accounts/{username}/password",
+      "auth": "admin",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "password": {"type": "string"}
+        },
+        "required": ["password"]
       }
     }
   ]

@@ -1,0 +1,258 @@
+账号：游客注册之后成员和成员 token 都不变；其他游客用账号登录，得到新的成员 token 和这台设备的登录设备凭证，自己原来的 token 随即失效；修改密码、退出登录让对应的成员 token 失效；后台可以查找账号、重置密码。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/account
+Authorization: Bearer $alice
+
+{"username": "alice", "password": "correct horse"}
+-- response --
+201
+{"account": {"username": "alice"}}
+
+-- request --
+GET /api/me
+Authorization: Bearer $alice
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer $alice
+
+{"email": " Alice@Example.COM "}
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}}
+
+-- request --
+GET /api/me
+Authorization: Bearer $alice
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "account": {"username": "alice", "email": "Alice@Example.COM"}}
+
+-- request --
+POST /api/account
+Authorization: Bearer $alice
+
+{"username": "alice2", "password": "correct horse"}
+-- response --
+409
+{"error": {"code": "CONFLICT", "message": "已经注册过了"}}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$bob", "member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""}}
+
+-- request --
+GET /api/me
+Authorization: Bearer $bob
+-- response --
+200
+{"member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer $bob
+
+{"email": "Alice@Example.COM"}
+-- response --
+200
+{"member": {"id": "$bobId", "name": "$bobName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}}
+
+-- request --
+GET /api/me
+Authorization: Bearer $bob
+-- response --
+200
+{"member": {"id": "$bobId", "name": "$bobName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer $bob
+
+{"email": ""}
+-- response --
+200
+{"member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""}}
+
+-- request --
+POST /api/account
+Authorization: Bearer $bob
+
+{"username": "alice", "password": "another horse"}
+-- response --
+409
+{"error": {"code": "CONFLICT", "message": "用户名已被占用"}}
+
+-- request --
+POST /api/account
+Authorization: Bearer $bob
+
+{"username": "Bob", "password": "another horse"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "username：格式不正确"}}
+
+-- request --
+POST /api/account
+Authorization: Bearer $bob
+
+{"username": "bob", "password": "short"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "password：长度不能少于 8 个字符"}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $bob
+
+{"username": "alice", "password": "wrong horse"}
+-- response --
+401
+{"error": {"code": "INVALID_CREDENTIALS", "message": "用户名或密码错误"}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $bob
+
+{"username": "alice", "password": "correct horse"}
+-- response --
+201
+{"memberToken": "$alice2", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "account": {"username": "alice", "email": "Alice@Example.COM"}, "device": "$bobDevice"}
+
+-- request --
+GET /api/me
+Authorization: Bearer $alice2
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "account": {"username": "alice", "email": "Alice@Example.COM"}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer $alice2
+
+{"email": ""}
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+GET /api/me
+Authorization: Bearer $alice
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}}
+
+-- request --
+GET /api/me
+Authorization: Bearer $bob
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "成员 token 无效"}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $alice2
+
+{"username": "alice", "password": "correct horse"}
+-- response --
+409
+{"error": {"code": "CONFLICT", "message": "已经登录了账号，先退出再登录其他账号"}}
+
+-- request --
+PUT /api/account/password
+Authorization: Bearer $alice
+
+{"currentPassword": "wrong horse", "newPassword": "battery staple"}
+-- response --
+401
+{"error": {"code": "INVALID_CREDENTIALS", "message": "当前密码错误"}}
+
+-- request --
+PUT /api/account/password
+Authorization: Bearer $alice
+
+{"currentPassword": "correct horse", "newPassword": "battery staple"}
+-- response --
+204
+
+-- request --
+GET /api/me
+Authorization: Bearer $alice2
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "成员 token 无效"}}
+
+-- request --
+DELETE /api/sessions/current
+Authorization: Bearer $alice
+-- response --
+204
+
+-- request --
+GET /api/me
+Authorization: Bearer $alice
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "成员 token 无效"}}
+
+-- request --
+GET /api/admin/accounts/alice
+Authorization: Bearer admin-secret
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "username": "alice"}
+
+-- request --
+GET /api/admin/accounts/nobody
+Authorization: Bearer admin-secret
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "没有这个用户名的账号"}}
+
+-- request --
+GET /api/admin/accounts/Not%20Valid
+Authorization: Bearer admin-secret
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "没有这个用户名的账号"}}
+
+-- request --
+POST /api/admin/accounts/alice/password
+Authorization: Bearer admin-secret
+
+{}
+-- response --
+200
+{"password": "$resetPassword"}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$dave", "member": {"id": "$daveId", "name": "$daveName", "avatarHash": ""}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $dave
+
+{"username": "alice", "password": "$resetPassword"}
+-- response --
+201
+{"memberToken": "$alice4", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "device": "$daveDevice"}

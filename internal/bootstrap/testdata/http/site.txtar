@@ -1,10 +1,10 @@
-站点：品牌名默认是 Alisten；后台修改时返回存下的名字，首尾的空白已经去掉，之后读到的也是它；空的、超过 20 个字符的和看不见的名字不能保存；修改品牌名要管理 token。
+站点：品牌名默认是 Alisten，默认开放注册；后台修改品牌名时返回存下的名字，首尾的空白已经去掉，之后读到的也是它；空的、超过 20 个字符的和看不见的名字不能保存；后台可以关闭和重新开放注册，关闭之后游客不能注册；修改站点设置要管理 token。
 
 -- request --
 GET /api/site
 -- response --
 200
-{"brandName": "Alisten"}
+{"brandName": "Alisten", "registrationOpen": true}
 
 -- request --
 PATCH /api/admin/site
@@ -19,7 +19,7 @@ Authorization: Bearer admin-secret
 GET /api/site
 -- response --
 200
-{"brandName": "周末听歌会"}
+{"brandName": "周末听歌会", "registrationOpen": true}
 
 -- request --
 PATCH /api/admin/site
@@ -57,7 +57,53 @@ PATCH /api/admin/site
 {"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
 
 -- request --
+DELETE /api/admin/registration
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
+
+-- request --
+DELETE /api/admin/registration
+Authorization: Bearer admin-secret
+-- response --
+204
+
+-- request --
 GET /api/site
 -- response --
 200
-{"brandName": "周末听歌会"}
+{"brandName": "周末听歌会", "registrationOpen": false}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$guest", "member": {"id": "$guestId", "name": "$guestName", "avatarHash": ""}}
+
+-- request --
+POST /api/account
+Authorization: Bearer $guest
+
+{"username": "guest", "password": "correct horse"}
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "注册已关闭"}}
+
+-- request --
+PUT /api/admin/registration
+Authorization: Bearer admin-secret
+
+{}
+-- response --
+204
+
+-- request --
+POST /api/account
+Authorization: Bearer $guest
+
+{"username": "guest", "password": "correct horse"}
+-- response --
+201
+{"account": {"username": "guest"}}

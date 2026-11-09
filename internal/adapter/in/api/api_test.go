@@ -42,6 +42,7 @@ func services(store *porttest.Store, rooms port.RoomDirectory, adminToken string
 	l := lobby.New(rooms, node)
 	return Services{
 		Identity: identity.New(store, rooms, store, gateway),
+		Accounts: identity.NewAccounts(store, store, nil, nil),
 		Lobby:    l,
 		Admin:    admin.New(adminToken, l, rooms, store, store, porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), gateway),
 		Gateway:  gateway,

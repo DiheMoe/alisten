@@ -37,6 +37,7 @@ const (
 
 type Services struct {
 	Identity *identity.Service
+	Accounts *identity.Accounts
 	Lobby    *lobby.Service
 	Admin    *admin.Service
 	Gateway  *realtime.Gateway
@@ -98,6 +99,10 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	srv.handle(mux, protocol.RouteCreateMember, srv.createMember)
 	srv.handle(mux, protocol.RouteGetMe, srv.getMe)
 	srv.handle(mux, protocol.RouteUpdateMe, srv.updateMe)
+	srv.handle(mux, protocol.RouteRegister, srv.register)
+	srv.handle(mux, protocol.RouteChangePassword, srv.changePassword)
+	srv.handle(mux, protocol.RouteLogin, srv.login)
+	srv.handle(mux, protocol.RouteLogout, srv.logout)
 	srv.handle(mux, protocol.RouteListRooms, srv.listRooms)
 	srv.handle(mux, protocol.RouteGetRoom, srv.getRoom)
 	srv.handle(mux, protocol.RouteCreateRoom, srv.createRoom)
@@ -127,6 +132,10 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	srv.handle(mux, protocol.RouteAdminListMedia, srv.adminListMedia)
 	srv.handle(mux, protocol.RouteAdminDeleteMedia, srv.adminDeleteMedia)
 	srv.handle(mux, protocol.RouteAdminUpdateSite, srv.adminUpdateSite)
+	srv.handle(mux, protocol.RouteAdminOpenRegistration, srv.adminOpenRegistration)
+	srv.handle(mux, protocol.RouteAdminCloseRegistration, srv.adminCloseRegistration)
+	srv.handle(mux, protocol.RouteAdminGetAccount, srv.adminGetAccount)
+	srv.handle(mux, protocol.RouteAdminResetAccountPassword, srv.adminResetAccountPassword)
 	mux.HandleFunc("GET /ws", srv.websocket)
 	mux.HandleFunc("GET /api/room/events", srv.roomEvents)
 	mux.HandleFunc("GET /media/{source}/{id}", srv.redirectMedia)
@@ -279,6 +288,15 @@ var knownErrors = []struct {
 	{identity.ErrInvalidTicket, protocol.ErrorCodeUnauthorized},
 	{identity.ErrBotSession, protocol.ErrorCodeUnauthorized},
 	{identity.ErrInvalidEmail, protocol.ErrorCodeInvalidArgument},
+	{identity.ErrInvalidCredentials, protocol.ErrorCodeInvalidCredentials},
+	{identity.ErrWrongCurrentPassword, protocol.ErrorCodeInvalidCredentials},
+	{identity.ErrAlreadyLoggedIn, protocol.ErrorCodeConflict},
+	{identity.ErrRegistrationClosed, protocol.ErrorCodeForbidden},
+	{identity.ErrNotRegistered, protocol.ErrorCodeForbidden},
+	{identity.ErrTooManyAttempts, protocol.ErrorCodeRateLimited},
+	{identity.ErrAccountNotFound, protocol.ErrorCodeNotFound},
+	{port.ErrUsernameTaken, protocol.ErrorCodeConflict},
+	{port.ErrAlreadyRegistered, protocol.ErrorCodeConflict},
 	{realtime.ErrRequesterNotAllowed, protocol.ErrorCodeInvalidArgument},
 	{site.ErrInvalidBrandName, protocol.ErrorCodeInvalidArgument},
 	{realtime.ErrUnavailable, protocol.ErrorCodeUnavailable},

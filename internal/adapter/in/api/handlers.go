@@ -13,11 +13,12 @@ import (
 	"github.com/dihemoe/alisten/protocol"
 )
 
-// 路径中的房间 ID 和别名不经过协议解码。格式不正确的房间 ID 或别名一定不存在，其中含有 U+0000 等字符的还会让
+// 路径中的房间 ID、别名和用户名不经过协议解码。格式不正确的房间 ID、别名或用户名一定不存在，其中含有 U+0000 等字符的还会让
 // PostgreSQL 报错，所以直接按不存在处理。
 var (
-	uuidPattern = regexp.MustCompile(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-	slugPattern = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
+	uuidPattern     = regexp.MustCompile(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	slugPattern     = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
+	usernamePattern = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
 )
 
 func (s *server) createMember(ctx context.Context, c call) (any, error) {
@@ -31,8 +32,17 @@ func (s *server) createMember(ctx context.Context, c call) (any, error) {
 	return protocol.CreateMemberResponse{MemberToken: session.MemberToken, Member: memberDTO(session.Member)}, nil
 }
 
-func (s *server) getMe(_ context.Context, c call) (any, error) {
-	return protocol.GetMeResponse{Member: memberDTO(c.member)}, nil
+func (s *server) getMe(ctx context.Context, c call) (any, error) {
+	resp := protocol.GetMeResponse{Member: memberDTO(c.member)}
+	account, registered, err := s.Accounts.Account(ctx, c.member.ID)
+	if err != nil {
+		return nil, err
+	}
+	if registered {
+		dto := accountDTO(account)
+		resp.Account = &dto
+	}
+	return resp, nil
 }
 
 func (s *server) updateMe(ctx context.Context, c call) (any, error) {

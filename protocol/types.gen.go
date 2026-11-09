@@ -4,10 +4,15 @@ package protocol
 
 import "encoding/json"
 
-const Version = "473ee31f5ef912b4"
+const Version = "bb812527ea1133df"
 
 type APIKey struct {
 	Key string `json:"key"`
+}
+
+type Account struct {
+	Email    *string `json:"email,omitempty"`
+	Username string  `json:"username"`
 }
 
 type ActivityKind string
@@ -20,6 +25,11 @@ const (
 	ActivityKindSkipped ActivityKind = "skipped"
 	ActivityKindFailed  ActivityKind = "failed"
 )
+
+type AdminAccount struct {
+	Member   Member `json:"member"`
+	Username string `json:"username"`
+}
 
 type AdminCheckBilibiliLoginRequest struct {
 	Key string `json:"key"`
@@ -94,6 +104,14 @@ func (v AdminListRoomsResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(plain(v))
 }
 
+type AdminOpenRegistrationRequest struct{}
+
+type AdminResetAccountPasswordRequest struct{}
+
+type AdminResetAccountPasswordResponse struct {
+	Password string `json:"password"`
+}
+
 type AdminResetRoomApiKeyRequest struct{}
 
 type AdminSetYoutubeCredentialRequest struct {
@@ -121,6 +139,11 @@ type AdminUpdateSiteRequest struct {
 
 type AdminUpdateSiteResponse struct {
 	BrandName string `json:"brandName"`
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
 }
 
 type ChatMessageEvent struct {
@@ -180,18 +203,19 @@ const (
 type ErrorCode string
 
 const (
-	ErrorCodeInvalidArgument ErrorCode = "INVALID_ARGUMENT"
-	ErrorCodeUnauthorized    ErrorCode = "UNAUTHORIZED"
-	ErrorCodeForbidden       ErrorCode = "FORBIDDEN"
-	ErrorCodeNotFound        ErrorCode = "NOT_FOUND"
-	ErrorCodeConflict        ErrorCode = "CONFLICT"
-	ErrorCodeQueueFull       ErrorCode = "QUEUE_FULL"
-	ErrorCodeNothingPlaying  ErrorCode = "NOTHING_PLAYING"
-	ErrorCodeRateLimited     ErrorCode = "RATE_LIMITED"
-	ErrorCodeProviderError   ErrorCode = "PROVIDER_ERROR"
-	ErrorCodeUnavailable     ErrorCode = "UNAVAILABLE"
-	ErrorCodeClientOutdated  ErrorCode = "CLIENT_OUTDATED"
-	ErrorCodeInternal        ErrorCode = "INTERNAL"
+	ErrorCodeInvalidArgument    ErrorCode = "INVALID_ARGUMENT"
+	ErrorCodeUnauthorized       ErrorCode = "UNAUTHORIZED"
+	ErrorCodeInvalidCredentials ErrorCode = "INVALID_CREDENTIALS"
+	ErrorCodeForbidden          ErrorCode = "FORBIDDEN"
+	ErrorCodeNotFound           ErrorCode = "NOT_FOUND"
+	ErrorCodeConflict           ErrorCode = "CONFLICT"
+	ErrorCodeQueueFull          ErrorCode = "QUEUE_FULL"
+	ErrorCodeNothingPlaying     ErrorCode = "NOTHING_PLAYING"
+	ErrorCodeRateLimited        ErrorCode = "RATE_LIMITED"
+	ErrorCodeProviderError      ErrorCode = "PROVIDER_ERROR"
+	ErrorCodeUnavailable        ErrorCode = "UNAVAILABLE"
+	ErrorCodeClientOutdated     ErrorCode = "CLIENT_OUTDATED"
+	ErrorCodeInternal           ErrorCode = "INTERNAL"
 )
 
 type ErrorInfo struct {
@@ -200,11 +224,13 @@ type ErrorInfo struct {
 }
 
 type GetMeResponse struct {
-	Member Member `json:"member"`
+	Account *Account `json:"account,omitempty"`
+	Member  Member   `json:"member"`
 }
 
 type GetSiteResponse struct {
-	BrandName string `json:"brandName"`
+	BrandName        string `json:"brandName"`
+	RegistrationOpen bool   `json:"registrationOpen"`
 }
 
 type HelloRequest struct {
@@ -229,6 +255,19 @@ func (v ListRoomsResponse) MarshalJSON() ([]byte, error) {
 		v.Items = []RoomListing{}
 	}
 	return json.Marshal(plain(v))
+}
+
+type LoginRequest struct {
+	Device   *string `json:"device,omitempty"`
+	Password string  `json:"password"`
+	Username string  `json:"username"`
+}
+
+type LoginResponse struct {
+	Account     Account `json:"account"`
+	Device      string  `json:"device"`
+	Member      Member  `json:"member"`
+	MemberToken string  `json:"memberToken"`
 }
 
 type Member struct {
@@ -395,6 +434,15 @@ func (v RecommendListResponse) MarshalJSON() ([]byte, error) {
 		v.Items = []TrackSummary{}
 	}
 	return json.Marshal(plain(v))
+}
+
+type RegisterRequest struct {
+	Password string `json:"password"`
+	Username string `json:"username"`
+}
+
+type RegisterResponse struct {
+	Account Account `json:"account"`
 }
 
 type RoomActivityEvent struct {
@@ -609,6 +657,10 @@ var (
 	RouteCreateMember                 = Route{Pattern: "POST /api/members", Auth: AuthNone, Status: 201}
 	RouteGetMe                        = Route{Pattern: "GET /api/me", Auth: AuthMember, Status: 200}
 	RouteUpdateMe                     = Route{Pattern: "PATCH /api/me", Auth: AuthMember, Status: 200}
+	RouteRegister                     = Route{Pattern: "POST /api/account", Auth: AuthMember, Status: 201}
+	RouteChangePassword               = Route{Pattern: "PUT /api/account/password", Auth: AuthMember, Status: 204}
+	RouteLogin                        = Route{Pattern: "POST /api/sessions", Auth: AuthMember, Status: 201}
+	RouteLogout                       = Route{Pattern: "DELETE /api/sessions/current", Auth: AuthMember, Status: 204}
 	RouteListRooms                    = Route{Pattern: "GET /api/rooms", Auth: AuthNone, Status: 200}
 	RouteGetRoom                      = Route{Pattern: "GET /api/rooms/{ref}", Auth: AuthNone, Status: 200}
 	RouteCreateRoom                   = Route{Pattern: "POST /api/rooms", Auth: AuthNone, Status: 201, Location: true}
@@ -635,6 +687,10 @@ var (
 	RouteAdminListMedia               = Route{Pattern: "GET /api/admin/media", Auth: AuthAdmin, Status: 200}
 	RouteAdminDeleteMedia             = Route{Pattern: "DELETE /api/admin/media/{key}", Auth: AuthAdmin, Status: 204}
 	RouteAdminUpdateSite              = Route{Pattern: "PATCH /api/admin/site", Auth: AuthAdmin, Status: 200}
+	RouteAdminOpenRegistration        = Route{Pattern: "PUT /api/admin/registration", Auth: AuthAdmin, Status: 204}
+	RouteAdminCloseRegistration       = Route{Pattern: "DELETE /api/admin/registration", Auth: AuthAdmin, Status: 204}
+	RouteAdminGetAccount              = Route{Pattern: "GET /api/admin/accounts/{username}", Auth: AuthAdmin, Status: 200}
+	RouteAdminResetAccountPassword    = Route{Pattern: "POST /api/admin/accounts/{username}/password", Auth: AuthAdmin, Status: 200}
 )
 
 var RoomRoutes = []RoomRoute{
@@ -652,17 +708,18 @@ var RoomRoutes = []RoomRoute{
 }
 
 var errorCodeHTTPStatus = map[ErrorCode]int{
-	ErrorCodeInvalidArgument: 400,
-	ErrorCodeUnauthorized:    401,
-	ErrorCodeForbidden:       403,
-	ErrorCodeNotFound:        404,
-	ErrorCodeConflict:        409,
-	ErrorCodeQueueFull:       409,
-	ErrorCodeNothingPlaying:  409,
-	ErrorCodeRateLimited:     429,
-	ErrorCodeProviderError:   502,
-	ErrorCodeUnavailable:     503,
-	ErrorCodeInternal:        500,
+	ErrorCodeInvalidArgument:    400,
+	ErrorCodeUnauthorized:       401,
+	ErrorCodeInvalidCredentials: 401,
+	ErrorCodeForbidden:          403,
+	ErrorCodeNotFound:           404,
+	ErrorCodeConflict:           409,
+	ErrorCodeQueueFull:          409,
+	ErrorCodeNothingPlaying:     409,
+	ErrorCodeRateLimited:        429,
+	ErrorCodeProviderError:      502,
+	ErrorCodeUnavailable:        503,
+	ErrorCodeInternal:           500,
 }
 
 // IDL 没有为某个取值指定 HTTP 状态码时返回 0。
