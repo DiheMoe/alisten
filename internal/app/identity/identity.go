@@ -3,6 +3,8 @@ package identity
 import (
 	"context"
 	"errors"
+	"regexp"
+	"strings"
 
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/realtime"
@@ -15,7 +17,10 @@ var (
 	ErrInvalidTicket      = errors.New("票据无效")
 	ErrWrongPassword      = errors.New("房间密码错误")
 	ErrBotSession         = errors.New("API Key 只能用于 HTTP 接口")
+	ErrInvalidEmail       = errors.New("email：格式不正确，应形如 name@example.com")
 )
+
+var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 
 type Service struct {
 	members port.Members
@@ -62,7 +67,11 @@ type Profile struct {
 func (s *Service) UpdateProfile(ctx context.Context, memberID string, p Profile) (member.Member, error) {
 	var avatar *string
 	if p.Email != nil {
-		hash := avatarHash(*p.Email)
+		email := strings.TrimSpace(*p.Email)
+		if email != "" && !emailPattern.MatchString(email) {
+			return member.Member{}, ErrInvalidEmail
+		}
+		hash := avatarHash(email)
 		avatar = &hash
 	}
 	m, err := s.members.UpdateMember(ctx, memberID, p.Name, avatar)

@@ -95,6 +95,23 @@ func TestUpdateProfile(t *testing.T) {
 	}
 }
 
+func TestUpdateProfileRejectsMalformedEmail(t *testing.T) {
+	s, _ := newService(t)
+	id := createMember(t, s).Member.ID
+	if _, err := s.UpdateProfile(t.Context(), id, Profile{Email: ptr("alice@example.com")}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, email := range []string{"a@b@c.com", "alice@example", "a lice@example.com", "alice@exa mple.com", "@", "@example.com", "alice@.", "alice"} {
+		if _, err := s.UpdateProfile(t.Context(), id, Profile{Email: ptr(email)}); !errors.Is(err, ErrInvalidEmail) {
+			t.Errorf("邮箱 %q 的错误 = %v，期望 ErrInvalidEmail", email, err)
+		}
+	}
+	if m, _ := s.UpdateProfile(t.Context(), id, Profile{}); m.AvatarHash != "c160f8cc69a4f0bf2b0362752353d060" {
+		t.Errorf("被拒绝的邮箱不应改动头像：%#v", m)
+	}
+}
+
 type noMemberBroadcast struct {
 	port.Bus
 }

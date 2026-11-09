@@ -36,6 +36,15 @@ Authorization: Bearer $alice
 PATCH /api/me
 Authorization: Bearer $alice
 
+{"email": "alice@example"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "email：格式不正确，应形如 name@example.com"}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer $alice
+
 {}
 -- response --
 200

@@ -278,6 +278,7 @@ var knownErrors = []struct {
 	{admin.ErrUnrecognizedCookies, protocol.ErrorCodeInvalidArgument},
 	{identity.ErrInvalidTicket, protocol.ErrorCodeUnauthorized},
 	{identity.ErrBotSession, protocol.ErrorCodeUnauthorized},
+	{identity.ErrInvalidEmail, protocol.ErrorCodeInvalidArgument},
 	{realtime.ErrRequesterNotAllowed, protocol.ErrorCodeInvalidArgument},
 	{site.ErrInvalidBrandName, protocol.ErrorCodeInvalidArgument},
 	{realtime.ErrUnavailable, protocol.ErrorCodeUnavailable},
