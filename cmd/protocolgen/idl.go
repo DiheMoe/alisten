@@ -107,6 +107,8 @@ type schema struct {
 	Required             []string           `json:"required,omitempty"`
 	AdditionalProperties *bool              `json:"additionalProperties,omitempty"`
 	Items                *schema            `json:"items,omitempty"`
+	MinItems             *int               `json:"minItems,omitempty"`
+	MaxItems             *int               `json:"maxItems,omitempty"`
 	AnyOf                []*schema          `json:"anyOf,omitempty"`
 	OneOf                []*schema          `json:"oneOf,omitempty"`
 	AllOf                []*schema          `json:"allOf,omitempty"`
@@ -439,19 +441,45 @@ func (d *idl) checkField(where string, s *schema, required, inbound bool) error 
 		}
 		return d.checkValue(where+".anyOf[0]", s.AnyOf[0], inbound)
 	case s.Type == "array":
-		if inbound || !required {
-			return fmt.Errorf("%s：数组只能出现在响应和事件中，并且必须是必填字段", where)
+		if !required {
+			return fmt.Errorf("%s：数组必须是必填字段", where)
 		}
-		if err := allowOnly(where, s, "type", "description", "items"); err != nil {
+		allowed := []string{"type", "description", "items"}
+		if inbound {
+			allowed = append(allowed, "minItems", "maxItems")
+		}
+		if err := allowOnly(where, s, allowed...); err != nil {
 			return err
 		}
 		if s.Items == nil {
 			return fmt.Errorf("%s：数组缺少 items", where)
 		}
+		if inbound {
+			if err := d.checkInboundArray(where, s); err != nil {
+				return err
+			}
+		}
 		return d.checkValue(where+".items", s.Items, inbound)
 	default:
 		return d.checkValue(where, s, inbound)
 	}
+}
+
+// 请求中的数组元素只能引用对象或枚举类型，解码函数按类型名生成。
+func (d *idl) checkInboundArray(where string, s *schema) error {
+	if s.Items.Ref == "" || d.Defs[refName(s.Items.Ref)] != nil && d.Defs[refName(s.Items.Ref)].scalar() {
+		return fmt.Errorf("%s：请求中的数组元素只能引用对象或枚举类型", where)
+	}
+	if s.MaxItems == nil {
+		return fmt.Errorf("%s：请求中的数组必须写 maxItems，解码时先按它拒绝过长的数组", where)
+	}
+	if s.MinItems != nil && *s.MinItems < 0 || *s.MaxItems < 0 {
+		return fmt.Errorf("%s：minItems 和 maxItems 不能是负数", where)
+	}
+	if s.MinItems != nil && *s.MinItems > *s.MaxItems {
+		return fmt.Errorf("%s：minItems 大于 maxItems", where)
+	}
+	return nil
 }
 
 func (d *idl) checkValue(where string, s *schema, inbound bool) error {
@@ -962,6 +990,9 @@ func topLevelNames(f *ast.File) []string {
 func (d *idl) markInbound(s *schema) error {
 	for _, name := range slices.Sorted(maps.Keys(s.Properties)) {
 		p := s.Properties[name]
+		if p.Type == "array" {
+			p = p.Items
+		}
 		if p.Ref == "" || d.inbound[refName(p.Ref)] || d.Defs[refName(p.Ref)].scalar() {
 			continue
 		}
@@ -1055,6 +1086,8 @@ func (s *schema) keywords() []string {
 	add(s.Required != nil, "required")
 	add(s.AdditionalProperties != nil, "additionalProperties")
 	add(s.Items != nil, "items")
+	add(s.MinItems != nil, "minItems")
+	add(s.MaxItems != nil, "maxItems")
 	add(s.AnyOf != nil, "anyOf")
 	add(s.OneOf != nil, "oneOf")
 	add(s.AllOf != nil, "allOf")

@@ -15,6 +15,7 @@ import (
 
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/domain/member"
+	"github.com/dihemoe/alisten/internal/domain/playlist"
 	"github.com/dihemoe/alisten/internal/domain/room"
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
@@ -674,7 +675,7 @@ func (s *Store) AddPlaylistItem(_ context.Context, ownerID, id string, item port
 	return nil
 }
 
-func (s *Store) RemovePlaylistItem(_ context.Context, ownerID, id string, t track.Track) error {
+func (s *Store) RemovePlaylistItems(_ context.Context, ownerID, id string, tracks []track.Track) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p := s.playlist(ownerID, id)
@@ -682,9 +683,63 @@ func (s *Store) RemovePlaylistItem(_ context.Context, ownerID, id string, t trac
 		return port.ErrPlaylistNotFound
 	}
 	n := len(p.items)
-	p.items = slices.DeleteFunc(p.items, func(i port.PlaylistItem) bool { return i.Track == t })
+	p.items = slices.DeleteFunc(p.items, func(i port.PlaylistItem) bool { return slices.Contains(tracks, i.Track) })
 	if len(p.items) < n {
 		p.updated = time.Now()
 	}
+	return nil
+}
+
+func (s *Store) CopyPlaylistItems(_ context.Context, ownerID, fromID, toID string, tracks []track.Track, limit int) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	from, to := s.playlist(ownerID, fromID), s.playlist(ownerID, toID)
+	if from == nil || to == nil {
+		return 0, port.ErrPlaylistNotFound
+	}
+	var fresh []port.PlaylistItem
+	for _, t := range tracks {
+		i := slices.IndexFunc(from.items, func(i port.PlaylistItem) bool { return i.Track == t })
+		if i < 0 || slices.ContainsFunc(to.items, func(i port.PlaylistItem) bool { return i.Track == t }) ||
+			slices.ContainsFunc(fresh, func(i port.PlaylistItem) bool { return i.Track == t }) {
+			continue
+		}
+		fresh = append(fresh, from.items[i])
+	}
+	if len(fresh) == 0 {
+		return 0, nil
+	}
+	if len(to.items)+len(fresh) > limit {
+		return 0, port.ErrPlaylistLimit
+	}
+	slices.Reverse(fresh)
+	to.items = append(to.items, fresh...)
+	to.updated = time.Now()
+	return len(fresh), nil
+}
+
+func (s *Store) MovePlaylistItems(_ context.Context, ownerID, id string, tracks []track.Track, before *track.Track) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.playlist(ownerID, id)
+	if p == nil {
+		return port.ErrPlaylistNotFound
+	}
+	order := make([]track.Track, len(p.items))
+	for i, item := range p.items {
+		order[len(order)-1-i] = item.Track
+	}
+	moved, err := playlist.Move(order, tracks, before)
+	if err != nil || slices.Equal(moved, order) {
+		return err
+	}
+	byTrack := make(map[track.Track]port.PlaylistItem, len(p.items))
+	for _, item := range p.items {
+		byTrack[item.Track] = item
+	}
+	for i, t := range moved {
+		p.items[len(moved)-1-i] = byTrack[t]
+	}
+	p.updated = time.Now()
 	return nil
 }

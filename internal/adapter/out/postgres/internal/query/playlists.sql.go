@@ -10,6 +10,49 @@ import (
 	"time"
 )
 
+const copyPlaylistItems = `-- name: CopyPlaylistItems :execrows
+WITH wanted AS (
+    SELECT s.source, k.track_id, min(s.ord) AS ord
+    FROM unnest($3::text[]) WITH ORDINALITY AS s(source, ord)
+    JOIN unnest($4::text[]) WITH ORDINALITY AS k(track_id, ord) USING (ord)
+    GROUP BY s.source, k.track_id
+), copied AS (
+    SELECT i.source, i.track_id, i.title, i.artist, i.album, i.cover_url, i.cover_key, i.duration_ms, i.page_url,
+           row_number() OVER (ORDER BY w.ord DESC) AS rank
+    FROM wanted w
+    JOIN playlist_items i ON i.playlist_id = $5 AND i.source = w.source AND i.track_id = w.track_id
+    WHERE NOT EXISTS (
+        SELECT FROM playlist_items d WHERE d.playlist_id = $1 AND d.source = w.source AND d.track_id = w.track_id
+    )
+)
+INSERT INTO playlist_items (playlist_id, source, track_id, title, artist, album, cover_url, cover_key, duration_ms, page_url, position)
+SELECT $1, source, track_id, title, artist, album, cover_url, cover_key, duration_ms, page_url, $2::bigint + rank
+FROM copied
+`
+
+type CopyPlaylistItemsParams struct {
+	ToID     string
+	ItemSeq  int64
+	Sources  []string
+	TrackIds []string
+	FromID   string
+}
+
+// 按请求的先后复制：第一首的排序值最大。请求里重复的歌只取第一次出现的位置。
+func (q *Queries) CopyPlaylistItems(ctx context.Context, arg CopyPlaylistItemsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, copyPlaylistItems,
+		arg.ToID,
+		arg.ItemSeq,
+		arg.Sources,
+		arg.TrackIds,
+		arg.FromID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countPlaylistItems = `-- name: CountPlaylistItems :one
 SELECT count(*) FROM playlist_items WHERE playlist_id = $1
 `
@@ -81,22 +124,25 @@ func (q *Queries) DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) 
 	return result.RowsAffected(), nil
 }
 
-const deletePlaylistItem = `-- name: DeletePlaylistItem :exec
+const deletePlaylistItems = `-- name: DeletePlaylistItems :exec
 WITH deleted AS (
-    DELETE FROM playlist_items WHERE playlist_id = $1 AND source = $2 AND track_id = $3
-    RETURNING playlist_id
+    DELETE FROM playlist_items i
+    USING unnest($1::text[]) WITH ORDINALITY AS s(source, ord)
+    JOIN unnest($2::text[]) WITH ORDINALITY AS t(track_id, ord) USING (ord)
+    WHERE i.playlist_id = $3 AND i.source = s.source AND i.track_id = t.track_id
+    RETURNING i.playlist_id
 )
 UPDATE playlists SET updated_at = now() WHERE id IN (SELECT playlist_id FROM deleted)
 `
 
-type DeletePlaylistItemParams struct {
+type DeletePlaylistItemsParams struct {
+	Sources    []string
+	TrackIds   []string
 	PlaylistID string
-	Source     string
-	TrackID    string
 }
 
-func (q *Queries) DeletePlaylistItem(ctx context.Context, arg DeletePlaylistItemParams) error {
-	_, err := q.db.Exec(ctx, deletePlaylistItem, arg.PlaylistID, arg.Source, arg.TrackID)
+func (q *Queries) DeletePlaylistItems(ctx context.Context, arg DeletePlaylistItemsParams) error {
+	_, err := q.db.Exec(ctx, deletePlaylistItems, arg.Sources, arg.TrackIds, arg.PlaylistID)
 	return err
 }
 
@@ -312,6 +358,35 @@ func (q *Queries) PlaylistKind(ctx context.Context, arg PlaylistKindParams) (str
 	return kind, err
 }
 
+const playlistTracks = `-- name: PlaylistTracks :many
+SELECT source, track_id FROM playlist_items WHERE playlist_id = $1 ORDER BY position DESC
+`
+
+type PlaylistTracksRow struct {
+	Source  string
+	TrackID string
+}
+
+func (q *Queries) PlaylistTracks(ctx context.Context, playlistID string) ([]PlaylistTracksRow, error) {
+	rows, err := q.db.Query(ctx, playlistTracks, playlistID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PlaylistTracksRow
+	for rows.Next() {
+		var i PlaylistTracksRow
+		if err := rows.Scan(&i.Source, &i.TrackID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const renamePlaylist = `-- name: RenamePlaylist :execrows
 UPDATE playlists SET name = $1, updated_at = now() WHERE id = $2 AND owner_id = $3 AND kind = 'custom'
 `
@@ -330,6 +405,31 @@ func (q *Queries) RenamePlaylist(ctx context.Context, arg RenamePlaylistParams) 
 	return result.RowsAffected(), nil
 }
 
+const setPlaylistPositions = `-- name: SetPlaylistPositions :exec
+UPDATE playlist_items i SET position = t.position
+FROM unnest($2::text[]) WITH ORDINALITY AS s(source, ord)
+JOIN unnest($3::text[]) WITH ORDINALITY AS k(track_id, ord) USING (ord)
+JOIN unnest($4::bigint[]) WITH ORDINALITY AS t(position, ord) USING (ord)
+WHERE i.playlist_id = $1 AND i.source = s.source AND i.track_id = k.track_id
+`
+
+type SetPlaylistPositionsParams struct {
+	PlaylistID string
+	Sources    []string
+	TrackIds   []string
+	Positions  []int64
+}
+
+func (q *Queries) SetPlaylistPositions(ctx context.Context, arg SetPlaylistPositionsParams) error {
+	_, err := q.db.Exec(ctx, setPlaylistPositions,
+		arg.PlaylistID,
+		arg.Sources,
+		arg.TrackIds,
+		arg.Positions,
+	)
+	return err
+}
+
 const setPlaylistSeq = `-- name: SetPlaylistSeq :exec
 UPDATE playlists SET item_seq = $1, updated_at = now() WHERE id = $2
 `
@@ -341,5 +441,14 @@ type SetPlaylistSeqParams struct {
 
 func (q *Queries) SetPlaylistSeq(ctx context.Context, arg SetPlaylistSeqParams) error {
 	_, err := q.db.Exec(ctx, setPlaylistSeq, arg.ItemSeq, arg.ID)
+	return err
+}
+
+const touchPlaylist = `-- name: TouchPlaylist :exec
+UPDATE playlists SET updated_at = now() WHERE id = $1
+`
+
+func (q *Queries) TouchPlaylist(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, touchPlaylist, id)
 	return err
 }

@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/dihemoe/alisten/internal/adapter/out/postgres/internal/query"
 	"github.com/dihemoe/alisten/internal/app/port"
+	"github.com/dihemoe/alisten/internal/domain/playlist"
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
@@ -196,7 +198,7 @@ func (s *Store) AddPlaylistItem(ctx context.Context, ownerID, id string, item po
 	return nil
 }
 
-func (s *Store) RemovePlaylistItem(ctx context.Context, ownerID, id string, t track.Track) error {
+func (s *Store) RemovePlaylistItems(ctx context.Context, ownerID, id string, tracks []track.Track) error {
 	if !isUUID(id) {
 		return port.ErrPlaylistNotFound
 	}
@@ -207,10 +209,96 @@ func (s *Store) RemovePlaylistItem(ctx context.Context, ownerID, id string, t tr
 		} else if err != nil {
 			return err
 		}
-		return q.DeletePlaylistItem(ctx, query.DeletePlaylistItemParams{PlaylistID: id, Source: string(t.Source), TrackID: t.ID})
+		sources, ids := splitTracks(tracks)
+		return q.DeletePlaylistItems(ctx, query.DeletePlaylistItemsParams{PlaylistID: id, Sources: sources, TrackIds: ids})
 	})
 	if err != nil {
-		return fmt.Errorf("从歌单 %s 移除 %s/%s：%w", id, t.Source, t.ID, err)
+		return fmt.Errorf("从歌单 %s 移除 %d 首歌：%w", id, len(tracks), err)
 	}
 	return nil
+}
+
+func (s *Store) CopyPlaylistItems(ctx context.Context, ownerID, fromID, toID string, tracks []track.Track, limit int) (int, error) {
+	var added int64
+	err := s.owned(ctx, ownerID, fromID)
+	if err == nil && !isUUID(toID) {
+		err = port.ErrPlaylistNotFound
+	}
+	if err == nil {
+		err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			q := s.q.WithTx(tx)
+			seq, err := q.LockPlaylist(ctx, query.LockPlaylistParams{ID: toID, OwnerID: ownerID})
+			if errors.Is(err, pgx.ErrNoRows) {
+				return port.ErrPlaylistNotFound
+			}
+			if err != nil {
+				return err
+			}
+			sources, ids := splitTracks(tracks)
+			added, err = q.CopyPlaylistItems(ctx, query.CopyPlaylistItemsParams{FromID: fromID, ToID: toID, ItemSeq: seq, Sources: sources, TrackIds: ids})
+			if err != nil || added == 0 {
+				return err
+			}
+			n, err := q.CountPlaylistItems(ctx, toID)
+			if err != nil {
+				return err
+			}
+			if n > int64(limit) {
+				return port.ErrPlaylistLimit
+			}
+			return q.SetPlaylistSeq(ctx, query.SetPlaylistSeqParams{ID: toID, ItemSeq: seq + added})
+		})
+	}
+	if err != nil {
+		return 0, fmt.Errorf("从歌单 %s 向歌单 %s 复制 %d 首歌：%w", fromID, toID, len(tracks), err)
+	}
+	return int(added), nil
+}
+
+func (s *Store) MovePlaylistItems(ctx context.Context, ownerID, id string, tracks []track.Track, before *track.Track) error {
+	if !isUUID(id) {
+		return port.ErrPlaylistNotFound
+	}
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		if _, err := q.LockPlaylist(ctx, query.LockPlaylistParams{ID: id, OwnerID: ownerID}); errors.Is(err, pgx.ErrNoRows) {
+			return port.ErrPlaylistNotFound
+		} else if err != nil {
+			return err
+		}
+		rows, err := q.PlaylistTracks(ctx, id)
+		if err != nil {
+			return err
+		}
+		order := make([]track.Track, len(rows))
+		for i, r := range rows {
+			order[i] = track.Track{Source: track.Source(r.Source), ID: r.TrackID}
+		}
+		moved, err := playlist.Move(order, tracks, before)
+		if err != nil || slices.Equal(moved, order) {
+			return err
+		}
+		// 显示顺序里最靠前的取最大的排序值；歌单的 item_seq 不小于曲目数，所以新加入的歌仍然排在最前。
+		positions := make([]int64, len(moved))
+		for i := range moved {
+			positions[i] = int64(len(moved) - i)
+		}
+		sources, ids := splitTracks(moved)
+		if err := q.SetPlaylistPositions(ctx, query.SetPlaylistPositionsParams{PlaylistID: id, Sources: sources, TrackIds: ids, Positions: positions}); err != nil {
+			return err
+		}
+		return q.TouchPlaylist(ctx, id)
+	})
+	if err != nil {
+		return fmt.Errorf("调整歌单 %s 的顺序：%w", id, err)
+	}
+	return nil
+}
+
+func splitTracks(tracks []track.Track) (sources, ids []string) {
+	sources, ids = make([]string, len(tracks)), make([]string, len(tracks))
+	for i, t := range tracks {
+		sources[i], ids[i] = string(t.Source), t.ID
+	}
+	return sources, ids
 }

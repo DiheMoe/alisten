@@ -102,6 +102,8 @@ func (g *goDecoder) object(name string, s *schema) {
 		at := fmt.Sprintf("field(path, %q)", f)
 		decode := "decodeString"
 		switch {
+		case p.Type == "array":
+			decode = fmt.Sprintf("decodeArray(decode%s, %d)", refName(p.Items.Ref), *p.MaxItems)
 		case p.Ref != "":
 			decode = "decode" + refName(p.Ref)
 		case p.Type == "integer":
@@ -148,6 +150,9 @@ func (g *goDecoder) checks(value, at string, s *schema, patternName string) {
 		name := "pattern" + patternName
 		g.patterns = append(g.patterns, goPattern{name: name, expr: s.Pattern})
 		check("checkPattern", name)
+	}
+	if s.MinItems != nil {
+		check("checkMinItems", fmt.Sprint(*s.MinItems))
 	}
 	if s.Minimum != nil {
 		check("checkMinimum", fmt.Sprint(*s.Minimum))

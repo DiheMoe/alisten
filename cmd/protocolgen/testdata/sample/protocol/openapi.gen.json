@@ -183,6 +183,23 @@
         },
         "type": "object"
       },
+      "RemoveTracksRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/Track"
+            },
+            "maxItems": 3,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "tracks"
+        ],
+        "type": "object"
+      },
       "Room": {
         "additionalProperties": false,
         "description": "房间",
@@ -318,7 +335,7 @@
   },
   "info": {
     "title": "Sample",
-    "version": "362d144af81ba8bf"
+    "version": "5e495c1e23fa03a5"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -773,6 +790,37 @@
           }
         ],
         "summary": "座位上的成员，<b>座位号</b> 从 1 开始 & 不超过 8"
+      }
+    },
+    "/api/tracks/removals": {
+      "post": {
+        "operationId": "removeTracks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveTracksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": []
       }
     }
   }

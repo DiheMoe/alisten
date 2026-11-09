@@ -441,6 +441,40 @@
         ],
         "type": "object"
       },
+      "CopyMyPlaylistItemsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "来源歌单的 ID",
+            "type": "string"
+          },
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/Track"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "from",
+          "tracks"
+        ],
+        "type": "object"
+      },
+      "CopyMyPlaylistItemsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "added": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "added"
+        ],
+        "type": "object"
+      },
       "CreateMemberRequest": {
         "additionalProperties": false,
         "type": "object"
@@ -817,6 +851,26 @@
         ],
         "type": "object"
       },
+      "MoveMyPlaylistItemsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "before": {
+            "$ref": "#/components/schemas/Track"
+          },
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/Track"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "tracks"
+        ],
+        "type": "object"
+      },
       "MyPlaylist": {
         "additionalProperties": false,
         "properties": {
@@ -1189,15 +1243,20 @@
         ],
         "type": "object"
       },
-      "RemoveMyPlaylistItemRequest": {
+      "RemoveMyPlaylistItemsRequest": {
         "additionalProperties": false,
         "properties": {
-          "track": {
-            "$ref": "#/components/schemas/Track"
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/Track"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
           }
         },
         "required": [
-          "track"
+          "tracks"
         ],
         "type": "object"
       },
@@ -1666,7 +1725,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "7380d77bc52d7f95"
+    "version": "1b53e1e08b0452e4"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2957,6 +3016,59 @@
         "summary": "重命名歌单；“我喜欢”不能重命名"
       }
     },
+    "/api/me/playlists/{id}/copies": {
+      "post": {
+        "operationId": "copyMyPlaylistItems",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyMyPlaylistItemsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CopyMyPlaylistItemsResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "把另一个歌单里的若干首歌连同元数据复制到这个歌单，一次 1 到 1000 首；不在来源歌单里的和已在这个歌单里的跳过；新复制的排在最前，保持 tracks 的先后；装不下时整批拒绝；返回实际复制的数量"
+      }
+    },
     "/api/me/playlists/{id}/items": {
       "get": {
         "operationId": "listMyPlaylistItems",
@@ -3051,9 +3163,9 @@
         "summary": "把一首歌加入歌单：元数据由服务端查询，链接曲目要先准备好；已经在歌单里时不变；一个歌单最多 1000 首"
       }
     },
-    "/api/me/playlists/{id}/removals": {
+    "/api/me/playlists/{id}/moves": {
       "post": {
-        "operationId": "removeMyPlaylistItem",
+        "operationId": "moveMyPlaylistItems",
         "parameters": [
           {
             "in": "path",
@@ -3068,7 +3180,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RemoveMyPlaylistItemRequest"
+                "$ref": "#/components/schemas/MoveMyPlaylistItemsRequest"
               }
             }
           },
@@ -3094,7 +3206,53 @@
             "memberToken": []
           }
         ],
-        "summary": "把一首歌移出歌单；不在歌单里也算成功"
+        "summary": "调整歌单里的顺序：把 tracks 里在歌单中的歌按给出的先后放到 before 之前，不给 before 就放到最后；一次 1 到 1000 首；before 不能在 tracks 里，也必须还在歌单里"
+      }
+    },
+    "/api/me/playlists/{id}/removals": {
+      "post": {
+        "operationId": "removeMyPlaylistItems",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveMyPlaylistItemsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "把若干首歌移出歌单，一次 1 到 1000 首；不在歌单里的忽略"
       }
     },
     "/api/members": {

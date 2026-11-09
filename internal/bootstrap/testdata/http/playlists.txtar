@@ -1,4 +1,4 @@
-歌单：只有已注册的账号能使用；注册时自带不能重命名、不能删除的“我喜欢”；收藏时元数据由服务端查询，同一首歌只收一次，新加入的在前；别人的歌单和不存在的一样。
+歌单：只有已注册的账号能使用；注册时自带不能重命名、不能删除的“我喜欢”；收藏时元数据由服务端查询，同一首歌只收一次，新加入的在前；可以批量移出、复制到别的歌单、调整顺序；别人的歌单和不存在的一样。
 
 -- request --
 POST /api/members
@@ -129,17 +129,108 @@ Authorization: Bearer $alice
 {"error": {"code": "CONFLICT", "message": "“我喜欢”不能重命名或删除"}}
 
 -- request --
+POST /api/me/playlists/$commute/copies
+Authorization: Bearer $alice
+
+{"from": "$favorites", "tracks": [{"source": "netease", "id": "186016"}, {"source": "netease", "id": "185811"}, {"source": "netease", "id": "999"}, {"source": "netease", "id": "186016"}]}
+-- response --
+200
+{"added": 2}
+
+-- request --
+POST /api/me/playlists/$commute/copies
+Authorization: Bearer $alice
+
+{"from": "$favorites", "tracks": [{"source": "netease", "id": "185811"}]}
+-- response --
+200
+{"added": 0}
+
+-- request --
+GET /api/me/playlists/$commute/items
+Authorization: Bearer $alice
+-- response --
+200
+{"items": [
+  {"track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000}},
+  {"track": {"source": "netease", "id": "185811"}, "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000}}
+]}
+
+-- request --
+POST /api/me/playlists/$commute/moves
+Authorization: Bearer $alice
+
+{"tracks": [{"source": "netease", "id": "186016"}]}
+-- response --
+204
+
+-- request --
+GET /api/me/playlists/$commute/items
+Authorization: Bearer $alice
+-- response --
+200
+{"items": [
+  {"track": {"source": "netease", "id": "185811"}, "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000}},
+  {"track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000}}
+]}
+
+-- request --
+POST /api/me/playlists/$commute/moves
+Authorization: Bearer $alice
+
+{"tracks": [{"source": "netease", "id": "186016"}], "before": {"source": "netease", "id": "185811"}}
+-- response --
+204
+
+-- request --
+GET /api/me/playlists/$commute/items
+Authorization: Bearer $alice
+-- response --
+200
+{"items": [
+  {"track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000}},
+  {"track": {"source": "netease", "id": "185811"}, "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000}}
+]}
+
+-- request --
+POST /api/me/playlists/$commute/moves
+Authorization: Bearer $alice
+
+{"tracks": [{"source": "netease", "id": "186016"}], "before": {"source": "netease", "id": "999"}}
+-- response --
+409
+{"error": {"code": "CONFLICT", "message": "歌单已经变了，刷新之后再试"}}
+
+-- request --
+POST /api/me/playlists/$commute/moves
+Authorization: Bearer $alice
+
+{"tracks": [{"source": "netease", "id": "186016"}], "before": {"source": "netease", "id": "186016"}}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "before 不能是要移动的歌"}}
+
+-- request --
+POST /api/me/playlists/$commute/moves
+Authorization: Bearer $alice
+
+{"tracks": []}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "tracks：元素不能少于 1 个"}}
+
+-- request --
 GET /api/me/playlists
 Authorization: Bearer $alice
 -- response --
 200
-{"items": [{"id": "$favorites", "name": "我喜欢", "favorites": true, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/qilixiang.jpg"}, {"id": "$commute", "name": "上班路上", "favorites": false, "trackCount": 0, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": null}]}
+{"items": [{"id": "$favorites", "name": "我喜欢", "favorites": true, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/qilixiang.jpg"}, {"id": "$commute", "name": "上班路上", "favorites": false, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/example.jpg"}]}
 
 -- request --
 POST /api/me/playlists/$favorites/removals
 Authorization: Bearer $alice
 
-{"track": {"source": "netease", "id": "186016"}}
+{"tracks": [{"source": "netease", "id": "186016"}, {"source": "netease", "id": "999"}]}
 -- response --
 204
 
@@ -147,7 +238,7 @@ Authorization: Bearer $alice
 POST /api/me/playlists/$favorites/removals
 Authorization: Bearer $alice
 
-{"track": {"source": "netease", "id": "186016"}}
+{"tracks": [{"source": "netease", "id": "186016"}, {"source": "netease", "id": "999"}]}
 -- response --
 204
 
@@ -176,6 +267,40 @@ Authorization: Bearer $bob
 {"account": {"username": "bob"}}
 
 -- request --
+GET /api/me/playlists
+Authorization: Bearer $bob
+-- response --
+200
+{"items": [{"id": "$bobFavorites", "name": "我喜欢", "favorites": true, "trackCount": 0, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": null}]}
+
+-- request --
+POST /api/me/playlists/$bobFavorites/copies
+Authorization: Bearer $bob
+
+{"from": "$favorites", "tracks": [{"source": "netease", "id": "185811"}]}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "歌单不存在"}}
+
+-- request --
+POST /api/me/playlists/$favorites/copies
+Authorization: Bearer $bob
+
+{"from": "$bobFavorites", "tracks": [{"source": "netease", "id": "185811"}]}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "歌单不存在"}}
+
+-- request --
+POST /api/me/playlists/$favorites/moves
+Authorization: Bearer $bob
+
+{"tracks": [{"source": "netease", "id": "185811"}]}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "歌单不存在"}}
+
+-- request --
 PATCH /api/me/playlists/$favorites
 Authorization: Bearer $bob
 
@@ -197,7 +322,7 @@ Authorization: Bearer $bob
 POST /api/me/playlists/$favorites/removals
 Authorization: Bearer $bob
 
-{"track": {"source": "netease", "id": "185811"}}
+{"tracks": [{"source": "netease", "id": "185811"}]}
 -- response --
 404
 {"error": {"code": "NOT_FOUND", "message": "歌单不存在"}}

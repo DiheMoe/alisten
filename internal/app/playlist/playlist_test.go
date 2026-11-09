@@ -14,6 +14,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/port/porttest"
 	"github.com/dihemoe/alisten/internal/domain/member"
+	playlistorder "github.com/dihemoe/alisten/internal/domain/playlist"
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
@@ -118,6 +119,15 @@ func TestGuestCannotUsePlaylists(t *testing.T) {
 	if _, err := f.svc.Add(t.Context(), guest.ID, "any", sunny); !errors.Is(err, ErrNotRegistered) {
 		t.Errorf("游客收藏 = %v，期望 ErrNotRegistered", err)
 	}
+	if err := f.svc.Remove(t.Context(), guest.ID, "any", []track.Track{sunny}); !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("游客批量移出 = %v，期望 ErrNotRegistered", err)
+	}
+	if _, err := f.svc.Copy(t.Context(), guest.ID, "from", "to", []track.Track{sunny}); !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("游客复制 = %v，期望 ErrNotRegistered", err)
+	}
+	if err := f.svc.Move(t.Context(), guest.ID, "any", []track.Track{sunny}, nil); !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("游客调整顺序 = %v，期望 ErrNotRegistered", err)
+	}
 	if len(f.quota.keys) != 0 {
 		t.Errorf("游客不应消耗额度：%v", f.quota.keys)
 	}
@@ -170,7 +180,7 @@ func TestAddTakesMetaFromTheServer(t *testing.T) {
 	if want := []string{"playlist:member:" + alice.ID}; !slices.Equal(f.quota.keys, want) {
 		t.Errorf("取的额度 = %v，期望 %v", f.quota.keys, want)
 	}
-	if err := f.svc.Remove(t.Context(), alice.ID, favorites, sunny); err != nil {
+	if err := f.svc.Remove(t.Context(), alice.ID, favorites, []track.Track{sunny}); err != nil {
 		t.Fatal(err)
 	}
 	if items, _ := f.svc.Items(t.Context(), alice.ID, favorites); len(items) != 0 {
@@ -211,6 +221,10 @@ func (fullPlaylists) AddPlaylistItem(context.Context, string, string, port.Playl
 	return port.ErrPlaylistLimit
 }
 
+func (fullPlaylists) CopyPlaylistItems(context.Context, string, string, string, []track.Track, int) (int, error) {
+	return 0, port.ErrPlaylistLimit
+}
+
 func TestAddReportsFullPlaylist(t *testing.T) {
 	f := newFixture(t)
 	alice := f.member(t, "alice")
@@ -230,5 +244,47 @@ func TestFavoritesStayFixed(t *testing.T) {
 	}
 	if err := f.svc.Delete(t.Context(), alice.ID, favorites); !errors.Is(err, port.ErrFavoritesFixed) {
 		t.Errorf("删除“我喜欢” = %v，期望 ErrFavoritesFixed", err)
+	}
+}
+
+func TestCopyReportsFullPlaylist(t *testing.T) {
+	f := newFixture(t)
+	alice := f.member(t, "alice")
+	favorites := f.favorites(t, alice.ID)
+	commute, err := f.svc.Create(t.Context(), alice.ID, "通勤")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Add(t.Context(), alice.ID, favorites, sunny); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := f.svc.Copy(t.Context(), alice.ID, favorites, commute.ID, []track.Track{sunny}); err != nil || n != 1 {
+		t.Errorf("复制 = %d, %v，期望 1", n, err)
+	}
+	if len(f.quota.keys) != 1 {
+		t.Errorf("复制不应取收藏额度：%v", f.quota.keys)
+	}
+	f.svc.playlists = fullPlaylists{f.store}
+	if _, err := f.svc.Copy(t.Context(), alice.ID, favorites, commute.ID, []track.Track{sunny}); !errors.Is(err, ErrPlaylistFull) {
+		t.Errorf("歌单满了时 = %v，期望 ErrPlaylistFull", err)
+	}
+}
+
+func TestMoveReordersAndReportsDomainErrors(t *testing.T) {
+	f := newFixture(t)
+	alice := f.member(t, "alice")
+	favorites := f.favorites(t, alice.ID)
+	if _, err := f.svc.Add(t.Context(), alice.ID, favorites, sunny); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Move(t.Context(), alice.ID, favorites, []track.Track{sunny}, &sunny); !errors.Is(err, playlistorder.ErrBeforeMoved) {
+		t.Errorf("before 是被移动的歌 = %v，期望 ErrBeforeMoved", err)
+	}
+	missing := track.Track{Source: track.NetEase, ID: "1"}
+	if err := f.svc.Move(t.Context(), alice.ID, favorites, []track.Track{sunny}, &missing); !errors.Is(err, playlistorder.ErrBeforeMissing) {
+		t.Errorf("before 不在歌单里 = %v，期望 ErrBeforeMissing", err)
+	}
+	if err := f.svc.Move(t.Context(), alice.ID, favorites, []track.Track{sunny}, nil); err != nil {
+		t.Errorf("移到最后 = %v", err)
 	}
 }

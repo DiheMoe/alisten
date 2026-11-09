@@ -117,11 +117,29 @@ func (s *Service) Add(ctx context.Context, memberID, id string, t track.Track) (
 	return item, nil
 }
 
-func (s *Service) Remove(ctx context.Context, memberID, id string, t track.Track) error {
+func (s *Service) Remove(ctx context.Context, memberID, id string, tracks []track.Track) error {
 	if err := s.registered(ctx, memberID); err != nil {
 		return err
 	}
-	return s.playlists.RemovePlaylistItem(ctx, memberID, id, t)
+	return s.playlists.RemovePlaylistItems(ctx, memberID, id, tracks)
+}
+
+func (s *Service) Copy(ctx context.Context, memberID, fromID, toID string, tracks []track.Track) (int, error) {
+	if err := s.registered(ctx, memberID); err != nil {
+		return 0, err
+	}
+	n, err := s.playlists.CopyPlaylistItems(ctx, memberID, fromID, toID, tracks, maxItems)
+	if errors.Is(err, port.ErrPlaylistLimit) {
+		return 0, ErrPlaylistFull
+	}
+	return n, err
+}
+
+func (s *Service) Move(ctx context.Context, memberID, id string, tracks []track.Track, before *track.Track) error {
+	if err := s.registered(ctx, memberID); err != nil {
+		return err
+	}
+	return s.playlists.MovePlaylistItems(ctx, memberID, id, tracks, before)
 }
 
 func (s *Service) registered(ctx context.Context, memberID string) error {

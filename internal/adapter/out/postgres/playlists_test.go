@@ -12,6 +12,7 @@ import (
 
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/domain/member"
+	playlistorder "github.com/dihemoe/alisten/internal/domain/playlist"
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
@@ -157,14 +158,14 @@ func TestPlaylistItems(t *testing.T) {
 		t.Errorf("加入别人的歌单 = %v，期望 ErrPlaylistNotFound", err)
 	}
 	for range 2 {
-		if err := store.RemovePlaylistItem(t.Context(), alice.ID, favorites, sunnyItem.Track); err != nil {
+		if err := store.RemovePlaylistItems(t.Context(), alice.ID, favorites, []track.Track{sunnyItem.Track}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if items, err := store.PlaylistItems(t.Context(), alice.ID, favorites); err != nil || !slices.Equal(items, []port.PlaylistItem{clipItem}) {
 		t.Errorf("移除之后的曲目 = %#v, %v", items, err)
 	}
-	if err := store.RemovePlaylistItem(t.Context(), bob.ID, favorites, clipItem.Track); !errors.Is(err, port.ErrPlaylistNotFound) {
+	if err := store.RemovePlaylistItems(t.Context(), bob.ID, favorites, []track.Track{clipItem.Track}); !errors.Is(err, port.ErrPlaylistNotFound) {
 		t.Errorf("从别人的歌单移除 = %v，期望 ErrPlaylistNotFound", err)
 	}
 }
@@ -237,8 +238,12 @@ func TestPlaylistTimestamps(t *testing.T) {
 		{"改名", func() error { return store.RenamePlaylist(t.Context(), alice.ID, created.ID, "上班路上") }, true},
 		{"加入新曲目", func() error { return store.AddPlaylistItem(t.Context(), alice.ID, created.ID, sunnyItem, 10) }, true},
 		{"重复加入", func() error { return store.AddPlaylistItem(t.Context(), alice.ID, created.ID, sunnyItem, 10) }, false},
-		{"移除曲目", func() error { return store.RemovePlaylistItem(t.Context(), alice.ID, created.ID, sunnyItem.Track) }, true},
-		{"移除不存在的曲目", func() error { return store.RemovePlaylistItem(t.Context(), alice.ID, created.ID, sunnyItem.Track) }, false},
+		{"移除曲目", func() error {
+			return store.RemovePlaylistItems(t.Context(), alice.ID, created.ID, []track.Track{sunnyItem.Track})
+		}, true},
+		{"移除不存在的曲目", func() error {
+			return store.RemovePlaylistItems(t.Context(), alice.ID, created.ID, []track.Track{sunnyItem.Track})
+		}, false},
 	}
 	for _, step := range steps {
 		if err := step.do(); err != nil {
@@ -283,24 +288,206 @@ func TestPlaylistCoverIsTheFirstSongWithOne(t *testing.T) {
 	}
 }
 
+func songItem(id string) port.PlaylistItem {
+	return port.PlaylistItem{Track: track.Track{Source: track.NetEase, ID: id}, Meta: track.Meta{Title: "歌" + id, Artist: "艺人", CoverURL: "https://example.com/" + id + ".jpg", PageURL: "https://music.163.com/#/song?id=" + id, Duration: time.Minute}}
+}
+
+func displayIDs(t *testing.T, store *Store, ownerID, id string) []string {
+	t.Helper()
+	items, err := store.PlaylistItems(t.Context(), ownerID, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]string, len(items))
+	for i, item := range items {
+		ids[i] = item.Track.ID
+	}
+	return ids
+}
+
+// 依次加入 ids，显示顺序与 ids 相反。
+func filled(t *testing.T, store *Store, ownerID, name string, ids ...string) string {
+	t.Helper()
+	p, err := store.CreatePlaylist(t.Context(), ownerID, name, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids {
+		if err := store.AddPlaylistItem(t.Context(), ownerID, p.ID, songItem(id), 1000); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return p.ID
+}
+
+func updatedAt(t *testing.T, store *Store, ownerID, id string) time.Time {
+	t.Helper()
+	lists, err := store.MemberPlaylists(t.Context(), ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range lists {
+		if l.ID == id {
+			return l.UpdatedAt
+		}
+	}
+	t.Fatalf("没有歌单 %s", id)
+	return time.Time{}
+}
+
+func trackList(ids ...string) []track.Track {
+	out := make([]track.Track, len(ids))
+	for i, id := range ids {
+		out[i] = track.Track{Source: track.NetEase, ID: id}
+	}
+	return out
+}
+
+func TestRemovePlaylistItemsIgnoresMissingTracks(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	list := filled(t, store, alice.ID, "通勤", "1", "2", "3", "4")
+	if err := store.RemovePlaylistItems(t.Context(), alice.ID, list, trackList("2", "9", "4", "2")); err != nil {
+		t.Fatal(err)
+	}
+	if got := displayIDs(t, store, alice.ID, list); !slices.Equal(got, []string{"3", "1"}) {
+		t.Errorf("批量移出之后 = %v，期望 [3 1]", got)
+	}
+}
+
+func TestCopyPlaylistItems(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	bob := registered(t, store, "bob")
+	from := filled(t, store, alice.ID, "来源", "1", "2", "3", "4")
+	to := filled(t, store, alice.ID, "目标", "3", "9")
+	before := updatedAt(t, store, alice.ID, to)
+
+	n, err := store.CopyPlaylistItems(t.Context(), alice.ID, from, to, trackList("4", "x", "3", "1", "4"), 1000)
+	if err != nil || n != 2 {
+		t.Fatalf("复制 = %d, %v，期望跳过已有的、不存在的和重复的，复制 2 首", n, err)
+	}
+	if got := displayIDs(t, store, alice.ID, to); !slices.Equal(got, []string{"4", "1", "9", "3"}) {
+		t.Errorf("复制之后 = %v，期望新复制的在最前且保持给定的先后 [4 1 9 3]", got)
+	}
+	items, _ := store.PlaylistItems(t.Context(), alice.ID, to)
+	if want := songItem("4"); items[0] != want {
+		t.Errorf("复制的曲目 = %#v，期望带着元数据快照 %#v", items[0], want)
+	}
+	if !updatedAt(t, store, alice.ID, to).After(before) {
+		t.Error("复制之后目标歌单的更新时间没有推进")
+	}
+
+	if err := store.AddPlaylistItem(t.Context(), alice.ID, to, songItem("5"), 1000); err != nil {
+		t.Fatal(err)
+	}
+	if got := displayIDs(t, store, alice.ID, to); got[0] != "5" {
+		t.Errorf("复制之后新加入的歌 = %v，期望仍在最前", got)
+	}
+
+	before = updatedAt(t, store, alice.ID, to)
+	if n, err := store.CopyPlaylistItems(t.Context(), alice.ID, from, to, trackList("1", "x"), 1000); err != nil || n != 0 {
+		t.Errorf("没有可复制的歌 = %d, %v，期望 0", n, err)
+	}
+	if !updatedAt(t, store, alice.ID, to).Equal(before) {
+		t.Error("没有复制任何歌，更新时间却变了")
+	}
+
+	if n, err := store.CopyPlaylistItems(t.Context(), alice.ID, from, to, trackList("2"), 5); !errors.Is(err, port.ErrPlaylistLimit) || n != 0 {
+		t.Errorf("装不下时 = %d, %v，期望 ErrPlaylistLimit", n, err)
+	}
+	if n, err := store.CopyPlaylistItems(t.Context(), alice.ID, from, to, trackList("2"), 6); err != nil || n != 1 {
+		t.Errorf("正好装满时 = %d, %v，期望复制 1 首", n, err)
+	}
+
+	full := filled(t, store, alice.ID, "满", "1", "2")
+	if _, err := store.CopyPlaylistItems(t.Context(), alice.ID, from, full, trackList("3", "4", "1"), 3); !errors.Is(err, port.ErrPlaylistLimit) {
+		t.Fatalf("超限 = %v，期望 ErrPlaylistLimit", err)
+	}
+	if got := displayIDs(t, store, alice.ID, full); !slices.Equal(got, []string{"2", "1"}) {
+		t.Errorf("整批拒绝之后 = %v，期望一首也没有复制", got)
+	}
+
+	other := filled(t, store, bob.ID, "别人的", "7")
+	for name, call := range map[string]func() (int, error){
+		"来源是别人的": func() (int, error) {
+			return store.CopyPlaylistItems(t.Context(), alice.ID, other, to, trackList("7"), 1000)
+		},
+		"目标是别人的": func() (int, error) {
+			return store.CopyPlaylistItems(t.Context(), alice.ID, from, other, trackList("1"), 1000)
+		},
+		"来源不是 UUID": func() (int, error) {
+			return store.CopyPlaylistItems(t.Context(), alice.ID, "x", to, trackList("1"), 1000)
+		},
+		"目标不是 UUID": func() (int, error) {
+			return store.CopyPlaylistItems(t.Context(), alice.ID, from, "x", trackList("1"), 1000)
+		},
+	} {
+		if n, err := call(); !errors.Is(err, port.ErrPlaylistNotFound) || n != 0 {
+			t.Errorf("%s = %d, %v，期望 ErrPlaylistNotFound", name, n, err)
+		}
+	}
+}
+
+func TestConcurrentCrossCopiesDoNotDeadlock(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	a := filled(t, store, alice.ID, "甲", "1", "2")
+	b := filled(t, store, alice.ID, "乙", "3", "4")
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Go(func() { _, _ = store.CopyPlaylistItems(t.Context(), alice.ID, a, b, trackList("1", "2"), 1000) })
+		wg.Go(func() { _, _ = store.CopyPlaylistItems(t.Context(), alice.ID, b, a, trackList("3", "4"), 1000) })
+	}
+	wg.Wait()
+	for _, id := range []string{a, b} {
+		if got := displayIDs(t, store, alice.ID, id); len(got) != 4 {
+			t.Errorf("互相复制之后有 %v，期望各 4 首", got)
+		}
+	}
+}
+
+func TestConcurrentRemovalsAndMovesDoNotDeadlock(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	ids := make([]string, 40)
+	for i := range ids {
+		ids[i] = strconv.Itoa(i)
+	}
+	list := filled(t, store, alice.ID, "通勤", ids...)
+	errs := make(chan error, 40)
+	var wg sync.WaitGroup
+	for i := range 20 {
+		wg.Go(func() { errs <- store.RemovePlaylistItems(t.Context(), alice.ID, list, trackList(ids[i])) })
+		wg.Go(func() { errs <- store.MovePlaylistItems(t.Context(), alice.ID, list, trackList(ids[20+i]), nil) })
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Errorf("并发移出和移动 = %v，期望都成功", err)
+		}
+	}
+	got := displayIDs(t, store, alice.ID, list)
+	slices.Sort(got)
+	want := slices.Clone(ids[20:])
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Errorf("并发移出和移动之后有 %v，期望只剩没有移出的 %v", got, want)
+	}
+}
+
 func TestConcurrentRemovalsAndDeletesDoNotDeadlock(t *testing.T) {
 	store, pool := newStore(t)
 	alice := registered(t, store, "alice")
 	lists := make([]string, 20)
 	for i := range lists {
-		p, err := store.CreatePlaylist(t.Context(), alice.ID, "歌单"+strconv.Itoa(i), 50)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := store.AddPlaylistItem(t.Context(), alice.ID, p.ID, sunnyItem, 1000); err != nil {
-			t.Fatal(err)
-		}
-		lists[i] = p.ID
+		lists[i] = filled(t, store, alice.ID, "歌单"+strconv.Itoa(i), "1", "2", "3")
 	}
 	removed, deleted := make(chan error, len(lists)), make(chan error, len(lists))
 	var wg sync.WaitGroup
 	for _, list := range lists {
-		wg.Go(func() { removed <- store.RemovePlaylistItem(t.Context(), alice.ID, list, sunnyItem.Track) })
+		wg.Go(func() { removed <- store.RemovePlaylistItems(t.Context(), alice.ID, list, trackList("1", "2", "3")) })
 		wg.Go(func() { deleted <- store.DeletePlaylist(t.Context(), alice.ID, list) })
 	}
 	wg.Wait()
@@ -322,5 +509,80 @@ func TestConcurrentRemovalsAndDeletesDoNotDeadlock(t *testing.T) {
 	var count int
 	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM playlist_items`).Scan(&count); err != nil || count != 0 {
 		t.Errorf("删除歌单之后还有 %d 首曲目, %v，期望 0", count, err)
+	}
+}
+
+func TestMovePlaylistItems(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	bob := registered(t, store, "bob")
+	list := filled(t, store, alice.ID, "通勤", "5", "4", "3", "2", "1")
+	at := func(id string) *track.Track { return &trackList(id)[0] }
+	steps := []struct {
+		name   string
+		moved  []track.Track
+		before *track.Track
+		want   []string
+	}{
+		{"移到最前", trackList("4"), at("1"), []string{"4", "1", "2", "3", "5"}},
+		{"移到最后", trackList("4"), nil, []string{"1", "2", "3", "5", "4"}},
+		{"移到中间", trackList("1"), at("5"), []string{"2", "3", "1", "5", "4"}},
+		{"多首保持给定的先后", trackList("4", "2"), at("3"), []string{"4", "2", "3", "1", "5"}},
+		{"忽略不在歌单里的歌", trackList("x", "5"), at("2"), []string{"4", "5", "2", "3", "1"}},
+	}
+	for _, step := range steps {
+		if err := store.MovePlaylistItems(t.Context(), alice.ID, list, step.moved, step.before); err != nil {
+			t.Fatalf("%s：%v", step.name, err)
+		}
+		if got := displayIDs(t, store, alice.ID, list); !slices.Equal(got, step.want) {
+			t.Errorf("%s之后 = %v，期望 %v", step.name, got, step.want)
+		}
+	}
+
+	if err := store.AddPlaylistItem(t.Context(), alice.ID, list, songItem("6"), 1000); err != nil {
+		t.Fatal(err)
+	}
+	if got := displayIDs(t, store, alice.ID, list); got[0] != "6" {
+		t.Errorf("移动之后新加入的歌 = %v，期望仍在最前", got)
+	}
+
+	errs := []struct {
+		name   string
+		moved  []track.Track
+		before *track.Track
+		want   error
+	}{
+		{"before 是被移动的歌", trackList("1", "2"), at("2"), playlistorder.ErrBeforeMoved},
+		{"before 不在歌单里", trackList("1"), at("x"), playlistorder.ErrBeforeMissing},
+	}
+	for _, e := range errs {
+		if err := store.MovePlaylistItems(t.Context(), alice.ID, list, e.moved, e.before); !errors.Is(err, e.want) {
+			t.Errorf("%s = %v，期望 %v", e.name, err, e.want)
+		}
+	}
+	if err := store.MovePlaylistItems(t.Context(), bob.ID, list, trackList("1"), nil); !errors.Is(err, port.ErrPlaylistNotFound) {
+		t.Errorf("移动别人的歌单 = %v，期望 ErrPlaylistNotFound", err)
+	}
+	if err := store.MovePlaylistItems(t.Context(), alice.ID, "not-a-uuid", trackList("1"), nil); !errors.Is(err, port.ErrPlaylistNotFound) {
+		t.Errorf("移动不存在的歌单 = %v，期望 ErrPlaylistNotFound", err)
+	}
+}
+
+func TestMovePlaylistItemsAdvancesUpdatedAt(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	list := filled(t, store, alice.ID, "通勤", "3", "2", "1")
+	before := updatedAt(t, store, alice.ID, list)
+	if err := store.MovePlaylistItems(t.Context(), alice.ID, list, trackList("x"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if !updatedAt(t, store, alice.ID, list).Equal(before) {
+		t.Error("没有歌被移动，更新时间却变了")
+	}
+	if err := store.MovePlaylistItems(t.Context(), alice.ID, list, trackList("1"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if !updatedAt(t, store, alice.ID, list).After(before) {
+		t.Error("移动之后更新时间没有推进")
 	}
 }

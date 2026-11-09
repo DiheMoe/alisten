@@ -88,6 +88,35 @@ func decodeInteger(raw json.RawMessage, path string) (int64, error) {
 	return n, nil
 }
 
+// 先数元素再逐个解码：过长的数组不必解码就能拒绝。
+func decodeArray[T any](decode func(json.RawMessage, string) (T, error), maxItems int) func(json.RawMessage, string) ([]T, error) {
+	return func(raw json.RawMessage, path string) ([]T, error) {
+		var elems []json.RawMessage
+		if bytes.Equal(raw, null) || json.Unmarshal(raw, &elems) != nil {
+			return nil, invalid(path, "应为数组")
+		}
+		if len(elems) > maxItems {
+			return nil, invalid(path, fmt.Sprintf("元素不能超过 %d 个", maxItems))
+		}
+		out := make([]T, len(elems))
+		for i, e := range elems {
+			v, err := decode(e, fmt.Sprintf("%s[%d]", path, i))
+			if err != nil {
+				return nil, err
+			}
+			out[i] = v
+		}
+		return out, nil
+	}
+}
+
+func checkMinItems[T any](a []T, path string, n int) error {
+	if len(a) < n {
+		return invalid(path, fmt.Sprintf("元素不能少于 %d 个", n))
+	}
+	return nil
+}
+
 func checkMinLength(s, path string, n int) error {
 	if utf8.RuneCountInString(s) < n {
 		return invalid(path, fmt.Sprintf("长度不能少于 %d 个字符", n))

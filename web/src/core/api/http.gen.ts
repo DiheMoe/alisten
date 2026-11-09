@@ -109,6 +109,15 @@ export interface ChangePasswordRequest {
   newPassword: string
 }
 
+export interface CopyMyPlaylistItemsRequest {
+  from: string
+  tracks: Track[]
+}
+
+export interface CopyMyPlaylistItemsResponse {
+  added: number
+}
+
 export type CreateMemberRequest = Record<string, never>
 
 export interface CreateMemberResponse {
@@ -173,6 +182,11 @@ export interface LoginResponse {
   memberToken: string
 }
 
+export interface MoveMyPlaylistItemsRequest {
+  before?: Track
+  tracks: Track[]
+}
+
 export interface RegisterRequest {
   password: string
   username: string
@@ -182,8 +196,8 @@ export interface RegisterResponse {
   account: Account
 }
 
-export interface RemoveMyPlaylistItemRequest {
-  track: Track
+export interface RemoveMyPlaylistItemsRequest {
+  tracks: Track[]
 }
 
 export interface RenameMyPlaylistRequest {
@@ -229,7 +243,9 @@ export function httpClient(send: HttpSend) {
     deleteMyPlaylist: (id: string) => send<void>({ method: 'DELETE', path: `/api/me/playlists/${encodeURIComponent(id)}`, auth: 'member' }),
     listMyPlaylistItems: (id: string) => send<ListMyPlaylistItemsResponse>({ method: 'GET', path: `/api/me/playlists/${encodeURIComponent(id)}/items`, auth: 'member' }),
     addMyPlaylistItem: (id: string, body: AddMyPlaylistItemRequest) => send<AddMyPlaylistItemResponse>({ method: 'POST', path: `/api/me/playlists/${encodeURIComponent(id)}/items`, auth: 'member', body }),
-    removeMyPlaylistItem: (id: string, body: RemoveMyPlaylistItemRequest) => send<void>({ method: 'POST', path: `/api/me/playlists/${encodeURIComponent(id)}/removals`, auth: 'member', body }),
+    removeMyPlaylistItems: (id: string, body: RemoveMyPlaylistItemsRequest) => send<void>({ method: 'POST', path: `/api/me/playlists/${encodeURIComponent(id)}/removals`, auth: 'member', body }),
+    copyMyPlaylistItems: (id: string, body: CopyMyPlaylistItemsRequest) => send<CopyMyPlaylistItemsResponse>({ method: 'POST', path: `/api/me/playlists/${encodeURIComponent(id)}/copies`, auth: 'member', body }),
+    moveMyPlaylistItems: (id: string, body: MoveMyPlaylistItemsRequest) => send<void>({ method: 'POST', path: `/api/me/playlists/${encodeURIComponent(id)}/moves`, auth: 'member', body }),
     listRooms: () => send<ListRoomsResponse>({ method: 'GET', path: '/api/rooms', auth: 'none' }),
     getRoom: (ref: string) => send<RoomListing>({ method: 'GET', path: `/api/rooms/${encodeURIComponent(ref)}`, auth: 'none' }),
     createRoom: (body: CreateRoomRequest) => send<CreateRoomResponse>({ method: 'POST', path: '/api/rooms', auth: 'none', body }),

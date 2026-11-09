@@ -238,7 +238,7 @@ func TestPlaylistLinkTracks(t *testing.T) {
 		t.Errorf("歌单里的曲目 = %+v，期望一首 ID %s、封面 %s", items.Items, link, coverURL)
 	}
 
-	call("POST /api/me/playlists/"+favorites+"/removals"+auth+"\n\n"+`{"track": {"source": "link", "id": "hTTps://example.COM/Song.mp3"}}`, http.StatusNoContent, nil)
+	call("POST /api/me/playlists/"+favorites+"/removals"+auth+"\n\n"+`{"tracks": [{"source": "link", "id": "hTTps://example.COM/Song.mp3"}]}`, http.StatusNoContent, nil)
 	call("GET /api/me/playlists/"+favorites+"/items"+auth, http.StatusOK, &items)
 	if len(items.Items) != 0 {
 		t.Errorf("换一种大小写移出之后还有 %+v，期望没有", items.Items)

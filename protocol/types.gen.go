@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "7380d77bc52d7f95"
+const Version = "1b53e1e08b0452e4"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -164,6 +164,23 @@ type ChatSendRequest struct {
 	Content string `json:"content"`
 }
 
+type CopyMyPlaylistItemsRequest struct {
+	From   string  `json:"from"`
+	Tracks []Track `json:"tracks"`
+}
+
+func (v CopyMyPlaylistItemsRequest) MarshalJSON() ([]byte, error) {
+	type plain CopyMyPlaylistItemsRequest
+	if v.Tracks == nil {
+		v.Tracks = []Track{}
+	}
+	return json.Marshal(plain(v))
+}
+
+type CopyMyPlaylistItemsResponse struct {
+	Added int64 `json:"added"`
+}
+
 type CreateMemberRequest struct{}
 
 type CreateMemberResponse struct {
@@ -321,6 +338,19 @@ func (v Members) MarshalJSON() ([]byte, error) {
 	type plain Members
 	if v.Sessions == nil {
 		v.Sessions = []Member{}
+	}
+	return json.Marshal(plain(v))
+}
+
+type MoveMyPlaylistItemsRequest struct {
+	Before *Track  `json:"before,omitempty"`
+	Tracks []Track `json:"tracks"`
+}
+
+func (v MoveMyPlaylistItemsRequest) MarshalJSON() ([]byte, error) {
+	type plain MoveMyPlaylistItemsRequest
+	if v.Tracks == nil {
+		v.Tracks = []Track{}
 	}
 	return json.Marshal(plain(v))
 }
@@ -496,8 +526,16 @@ type RegisterResponse struct {
 	Account Account `json:"account"`
 }
 
-type RemoveMyPlaylistItemRequest struct {
-	Track Track `json:"track"`
+type RemoveMyPlaylistItemsRequest struct {
+	Tracks []Track `json:"tracks"`
+}
+
+func (v RemoveMyPlaylistItemsRequest) MarshalJSON() ([]byte, error) {
+	type plain RemoveMyPlaylistItemsRequest
+	if v.Tracks == nil {
+		v.Tracks = []Track{}
+	}
+	return json.Marshal(plain(v))
 }
 
 type RenameMyPlaylistRequest struct {
@@ -726,7 +764,9 @@ var (
 	RouteDeleteMyPlaylist             = Route{Pattern: "DELETE /api/me/playlists/{id}", Auth: AuthMember, Status: 204}
 	RouteListMyPlaylistItems          = Route{Pattern: "GET /api/me/playlists/{id}/items", Auth: AuthMember, Status: 200}
 	RouteAddMyPlaylistItem            = Route{Pattern: "POST /api/me/playlists/{id}/items", Auth: AuthMember, Status: 201}
-	RouteRemoveMyPlaylistItem         = Route{Pattern: "POST /api/me/playlists/{id}/removals", Auth: AuthMember, Status: 204}
+	RouteRemoveMyPlaylistItems        = Route{Pattern: "POST /api/me/playlists/{id}/removals", Auth: AuthMember, Status: 204}
+	RouteCopyMyPlaylistItems          = Route{Pattern: "POST /api/me/playlists/{id}/copies", Auth: AuthMember, Status: 200}
+	RouteMoveMyPlaylistItems          = Route{Pattern: "POST /api/me/playlists/{id}/moves", Auth: AuthMember, Status: 204}
 	RouteListRooms                    = Route{Pattern: "GET /api/rooms", Auth: AuthNone, Status: 200}
 	RouteGetRoom                      = Route{Pattern: "GET /api/rooms/{ref}", Auth: AuthNone, Status: 200}
 	RouteCreateRoom                   = Route{Pattern: "POST /api/rooms", Auth: AuthNone, Status: 201, Location: true}

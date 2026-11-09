@@ -41,7 +41,7 @@ type streamClose struct {
 func (s *server) roomEvents(w http.ResponseWriter, r *http.Request) {
 	// 打开事件流的期限与 WebSocket 的握手相同，打开之后的推送不设期限。
 	setup, cancel := context.WithTimeout(r.Context(), helloTimeout)
-	ctx, opened, err := s.serve(setup, w, r, protocol.AuthTicket, s.observe)
+	ctx, opened, err := s.serve(setup, w, r, protocol.AuthTicket, maxBodyBytes, s.observe)
 	cancel()
 	if err != nil {
 		s.fail(ctx, w, r, err)

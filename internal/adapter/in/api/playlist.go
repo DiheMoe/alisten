@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/dihemoe/alisten/internal/app/port"
+	"github.com/dihemoe/alisten/internal/domain/track"
 	"github.com/dihemoe/alisten/protocol"
 )
 
@@ -91,10 +92,43 @@ func (s *server) addMyPlaylistItem(ctx context.Context, c call) (any, error) {
 	return protocol.AddMyPlaylistItemResponse{Item: s.playlistItemDTO(item)}, nil
 }
 
-func (s *server) removeMyPlaylistItem(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeRemoveMyPlaylistItemRequest(c.body)
+func tracksOf(in []protocol.Track) []track.Track {
+	out := make([]track.Track, len(in))
+	for i, t := range in {
+		out[i] = trackOf(t)
+	}
+	return out
+}
+
+func (s *server) removeMyPlaylistItems(ctx context.Context, c call) (any, error) {
+	req, err := protocol.DecodeRemoveMyPlaylistItemsRequest(c.body)
 	if err != nil {
 		return nil, err
 	}
-	return nil, s.Playlists.Remove(ctx, c.member.ID, c.r.PathValue("id"), trackOf(req.Track))
+	return nil, s.Playlists.Remove(ctx, c.member.ID, c.r.PathValue("id"), tracksOf(req.Tracks))
+}
+
+func (s *server) copyMyPlaylistItems(ctx context.Context, c call) (any, error) {
+	req, err := protocol.DecodeCopyMyPlaylistItemsRequest(c.body)
+	if err != nil {
+		return nil, err
+	}
+	n, err := s.Playlists.Copy(ctx, c.member.ID, req.From, c.r.PathValue("id"), tracksOf(req.Tracks))
+	if err != nil {
+		return nil, err
+	}
+	return protocol.CopyMyPlaylistItemsResponse{Added: int64(n)}, nil
+}
+
+func (s *server) moveMyPlaylistItems(ctx context.Context, c call) (any, error) {
+	req, err := protocol.DecodeMoveMyPlaylistItemsRequest(c.body)
+	if err != nil {
+		return nil, err
+	}
+	var before *track.Track
+	if req.Before != nil {
+		t := trackOf(*req.Before)
+		before = &t
+	}
+	return nil, s.Playlists.Move(ctx, c.member.ID, c.r.PathValue("id"), tracksOf(req.Tracks), before)
 }

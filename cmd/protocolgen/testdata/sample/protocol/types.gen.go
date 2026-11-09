@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "362d144af81ba8bf"
+const Version = "5e495c1e23fa03a5"
 
 type AdminUpdateRoomRequest struct {
 	Homepage *string `json:"homepage,omitempty"`
@@ -88,6 +88,18 @@ type QueueRemoveRequest struct {
 	EntryID string `json:"entryId"`
 }
 
+type RemoveTracksRequest struct {
+	Tracks []Track `json:"tracks"`
+}
+
+func (v RemoveTracksRequest) MarshalJSON() ([]byte, error) {
+	type plain RemoveTracksRequest
+	if v.Tracks == nil {
+		v.Tracks = []Track{}
+	}
+	return json.Marshal(plain(v))
+}
+
 type Room struct {
 	Gain    float64  `json:"gain"`
 	ID      string   `json:"id"`
@@ -154,6 +166,7 @@ const (
 
 var (
 	RouteCreateMember    = Route{Pattern: "POST /api/members", Auth: AuthNone, Status: 201}
+	RouteRemoveTracks    = Route{Pattern: "POST /api/tracks/removals", Auth: AuthNone, Status: 204}
 	RouteGetRoom         = Route{Pattern: "GET /api/rooms/{ref}", Auth: AuthNone, Status: 200}
 	RouteCreateRoom      = Route{Pattern: "POST /api/rooms", Auth: AuthNone, Status: 201, Location: true}
 	RouteGetSeat         = Route{Pattern: "GET /api/rooms/{ref}/seats/{seat}", Auth: AuthMember, Status: 200}

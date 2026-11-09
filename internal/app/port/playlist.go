@@ -49,6 +49,12 @@ type Playlists interface {
 	PlaylistItems(ctx context.Context, ownerID, id string) ([]PlaylistItem, error)
 	// 已经在歌单里时什么也不做；已有 limit 首时返回 ErrPlaylistLimit。
 	AddPlaylistItem(ctx context.Context, ownerID, id string, item PlaylistItem, limit int) error
-	// 不在歌单里时什么也不做。
-	RemovePlaylistItem(ctx context.Context, ownerID, id string, t track.Track) error
+	// 不在歌单里的歌忽略。
+	RemovePlaylistItems(ctx context.Context, ownerID, id string, tracks []track.Track) error
+	// 把 fromID 歌单里的这些歌连同元数据复制到 toID 歌单，返回复制的数量。fromID 不属于 ownerID 时返回 ErrPlaylistNotFound。
+	// 不在 fromID 里的和已在 toID 里的跳过；新复制的排在最前，tracks[0] 最靠前。
+	// 复制之后超过 limit 首时整批拒绝，返回 ErrPlaylistLimit。
+	CopyPlaylistItems(ctx context.Context, ownerID, fromID, toID string, tracks []track.Track, limit int) (int, error)
+	// 按 playlist.Move 的规则调整顺序，错误原样返回。
+	MovePlaylistItems(ctx context.Context, ownerID, id string, tracks []track.Track, before *track.Track) error
 }

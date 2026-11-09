@@ -99,8 +99,16 @@ func DecodeAddMyPlaylistItemRequest(body []byte) (AddMyPlaylistItemRequest, erro
 	return decodeAddMyPlaylistItemRequest(body, "")
 }
 
-func DecodeRemoveMyPlaylistItemRequest(body []byte) (RemoveMyPlaylistItemRequest, error) {
-	return decodeRemoveMyPlaylistItemRequest(body, "")
+func DecodeRemoveMyPlaylistItemsRequest(body []byte) (RemoveMyPlaylistItemsRequest, error) {
+	return decodeRemoveMyPlaylistItemsRequest(body, "")
+}
+
+func DecodeCopyMyPlaylistItemsRequest(body []byte) (CopyMyPlaylistItemsRequest, error) {
+	return decodeCopyMyPlaylistItemsRequest(body, "")
+}
+
+func DecodeMoveMyPlaylistItemsRequest(body []byte) (MoveMyPlaylistItemsRequest, error) {
+	return decodeMoveMyPlaylistItemsRequest(body, "")
 }
 
 func DecodeCreateRoomRequest(body []byte) (CreateRoomRequest, error) {
@@ -451,6 +459,27 @@ func decodeChatSendRequest(raw json.RawMessage, path string) (ChatSendRequest, e
 	return v, nil
 }
 
+func decodeCopyMyPlaylistItemsRequest(raw json.RawMessage, path string) (CopyMyPlaylistItemsRequest, error) {
+	var v CopyMyPlaylistItemsRequest
+	m, err := decodeObject(raw, path, "from", "tracks")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "from", "tracks"); err != nil {
+		return v, err
+	}
+	if v.From, err = decodeString(m["from"], field(path, "from")); err != nil {
+		return v, err
+	}
+	if v.Tracks, err = decodeArray(decodeTrack, 1000)(m["tracks"], field(path, "tracks")); err != nil {
+		return v, err
+	}
+	if err = checkMinItems(v.Tracks, field(path, "tracks"), 1); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
 func decodeCreateMemberRequest(raw json.RawMessage, path string) (CreateMemberRequest, error) {
 	var v CreateMemberRequest
 	_, err := decodeObject(raw, path)
@@ -578,6 +607,31 @@ func decodeLoginRequest(raw json.RawMessage, path string) (LoginRequest, error) 
 		return v, err
 	}
 	if err = checkPattern(v.Username, field(path, "username"), patternLoginRequestUsername); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+func decodeMoveMyPlaylistItemsRequest(raw json.RawMessage, path string) (MoveMyPlaylistItemsRequest, error) {
+	var v MoveMyPlaylistItemsRequest
+	m, err := decodeObject(raw, path, "before", "tracks")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "tracks"); err != nil {
+		return v, err
+	}
+	if r, ok := m["before"]; ok {
+		x, err := decodeTrack(r, field(path, "before"))
+		if err != nil {
+			return v, err
+		}
+		v.Before = &x
+	}
+	if v.Tracks, err = decodeArray(decodeTrack, 1000)(m["tracks"], field(path, "tracks")); err != nil {
+		return v, err
+	}
+	if err = checkMinItems(v.Tracks, field(path, "tracks"), 1); err != nil {
 		return v, err
 	}
 	return v, nil
@@ -761,16 +815,19 @@ func decodeRegisterRequest(raw json.RawMessage, path string) (RegisterRequest, e
 	return v, nil
 }
 
-func decodeRemoveMyPlaylistItemRequest(raw json.RawMessage, path string) (RemoveMyPlaylistItemRequest, error) {
-	var v RemoveMyPlaylistItemRequest
-	m, err := decodeObject(raw, path, "track")
+func decodeRemoveMyPlaylistItemsRequest(raw json.RawMessage, path string) (RemoveMyPlaylistItemsRequest, error) {
+	var v RemoveMyPlaylistItemsRequest
+	m, err := decodeObject(raw, path, "tracks")
 	if err != nil {
 		return v, err
 	}
-	if err = requireFields(m, path, "track"); err != nil {
+	if err = requireFields(m, path, "tracks"); err != nil {
 		return v, err
 	}
-	if v.Track, err = decodeTrack(m["track"], field(path, "track")); err != nil {
+	if v.Tracks, err = decodeArray(decodeTrack, 1000)(m["tracks"], field(path, "tracks")); err != nil {
+		return v, err
+	}
+	if err = checkMinItems(v.Tracks, field(path, "tracks"), 1); err != nil {
 		return v, err
 	}
 	return v, nil

@@ -213,6 +213,21 @@
       }
     },
     {
+      "name": "removeTracks",
+      "method": "POST",
+      "path": "/api/tracks/removals",
+      "auth": "none",
+      "status": 204,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tracks": {"type": "array", "items": {"$ref": "#/$defs/Track"}, "minItems": 1, "maxItems": 3}
+        },
+        "required": ["tracks"]
+      }
+    },
+    {
       "name": "getRoom",
       "method": "GET",
       "path": "/api/rooms/{ref}",

@@ -143,17 +143,33 @@ func TestParseIDLRejects(t *testing.T) {
 		{"required 写了不存在的字段", func(d map[string]any) {
 			defs(d)["ErrorInfo"] = object(map[string]any{"message": map[string]any{"type": "string"}}, "message", "code")
 		}, "required 中的 code 不在 properties 里"},
-		{"请求中有数组", func(d map[string]any) {
+		{"请求中有标量数组", func(d map[string]any) {
 			d["x-requests"] = []any{roomRequest(object(map[string]any{
 				"ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			}, "ids"))}
-		}, "数组只能出现在响应和事件中"},
-		{"请求引用的类型中有数组", func(d map[string]any) {
+		}, "请求中的数组元素只能引用对象或枚举类型"},
+		{"请求引用的类型中有可选数组", func(d map[string]any) {
 			defs(d)["Batch"] = object(map[string]any{
-				"ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-			}, "ids")
+				"ids": map[string]any{"type": "array", "items": ref("Empty")},
+			})
 			d["x-requests"] = []any{roomRequest(object(map[string]any{"batch": ref("Batch")}, "batch"))}
-		}, "$defs.Batch.properties.ids：数组只能出现在响应和事件中"},
+		}, "$defs.Batch.properties.ids：数组必须是必填字段"},
+		{"请求数组没有 maxItems", func(d map[string]any) {
+			d["x-requests"] = []any{roomRequest(object(map[string]any{
+				"ids": map[string]any{"type": "array", "items": ref("Empty"), "minItems": 1},
+			}, "ids"))}
+		}, "请求中的数组必须写 maxItems"},
+		{"请求数组的 minItems 大于 maxItems", func(d map[string]any) {
+			d["x-requests"] = []any{roomRequest(object(map[string]any{
+				"ids": map[string]any{"type": "array", "items": ref("Empty"), "minItems": 2, "maxItems": 1},
+			}, "ids"))}
+		}, "minItems 大于 maxItems"},
+		{"响应中的数组写了 minItems", func(d map[string]any) {
+			defs(d)["Batch"] = object(map[string]any{
+				"ids": map[string]any{"type": "array", "items": ref("Empty"), "minItems": 1},
+			}, "ids")
+			d["x-events"] = []any{map[string]any{"type": "batch", "data": ref("Batch")}}
+		}, "不支持 minItems"},
 		{"生成的类型名重名", func(d map[string]any) {
 			defs(d)["RoomSyncRequest"] = object(map[string]any{})
 			d["x-requests"] = []any{roomRequest(object(map[string]any{}))}

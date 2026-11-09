@@ -26,14 +26,17 @@ import (
 	"github.com/dihemoe/alisten/internal/app/realtime"
 	"github.com/dihemoe/alisten/internal/app/site"
 	"github.com/dihemoe/alisten/internal/domain/member"
+	playlistorder "github.com/dihemoe/alisten/internal/domain/playlist"
 	"github.com/dihemoe/alisten/internal/domain/room"
 	"github.com/dihemoe/alisten/internal/lib/logctx"
 	"github.com/dihemoe/alisten/protocol"
 )
 
 const (
-	maxBodyBytes    = 64 << 10
-	requestDeadline = 3 * time.Minute
+	maxBodyBytes = 64 << 10
+	// 歌单的批量接口一次最多 1000 首，链接曲目的 ID 最长 2048 字节，每首再留 256 字节给来源、字段名和 JSON 的标点。
+	maxBatchBodyBytes = 1000 * (2048 + 256)
+	requestDeadline   = 3 * time.Minute
 )
 
 type Services struct {
@@ -113,7 +116,9 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	srv.handle(mux, protocol.RouteDeleteMyPlaylist, srv.deleteMyPlaylist)
 	srv.handle(mux, protocol.RouteListMyPlaylistItems, srv.listMyPlaylistItems)
 	srv.handle(mux, protocol.RouteAddMyPlaylistItem, srv.addMyPlaylistItem)
-	srv.handle(mux, protocol.RouteRemoveMyPlaylistItem, srv.removeMyPlaylistItem)
+	srv.handleLimit(mux, protocol.RouteRemoveMyPlaylistItems, maxBatchBodyBytes, srv.removeMyPlaylistItems)
+	srv.handleLimit(mux, protocol.RouteCopyMyPlaylistItems, maxBatchBodyBytes, srv.copyMyPlaylistItems)
+	srv.handleLimit(mux, protocol.RouteMoveMyPlaylistItems, maxBatchBodyBytes, srv.moveMyPlaylistItems)
 	srv.handle(mux, protocol.RouteListRooms, srv.listRooms)
 	srv.handle(mux, protocol.RouteGetRoom, srv.getRoom)
 	srv.handle(mux, protocol.RouteCreateRoom, srv.createRoom)
@@ -170,10 +175,14 @@ func SameOrigin(allowedOrigins []string, next http.Handler) http.Handler {
 }
 
 func (s *server) handle(mux *http.ServeMux, route protocol.Route, fn handlerFunc) {
+	s.handleLimit(mux, route, maxBodyBytes, fn)
+}
+
+func (s *server) handleLimit(mux *http.ServeMux, route protocol.Route, maxBody int64, fn handlerFunc) {
 	mux.HandleFunc(route.Pattern, func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), requestDeadline)
 		defer cancel()
-		ctx, resp, err := s.serve(ctx, w, r, route.Auth, func(ctx context.Context, c call) (any, error) {
+		ctx, resp, err := s.serve(ctx, w, r, route.Auth, maxBody, func(ctx context.Context, c call) (any, error) {
 			resp, err := fn(ctx, c)
 			if err != nil || !route.Location {
 				return resp, err
@@ -196,7 +205,7 @@ func (s *server) handle(mux *http.ServeMux, route protocol.Route, fn handlerFunc
 
 // 先鉴权再读请求体：后台没有启用时，无论请求是否合法都返回 FORBIDDEN。返回的 ctx 带有凭证所属的成员和房间，
 // 出错时的日志也要带上它们。
-func (s *server) serve(ctx context.Context, w http.ResponseWriter, r *http.Request, auth protocol.Auth, fn handlerFunc) (logCtx context.Context, _ any, err error) {
+func (s *server) serve(ctx context.Context, w http.ResponseWriter, r *http.Request, auth protocol.Auth, maxBody int64, fn handlerFunc) (logCtx context.Context, _ any, err error) {
 	defer func() {
 		if value := recover(); value != nil {
 			logCtx, err = ctx, s.panicked(ctx, r, value)
@@ -229,7 +238,7 @@ func (s *server) serve(ctx context.Context, w http.ResponseWriter, r *http.Reque
 		return ctx, nil, fmt.Errorf("不支持的凭证类型 %d", auth)
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodDelete {
-		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
 		if err != nil {
 			return ctx, nil, bodyError(r, err)
 		}
@@ -316,6 +325,8 @@ var knownErrors = []struct {
 	{playlist.ErrPlaylistFull, protocol.ErrorCodeConflict},
 	{playlist.ErrTrackNotReady, protocol.ErrorCodeConflict},
 	{playlist.ErrTooFast, protocol.ErrorCodeRateLimited},
+	{playlistorder.ErrBeforeMoved, protocol.ErrorCodeInvalidArgument},
+	{playlistorder.ErrBeforeMissing, protocol.ErrorCodeConflict},
 	{realtime.ErrRequesterNotAllowed, protocol.ErrorCodeInvalidArgument},
 	{site.ErrInvalidBrandName, protocol.ErrorCodeInvalidArgument},
 	{realtime.ErrUnavailable, protocol.ErrorCodeUnavailable},
@@ -334,7 +345,7 @@ func errorInfo(err error) (info protocol.ErrorInfo, expected bool) {
 	}
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
-		return protocol.ErrorInfo{Code: protocol.ErrorCodeInvalidArgument, Message: "请求体不能超过 64 KiB"}, true
+		return protocol.ErrorInfo{Code: protocol.ErrorCodeInvalidArgument, Message: fmt.Sprintf("请求体不能超过 %d KiB", tooLarge.Limit>>10)}, true
 	}
 	var roomErr *room.Error
 	if errors.As(err, &roomErr) {

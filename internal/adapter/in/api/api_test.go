@@ -22,6 +22,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/admin"
 	"github.com/dihemoe/alisten/internal/app/identity"
 	"github.com/dihemoe/alisten/internal/app/lobby"
+	"github.com/dihemoe/alisten/internal/app/playlist"
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/port/porttest"
 	"github.com/dihemoe/alisten/internal/app/realtime"
@@ -151,6 +152,54 @@ func TestRequestBodyLimit(t *testing.T) {
 	want := failure(protocol.ErrorCodeInvalidArgument, "请求体不能超过 64 KiB")
 	if got := send(t, server, http.MethodPost, "/api/rooms", fits+" "); got != want {
 		t.Errorf("超过 64 KiB 的请求体 = %#v，期望 %#v", got, want)
+	}
+}
+
+func TestPlaylistBatchBodyLimit(t *testing.T) {
+	store := porttest.New()
+	s := services(store, store, "")
+	s.Playlists = playlist.New(store, store, noTracks{}, s.Catalog, nil)
+	server, _ := start(t, s)
+	var created protocol.CreateMemberResponse
+	if err := json.Unmarshal([]byte(send(t, server, http.MethodPost, "/api/members", "{}").body), &created); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Register(t.Context(), created.Member.ID, "alice", "hash"); err != nil {
+		t.Fatal(err)
+	}
+	auth := []string{"Authorization", "Bearer " + created.MemberToken}
+	lists, err := store.MemberPlaylists(t.Context(), created.Member.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	favorites := lists[0].ID
+	other, err := store.CreatePlaylist(t.Context(), created.Member.ID, "通勤", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tracks := make([]string, 1000)
+	for i := range tracks {
+		tracks[i] = fmt.Sprintf(`{"source":"link","id":"https://www.youtube.com/watch?v=%011d&list=PL%032d"}`, i, i)
+	}
+	list := "[" + strings.Join(tracks, ",") + "]"
+	if len(list) <= 64<<10 {
+		t.Fatalf("1000 首链接只有 %d 字节，测不出 64 KiB 的上限", len(list))
+	}
+	if got := send(t, server, http.MethodPost, "/api/me/playlists/"+favorites+"/removals", `{"tracks":`+list+`}`, auth...); got.status != http.StatusNoContent {
+		t.Errorf("移出 1000 首链接 = %#v，期望成功", got)
+	}
+	if got := send(t, server, http.MethodPost, "/api/me/playlists/"+favorites+"/moves", `{"tracks":`+list+`}`, auth...); got.status != http.StatusNoContent {
+		t.Errorf("移动 1000 首链接 = %#v，期望成功", got)
+	}
+	if got := send(t, server, http.MethodPost, "/api/me/playlists/"+other.ID+"/copies", `{"from":"`+favorites+`","tracks":`+list+`}`, auth...); got != (response{status: http.StatusOK, body: `{"added":0}`}) {
+		t.Errorf("复制 1000 首链接 = %#v，期望成功", got)
+	}
+
+	tooLarge := `{"tracks":[]}` + strings.Repeat(" ", maxBatchBodyBytes)
+	want := failure(protocol.ErrorCodeInvalidArgument, fmt.Sprintf("请求体不能超过 %d KiB", maxBatchBodyBytes>>10))
+	if got := send(t, server, http.MethodPost, "/api/me/playlists/"+favorites+"/removals", tooLarge, auth...); got != want {
+		t.Errorf("超过批量上限的请求体 = %#v，期望 %#v", got, want)
 	}
 }
 

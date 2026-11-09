@@ -56,9 +56,45 @@ UPDATE playlists SET item_seq = @item_seq, updated_at = now() WHERE id = @id;
 -- name: PlaylistItems :many
 SELECT * FROM playlist_items WHERE playlist_id = @playlist_id ORDER BY position DESC;
 
--- name: DeletePlaylistItem :exec
+-- name: DeletePlaylistItems :exec
 WITH deleted AS (
-    DELETE FROM playlist_items WHERE playlist_id = @playlist_id AND source = @source AND track_id = @track_id
-    RETURNING playlist_id
+    DELETE FROM playlist_items i
+    USING unnest(@sources::text[]) WITH ORDINALITY AS s(source, ord)
+    JOIN unnest(@track_ids::text[]) WITH ORDINALITY AS t(track_id, ord) USING (ord)
+    WHERE i.playlist_id = @playlist_id AND i.source = s.source AND i.track_id = t.track_id
+    RETURNING i.playlist_id
 )
 UPDATE playlists SET updated_at = now() WHERE id IN (SELECT playlist_id FROM deleted);
+
+-- name: CopyPlaylistItems :execrows
+-- 按请求的先后复制：第一首的排序值最大。请求里重复的歌只取第一次出现的位置。
+WITH wanted AS (
+    SELECT s.source, k.track_id, min(s.ord) AS ord
+    FROM unnest(@sources::text[]) WITH ORDINALITY AS s(source, ord)
+    JOIN unnest(@track_ids::text[]) WITH ORDINALITY AS k(track_id, ord) USING (ord)
+    GROUP BY s.source, k.track_id
+), copied AS (
+    SELECT i.source, i.track_id, i.title, i.artist, i.album, i.cover_url, i.cover_key, i.duration_ms, i.page_url,
+           row_number() OVER (ORDER BY w.ord DESC) AS rank
+    FROM wanted w
+    JOIN playlist_items i ON i.playlist_id = @from_id AND i.source = w.source AND i.track_id = w.track_id
+    WHERE NOT EXISTS (
+        SELECT FROM playlist_items d WHERE d.playlist_id = @to_id AND d.source = w.source AND d.track_id = w.track_id
+    )
+)
+INSERT INTO playlist_items (playlist_id, source, track_id, title, artist, album, cover_url, cover_key, duration_ms, page_url, position)
+SELECT sqlc.arg(to_id), source, track_id, title, artist, album, cover_url, cover_key, duration_ms, page_url, sqlc.arg(item_seq)::bigint + rank
+FROM copied;
+
+-- name: PlaylistTracks :many
+SELECT source, track_id FROM playlist_items WHERE playlist_id = @playlist_id ORDER BY position DESC;
+
+-- name: SetPlaylistPositions :exec
+UPDATE playlist_items i SET position = t.position
+FROM unnest(@sources::text[]) WITH ORDINALITY AS s(source, ord)
+JOIN unnest(@track_ids::text[]) WITH ORDINALITY AS k(track_id, ord) USING (ord)
+JOIN unnest(@positions::bigint[]) WITH ORDINALITY AS t(position, ord) USING (ord)
+WHERE i.playlist_id = @playlist_id AND i.source = s.source AND i.track_id = k.track_id;
+
+-- name: TouchPlaylist :exec
+UPDATE playlists SET updated_at = now() WHERE id = @id;

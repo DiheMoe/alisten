@@ -930,8 +930,8 @@
       }
     },
     {
-      "name": "removeMyPlaylistItem",
-      "description": "把一首歌移出歌单；不在歌单里也算成功",
+      "name": "removeMyPlaylistItems",
+      "description": "把若干首歌移出歌单，一次 1 到 1000 首；不在歌单里的忽略",
       "method": "POST",
       "path": "/api/me/playlists/{id}/removals",
       "auth": "member",
@@ -940,9 +940,50 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "track": {"$ref": "#/$defs/Track"}
+          "tracks": {"type": "array", "items": {"$ref": "#/$defs/Track"}, "minItems": 1, "maxItems": 1000}
         },
-        "required": ["track"]
+        "required": ["tracks"]
+      }
+    },
+    {
+      "name": "copyMyPlaylistItems",
+      "description": "把另一个歌单里的若干首歌连同元数据复制到这个歌单，一次 1 到 1000 首；不在来源歌单里的和已在这个歌单里的跳过；新复制的排在最前，保持 tracks 的先后；装不下时整批拒绝；返回实际复制的数量",
+      "method": "POST",
+      "path": "/api/me/playlists/{id}/copies",
+      "auth": "member",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "from": {"type": "string", "description": "来源歌单的 ID"},
+          "tracks": {"type": "array", "items": {"$ref": "#/$defs/Track"}, "minItems": 1, "maxItems": 1000}
+        },
+        "required": ["from", "tracks"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "added": {"type": "integer"}
+        },
+        "required": ["added"]
+      }
+    },
+    {
+      "name": "moveMyPlaylistItems",
+      "description": "调整歌单里的顺序：把 tracks 里在歌单中的歌按给出的先后放到 before 之前，不给 before 就放到最后；一次 1 到 1000 首；before 不能在 tracks 里，也必须还在歌单里",
+      "method": "POST",
+      "path": "/api/me/playlists/{id}/moves",
+      "auth": "member",
+      "status": 204,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tracks": {"type": "array", "items": {"$ref": "#/$defs/Track"}, "minItems": 1, "maxItems": 1000},
+          "before": {"$ref": "#/$defs/Track"}
+        },
+        "required": ["tracks"]
       }
     },
     {

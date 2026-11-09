@@ -48,6 +48,10 @@ func DecodeCreateMemberRequest(body []byte) (CreateMemberRequest, error) {
 	return decodeCreateMemberRequest(body, "")
 }
 
+func DecodeRemoveTracksRequest(body []byte) (RemoveTracksRequest, error) {
+	return decodeRemoveTracksRequest(body, "")
+}
+
 func DecodeCreateRoomRequest(body []byte) (CreateRoomRequest, error) {
 	return decodeCreateRoomRequest(body, "")
 }
@@ -252,6 +256,24 @@ func decodeQueueRemoveRequest(raw json.RawMessage, path string) (QueueRemoveRequ
 		return v, err
 	}
 	if v.EntryID, err = decodeString(m["entryId"], field(path, "entryId")); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+func decodeRemoveTracksRequest(raw json.RawMessage, path string) (RemoveTracksRequest, error) {
+	var v RemoveTracksRequest
+	m, err := decodeObject(raw, path, "tracks")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "tracks"); err != nil {
+		return v, err
+	}
+	if v.Tracks, err = decodeArray(decodeTrack, 3)(m["tracks"], field(path, "tracks")); err != nil {
+		return v, err
+	}
+	if err = checkMinItems(v.Tracks, field(path, "tracks"), 1); err != nil {
 		return v, err
 	}
 	return v, nil
