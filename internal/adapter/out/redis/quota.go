@@ -31,9 +31,35 @@ func (q *RoomQuota) TakePick(ctx context.Context, roomID string, burst int, refi
 }
 
 func (q *RoomQuota) take(ctx context.Context, roomID, bucket, what string, burst int, refill time.Duration) (time.Duration, error) {
-	res, err := q.limiter.Allow(ctx, "room:"+roomID+":"+bucket, redis_rate.Limit{Rate: 1, Burst: burst, Period: refill})
+	wait, err := take(ctx, q.limiter, "room:"+roomID+":"+bucket, burst, refill)
 	if err != nil {
 		return 0, fmt.Errorf("取房间 %s 的%s额度：%w", roomID, what, err)
+	}
+	return wait, nil
+}
+
+var _ port.AccountQuota = (*AccountQuota)(nil)
+
+type AccountQuota struct {
+	limiter *redis_rate.Limiter
+}
+
+func NewAccountQuota(client *goredis.Client) *AccountQuota {
+	return &AccountQuota{limiter: redis_rate.NewLimiter(client)}
+}
+
+func (q *AccountQuota) Take(ctx context.Context, key string, burst int, refill time.Duration) (time.Duration, error) {
+	wait, err := take(ctx, q.limiter, "account:"+key, burst, refill)
+	if err != nil {
+		return 0, fmt.Errorf("取 %s 的额度：%w", key, err)
+	}
+	return wait, nil
+}
+
+func take(ctx context.Context, limiter *redis_rate.Limiter, key string, burst int, refill time.Duration) (time.Duration, error) {
+	res, err := limiter.Allow(ctx, key, redis_rate.Limit{Rate: 1, Burst: burst, Period: refill})
+	if err != nil {
+		return 0, err
 	}
 	if res.Allowed > 0 {
 		return 0, nil
