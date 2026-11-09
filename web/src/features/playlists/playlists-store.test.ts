@@ -399,6 +399,30 @@ describe('playlistsStore', () => {
     expect(notificationStore.state.notifications.map(n => n.message)).toEqual([changed])
   })
 
+  // 详情页的用法：移动经过 TrackEdits 排队。CONFLICT 说明歌单在别处变了，排在后面的移动基于过时的顺序。
+  it('排队的移动遇到 CONFLICT：提示服务端的文案，回到这次移动之前，后面的不再发出，结束后重新读取', async () => {
+    const { playlistsStore } = await loaded()
+    const { notificationStore } = await import('@/shared/ui')
+    const { TrackEdits } = await import('./track-edits')
+    let rereads = 0
+    const edits = new TrackEdits(() => rereads++)
+    failMove = true
+    let shown = '第一次移动之后'
+    void edits.run(() => playlistsStore.moveItems(favorites, [rain], sunny), () => {
+      shown = '移动之前'
+    })
+    shown = '第二次移动之后'
+    const done = edits.run(() => playlistsStore.moveItems(favorites, [sunny]), () => {
+      shown = '第一次移动之后'
+    })
+    await settle()
+    await done
+    expect(writes()).toEqual(['POST /api/me/playlists/p1/moves'])
+    expect(shown).toBe('移动之前')
+    expect(rereads).toBe(1)
+    expect(notificationStore.state.notifications.map(n => n.message)).toEqual([changed])
+  })
+
   it('游客不读取歌单', async () => {
     const { playlistsStore } = await import('./playlists-store')
     playlistsStore.start()
