@@ -175,6 +175,30 @@
       },
       "required": ["member", "username"]
     },
+    "PlaylistName": {"type": "string", "description": "歌单名：去掉首尾空白后 1 到 50 个字符", "maxLength": 200},
+    "MyPlaylist": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "favorites": {"type": "boolean", "description": "是否是“我喜欢”"},
+        "trackCount": {"type": "integer"},
+        "createdAtMs": {"type": "integer"},
+        "updatedAtMs": {"type": "integer"},
+        "coverUrl": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "歌单里排在最前、有封面的那首歌的封面；没有时为 null"}
+      },
+      "required": ["id", "name", "favorites", "trackCount", "createdAtMs", "updatedAtMs", "coverUrl"]
+    },
+    "MyPlaylistItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "track": {"$ref": "#/$defs/Track"},
+        "meta": {"$ref": "#/$defs/TrackMeta"}
+      },
+      "required": ["track", "meta"]
+    },
     "Members": {
       "type": "object",
       "additionalProperties": false,
@@ -809,6 +833,117 @@
       "path": "/api/sessions/current",
       "auth": "member",
       "status": 204
+    },
+    {
+      "name": "listMyPlaylists",
+      "description": "我的歌单：“我喜欢”在最前，其余按创建的先后；只有已注册的账号能使用歌单",
+      "method": "GET",
+      "path": "/api/me/playlists",
+      "auth": "member",
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/$defs/MyPlaylist"}}
+        },
+        "required": ["items"]
+      }
+    },
+    {
+      "name": "createMyPlaylist",
+      "description": "新建歌单：最多 50 个（含“我喜欢”），可以重名",
+      "method": "POST",
+      "path": "/api/me/playlists",
+      "auth": "member",
+      "status": 201,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"$ref": "#/$defs/PlaylistName"}
+        },
+        "required": ["name"]
+      },
+      "response": {"$ref": "#/$defs/MyPlaylist"}
+    },
+    {
+      "name": "renameMyPlaylist",
+      "description": "重命名歌单；“我喜欢”不能重命名",
+      "method": "PATCH",
+      "path": "/api/me/playlists/{id}",
+      "auth": "member",
+      "status": 204,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"$ref": "#/$defs/PlaylistName"}
+        },
+        "required": ["name"]
+      }
+    },
+    {
+      "name": "deleteMyPlaylist",
+      "description": "删除歌单；“我喜欢”不能删除",
+      "method": "DELETE",
+      "path": "/api/me/playlists/{id}",
+      "auth": "member",
+      "status": 204
+    },
+    {
+      "name": "listMyPlaylistItems",
+      "description": "歌单里的歌，新加入的在前",
+      "method": "GET",
+      "path": "/api/me/playlists/{id}/items",
+      "auth": "member",
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/$defs/MyPlaylistItem"}}
+        },
+        "required": ["items"]
+      }
+    },
+    {
+      "name": "addMyPlaylistItem",
+      "description": "把一首歌加入歌单：元数据由服务端查询，链接曲目要先准备好；已经在歌单里时不变；一个歌单最多 1000 首",
+      "method": "POST",
+      "path": "/api/me/playlists/{id}/items",
+      "auth": "member",
+      "status": 201,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "track": {"$ref": "#/$defs/Track"}
+        },
+        "required": ["track"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "item": {"$ref": "#/$defs/MyPlaylistItem"}
+        },
+        "required": ["item"]
+      }
+    },
+    {
+      "name": "removeMyPlaylistItem",
+      "description": "把一首歌移出歌单；不在歌单里也算成功",
+      "method": "POST",
+      "path": "/api/me/playlists/{id}/removals",
+      "auth": "member",
+      "status": 204,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "track": {"$ref": "#/$defs/Track"}
+        },
+        "required": ["track"]
+      }
     },
     {
       "name": "listRooms",

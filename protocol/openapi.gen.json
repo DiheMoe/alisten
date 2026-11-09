@@ -41,6 +41,30 @@
         ],
         "type": "string"
       },
+      "AddMyPlaylistItemRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "track": {
+            "$ref": "#/components/schemas/Track"
+          }
+        },
+        "required": [
+          "track"
+        ],
+        "type": "object"
+      },
+      "AddMyPlaylistItemResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/MyPlaylistItem"
+          }
+        },
+        "required": [
+          "item"
+        ],
+        "type": "object"
+      },
       "AdminAccount": {
         "additionalProperties": false,
         "properties": {
@@ -437,6 +461,20 @@
         ],
         "type": "object"
       },
+      "CreateMyPlaylistRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "歌单名：去掉首尾空白后 1 到 50 个字符",
+            "maxLength": 200,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "CreateRoomRequest": {
         "additionalProperties": false,
         "properties": {
@@ -641,6 +679,36 @@
         ],
         "type": "object"
       },
+      "ListMyPlaylistItemsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MyPlaylistItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ListMyPlaylistsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MyPlaylist"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "ListRoomsResponse": {
         "additionalProperties": false,
         "properties": {
@@ -746,6 +814,67 @@
         "required": [
           "sessions",
           "onlineCount"
+        ],
+        "type": "object"
+      },
+      "MyPlaylist": {
+        "additionalProperties": false,
+        "properties": {
+          "coverUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "歌单里排在最前、有封面的那首歌的封面；没有时为 null"
+          },
+          "createdAtMs": {
+            "type": "integer"
+          },
+          "favorites": {
+            "description": "是否是“我喜欢”",
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "trackCount": {
+            "type": "integer"
+          },
+          "updatedAtMs": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "favorites",
+          "trackCount",
+          "createdAtMs",
+          "updatedAtMs",
+          "coverUrl"
+        ],
+        "type": "object"
+      },
+      "MyPlaylistItem": {
+        "additionalProperties": false,
+        "properties": {
+          "meta": {
+            "$ref": "#/components/schemas/TrackMeta"
+          },
+          "track": {
+            "$ref": "#/components/schemas/Track"
+          }
+        },
+        "required": [
+          "track",
+          "meta"
         ],
         "type": "object"
       },
@@ -1057,6 +1186,32 @@
         },
         "required": [
           "account"
+        ],
+        "type": "object"
+      },
+      "RemoveMyPlaylistItemRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "track": {
+            "$ref": "#/components/schemas/Track"
+          }
+        },
+        "required": [
+          "track"
+        ],
+        "type": "object"
+      },
+      "RenameMyPlaylistRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "歌单名：去掉首尾空白后 1 到 50 个字符",
+            "maxLength": 200,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },
@@ -1511,7 +1666,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "000a0b37ea0f0adc"
+    "version": "7380d77bc52d7f95"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2646,6 +2801,300 @@
           }
         ],
         "summary": "修改昵称和头像；email 用来计算头像哈希，已注册的账号同时保存它，去掉首尾空白后应形如 name@example.com，空字符串表示清除"
+      }
+    },
+    "/api/me/playlists": {
+      "get": {
+        "operationId": "listMyPlaylists",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListMyPlaylistsResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "我的歌单：“我喜欢”在最前，其余按创建的先后；只有已注册的账号能使用歌单"
+      },
+      "post": {
+        "operationId": "createMyPlaylist",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMyPlaylistRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyPlaylist"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "新建歌单：最多 50 个（含“我喜欢”），可以重名"
+      }
+    },
+    "/api/me/playlists/{id}": {
+      "delete": {
+        "operationId": "deleteMyPlaylist",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "删除歌单；“我喜欢”不能删除"
+      },
+      "patch": {
+        "operationId": "renameMyPlaylist",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameMyPlaylistRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "重命名歌单；“我喜欢”不能重命名"
+      }
+    },
+    "/api/me/playlists/{id}/items": {
+      "get": {
+        "operationId": "listMyPlaylistItems",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListMyPlaylistItemsResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "歌单里的歌，新加入的在前"
+      },
+      "post": {
+        "operationId": "addMyPlaylistItem",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddMyPlaylistItemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddMyPlaylistItemResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "把一首歌加入歌单：元数据由服务端查询，链接曲目要先准备好；已经在歌单里时不变；一个歌单最多 1000 首"
+      }
+    },
+    "/api/me/playlists/{id}/removals": {
+      "post": {
+        "operationId": "removeMyPlaylistItem",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveMyPlaylistItemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "把一首歌移出歌单；不在歌单里也算成功"
       }
     },
     "/api/members": {

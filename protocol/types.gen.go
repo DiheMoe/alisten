@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "000a0b37ea0f0adc"
+const Version = "7380d77bc52d7f95"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -25,6 +25,14 @@ const (
 	ActivityKindSkipped ActivityKind = "skipped"
 	ActivityKindFailed  ActivityKind = "failed"
 )
+
+type AddMyPlaylistItemRequest struct {
+	Track Track `json:"track"`
+}
+
+type AddMyPlaylistItemResponse struct {
+	Item MyPlaylistItem `json:"item"`
+}
 
 type AdminAccount struct {
 	Member   Member `json:"member"`
@@ -163,6 +171,10 @@ type CreateMemberResponse struct {
 	MemberToken string `json:"memberToken"`
 }
 
+type CreateMyPlaylistRequest struct {
+	Name string `json:"name"`
+}
+
 type CreateRoomRequest struct {
 	Description string  `json:"description"`
 	Name        string  `json:"name"`
@@ -245,6 +257,30 @@ type HelloResponse struct {
 	ServerTimeMs int64        `json:"serverTimeMs"`
 }
 
+type ListMyPlaylistItemsResponse struct {
+	Items []MyPlaylistItem `json:"items"`
+}
+
+func (v ListMyPlaylistItemsResponse) MarshalJSON() ([]byte, error) {
+	type plain ListMyPlaylistItemsResponse
+	if v.Items == nil {
+		v.Items = []MyPlaylistItem{}
+	}
+	return json.Marshal(plain(v))
+}
+
+type ListMyPlaylistsResponse struct {
+	Items []MyPlaylist `json:"items"`
+}
+
+func (v ListMyPlaylistsResponse) MarshalJSON() ([]byte, error) {
+	type plain ListMyPlaylistsResponse
+	if v.Items == nil {
+		v.Items = []MyPlaylist{}
+	}
+	return json.Marshal(plain(v))
+}
+
 type ListRoomsResponse struct {
 	Items []RoomListing `json:"items"`
 }
@@ -287,6 +323,21 @@ func (v Members) MarshalJSON() ([]byte, error) {
 		v.Sessions = []Member{}
 	}
 	return json.Marshal(plain(v))
+}
+
+type MyPlaylist struct {
+	CoverURL    *string `json:"coverUrl"`
+	CreatedAtMs int64   `json:"createdAtMs"`
+	Favorites   bool    `json:"favorites"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	TrackCount  int64   `json:"trackCount"`
+	UpdatedAtMs int64   `json:"updatedAtMs"`
+}
+
+type MyPlaylistItem struct {
+	Meta  TrackMeta `json:"meta"`
+	Track Track     `json:"track"`
 }
 
 type NowPlaying struct {
@@ -443,6 +494,14 @@ type RegisterRequest struct {
 
 type RegisterResponse struct {
 	Account Account `json:"account"`
+}
+
+type RemoveMyPlaylistItemRequest struct {
+	Track Track `json:"track"`
+}
+
+type RenameMyPlaylistRequest struct {
+	Name string `json:"name"`
 }
 
 type RoomActivityEvent struct {
@@ -661,6 +720,13 @@ var (
 	RouteChangePassword               = Route{Pattern: "PUT /api/account/password", Auth: AuthMember, Status: 204}
 	RouteLogin                        = Route{Pattern: "POST /api/sessions", Auth: AuthMember, Status: 201}
 	RouteLogout                       = Route{Pattern: "DELETE /api/sessions/current", Auth: AuthMember, Status: 204}
+	RouteListMyPlaylists              = Route{Pattern: "GET /api/me/playlists", Auth: AuthMember, Status: 200}
+	RouteCreateMyPlaylist             = Route{Pattern: "POST /api/me/playlists", Auth: AuthMember, Status: 201}
+	RouteRenameMyPlaylist             = Route{Pattern: "PATCH /api/me/playlists/{id}", Auth: AuthMember, Status: 204}
+	RouteDeleteMyPlaylist             = Route{Pattern: "DELETE /api/me/playlists/{id}", Auth: AuthMember, Status: 204}
+	RouteListMyPlaylistItems          = Route{Pattern: "GET /api/me/playlists/{id}/items", Auth: AuthMember, Status: 200}
+	RouteAddMyPlaylistItem            = Route{Pattern: "POST /api/me/playlists/{id}/items", Auth: AuthMember, Status: 201}
+	RouteRemoveMyPlaylistItem         = Route{Pattern: "POST /api/me/playlists/{id}/removals", Auth: AuthMember, Status: 204}
 	RouteListRooms                    = Route{Pattern: "GET /api/rooms", Auth: AuthNone, Status: 200}
 	RouteGetRoom                      = Route{Pattern: "GET /api/rooms/{ref}", Auth: AuthNone, Status: 200}
 	RouteCreateRoom                   = Route{Pattern: "POST /api/rooms", Auth: AuthNone, Status: 201, Location: true}

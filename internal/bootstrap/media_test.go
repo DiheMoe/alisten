@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -153,5 +154,93 @@ func TestRestoredLinksNeedTheirAudio(t *testing.T) {
 	}
 	if n := queuedLinkJobs(t, pool, present); n != 0 {
 		t.Errorf("音频还在的链接有 %d 个准备任务，期望没有", n)
+	}
+}
+
+// 准备好的链接曲目进了歌单之后，三处封面地址都由对象存储的公开地址和封面的对象键拼出；换一种大小写写法也能找到它。
+func TestPlaylistLinkTracks(t *testing.T) {
+	contractEnv(t, startPostgres(t)(t), startValkey(t)(t))
+	svc := startService(t)
+	dbConfig, err := loadDatabaseConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, err := pgxpool.NewWithConfig(t.Context(), dbConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	const link = "https://example.com/Song.mp3"
+	cover := track.ObjectKey(media.CoverObject(media.Key(link), "jpg"))
+	prepared := port.PreparedTrack{
+		Meta:      track.Meta{Title: "Song.mp3", CoverKey: cover, PageURL: link, Duration: 2 * time.Second},
+		Result:    track.Prepared{Duration: 2 * time.Second, Gain: 1},
+		MediaKey:  media.Key(link),
+		MediaSize: 3,
+	}
+	if err := postgres.New(pool).SavePreparedTrack(t.Context(), track.Track{Source: track.Link, ID: link}, prepared); err != nil {
+		t.Fatal(err)
+	}
+	coverURL := "https://alisten.example/storage/alisten/" + string(cover)
+
+	call := func(request string, status int, resp any) {
+		t.Helper()
+		line, got, _, body := send(t, svc.server, request)
+		if got != status {
+			t.Fatalf("%s = %d %s，期望 %d", line, got, body, status)
+		}
+		if resp != nil {
+			if err := json.Unmarshal(body, resp); err != nil {
+				t.Fatalf("%s 的响应体 %s：%v", line, body, err)
+			}
+		}
+	}
+	var session struct {
+		MemberToken string `json:"memberToken"`
+	}
+	call("POST /api/members\n\n{}", http.StatusCreated, &session)
+	auth := "\nAuthorization: Bearer " + session.MemberToken
+	call("POST /api/account"+auth+"\n\n"+`{"username": "alice", "password": "correct horse"}`, http.StatusCreated, nil)
+
+	type item struct {
+		Track struct {
+			ID string `json:"id"`
+		} `json:"track"`
+		Meta struct {
+			CoverURL string `json:"coverUrl"`
+		} `json:"meta"`
+	}
+	var lists struct {
+		Items []struct {
+			ID       string  `json:"id"`
+			CoverURL *string `json:"coverUrl"`
+		} `json:"items"`
+	}
+	call("GET /api/me/playlists"+auth, http.StatusOK, &lists)
+	favorites := lists.Items[0].ID
+
+	var added struct {
+		Item item `json:"item"`
+	}
+	call("POST /api/me/playlists/"+favorites+"/items"+auth+"\n\n"+`{"track": {"source": "link", "id": "HTTPS://EXAMPLE.COM/Song.mp3"}}`, http.StatusCreated, &added)
+	if added.Item.Track.ID != link || added.Item.Meta.CoverURL != coverURL {
+		t.Errorf("加入的曲目 = %+v，期望 ID %s、封面 %s", added.Item, link, coverURL)
+	}
+	call("GET /api/me/playlists"+auth, http.StatusOK, &lists)
+	if got := lists.Items[0].CoverURL; got == nil || *got != coverURL {
+		t.Errorf("歌单的封面 = %v，期望 %s", got, coverURL)
+	}
+	var items struct {
+		Items []item `json:"items"`
+	}
+	call("GET /api/me/playlists/"+favorites+"/items"+auth, http.StatusOK, &items)
+	if len(items.Items) != 1 || items.Items[0].Track.ID != link || items.Items[0].Meta.CoverURL != coverURL {
+		t.Errorf("歌单里的曲目 = %+v，期望一首 ID %s、封面 %s", items.Items, link, coverURL)
+	}
+
+	call("POST /api/me/playlists/"+favorites+"/removals"+auth+"\n\n"+`{"track": {"source": "link", "id": "hTTps://example.COM/Song.mp3"}}`, http.StatusNoContent, nil)
+	call("GET /api/me/playlists/"+favorites+"/items"+auth, http.StatusOK, &items)
+	if len(items.Items) != 0 {
+		t.Errorf("换一种大小写移出之后还有 %+v，期望没有", items.Items)
 	}
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/identity"
 	"github.com/dihemoe/alisten/internal/app/lobby"
 	"github.com/dihemoe/alisten/internal/app/media"
+	"github.com/dihemoe/alisten/internal/app/playlist"
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/prepare"
 	"github.com/dihemoe/alisten/internal/app/realtime"
@@ -77,15 +78,16 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 	registerRuntimeMetrics(metrics, host, gateway)
 	rooms := lobby.New(store, leases)
 	services := api.Services{
-		Identity: identity.New(store, store, store, gateway),
-		Accounts: identity.NewAccounts(store, store, redis.NewAccountQuota(rdb), redis.NewDevices(rdb), gateway),
-		Lobby:    rooms,
-		Admin:    admin.New(cfg.adminToken, rooms, store, store, store, src.neteaseLogin, src.qqLogin, src.bilibiliLogin, store, gateway),
-		Gateway:  gateway,
-		Catalog:  music,
-		Media:    media.NewLibrary(store, store, objects),
-		Playback: media.NewPlayback(src.playback, store),
-		Site:     site.New(store),
+		Identity:  identity.New(store, store, store, gateway),
+		Accounts:  identity.NewAccounts(store, store, redis.NewAccountQuota(rdb), redis.NewDevices(rdb), gateway),
+		Playlists: playlist.New(store, store, store, music, redis.NewAccountQuota(rdb)),
+		Lobby:     rooms,
+		Admin:     admin.New(cfg.adminToken, rooms, store, store, store, src.neteaseLogin, src.qqLogin, src.bilibiliLogin, store, gateway),
+		Gateway:   gateway,
+		Catalog:   music,
+		Media:     media.NewLibrary(store, store, objects),
+		Playback:  media.NewPlayback(src.playback, store),
+		Site:      site.New(store),
 
 		StorageURL: cfg.storageURL,
 	}

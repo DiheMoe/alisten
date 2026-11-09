@@ -41,7 +41,7 @@ func (s *server) answer(ctx context.Context, roomID string, data any) (resp any,
 func summaries(songs []port.Song) []protocol.TrackSummary {
 	items := make([]protocol.TrackSummary, len(songs))
 	for i, s := range songs {
-		items[i] = protocol.TrackSummary{Track: protocol.Track{Source: protocol.Source(s.Track.Source), ID: s.Track.ID}, Meta: meta(s.Meta)}
+		items[i] = protocol.TrackSummary{Track: trackDTO(s.Track), Meta: meta(s.Meta)}
 	}
 	return items
 }

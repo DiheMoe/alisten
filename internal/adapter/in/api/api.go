@@ -21,6 +21,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/identity"
 	"github.com/dihemoe/alisten/internal/app/lobby"
 	"github.com/dihemoe/alisten/internal/app/media"
+	"github.com/dihemoe/alisten/internal/app/playlist"
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/realtime"
 	"github.com/dihemoe/alisten/internal/app/site"
@@ -36,15 +37,16 @@ const (
 )
 
 type Services struct {
-	Identity *identity.Service
-	Accounts *identity.Accounts
-	Lobby    *lobby.Service
-	Admin    *admin.Service
-	Gateway  *realtime.Gateway
-	Catalog  *catalog.Service
-	Media    *media.Library
-	Playback *media.Playback
-	Site     *site.Service
+	Identity  *identity.Service
+	Accounts  *identity.Accounts
+	Playlists *playlist.Service
+	Lobby     *lobby.Service
+	Admin     *admin.Service
+	Gateway   *realtime.Gateway
+	Catalog   *catalog.Service
+	Media     *media.Library
+	Playback  *media.Playback
+	Site      *site.Service
 
 	// 浏览器访问对象存储时使用的地址前缀，结尾没有 /。
 	StorageURL string
@@ -105,6 +107,13 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	srv.handle(mux, protocol.RouteChangePassword, srv.changePassword)
 	srv.handle(mux, protocol.RouteLogin, srv.login)
 	srv.handle(mux, protocol.RouteLogout, srv.logout)
+	srv.handle(mux, protocol.RouteListMyPlaylists, srv.listMyPlaylists)
+	srv.handle(mux, protocol.RouteCreateMyPlaylist, srv.createMyPlaylist)
+	srv.handle(mux, protocol.RouteRenameMyPlaylist, srv.renameMyPlaylist)
+	srv.handle(mux, protocol.RouteDeleteMyPlaylist, srv.deleteMyPlaylist)
+	srv.handle(mux, protocol.RouteListMyPlaylistItems, srv.listMyPlaylistItems)
+	srv.handle(mux, protocol.RouteAddMyPlaylistItem, srv.addMyPlaylistItem)
+	srv.handle(mux, protocol.RouteRemoveMyPlaylistItem, srv.removeMyPlaylistItem)
 	srv.handle(mux, protocol.RouteListRooms, srv.listRooms)
 	srv.handle(mux, protocol.RouteGetRoom, srv.getRoom)
 	srv.handle(mux, protocol.RouteCreateRoom, srv.createRoom)
@@ -299,6 +308,14 @@ var knownErrors = []struct {
 	{identity.ErrAccountNotFound, protocol.ErrorCodeNotFound},
 	{port.ErrUsernameTaken, protocol.ErrorCodeConflict},
 	{port.ErrAlreadyRegistered, protocol.ErrorCodeConflict},
+	{port.ErrPlaylistNotFound, protocol.ErrorCodeNotFound},
+	{port.ErrFavoritesFixed, protocol.ErrorCodeConflict},
+	{playlist.ErrNotRegistered, protocol.ErrorCodeForbidden},
+	{playlist.ErrInvalidName, protocol.ErrorCodeInvalidArgument},
+	{playlist.ErrTooManyPlaylists, protocol.ErrorCodeConflict},
+	{playlist.ErrPlaylistFull, protocol.ErrorCodeConflict},
+	{playlist.ErrTrackNotReady, protocol.ErrorCodeConflict},
+	{playlist.ErrTooFast, protocol.ErrorCodeRateLimited},
 	{realtime.ErrRequesterNotAllowed, protocol.ErrorCodeInvalidArgument},
 	{site.ErrInvalidBrandName, protocol.ErrorCodeInvalidArgument},
 	{realtime.ErrUnavailable, protocol.ErrorCodeUnavailable},

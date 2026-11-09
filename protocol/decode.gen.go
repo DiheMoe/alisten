@@ -87,6 +87,22 @@ func DecodeLoginRequest(body []byte) (LoginRequest, error) {
 	return decodeLoginRequest(body, "")
 }
 
+func DecodeCreateMyPlaylistRequest(body []byte) (CreateMyPlaylistRequest, error) {
+	return decodeCreateMyPlaylistRequest(body, "")
+}
+
+func DecodeRenameMyPlaylistRequest(body []byte) (RenameMyPlaylistRequest, error) {
+	return decodeRenameMyPlaylistRequest(body, "")
+}
+
+func DecodeAddMyPlaylistItemRequest(body []byte) (AddMyPlaylistItemRequest, error) {
+	return decodeAddMyPlaylistItemRequest(body, "")
+}
+
+func DecodeRemoveMyPlaylistItemRequest(body []byte) (RemoveMyPlaylistItemRequest, error) {
+	return decodeRemoveMyPlaylistItemRequest(body, "")
+}
+
 func DecodeCreateRoomRequest(body []byte) (CreateRoomRequest, error) {
 	return decodeCreateRoomRequest(body, "")
 }
@@ -145,6 +161,21 @@ func DecodeAdminOpenRegistrationRequest(body []byte) (AdminOpenRegistrationReque
 
 func DecodeAdminResetAccountPasswordRequest(body []byte) (AdminResetAccountPasswordRequest, error) {
 	return decodeAdminResetAccountPasswordRequest(body, "")
+}
+
+func decodeAddMyPlaylistItemRequest(raw json.RawMessage, path string) (AddMyPlaylistItemRequest, error) {
+	var v AddMyPlaylistItemRequest
+	m, err := decodeObject(raw, path, "track")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "track"); err != nil {
+		return v, err
+	}
+	if v.Track, err = decodeTrack(m["track"], field(path, "track")); err != nil {
+		return v, err
+	}
+	return v, nil
 }
 
 func decodeAdminCheckBilibiliLoginRequest(raw json.RawMessage, path string) (AdminCheckBilibiliLoginRequest, error) {
@@ -424,6 +455,24 @@ func decodeCreateMemberRequest(raw json.RawMessage, path string) (CreateMemberRe
 	var v CreateMemberRequest
 	_, err := decodeObject(raw, path)
 	return v, err
+}
+
+func decodeCreateMyPlaylistRequest(raw json.RawMessage, path string) (CreateMyPlaylistRequest, error) {
+	var v CreateMyPlaylistRequest
+	m, err := decodeObject(raw, path, "name")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "name"); err != nil {
+		return v, err
+	}
+	if v.Name, err = decodeString(m["name"], field(path, "name")); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.Name, field(path, "name"), 200); err != nil {
+		return v, err
+	}
+	return v, nil
 }
 
 func decodeCreateRoomRequest(raw json.RawMessage, path string) (CreateRoomRequest, error) {
@@ -707,6 +756,39 @@ func decodeRegisterRequest(raw json.RawMessage, path string) (RegisterRequest, e
 		return v, err
 	}
 	if err = checkPattern(v.Username, field(path, "username"), patternRegisterRequestUsername); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+func decodeRemoveMyPlaylistItemRequest(raw json.RawMessage, path string) (RemoveMyPlaylistItemRequest, error) {
+	var v RemoveMyPlaylistItemRequest
+	m, err := decodeObject(raw, path, "track")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "track"); err != nil {
+		return v, err
+	}
+	if v.Track, err = decodeTrack(m["track"], field(path, "track")); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+func decodeRenameMyPlaylistRequest(raw json.RawMessage, path string) (RenameMyPlaylistRequest, error) {
+	var v RenameMyPlaylistRequest
+	m, err := decodeObject(raw, path, "name")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "name"); err != nil {
+		return v, err
+	}
+	if v.Name, err = decodeString(m["name"], field(path, "name")); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.Name, field(path, "name"), 200); err != nil {
 		return v, err
 	}
 	return v, nil

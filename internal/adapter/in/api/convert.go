@@ -48,11 +48,7 @@ func (s *server) action(ctx context.Context, roomID string, by member.Member, bo
 // 协议解码保证要么只给出 track，要么只给出 source 和 keyword。
 func pick(d protocol.QueueAddRequest) realtime.Pick {
 	if d.Track != nil {
-		t := track.Track{Source: track.Source(d.Track.Source), ID: d.Track.ID}
-		if t.Source == track.Link {
-			t.ID = track.LinkID(t.ID)
-		}
-		return realtime.Pick{Track: t, Requester: deref(d.Requester)}
+		return realtime.Pick{Track: trackOf(*d.Track), Requester: deref(d.Requester)}
 	}
 	return realtime.Pick{Source: track.Source(*d.Source), Keyword: *d.Keyword, Requester: deref(d.Requester)}
 }
@@ -145,17 +141,41 @@ func (s *server) mediaURL(t track.Track) string {
 	return "/media/" + string(t.Source) + "/" + url.PathEscape(t.ID)
 }
 
+// 链接按点歌时的写法规范化：曲目表和歌单里的链接曲目都用规范化之后的 ID。
+func trackOf(d protocol.Track) track.Track {
+	t := track.Track{Source: track.Source(d.Source), ID: d.ID}
+	if t.Source == track.Link {
+		t.ID = track.LinkID(t.ID)
+	}
+	return t
+}
+
+// 封面在对象存储中的曲目，对外的封面地址由公开地址拼出。
+func (s *server) trackMeta(m track.Meta) protocol.TrackMeta {
+	d := meta(m)
+	d.CoverURL = s.coverURL(m.CoverURL, m.CoverKey)
+	return d
+}
+
+func (s *server) coverURL(url string, key track.ObjectKey) string {
+	if key != "" {
+		return s.StorageURL + "/" + string(key)
+	}
+	return url
+}
+
+func trackDTO(t track.Track) protocol.Track {
+	return protocol.Track{Source: protocol.Source(t.Source), ID: t.ID}
+}
+
 func (s *server) entry(e room.Entry) protocol.Entry {
 	d := protocol.Entry{
 		ID:     strconv.FormatUint(uint64(e.ID), 10),
-		Track:  protocol.Track{Source: protocol.Source(e.Track.Source), ID: e.Track.ID},
-		Meta:   meta(e.Meta),
+		Track:  trackDTO(e.Track),
+		Meta:   s.trackMeta(e.Meta),
 		Auto:   e.Auto,
 		Likes:  int64(e.Likes),
 		Status: protocol.EntryStatusPreparing,
-	}
-	if e.Meta.CoverKey != "" {
-		d.Meta.CoverURL = s.StorageURL + "/" + string(e.Meta.CoverKey)
 	}
 	if !e.Auto {
 		by := memberDTO(e.By)
