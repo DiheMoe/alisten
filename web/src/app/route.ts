@@ -12,6 +12,8 @@ export type Route
     | { name: 'admin', panel: Panel | null }
     | { name: 'settings', panel: Panel | null }
     | { name: 'history', filter: string, panel: Panel | null }
+    | { name: 'playlists', panel: Panel | null }
+    | { name: 'my-playlist', id: string, panel: Panel | null }
     | { name: RoomPage, ref: string, panel: Panel | null }
     | { name: 'search', ref: string, panel: Panel | null, query: SearchQuery }
     | { name: 'playlist', ref: string, panel: Panel | null, source: Source, id: string, page: number }
@@ -68,6 +70,11 @@ export function parseRoute({ pathname, search }: Pick<Location, 'pathname' | 'se
     return { name: 'settings', panel }
   if (pathname === '/history')
     return { name: 'history', filter: params.get('q') ?? '', panel }
+  if (pathname === '/playlists')
+    return { name: 'playlists', panel }
+  const own = /^\/playlists\/([^/]+)$/.exec(pathname)
+  if (own)
+    return { name: 'my-playlist', id: own[1], panel }
   // 不做 decodeURIComponent：UUID、别名和歌单 ID 不含需要转义的字符，而它遇到不合法的转义序列会抛出异常。
   const room = /^\/r\/([^/]+)(\/.*)?$/.exec(pathname)
   if (!room)
@@ -97,7 +104,10 @@ function pathOf(route: Route): string {
     case 'admin':
     case 'settings':
     case 'history':
+    case 'playlists':
       return `/${route.name}`
+    case 'my-playlist':
+      return `/playlists/${route.id}`
     case 'listen':
       return `/r/${route.ref}`
     case 'playlist':
@@ -126,6 +136,8 @@ export function formatRoute(route: Route): string {
 export function isNewEntry(from: Route, to: Route): boolean {
   if (from.name !== to.name || ('ref' in from && 'ref' in to && from.ref !== to.ref))
     return true
+  if (from.name === 'my-playlist' && to.name === 'my-playlist')
+    return from.id !== to.id
   if (from.name === 'search' && to.name === 'search')
     return to.query.view !== 'recommend' && to.query.keyword !== (from.query.view === 'recommend' ? '' : from.query.keyword)
   if (from.name === 'playlist' && to.name === 'playlist')

@@ -15,6 +15,9 @@ describe('parseRoute', () => {
     ['/settings?panel=queue', { name: 'settings', panel: 'queue' }],
     ['/history', { name: 'history', filter: '', panel: null }],
     ['/history?q=%E6%99%B4&panel=history', { name: 'history', filter: '晴', panel: 'history' }],
+    ['/playlists', { name: 'playlists', panel: null }],
+    ['/playlists/abc', { name: 'my-playlist', id: 'abc', panel: null }],
+    ['/playlists/abc?panel=queue', { name: 'my-playlist', id: 'abc', panel: 'queue' }],
     ['/r/my-room', { name: 'listen', ref: 'my-room', panel: null }],
     ['/r/my-room?panel=history', { name: 'listen', ref: 'my-room', panel: 'history' }],
     ['/r/my-room/queue?panel=queue', { name: 'queue', ref: 'my-room', panel: 'queue' }],
@@ -62,6 +65,11 @@ describe('isNewEntry', () => {
     expect(isNewEntry({ name: 'queue', ref: 'a', panel: null }, { name: 'queue', ref: 'a', panel: 'chat' })).toBe(false)
     expect(isNewEntry({ name: 'settings', panel: null }, { name: 'settings', panel: 'chat' })).toBe(false)
     expect(isNewEntry({ name: 'history', filter: '晴', panel: null }, { name: 'history', filter: '晴天', panel: null })).toBe(false)
+  })
+
+  it('打开另一个自己的歌单写入新记录，同一个歌单只换侧栏时替换当前地址', () => {
+    expect(isNewEntry({ name: 'my-playlist', id: 'a', panel: null }, { name: 'my-playlist', id: 'b', panel: null })).toBe(true)
+    expect(isNewEntry({ name: 'my-playlist', id: 'a', panel: null }, { name: 'my-playlist', id: 'a', panel: 'queue' })).toBe(false)
   })
 
   it('提交新的关键词写入新记录，换来源、类别、页码和推荐只替换当前地址', () => {

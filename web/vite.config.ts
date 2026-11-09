@@ -62,7 +62,7 @@ export default defineConfig({
       workbox: {
         // 与 nginx 一致：只有页面路径返回 index.html，/api、/ws 和 /media 照常走网络。
         // Workbox 拿路径加查询参数来匹配，nginx 只看路径，所以这里的规则末尾允许查询参数。
-        navigateFallbackAllowlist: [/^\/(?:admin|settings|history)?(?:\?.*)?$/, /^\/r\/[^/?]+(?:\/(?:queue|chat|search|playlists\/[^/?]+\/[^/?]+))?(?:\?.*)?$/],
+        navigateFallbackAllowlist: [/^\/(?:admin|settings|history|playlists(?:\/[^/?]+)?)?(?:\?.*)?$/, /^\/r\/[^/?]+(?:\/(?:queue|chat|search|playlists\/[^/?]+\/[^/?]+))?(?:\?.*)?$/],
         importScripts: ['notification-click.js'],
       },
     }),

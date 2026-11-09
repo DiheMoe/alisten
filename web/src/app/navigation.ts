@@ -65,11 +65,11 @@ class NavigationStore extends Store<NavigationState> {
   }
 
   // 不在房间里时，房间的页面没有地址，去发现房间。换页面时侧栏保持原样。
-  open(page: 'lobby' | 'admin' | 'settings' | 'history' | RoomPage): void {
+  open(page: 'lobby' | 'admin' | 'settings' | 'history' | 'playlists' | RoomPage): void {
     const { panel } = this.state.route
     if (page === 'lobby' || page === 'history')
       this.navigate({ name: page, filter: '', panel })
-    else if (page === 'admin' || page === 'settings')
+    else if (page === 'admin' || page === 'settings' || page === 'playlists')
       this.navigate({ name: page, panel })
     else
       this.#openRoomPage(ref => ({ name: page, ref, panel }))

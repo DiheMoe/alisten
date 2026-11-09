@@ -5,6 +5,7 @@ import { chatStore } from '@/features/chat'
 import { historyStore } from '@/features/history'
 import { lyricsStore } from '@/features/lyrics'
 import { playerStore, reminderStore, volumeStore } from '@/features/playback'
+import { playlistsStore } from '@/features/playlists'
 import { roomEntryStore } from '@/features/rooms'
 import { searchStore } from '@/features/search'
 import { appearanceStore, performanceStore, profileStore } from '@/features/settings'
@@ -26,6 +27,7 @@ performanceStore.start()
 volumeStore.start()
 brandStore.start()
 profileStore.start()
+playlistsStore.start()
 playerStore.start()
 reminderStore.start()
 historyStore.start()
