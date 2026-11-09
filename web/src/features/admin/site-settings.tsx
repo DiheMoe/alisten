@@ -76,8 +76,75 @@ export function SiteSettings() {
                     <button type="submit" className="button-secondary" disabled={busy || name.trim() === ''}>{busy ? '正在保存…' : '保存'}</button>
                   </div>
                 </div>
+                <RegistrationSetting />
               </form>
             )}
     </section>
+  )
+}
+
+function RegistrationSetting() {
+  const [open, setOpen] = useState<boolean | null>(null)
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    let active = true
+    api.getSite().then((site) => {
+      if (active)
+        setOpen(site.registrationOpen)
+    }, () => {
+      if (active)
+        setFailed(true)
+    })
+    return () => {
+      active = false
+    }
+  }, [attempt])
+  const toggle = async () => {
+    if (open === null)
+      return
+    setBusy(true)
+    try {
+      const done = await adminStore.call(() => open ? api.adminCloseRegistration() : api.adminOpenRegistration())
+      if (done === null)
+        return
+      setOpen(!open)
+      notificationStore.success(open ? '已关闭注册' : '已开放注册')
+    }
+    finally {
+      setBusy(false)
+    }
+  }
+  const description = failed
+    ? '暂时无法获取注册状态。'
+    : open === null
+      ? '正在获取注册状态…'
+      : open
+        ? '现在任何人都可以注册账号。关闭后不能再注册新账号，已有账号照常登录，游客照常使用。'
+        : '现在不能注册新账号。已有账号照常登录，游客照常使用。'
+  return (
+    <div className="admin-row">
+      <div className="admin-row-copy">
+        <span className="admin-row-title text-ui-base">注册</span>
+        <span className="text-ui-sm muted">{description}</span>
+      </div>
+      <div className="admin-row-actions">
+        {failed
+          ? (
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => {
+                  setFailed(false)
+                  setAttempt(n => n + 1)
+                }}
+              >
+                重试
+              </button>
+            )
+          : <button type="button" className="button-secondary" disabled={open === null || busy} onClick={() => void toggle()}>{open === false ? '开放注册' : '关闭注册'}</button>}
+      </div>
+    </div>
   )
 }
