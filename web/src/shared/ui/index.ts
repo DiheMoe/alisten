@@ -3,6 +3,7 @@ import './ui.css'
 
 export { Artwork } from './artwork'
 export { Avatar } from './avatar'
+export { ConfirmDialog } from './confirm-dialog'
 export { EmptyState } from './empty-state'
 export { AsyncIconButton, IconButton } from './icon-button'
 export { lazyPage } from './lazy-page'

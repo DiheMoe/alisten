@@ -3,9 +3,8 @@ import type { RoomListing } from '@/core/realtime'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '@/core/api'
 import { formatDateTime } from '@/shared/lib/time'
-import { Modal, notificationStore } from '@/shared/ui'
+import { ConfirmDialog, Modal, notificationStore } from '@/shared/ui'
 import { adminStore } from './admin-store'
-import { ConfirmDialog } from './confirm-dialog'
 
 // 非安全上下文（比如局域网的明文 HTTP）没有剪贴板接口，用户也可能拒绝授权：这时返回 false，由调用方让用户手动复制。
 async function copyApiKey(key: string): Promise<boolean> {
@@ -118,6 +117,7 @@ export function RoomApiKeyDialog({ room, onClose }: { room: RoomListing, onClose
         <ConfirmDialog
           title="重置 API Key"
           confirmLabel="重置"
+          danger
           onConfirm={async () => {
             const fresh = await renew()
             if (!fresh)

@@ -53,6 +53,7 @@
   --color-toast: #303034;
   --color-overlay: rgb(0 0 0 / 55%);
   --color-shadow: rgb(0 0 0 / 24%);
+  --glow-opacity: .8;
   color-scheme: dark;
   font-synthesis: none;
 }
@@ -87,6 +88,7 @@
   --color-success: #287144;
   --color-toast: #fff;
   --color-shadow: rgb(30 30 45 / 12%);
+  --glow-opacity: .5;
   color-scheme: light;
 }
 @media (prefers-color-scheme: light) {
@@ -121,6 +123,7 @@
     --color-success: #287144;
     --color-toast: #fff;
     --color-shadow: rgb(30 30 45 / 12%);
+    --glow-opacity: .5;
     color-scheme: light;
   }
 }

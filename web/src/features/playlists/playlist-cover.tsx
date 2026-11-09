@@ -11,6 +11,7 @@ function FilledStar() {
 
 export function PlaylistCover({ cover, favorites, size }: { cover: string | null, favorites: boolean, size: 'sm' | 'md' | 'lg' }) {
   const [failedSrc, setFailedSrc] = useState<string>()
+  const large = size !== 'sm'
   if (!cover || cover === failedSrc) {
     return (
       <span className={`playlist-cover playlist-cover-${size}`} data-favorites={favorites || undefined}>
@@ -20,7 +21,9 @@ export function PlaylistCover({ cover, favorites, size }: { cover: string | null
   }
   return (
     <span className={`playlist-cover playlist-cover-${size}`}>
+      {large && <img className="playlist-cover-glow" src={cover} alt="" loading="lazy" decoding="async" />}
       <img src={cover} alt="" loading="lazy" decoding="async" onError={() => setFailedSrc(cover)} />
+      {large && favorites && <span className="playlist-cover-badge"><FilledStar /></span>}
     </span>
   )
 }

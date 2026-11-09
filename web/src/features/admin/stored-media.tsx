@@ -4,9 +4,8 @@ import { useEffect, useState } from 'react'
 import { api } from '@/core/api'
 import { bookTitle } from '@/shared/lib/book-title'
 import { formatDateTime } from '@/shared/lib/time'
-import { IconButton, Skeleton } from '@/shared/ui'
+import { ConfirmDialog, IconButton, Skeleton } from '@/shared/ui'
 import { adminStore } from './admin-store'
-import { ConfirmDialog } from './confirm-dialog'
 
 function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`
@@ -74,6 +73,7 @@ export function StoredMedia() {
         <ConfirmDialog
           title="删除已存储的媒体"
           confirmLabel="删除"
+          danger
           onConfirm={async () => {
             if (await adminStore.call(() => api.adminDeleteMedia(deleting.key)) !== null) {
               setDeleting(null)

@@ -2,9 +2,8 @@ import type { YoutubeCredentialState } from './youtube-cookies-view'
 import { useEffect, useId, useState } from 'react'
 import { api } from '@/core/api'
 import { formatDateTime } from '@/shared/lib/time'
-import { Modal, notificationStore } from '@/shared/ui'
+import { ConfirmDialog, Modal, notificationStore } from '@/shared/ui'
 import { adminStore } from './admin-store'
-import { ConfirmDialog } from './confirm-dialog'
 import { canSubmitYoutubeCookies, shouldWarnAboutPlaintext, youtubeCookiesText, youtubeCookiesTooLarge, youtubeCookiesView } from './youtube-cookies-view'
 
 function YouTubeCookiesDialog({ onSaved, onClose }: { onSaved: () => void, onClose: () => void }) {
@@ -111,6 +110,7 @@ export function YouTubeCookies() {
         <ConfirmDialog
           title="清除 YouTube cookies"
           confirmLabel="清除"
+          danger
           onConfirm={async () => {
             if (await adminStore.call(() => api.adminDeleteYoutubeCredential()) === null)
               return

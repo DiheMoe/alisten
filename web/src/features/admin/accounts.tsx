@@ -1,8 +1,8 @@
 import type { AdminAccount } from '@/core/realtime'
 import { useState } from 'react'
 import { api } from '@/core/api'
+import { ConfirmDialog } from '@/shared/ui'
 import { adminStore } from './admin-store'
-import { ConfirmDialog } from './confirm-dialog'
 
 export function Accounts() {
   const [username, setUsername] = useState('')
@@ -72,7 +72,7 @@ export function Accounts() {
         )}
       </form>
       {found && confirming && (
-        <ConfirmDialog title="重置密码" confirmLabel="重置" onConfirm={() => reset(found)} onClose={() => setConfirming(false)}>
+        <ConfirmDialog title="重置密码" confirmLabel="重置" danger onConfirm={() => reset(found)} onClose={() => setConfirming(false)}>
           {`将为 ${found.username} 生成一个新密码，原来的密码立即失效，这个账号在所有设备上都会退出登录。`}
         </ConfirmDialog>
       )}

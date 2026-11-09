@@ -8,6 +8,14 @@ export interface PlaylistSort {
   order: SortOrder
 }
 
+export const sortKeys: SortKey[] = ['name', 'createdAt', 'updatedAt', 'trackCount']
+export const sortOrders: SortOrder[] = ['asc', 'desc']
+
+// 换一个字段排序时的方向：名称从 A 到 Z，时间最新在前，歌曲数最多在前。
+export function defaultOrder(key: SortKey): SortOrder {
+  return key === 'name' ? 'asc' : 'desc'
+}
+
 const collator = new Intl.Collator('zh-Hans-CN', { numeric: true, sensitivity: 'base' })
 
 function compareBy(key: SortKey, a: MyPlaylist, b: MyPlaylist): number {

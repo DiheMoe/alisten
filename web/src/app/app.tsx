@@ -1,13 +1,14 @@
 import type { LucideIcon } from 'lucide-react'
 import type { Page, Panel, RoomPage } from './route'
 import type { SearchQuery } from '@/features/search'
-import { ChevronLeft, ChevronRight, Headphones, History, House, ListMusic, MessageCircle, MoreHorizontal, Search, Settings, Share2, UserRound, Wifi, WifiOff, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Headphones, History, House, Library, ListMusic, MessageCircle, MoreHorizontal, Search, Settings, Share2, UserRound, Wifi, WifiOff, X } from 'lucide-react'
 import { Suspense } from 'react'
 import { roomStore } from '@/core/room'
 import { ChatPanel } from '@/features/chat'
 import { HistoryPage } from '@/features/history'
 import { ListenPage } from '@/features/lyrics'
 import { AudioEngine, ManualStartPrompt, PlayerBar, playerStore } from '@/features/playback'
+import { MyPlaylistPage, PlaylistsPage } from '@/features/playlists'
 import { QueuePage, voteSkip } from '@/features/queue'
 import { copyInviteLink, EntryDialog, Lobby, roomEntryStore, RoomGate } from '@/features/rooms'
 import { HeaderSearch, PlaylistPage, SearchPage, searchStore } from '@/features/search'
@@ -29,11 +30,12 @@ const AdminPage = lazyPage(() => import('@/features/admin').then((module) => {
 
 const pageLoading = <div className="page-content"><Skeleton rows={6} /></div>
 
-const menu: { page: 'lobby' | 'settings' | 'history' | RoomPage, label: string, icon: LucideIcon }[] = [
+const menu: { page: 'lobby' | 'settings' | 'history' | 'playlists' | RoomPage, label: string, icon: LucideIcon }[] = [
   { page: 'listen', label: '正在聆听', icon: Headphones },
   { page: 'queue', label: '播放列表', icon: ListMusic },
   { page: 'chat', label: '房间聊天', icon: MessageCircle },
   { page: 'history', label: '播放历史', icon: History },
+  { page: 'playlists', label: '我的歌单', icon: Library },
   { page: 'lobby', label: '发现房间', icon: House },
   { page: 'settings', label: '设置', icon: Settings },
 ]
@@ -45,9 +47,11 @@ const mobileMenu: { page: RoomPage, label: string, icon: LucideIcon }[] = [
 ]
 
 const pageClasses: Partial<Record<Page, string>> = {
-  queue: 'scrollbar-hidden',
-  history: 'scrollbar-hidden',
-  settings: 'settings-view',
+  'queue': 'scrollbar-hidden',
+  'history': 'scrollbar-hidden',
+  'playlists': 'scrollbar-hidden',
+  'my-playlist': 'scrollbar-hidden',
+  'settings': 'settings-view',
 }
 
 function closeMenu(element: HTMLElement): void {
@@ -112,21 +116,24 @@ function Header({ page }: { page: Page }) {
             <MoreHorizontal size={20} />
           </summary>
           <nav className="main-nav" aria-label="主导航">
-            {menu.map(({ page: target, label, icon: Icon }) => (
-              <button
-                type="button"
-                key={target}
-                className={`nav-item text-ui-base ${page === target ? 'selected' : ''}`}
-                aria-current={page === target ? 'page' : undefined}
-                onClick={(event) => {
-                  navigationStore.open(target)
-                  closeMenu(event.currentTarget)
-                }}
-              >
-                <Icon size={20} strokeWidth={1.7} />
-                {label}
-              </button>
-            ))}
+            {menu.map(({ page: target, label, icon: Icon }) => {
+              const selected = page === target || (target === 'playlists' && page === 'my-playlist')
+              return (
+                <button
+                  type="button"
+                  key={target}
+                  className={`nav-item text-ui-base ${selected ? 'selected' : ''}`}
+                  aria-current={selected ? 'page' : undefined}
+                  onClick={(event) => {
+                    navigationStore.open(target)
+                    closeMenu(event.currentTarget)
+                  }}
+                >
+                  <Icon size={20} strokeWidth={1.7} />
+                  {label}
+                </button>
+              )
+            })}
             <button
               type="button"
               className="nav-item text-ui-base"
@@ -185,6 +192,13 @@ function RoutedHistory() {
   if (route.name !== 'history')
     return null
   return <HistoryPage filter={route.filter} onFilter={filter => navigationStore.navigate({ ...route, filter })} />
+}
+
+function RoutedMyPlaylist() {
+  const route = useStore(navigationStore, s => s.route)
+  if (route.name !== 'my-playlist')
+    return null
+  return <MyPlaylistPage id={route.id} onBack={() => navigationStore.open('playlists')} />
 }
 
 function RoutedSearch() {
@@ -258,6 +272,13 @@ export function App() {
                   {page === 'playlist' && <RoomGate onBrowse={browse}><RoutedPlaylist /></RoomGate>}
                   {page === 'chat' && <RoomGate onBrowse={browse}><ChatPanel /></RoomGate>}
                   {page === 'history' && <RoutedHistory />}
+                  {page === 'playlists' && (
+                    <PlaylistsPage
+                      onOpen={playlist => navigationStore.navigate({ name: 'my-playlist', id: playlist.id, panel: navigationStore.state.route.panel }, playlist.name)}
+                      onRegister={() => navigationStore.open('settings')}
+                    />
+                  )}
+                  {page === 'my-playlist' && <RoutedMyPlaylist />}
                   {page === 'settings' && <SettingsPage />}
                 </Suspense>
               </ErrorBoundary>

@@ -3,9 +3,8 @@ import { KeyRound, LockKeyhole, LogIn, Pencil, Plus, Share2, Trash2 } from 'luci
 import { useEffect, useState } from 'react'
 import { api } from '@/core/api'
 import { copyInviteLink, roomEntryStore } from '@/features/rooms'
-import { IconButton, Skeleton } from '@/shared/ui'
+import { ConfirmDialog, IconButton, Skeleton } from '@/shared/ui'
 import { adminStore } from './admin-store'
-import { ConfirmDialog } from './confirm-dialog'
 import { RoomApiKeyDialog } from './room-api-key-dialog'
 import { RoomFormDialog } from './room-form-dialog'
 
@@ -113,6 +112,7 @@ export function PersistentRooms({ onEntered }: { onEntered: (ref: string) => voi
         <ConfirmDialog
           title="删除常驻房间"
           confirmLabel="删除房间"
+          danger
           onConfirm={async () => {
             if (await adminStore.call(() => api.adminDeleteRoom(deleting.id)) !== null) {
               setDeleting(null)
