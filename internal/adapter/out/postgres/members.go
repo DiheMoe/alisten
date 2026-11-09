@@ -70,12 +70,19 @@ func (s *Store) AccountProfile(ctx context.Context, memberID string) (port.Accou
 }
 
 func (s *Store) Register(ctx context.Context, memberID, username, passwordHash string) error {
-	n, err := s.q.RegisterMember(ctx, query.RegisterMemberParams{ID: memberID, Username: &username, PasswordHash: &passwordHash})
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		n, err := q.RegisterMember(ctx, query.RegisterMemberParams{ID: memberID, Username: &username, PasswordHash: &passwordHash})
+		if err != nil {
+			return usernameError(err)
+		}
+		if n == 0 {
+			return port.ErrAlreadyRegistered
+		}
+		return q.CreateFavorites(ctx, memberID)
+	})
 	if err != nil {
-		return fmt.Errorf("注册成员 %s：%w", memberID, usernameError(err))
-	}
-	if n == 0 {
-		return fmt.Errorf("注册成员 %s：%w", memberID, port.ErrAlreadyRegistered)
+		return fmt.Errorf("注册成员 %s：%w", memberID, err)
 	}
 	return nil
 }

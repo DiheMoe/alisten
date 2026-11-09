@@ -38,7 +38,7 @@ type Members interface {
 	// name、avatarHash 或 email 为 nil 时保持原值，email 为空字符串表示清除。游客的 email 不保存。
 	UpdateMember(ctx context.Context, id string, name, avatarHash, email *string) (member.Member, error)
 	AccountProfile(ctx context.Context, memberID string) (AccountProfile, error)
-	// 用户名已属于其他成员时返回 ErrUsernameTaken，成员已经注册过时返回 ErrAlreadyRegistered。
+	// 用户名已属于其他成员时返回 ErrUsernameTaken，成员已经注册过时返回 ErrAlreadyRegistered。同时为这个账号创建“我喜欢”。
 	Register(ctx context.Context, memberID, username, passwordHash string) error
 	AccountByUsername(ctx context.Context, username string) (Account, error)
 	// 在同一个事务中删除 oldTokenHash 的会话，给 memberID 创建 newTokenHash 的会话。oldTokenHash 的会话已经不存在时返回

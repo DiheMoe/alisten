@@ -18,6 +18,21 @@ type Member struct {
 	Email        *string
 }
 
+type PlaylistItem struct {
+	PlaylistID string
+	Source     string
+	TrackID    string
+	Title      string
+	Artist     *string
+	Album      *string
+	CoverURL   *string
+	CoverKey   *string
+	DurationMs int64
+	PageURL    string
+	Position   int64
+	AddedAt    time.Time
+}
+
 type Room struct {
 	ID           string
 	Kind         string

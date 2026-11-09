@@ -16,6 +16,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/domain/member"
 	"github.com/dihemoe/alisten/internal/domain/room"
+	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
 // Store 的行为与 postgres 适配器一致，包括它会拒绝的输入。
@@ -33,6 +34,7 @@ type Store struct {
 	cookies            map[string]string
 	brandName          string
 	registrationClosed bool
+	playlists          []*storedPlaylist
 }
 
 type storedMember struct {
@@ -57,6 +59,7 @@ var (
 	_ port.Credentials     = (*Store)(nil)
 	_ port.APIKeys         = (*Store)(nil)
 	_ port.Site            = (*Store)(nil)
+	_ port.Playlists       = (*Store)(nil)
 )
 
 func New() *Store {
@@ -175,6 +178,8 @@ func (s *Store) Register(_ context.Context, memberID, username, passwordHash str
 		return port.ErrUsernameTaken
 	}
 	m.username, m.passwordHash = username, passwordHash
+	now := time.Now()
+	s.playlists = append(s.playlists, &storedPlaylist{id: s.newID(), owner: memberID, name: "我喜欢", favorites: true, created: now, updated: now})
 	return nil
 }
 
@@ -523,6 +528,163 @@ func (s *Store) slugOwner(slug string) *port.RoomRecord {
 		if s.rooms[i].Slug != "" && s.rooms[i].Slug == slug {
 			return &s.rooms[i]
 		}
+	}
+	return nil
+}
+
+type storedPlaylist struct {
+	id, owner, name  string
+	favorites        bool
+	items            []port.PlaylistItem
+	created, updated time.Time
+}
+
+func (p *storedPlaylist) cover() *port.Cover {
+	for i := len(p.items) - 1; i >= 0; i-- {
+		if m := p.items[i].Meta; m.CoverURL != "" || m.CoverKey != "" {
+			return &port.Cover{URL: m.CoverURL, Key: m.CoverKey}
+		}
+	}
+	return nil
+}
+
+// 调用方持有 s.mu。
+func (s *Store) playlist(ownerID, id string) *storedPlaylist {
+	for _, p := range s.playlists {
+		if p.id == id && p.owner == ownerID {
+			return p
+		}
+	}
+	return nil
+}
+
+func (s *Store) MemberPlaylists(_ context.Context, ownerID string) ([]port.PlaylistRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var lists []port.PlaylistRecord
+	for _, p := range s.playlists {
+		if p.owner != ownerID {
+			continue
+		}
+		r := port.PlaylistRecord{
+			ID:         p.id,
+			Name:       p.name,
+			Favorites:  p.favorites,
+			TrackCount: len(p.items),
+			CreatedAt:  p.created,
+			UpdatedAt:  p.updated,
+			Cover:      p.cover(),
+		}
+		if p.favorites {
+			lists = append([]port.PlaylistRecord{r}, lists...)
+		} else {
+			lists = append(lists, r)
+		}
+	}
+	return lists, nil
+}
+
+func (s *Store) CreatePlaylist(_ context.Context, ownerID, name string, limit int) (port.PlaylistRecord, error) {
+	if err := checkText(name); err != nil {
+		return port.PlaylistRecord{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for _, p := range s.playlists {
+		if p.owner == ownerID {
+			n++
+		}
+	}
+	if n >= limit {
+		return port.PlaylistRecord{}, port.ErrPlaylistLimit
+	}
+	now := time.Now()
+	p := &storedPlaylist{id: s.newID(), owner: ownerID, name: name, created: now, updated: now}
+	s.playlists = append(s.playlists, p)
+	return port.PlaylistRecord{ID: p.id, Name: name, CreatedAt: now, UpdatedAt: now}, nil
+}
+
+func (s *Store) RenamePlaylist(_ context.Context, ownerID, id, name string) error {
+	if err := checkText(name); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.playlist(ownerID, id)
+	switch {
+	case p == nil:
+		return port.ErrPlaylistNotFound
+	case p.favorites:
+		return port.ErrFavoritesFixed
+	}
+	p.name = name
+	p.updated = time.Now()
+	return nil
+}
+
+func (s *Store) DeletePlaylist(_ context.Context, ownerID, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.playlist(ownerID, id)
+	switch {
+	case p == nil:
+		return port.ErrPlaylistNotFound
+	case p.favorites:
+		return port.ErrFavoritesFixed
+	}
+	s.playlists = slices.DeleteFunc(s.playlists, func(other *storedPlaylist) bool { return other == p })
+	return nil
+}
+
+func (s *Store) PlaylistItems(_ context.Context, ownerID, id string) ([]port.PlaylistItem, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.playlist(ownerID, id)
+	if p == nil {
+		return nil, port.ErrPlaylistNotFound
+	}
+	items := make([]port.PlaylistItem, 0, len(p.items))
+	for i := len(p.items) - 1; i >= 0; i-- {
+		items = append(items, p.items[i])
+	}
+	return items, nil
+}
+
+func (s *Store) AddPlaylistItem(_ context.Context, ownerID, id string, item port.PlaylistItem, limit int) error {
+	m := item.Meta
+	if err := checkText(item.Track.ID, m.Title, m.Artist, m.Album, m.CoverURL, string(m.CoverKey), m.PageURL); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.playlist(ownerID, id)
+	if p == nil {
+		return port.ErrPlaylistNotFound
+	}
+	if slices.ContainsFunc(p.items, func(i port.PlaylistItem) bool { return i.Track == item.Track }) {
+		return nil
+	}
+	if len(p.items) >= limit {
+		return port.ErrPlaylistLimit
+	}
+	item.Meta.Duration = item.Meta.Duration.Truncate(time.Millisecond)
+	p.items = append(p.items, item)
+	p.updated = time.Now()
+	return nil
+}
+
+func (s *Store) RemovePlaylistItem(_ context.Context, ownerID, id string, t track.Track) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.playlist(ownerID, id)
+	if p == nil {
+		return port.ErrPlaylistNotFound
+	}
+	n := len(p.items)
+	p.items = slices.DeleteFunc(p.items, func(i port.PlaylistItem) bool { return i.Track == t })
+	if len(p.items) < n {
+		p.updated = time.Now()
 	}
 	return nil
 }
