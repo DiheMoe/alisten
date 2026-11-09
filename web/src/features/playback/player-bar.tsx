@@ -1,6 +1,8 @@
-import { ListMusic, MessageCircle, SkipForward, Volume2, VolumeX } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import type { Track } from '@/core/realtime'
+import { ListMusic, ListPlus, MessageCircle, SkipForward, Volume2, VolumeX } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { roomStore } from '@/core/room'
+import { SaveToPlaylistDialog, saveToPlaylistLabel } from '@/features/playlists'
 import { sourceName } from '@/features/queue'
 import { formatDuration } from '@/shared/lib/time'
 import { useStore } from '@/shared/lib/use-store'
@@ -69,6 +71,8 @@ export function PlayerBar({ onSkip, onLyrics, onQueue, onChat, queueOpen, chatOp
   const artist = meta?.artist || '未知艺术家'
   const source = nowPlaying ? sourceName(nowPlaying.entry.track) : undefined
   const note = nowPlaying?.entry.by ? `${nowPlaying.entry.by.name} 点的歌` : undefined
+  // 记下打开时的歌：对话框开着时换了歌，或者这首播完了，勾选仍然作用于打开时的那首。
+  const [saving, setSaving] = useState<{ track: Track, title: string } | null>(null)
   return (
     <section className="player-bar" aria-label="播放器">
       <button type="button" className="player-artwork" onClick={onLyrics} aria-label="查看歌词">
@@ -87,6 +91,15 @@ export function PlayerBar({ onSkip, onLyrics, onQueue, onChat, queueOpen, chatOp
       </div>
       <div className="player-right">
         <div className="player-center">
+          <IconButton
+            icon={ListPlus}
+            label={meta ? saveToPlaylistLabel(meta.title) : '保存到歌单'}
+            disabled={!nowPlaying}
+            onClick={() => {
+              if (nowPlaying)
+                setSaving({ track: nowPlaying.entry.track, title: nowPlaying.entry.meta.title })
+            }}
+          />
           <AsyncIconButton icon={SkipForward} label="投票切歌" disabled={!nowPlaying || !connected} onAction={onSkip} />
         </div>
         <div className="player-tools">
@@ -112,6 +125,7 @@ export function PlayerBar({ onSkip, onLyrics, onQueue, onChat, queueOpen, chatOp
           <IconButton icon={ListMusic} label="播放列表" className="player-panel-toggle" disabled={!canOpenPanels} aria-pressed={queueOpen} onClick={onQueue} />
         </div>
       </div>
+      {saving && <SaveToPlaylistDialog track={saving.track} title={saving.title} onClose={() => setSaving(null)} />}
     </section>
   )
 }

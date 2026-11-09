@@ -1,0 +1,24 @@
+.save-playlist-subject { margin-bottom: 12px; }
+.save-playlist-list { display: flex; flex-direction: column; gap: 2px; max-height: min(52dvh, 432px); margin: 0 -12px; padding: 0; overflow-y: auto; overscroll-behavior: contain; list-style: none; }
+.save-playlist-row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.save-playlist-row:hover { background: var(--color-surface-hover); }
+.save-playlist-row:has(input:focus-visible) { outline: 2px solid var(--color-brand); outline-offset: -2px; }
+.save-playlist-row > .playlist-cover-sm { width: 36px; }
+.save-playlist-name { display: flex; flex: 1; align-items: center; gap: 6px; min-width: 0; }
+.save-playlist-row > .muted { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+/* 勾选框的位置空着，加号图块和上面各行的封面对齐。 */
+.save-playlist-new { width: 100%; padding-left: 40px; border: 0; background: none; color: inherit; text-align: left; }
+.save-playlist-new:focus-visible { outline-offset: -2px; }
+.save-playlist-new-tile { display: grid; place-items: center; width: 36px; aspect-ratio: 1; border-radius: 8px; color: var(--color-foreground-subtle); }
+.save-playlist-new-tile > svg { width: 20px; height: 20px; }
+/* 深色主题下对话框的底色和 --color-card-hover 几乎相同，占位图块会看不见。 */
+.save-playlist-new-tile, .save-playlist-row > .playlist-cover:not([data-favorites]) { background: var(--color-hover); }
+
+.playlist-cover { position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; flex-shrink: 0; aspect-ratio: 1; border-radius: 8px; background: var(--color-card-hover); color: var(--color-foreground-subtlest); }
+.playlist-cover[data-favorites] { background: var(--color-accent); color: var(--color-brand); }
+.playlist-cover > svg { width: 38%; height: 38%; }
+.playlist-cover > img { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.playlist-cover-sm { width: 40px; }
+.playlist-cover-md { width: 100%; }
+.playlist-cover-lg { width: 232px; border-radius: 10px; }
+.playlist-favorites-mark { flex-shrink: 0; color: var(--color-brand); }

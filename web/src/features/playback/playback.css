@@ -43,7 +43,7 @@
   .playback-progress { position: absolute; left: 0; right: 0; bottom: 0; margin-top: 0; }
   .player-center { flex-shrink: 0; }
   .player-track { position: static; }
-  .player-time { top: 30px; right: 54px; }
+  .player-time { top: 30px; right: 90px; }
   .progress-track { height: 2px; border-radius: 0 0 8px 8px; }
   .player-tools { display: none; }
 }

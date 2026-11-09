@@ -1,10 +1,12 @@
-import type { Entry, PlayMode } from '@/core/realtime'
+import type { Entry, PlayMode, Track } from '@/core/realtime'
 import type { SongItem } from '@/shared/ui'
-import { Heart, ListMusic, Trash2 } from 'lucide-react'
+import { Heart, ListMusic, ListPlus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { roomStore } from '@/core/room'
+import { SaveToPlaylistDialog, saveToPlaylistLabel } from '@/features/playlists'
 import { bookTitle } from '@/shared/lib/book-title'
 import { useStore } from '@/shared/lib/use-store'
-import { EmptyState, PlayingBars, Select, SongArtwork, SongList } from '@/shared/ui'
+import { EmptyState, IconButton, PlayingBars, Select, SongArtwork, SongList } from '@/shared/ui'
 import { likeEntry, removeEntry, setPlayMode } from './actions'
 import { sourceName } from './source'
 import './queue.css'
@@ -26,7 +28,7 @@ function songItem(entry: Entry): SongItem {
   }
 }
 
-function QueueCard({ label, entry, className = '', playing = false }: { label: string, entry: Entry, className?: string, playing?: boolean }) {
+function QueueCard({ label, entry, className = '', playing = false, onSave }: { label: string, entry: Entry, className?: string, playing?: boolean, onSave: () => void }) {
   const song = songItem(entry)
   return (
     <div className={`queue-current ${className}`}>
@@ -37,6 +39,7 @@ function QueueCard({ label, entry, className = '', playing = false }: { label: s
         <span className="text-ui-sm muted truncate">{[song.artist, song.sourceName, song.note].filter(Boolean).join(' · ')}</span>
       </div>
       {playing && <PlayingBars />}
+      <IconButton icon={ListPlus} label={saveToPlaylistLabel(song.title)} onClick={onSave} />
     </div>
   )
 }
@@ -47,6 +50,8 @@ export function QueuePage({ compact = false }: { compact?: boolean }) {
   const items = useStore(roomStore, s => s.room?.items ?? noEntries)
   const playMode = useStore(roomStore, s => s.room?.playMode ?? 'sequential')
   const connected = useStore(roomStore, s => s.status === 'open')
+  const [saving, setSaving] = useState<{ track: Track, title: string } | null>(null)
+  const save = (entry: Entry) => setSaving({ track: entry.track, title: entry.meta.title })
   return (
     <section className={compact ? 'queue-panel' : 'page-content queue-page'} aria-label="播放列表">
       <div className="section-heading">
@@ -67,16 +72,20 @@ export function QueuePage({ compact = false }: { compact?: boolean }) {
           ]}
         />
       </div>
-      {nowPlaying && <QueueCard label="正在播放" entry={nowPlaying.entry} playing />}
-      {pending && <QueueCard label="下一首" entry={pending} className="queue-pending" />}
+      {nowPlaying && <QueueCard label="正在播放" entry={nowPlaying.entry} playing onSave={() => save(nowPlaying.entry)} />}
+      {pending && <QueueCard label="下一首" entry={pending} className="queue-pending" onSave={() => save(pending)} />}
       {items.length
         ? (
             <SongList
               songs={items.map(songItem)}
-              actions={song => [
-                { icon: Heart, label: `点赞${bookTitle(song.title)}`, disabled: !connected, secondary: true, run: () => likeEntry(song.key, song.title) },
-                { icon: Trash2, label: `移除${bookTitle(song.title)}`, disabled: !connected, secondary: true, run: () => removeEntry(song.key, song.title) },
-              ]}
+              actions={(song, index) => {
+                const { track } = items[index]
+                return [
+                  { icon: ListPlus, label: saveToPlaylistLabel(song.title), secondary: true, run: async () => setSaving({ track, title: song.title }) },
+                  { icon: Heart, label: `点赞${bookTitle(song.title)}`, disabled: !connected, secondary: true, run: () => likeEntry(song.key, song.title) },
+                  { icon: Trash2, label: `移除${bookTitle(song.title)}`, disabled: !connected, secondary: true, run: () => removeEntry(song.key, song.title) },
+                ]
+              }}
             />
           )
         : !pending && (
@@ -84,6 +93,7 @@ export function QueuePage({ compact = false }: { compact?: boolean }) {
               每个人都可以点歌，一起决定下一首。
             </EmptyState>
           )}
+      {saving && <SaveToPlaylistDialog track={saving.track} title={saving.title} onClose={() => setSaving(null)} />}
     </section>
   )
 }

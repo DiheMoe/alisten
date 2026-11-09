@@ -2,6 +2,7 @@ import type { PlayRecord } from './records'
 import { CirclePlus, Download, History, Search, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { roomStore, sameTrack } from '@/core/room'
+import { SaveToPlaylistButton } from '@/features/playlists'
 import { enqueue, sourceName } from '@/features/queue'
 import { bookTitle } from '@/shared/lib/book-title'
 import { formatClock } from '@/shared/lib/time'
@@ -46,6 +47,7 @@ function HistoryRow({ record, compact, connected, playing }: { record: PlayRecor
           await enqueue(record.track)
         }}
       />
+      <SaveToPlaylistButton track={record.track} title={title} className="song-action song-action-secondary" />
       <IconButton
         icon={Trash2}
         className="song-action song-action-secondary"
