@@ -29,9 +29,10 @@ type Store struct {
 	states   map[string]*roomState
 	tickets  map[string]storedTicket
 	// 房间 ID 到 bot 成员 ID。
-	bots      map[string]string
-	cookies   map[string]string
-	brandName string
+	bots               map[string]string
+	cookies            map[string]string
+	brandName          string
+	registrationClosed bool
 }
 
 type storedMember struct {
@@ -453,10 +454,17 @@ func (s *Store) SetBilibiliCredential(_ context.Context, credential string) erro
 	return nil
 }
 
-func (s *Store) BrandName(context.Context) (string, error) {
+func (s *Store) Settings(context.Context) (port.SiteSettings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.brandName, nil
+	return port.SiteSettings{BrandName: s.brandName, RegistrationOpen: !s.registrationClosed}, nil
+}
+
+func (s *Store) SetRegistrationOpen(_ context.Context, open bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.registrationClosed = !open
+	return nil
 }
 
 func (s *Store) SetBrandName(_ context.Context, name string) error {

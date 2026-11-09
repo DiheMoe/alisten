@@ -9,23 +9,38 @@ import (
 	"context"
 )
 
-const brandName = `-- name: BrandName :one
-SELECT brand_name FROM site
-`
-
-func (q *Queries) BrandName(ctx context.Context) (string, error) {
-	row := q.db.QueryRow(ctx, brandName)
-	var brand_name string
-	err := row.Scan(&brand_name)
-	return brand_name, err
-}
-
 const setBrandName = `-- name: SetBrandName :exec
 INSERT INTO site (brand_name) VALUES ($1)
 ON CONFLICT (id) DO UPDATE SET brand_name = excluded.brand_name
 `
 
-func (q *Queries) SetBrandName(ctx context.Context, brandName string) error {
+func (q *Queries) SetBrandName(ctx context.Context, brandName *string) error {
 	_, err := q.db.Exec(ctx, setBrandName, brandName)
 	return err
+}
+
+const setRegistrationOpen = `-- name: SetRegistrationOpen :exec
+INSERT INTO site (registration_open) VALUES ($1)
+ON CONFLICT (id) DO UPDATE SET registration_open = excluded.registration_open
+`
+
+func (q *Queries) SetRegistrationOpen(ctx context.Context, registrationOpen bool) error {
+	_, err := q.db.Exec(ctx, setRegistrationOpen, registrationOpen)
+	return err
+}
+
+const siteSettings = `-- name: SiteSettings :one
+SELECT brand_name, registration_open FROM site
+`
+
+type SiteSettingsRow struct {
+	BrandName        *string
+	RegistrationOpen bool
+}
+
+func (q *Queries) SiteSettings(ctx context.Context) (SiteSettingsRow, error) {
+	row := q.db.QueryRow(ctx, siteSettings)
+	var i SiteSettingsRow
+	err := row.Scan(&i.BrandName, &i.RegistrationOpen)
+	return i, err
 }

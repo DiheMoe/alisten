@@ -12,20 +12,27 @@ import (
 
 var _ port.Site = (*Store)(nil)
 
-func (s *Store) BrandName(ctx context.Context) (string, error) {
-	name, err := s.q.BrandName(ctx)
+func (s *Store) Settings(ctx context.Context) (port.SiteSettings, error) {
+	row, err := s.q.SiteSettings(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
+		return port.SiteSettings{RegistrationOpen: true}, nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("读取品牌名：%w", err)
+		return port.SiteSettings{}, fmt.Errorf("读取站点设置：%w", err)
 	}
-	return name, nil
+	return port.SiteSettings{BrandName: orEmpty(row.BrandName), RegistrationOpen: row.RegistrationOpen}, nil
 }
 
 func (s *Store) SetBrandName(ctx context.Context, name string) error {
-	if err := s.q.SetBrandName(ctx, name); err != nil {
+	if err := s.q.SetBrandName(ctx, &name); err != nil {
 		return fmt.Errorf("保存品牌名：%w", err)
+	}
+	return nil
+}
+
+func (s *Store) SetRegistrationOpen(ctx context.Context, open bool) error {
+	if err := s.q.SetRegistrationOpen(ctx, open); err != nil {
+		return fmt.Errorf("保存注册开关：%w", err)
 	}
 	return nil
 }

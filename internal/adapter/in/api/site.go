@@ -7,11 +7,11 @@ import (
 )
 
 func (s *server) getSite(ctx context.Context, _ call) (any, error) {
-	name, err := s.Site.BrandName(ctx)
+	settings, err := s.Site.Settings(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return protocol.GetSiteResponse{BrandName: name}, nil
+	return protocol.GetSiteResponse{BrandName: settings.BrandName}, nil
 }
 
 func (s *server) adminUpdateSite(ctx context.Context, c call) (any, error) {

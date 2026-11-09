@@ -1,20 +1,34 @@
 package postgres
 
-import "testing"
+import (
+	"testing"
 
-func TestBrandName(t *testing.T) {
+	"github.com/dihemoe/alisten/internal/app/port"
+)
+
+func TestSiteSettings(t *testing.T) {
 	store, pool := newStore(t)
-	if name, err := store.BrandName(t.Context()); err != nil || name != "" {
-		t.Fatalf("没有设置过时 = %q, %v，期望空字符串", name, err)
+	check := func(want port.SiteSettings, why string) {
+		t.Helper()
+		if got, err := store.Settings(t.Context()); err != nil || got != want {
+			t.Errorf("%s：Settings = %#v, %v，期望 %#v", why, got, err, want)
+		}
 	}
-	for _, want := range []string{"周末听歌会", "Alisten"} {
-		if err := store.SetBrandName(t.Context(), want); err != nil {
+	check(port.SiteSettings{RegistrationOpen: true}, "没有设置过时没有品牌名、开放注册")
+	if err := store.SetRegistrationOpen(t.Context(), false); err != nil {
+		t.Fatal(err)
+	}
+	check(port.SiteSettings{RegistrationOpen: false}, "只关闭注册时品牌名仍未设置")
+	for _, name := range []string{"周末听歌会", "Alisten"} {
+		if err := store.SetBrandName(t.Context(), name); err != nil {
 			t.Fatal(err)
 		}
-		if got, err := store.BrandName(t.Context()); err != nil || got != want {
-			t.Errorf("BrandName = %q, %v，期望 %q", got, err, want)
-		}
+		check(port.SiteSettings{BrandName: name, RegistrationOpen: false}, "修改品牌名不影响注册开关")
 	}
+	if err := store.SetRegistrationOpen(t.Context(), true); err != nil {
+		t.Fatal(err)
+	}
+	check(port.SiteSettings{BrandName: "Alisten", RegistrationOpen: true}, "重新开放注册不影响品牌名")
 	var rows int
 	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM site").Scan(&rows); err != nil {
 		t.Fatal(err)

@@ -2,8 +2,14 @@ package port
 
 import "context"
 
-// 没有设置过品牌名时，BrandName 返回空字符串。
+type SiteSettings struct {
+	// 没有设置过品牌名时为空字符串。
+	BrandName        string
+	RegistrationOpen bool
+}
+
 type Site interface {
-	BrandName(ctx context.Context) (string, error)
+	Settings(ctx context.Context) (SiteSettings, error)
 	SetBrandName(ctx context.Context, name string) error
+	SetRegistrationOpen(ctx context.Context, open bool) error
 }

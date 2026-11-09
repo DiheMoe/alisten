@@ -25,15 +25,25 @@ func New(site port.Site) *Service {
 	return &Service{site: site}
 }
 
-func (s *Service) BrandName(ctx context.Context) (string, error) {
-	name, err := s.site.BrandName(ctx)
+type Settings struct {
+	BrandName        string
+	RegistrationOpen bool
+}
+
+func (s *Service) Settings(ctx context.Context) (Settings, error) {
+	settings, err := s.site.Settings(ctx)
 	if err != nil {
-		return "", err
+		return Settings{}, err
 	}
+	name := settings.BrandName
 	if name == "" {
-		return defaultBrandName, nil
+		name = defaultBrandName
 	}
-	return name, nil
+	return Settings{BrandName: name, RegistrationOpen: settings.RegistrationOpen}, nil
+}
+
+func (s *Service) SetRegistrationOpen(ctx context.Context, open bool) error {
+	return s.site.SetRegistrationOpen(ctx, open)
 }
 
 func (s *Service) SetBrandName(ctx context.Context, name string) (string, error) {

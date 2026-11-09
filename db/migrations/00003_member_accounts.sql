@@ -23,3 +23,8 @@ ALTER TABLE members
     ADD CONSTRAINT members_password_check CHECK (password_hash IS NULL OR username IS NOT NULL),
     ADD COLUMN email text,
     ADD CONSTRAINT members_email_check CHECK (email IS NULL OR username IS NOT NULL);
+
+-- site 表没有行或者 brand_name 为 NULL 时，品牌名是默认的 Alisten；没有行时开放注册。
+ALTER TABLE site
+    ALTER COLUMN brand_name DROP NOT NULL,
+    ADD COLUMN registration_open boolean NOT NULL DEFAULT true;
