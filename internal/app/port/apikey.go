@@ -8,8 +8,6 @@ import (
 // 常驻房间的 API Key 是房间 bot 成员的票据。
 type NewAPIKey struct {
 	TokenHash []byte
-	// 房间还没有 bot 成员时用它创建：对应的随机值不交给任何人，bot 因此没有可用的成员 token。
-	BotTokenHash []byte
 }
 
 type APIKeyStatus struct {

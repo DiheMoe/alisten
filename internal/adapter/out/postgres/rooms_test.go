@@ -25,7 +25,7 @@ func addTicket(t *testing.T, pool *pgxpool.Pool, roomID string) {
 	t.Helper()
 	_, err := pool.Exec(t.Context(), `
 		WITH m AS (
-			INSERT INTO members (token_hash, name) VALUES (sha256(gen_random_uuid()::text::bytea), '甲')
+			INSERT INTO members (name) VALUES ('甲')
 			RETURNING id
 		)
 		INSERT INTO room_tickets (token_hash, room_id, member_id) SELECT sha256(gen_random_uuid()::text::bytea), $1, id FROM m`,

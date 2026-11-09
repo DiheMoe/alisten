@@ -9,31 +9,128 @@ import (
 	"context"
 )
 
-const createMember = `-- name: CreateMember :one
-INSERT INTO members (token_hash, name) VALUES ($1, $2)
-RETURNING id, token_hash, name, avatar_hash, created_at
+const accountByUsername = `-- name: AccountByUsername :one
+SELECT id, name, avatar_hash, created_at, username, password_hash, email FROM members WHERE username = $1
 `
 
-type CreateMemberParams struct {
-	TokenHash []byte
-	Name      string
-}
-
-func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Member, error) {
-	row := q.db.QueryRow(ctx, createMember, arg.TokenHash, arg.Name)
+func (q *Queries) AccountByUsername(ctx context.Context, username *string) (Member, error) {
+	row := q.db.QueryRow(ctx, accountByUsername, username)
 	var i Member
 	err := row.Scan(
 		&i.ID,
-		&i.TokenHash,
 		&i.Name,
 		&i.AvatarHash,
 		&i.CreatedAt,
+		&i.Username,
+		&i.PasswordHash,
+		&i.Email,
 	)
 	return i, err
 }
 
+const createMember = `-- name: CreateMember :one
+INSERT INTO members (name) VALUES ($1)
+RETURNING id, name, avatar_hash, created_at, username, password_hash, email
+`
+
+func (q *Queries) CreateMember(ctx context.Context, name string) (Member, error) {
+	row := q.db.QueryRow(ctx, createMember, name)
+	var i Member
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.AvatarHash,
+		&i.CreatedAt,
+		&i.Username,
+		&i.PasswordHash,
+		&i.Email,
+	)
+	return i, err
+}
+
+const createSession = `-- name: CreateSession :exec
+INSERT INTO member_sessions (token_hash, member_id) VALUES ($1, $2)
+`
+
+type CreateSessionParams struct {
+	TokenHash []byte
+	MemberID  string
+}
+
+func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
+	_, err := q.db.Exec(ctx, createSession, arg.TokenHash, arg.MemberID)
+	return err
+}
+
+const deleteMemberSessions = `-- name: DeleteMemberSessions :exec
+DELETE FROM member_sessions WHERE member_id = $1 AND token_hash IS DISTINCT FROM $2::bytea
+`
+
+type DeleteMemberSessionsParams struct {
+	MemberID string
+	Keep     []byte
+}
+
+// keep 为 NULL 时删除这个成员的全部会话。
+func (q *Queries) DeleteMemberSessions(ctx context.Context, arg DeleteMemberSessionsParams) error {
+	_, err := q.db.Exec(ctx, deleteMemberSessions, arg.MemberID, arg.Keep)
+	return err
+}
+
+const deleteSession = `-- name: DeleteSession :execrows
+DELETE FROM member_sessions WHERE token_hash = $1
+`
+
+func (q *Queries) DeleteSession(ctx context.Context, tokenHash []byte) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSession, tokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const lockAccountPassword = `-- name: LockAccountPassword :one
+SELECT coalesce(password_hash, '')::text AS password_hash FROM members WHERE id = $1 AND username IS NOT NULL FOR NO KEY UPDATE
+`
+
+// 用互斥的 FOR NO KEY UPDATE，不用 FOR SHARE：同一个账号的修改和重置依次进行，后一个读到的是前一个写入的密码哈希。
+func (q *Queries) LockAccountPassword(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRow(ctx, lockAccountPassword, id)
+	var password_hash string
+	err := row.Scan(&password_hash)
+	return password_hash, err
+}
+
+const lockMemberPassword = `-- name: LockMemberPassword :one
+SELECT coalesce(password_hash, '')::text AS password_hash FROM members WHERE id = $1 FOR NO KEY UPDATE
+`
+
+// 让修改密码等到这次登录提交之后，它随后删除会话时会删掉这次登录签发的会话。
+func (q *Queries) LockMemberPassword(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRow(ctx, lockMemberPassword, id)
+	var password_hash string
+	err := row.Scan(&password_hash)
+	return password_hash, err
+}
+
+const memberAccountProfile = `-- name: MemberAccountProfile :one
+SELECT username, email FROM members WHERE id = $1
+`
+
+type MemberAccountProfileRow struct {
+	Username *string
+	Email    *string
+}
+
+func (q *Queries) MemberAccountProfile(ctx context.Context, id string) (MemberAccountProfileRow, error) {
+	row := q.db.QueryRow(ctx, memberAccountProfile, id)
+	var i MemberAccountProfileRow
+	err := row.Scan(&i.Username, &i.Email)
+	return i, err
+}
+
 const memberByToken = `-- name: MemberByToken :one
-SELECT id, token_hash, name, avatar_hash, created_at FROM members WHERE token_hash = $1
+SELECT id, name, avatar_hash, created_at, username, password_hash, email FROM members WHERE id = (SELECT member_id FROM member_sessions WHERE token_hash = $1)
 `
 
 func (q *Queries) MemberByToken(ctx context.Context, tokenHash []byte) (Member, error) {
@@ -41,38 +138,102 @@ func (q *Queries) MemberByToken(ctx context.Context, tokenHash []byte) (Member, 
 	var i Member
 	err := row.Scan(
 		&i.ID,
-		&i.TokenHash,
 		&i.Name,
 		&i.AvatarHash,
 		&i.CreatedAt,
+		&i.Username,
+		&i.PasswordHash,
+		&i.Email,
 	)
 	return i, err
+}
+
+const memberHasSession = `-- name: MemberHasSession :one
+SELECT EXISTS (SELECT FROM member_sessions WHERE token_hash = $1 AND member_id = $2)
+`
+
+type MemberHasSessionParams struct {
+	TokenHash []byte
+	MemberID  string
+}
+
+func (q *Queries) MemberHasSession(ctx context.Context, arg MemberHasSessionParams) (bool, error) {
+	row := q.db.QueryRow(ctx, memberHasSession, arg.TokenHash, arg.MemberID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const registerMember = `-- name: RegisterMember :execrows
+UPDATE members SET username = $1, password_hash = $2
+WHERE id = $3 AND username IS NULL
+`
+
+type RegisterMemberParams struct {
+	Username     *string
+	PasswordHash *string
+	ID           string
+}
+
+// 只给游客设置：已经注册过的成员不受影响，影响的行数为 0。
+func (q *Queries) RegisterMember(ctx context.Context, arg RegisterMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, registerMember, arg.Username, arg.PasswordHash, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setMemberPassword = `-- name: SetMemberPassword :execrows
+UPDATE members SET password_hash = $1 WHERE id = $2 AND username IS NOT NULL
+`
+
+type SetMemberPasswordParams struct {
+	PasswordHash *string
+	ID           string
+}
+
+func (q *Queries) SetMemberPassword(ctx context.Context, arg SetMemberPasswordParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setMemberPassword, arg.PasswordHash, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateMember = `-- name: UpdateMember :one
 UPDATE members
 SET name = coalesce($1, name),
-    avatar_hash = CASE WHEN $2::text IS NULL THEN avatar_hash ELSE NULLIF($2::text, '') END
-WHERE id = $3
-RETURNING id, token_hash, name, avatar_hash, created_at
+    avatar_hash = CASE WHEN $2::text IS NULL THEN avatar_hash ELSE NULLIF($2::text, '') END,
+    email = CASE WHEN username IS NULL THEN NULL WHEN $3::text IS NULL THEN email ELSE NULLIF($3::text, '') END
+WHERE id = $4
+RETURNING id, name, avatar_hash, created_at, username, password_hash, email
 `
 
 type UpdateMemberParams struct {
 	Name       *string
 	AvatarHash *string
+	Email      *string
 	ID         string
 }
 
-// 只覆盖传入的列，分别修改昵称和头像的两个并发请求因此不会互相还原；头像哈希传入空串表示清除。
+// 只覆盖传入的列，分别修改昵称和头像的两个并发请求因此不会互相还原；头像哈希和邮箱传入空串表示清除。游客的邮箱总是 NULL。
 func (q *Queries) UpdateMember(ctx context.Context, arg UpdateMemberParams) (Member, error) {
-	row := q.db.QueryRow(ctx, updateMember, arg.Name, arg.AvatarHash, arg.ID)
+	row := q.db.QueryRow(ctx, updateMember,
+		arg.Name,
+		arg.AvatarHash,
+		arg.Email,
+		arg.ID,
+	)
 	var i Member
 	err := row.Scan(
 		&i.ID,
-		&i.TokenHash,
 		&i.Name,
 		&i.AvatarHash,
 		&i.CreatedAt,
+		&i.Username,
+		&i.PasswordHash,
+		&i.Email,
 	)
 	return i, err
 }

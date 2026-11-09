@@ -11,6 +11,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
+
+	"github.com/dihemoe/alisten/db/migrations"
+	"github.com/dihemoe/alisten/internal/app/port"
 )
 
 func migrate(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error {
@@ -126,5 +131,51 @@ func TestMigrationLogsKeepFixedFields(t *testing.T) {
 		if entry["version"] != "test" {
 			t.Errorf("日志覆盖了固定字段 version：%s", line)
 		}
+	}
+}
+
+func TestMemberSessionsMigrationKeepsMemberTokens(t *testing.T) {
+	ctx := t.Context()
+	name := fmt.Sprintf("test_%d", databases.Add(1))
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
+		t.Fatal(err)
+	}
+	cfg := server.Copy()
+	cfg.ConnConfig.Database = name
+	pool := connect(t, cfg)
+	db := stdlib.OpenDBFromPool(pool)
+	t.Cleanup(func() { _ = db.Close() })
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 2); err != nil {
+		t.Fatal(err)
+	}
+	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	var guest, bot string
+	if err := pool.QueryRow(ctx, "INSERT INTO members (token_hash, name, created_at) VALUES ($1, '游客-1a2b', $2) RETURNING id", tokenHash("guest"), created).Scan(&guest); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, "INSERT INTO members (token_hash, name) VALUES ($1, 'bot') RETURNING id", tokenHash("bot")).Scan(&bot); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO rooms (kind, name, description, bot_member_id) VALUES ('persistent', '大厅', '', $1)", bot); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	store := New(pool)
+	if m, err := store.MemberByToken(ctx, tokenHash("guest")); err != nil || m.ID != guest {
+		t.Errorf("迁移之后按原来的 token 找到 %#v, %v，期望成员 %s", m, err, guest)
+	}
+	var sessionCreated time.Time
+	if err := pool.QueryRow(ctx, "SELECT created_at FROM member_sessions WHERE member_id = $1", guest).Scan(&sessionCreated); err != nil || !sessionCreated.Equal(created) {
+		t.Errorf("会话的创建时间 = %v, %v，期望沿用成员的创建时间 %v", sessionCreated, err, created)
+	}
+	if _, err := store.MemberByToken(ctx, tokenHash("bot")); !errors.Is(err, port.ErrMemberNotFound) {
+		t.Errorf("bot 成员原来的 token 在迁移之后 = %v，期望不再有效", err)
 	}
 }

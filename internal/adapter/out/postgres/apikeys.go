@@ -41,7 +41,7 @@ func (s *Store) ResetRoomAPIKey(ctx context.Context, roomID string, k port.NewAP
 				return err
 			}
 		} else {
-			m, err := q.CreateMember(ctx, query.CreateMemberParams{TokenHash: k.BotTokenHash, Name: botName})
+			m, err := q.CreateMember(ctx, botName)
 			if err != nil {
 				return err
 			}

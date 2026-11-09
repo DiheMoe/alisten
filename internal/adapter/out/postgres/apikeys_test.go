@@ -12,7 +12,7 @@ import (
 )
 
 func newAPIKey(key string) port.NewAPIKey {
-	return port.NewAPIKey{TokenHash: tokenHash(key), BotTokenHash: tokenHash("bot " + key)}
+	return port.NewAPIKey{TokenHash: tokenHash(key)}
 }
 
 func resetAPIKey(t *testing.T, store *Store, roomID, key string) {
@@ -148,5 +148,18 @@ func TestConcurrentFirstResetsCreateOneBot(t *testing.T) {
 	}
 	if n := ticketCount(t, pool, id); n != 1 || bots != 1 {
 		t.Errorf("有 %d 把 Key、%d 个 bot 成员，期望各一个", n, bots)
+	}
+}
+
+func TestRoomBotHasNoSession(t *testing.T) {
+	store, pool := newStore(t)
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	resetAPIKey(t, store, id, "key-1")
+	var sessions int
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM member_sessions s JOIN rooms r ON r.bot_member_id = s.member_id WHERE r.id = $1", id).Scan(&sessions); err != nil {
+		t.Fatal(err)
+	}
+	if sessions != 0 {
+		t.Errorf("bot 成员有 %d 个会话，期望没有：bot 只通过 API Key 使用 HTTP 接口", sessions)
 	}
 }

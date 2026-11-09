@@ -74,7 +74,7 @@ func (s *Service) UpdateProfile(ctx context.Context, memberID string, p Profile)
 		hash := avatarHash(email)
 		avatar = &hash
 	}
-	m, err := s.members.UpdateMember(ctx, memberID, p.Name, avatar)
+	m, err := s.members.UpdateMember(ctx, memberID, p.Name, avatar, nil)
 	if err != nil {
 		return member.Member{}, err
 	}
@@ -140,9 +140,7 @@ func (s *Service) EnterRoom(ctx context.Context, roomID, ticket string) (*realti
 	return s.gateway.Join(logctx.WithMember(logctx.WithRoom(ctx, r.Info.ID), holder.Member.ID), r.Info.ID, holder.Member)
 }
 
-// 每次都准备好 bot 成员的 token：房间还没有 bot 成员时由存储用它创建，这个随机值不交给任何人。
 func NewAPIKey() (string, port.NewAPIKey) {
 	key, hash := newSecret()
-	_, botHash := newSecret()
-	return key, port.NewAPIKey{TokenHash: hash, BotTokenHash: botHash}
+	return key, port.NewAPIKey{TokenHash: hash}
 }

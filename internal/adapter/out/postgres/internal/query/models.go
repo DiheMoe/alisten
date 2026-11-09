@@ -9,11 +9,13 @@ import (
 )
 
 type Member struct {
-	ID         string
-	TokenHash  []byte
-	Name       string
-	AvatarHash *string
-	CreatedAt  time.Time
+	ID           string
+	Name         string
+	AvatarHash   *string
+	CreatedAt    time.Time
+	Username     *string
+	PasswordHash *string
+	Email        *string
 }
 
 type Room struct {

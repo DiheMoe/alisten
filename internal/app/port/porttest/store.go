@@ -23,9 +23,11 @@ type Store struct {
 	mu      sync.Mutex
 	ids     int
 	members []storedMember
-	rooms   []port.RoomRecord
-	states  map[string]*roomState
-	tickets map[string]storedTicket
+	// 会话的 token 哈希到成员 ID。
+	sessions map[string]string
+	rooms    []port.RoomRecord
+	states   map[string]*roomState
+	tickets  map[string]storedTicket
 	// 房间 ID 到 bot 成员 ID。
 	bots      map[string]string
 	cookies   map[string]string
@@ -33,8 +35,10 @@ type Store struct {
 }
 
 type storedMember struct {
-	tokenHash string
-	member    member.Member
+	member       member.Member
+	username     string
+	email        string
+	passwordHash string
 }
 
 type storedTicket struct {
@@ -54,10 +58,11 @@ var (
 
 func New() *Store {
 	return &Store{
-		states:  map[string]*roomState{},
-		tickets: map[string]storedTicket{},
-		bots:    map[string]string{},
-		cookies: map[string]string{},
+		states:   map[string]*roomState{},
+		sessions: map[string]string{},
+		tickets:  map[string]storedTicket{},
+		bots:     map[string]string{},
+		cookies:  map[string]string{},
 	}
 }
 
@@ -84,34 +89,47 @@ func (s *Store) CreateMember(_ context.Context, tokenHash []byte, name string) (
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, m := range s.members {
-		if m.tokenHash == string(tokenHash) {
-			return member.Member{}, errors.New("token 哈希重复")
-		}
+	if _, ok := s.sessions[string(tokenHash)]; ok {
+		return member.Member{}, errors.New("token 哈希重复")
 	}
 	m := member.Member{ID: s.newID(), Name: name}
-	s.members = append(s.members, storedMember{tokenHash: string(tokenHash), member: m})
+	s.members = append(s.members, storedMember{member: m})
+	s.sessions[string(tokenHash)] = m.ID
 	return m, nil
 }
 
 func (s *Store) MemberByToken(_ context.Context, tokenHash []byte) (member.Member, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, m := range s.members {
-		if m.tokenHash == string(tokenHash) {
-			return m.member, nil
-		}
+	if m := s.member(s.sessions[string(tokenHash)]); m != nil {
+		return m.member, nil
 	}
 	return member.Member{}, port.ErrMemberNotFound
 }
 
-func (s *Store) UpdateMember(_ context.Context, id string, name, avatarHash *string) (member.Member, error) {
+// 调用方持有 s.mu。
+func (s *Store) member(id string) *storedMember {
+	for i := range s.members {
+		if s.members[i].member.ID == id {
+			return &s.members[i]
+		}
+	}
+	return nil
+}
+
+func (s *Store) UpdateMember(_ context.Context, id string, name, avatarHash, email *string) (member.Member, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.members {
-		m := &s.members[i].member
+		stored := &s.members[i]
+		m := &stored.member
 		if m.ID != id {
 			continue
+		}
+		if email != nil {
+			if err := checkText(*email); err != nil {
+				return member.Member{}, err
+			}
 		}
 		if name != nil {
 			if err := checkText(*name); err != nil {
@@ -122,9 +140,115 @@ func (s *Store) UpdateMember(_ context.Context, id string, name, avatarHash *str
 		if avatarHash != nil {
 			m.AvatarHash = *avatarHash
 		}
+		if email != nil && stored.username != "" {
+			stored.email = *email
+		}
 		return *m, nil
 	}
 	return member.Member{}, port.ErrMemberNotFound
+}
+
+func (s *Store) AccountProfile(_ context.Context, memberID string) (port.AccountProfile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.member(memberID)
+	if m == nil {
+		return port.AccountProfile{}, port.ErrMemberNotFound
+	}
+	return port.AccountProfile{Username: m.username, Email: m.email}, nil
+}
+
+func (s *Store) Register(_ context.Context, memberID, username, passwordHash string) error {
+	if err := checkText(username, passwordHash); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.member(memberID)
+	if m == nil || m.username != "" {
+		return port.ErrAlreadyRegistered
+	}
+	if slices.ContainsFunc(s.members, func(other storedMember) bool { return other.username == username }) {
+		return port.ErrUsernameTaken
+	}
+	m.username, m.passwordHash = username, passwordHash
+	return nil
+}
+
+func (s *Store) AccountByUsername(_ context.Context, username string) (port.Account, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range s.members {
+		if username != "" && m.username == username {
+			return port.Account{Member: m.member, Username: m.username, Email: m.email, PasswordHash: m.passwordHash}, nil
+		}
+	}
+	return port.Account{}, port.ErrMemberNotFound
+}
+
+func (s *Store) ReplaceSession(_ context.Context, oldTokenHash []byte, memberID string, newTokenHash []byte, passwordHash string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.member(memberID)
+	if m == nil {
+		return fmt.Errorf("成员 %s 不存在", memberID)
+	}
+	if m.passwordHash != passwordHash {
+		return port.ErrAccountPasswordChanged
+	}
+	if _, ok := s.sessions[string(oldTokenHash)]; !ok {
+		return port.ErrSessionNotFound
+	}
+	if _, ok := s.sessions[string(newTokenHash)]; ok {
+		return errors.New("token 哈希重复")
+	}
+	delete(s.sessions, string(oldTokenHash))
+	s.sessions[string(newTokenHash)] = memberID
+	return nil
+}
+
+func (s *Store) DeleteSession(_ context.Context, tokenHash []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.sessions, string(tokenHash))
+	return nil
+}
+
+func (s *Store) SetPassword(_ context.Context, memberID, passwordHash string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.member(memberID)
+	if m == nil || m.username == "" {
+		return port.ErrMemberNotFound
+	}
+	m.passwordHash = passwordHash
+	s.deleteSessions(memberID, nil)
+	return nil
+}
+
+func (s *Store) ChangePassword(_ context.Context, memberID, currentPasswordHash, passwordHash string, keepTokenHash []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.member(memberID)
+	if m == nil || m.username == "" {
+		return port.ErrMemberNotFound
+	}
+	if owner, ok := s.sessions[string(keepTokenHash)]; !ok || owner != memberID {
+		return port.ErrSessionNotFound
+	}
+	if m.passwordHash != currentPasswordHash {
+		return port.ErrAccountPasswordChanged
+	}
+	m.passwordHash = passwordHash
+	s.deleteSessions(memberID, keepTokenHash)
+	return nil
+}
+
+// 调用方持有 s.mu。
+func (s *Store) deleteSessions(memberID string, keepTokenHash []byte) {
+	maps.DeleteFunc(s.sessions, func(hash, id string) bool {
+		return id == memberID && (keepTokenHash == nil || hash != string(keepTokenHash))
+	})
 }
 
 func (s *Store) CreateTicket(_ context.Context, t port.NewTicket) error {
@@ -194,7 +318,7 @@ func (s *Store) ResetRoomAPIKey(_ context.Context, roomID string, k port.NewAPIK
 		maps.DeleteFunc(s.tickets, func(_ string, t storedTicket) bool { return t.roomID == r.Info.ID && t.memberID == bot })
 	} else {
 		bot = s.newID()
-		s.members = append(s.members, storedMember{tokenHash: string(k.BotTokenHash), member: member.Member{ID: bot, Name: "bot"}})
+		s.members = append(s.members, storedMember{member: member.Member{ID: bot, Name: "bot"}})
 		s.bots[r.Info.ID] = bot
 	}
 	s.tickets[string(k.TokenHash)] = storedTicket{roomID: r.Info.ID, memberID: bot, createdAt: time.Now()}

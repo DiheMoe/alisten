@@ -298,7 +298,7 @@ func TestAbortHandlerIsLeftToNetHTTP(t *testing.T) {
 
 type brokenProfiles struct{ *porttest.Store }
 
-func (brokenProfiles) UpdateMember(context.Context, string, *string, *string) (member.Member, error) {
+func (brokenProfiles) UpdateMember(context.Context, string, *string, *string, *string) (member.Member, error) {
 	return member.Member{}, errors.New("连接中断")
 }
 

@@ -24,7 +24,7 @@ func TestTicketHolder(t *testing.T) {
 		t.Errorf("TicketHolder = %#v, %v，期望 %#v", got, err, want)
 	}
 
-	renamed, err := store.UpdateMember(t.Context(), alice.ID, ptr("新名字"), nil)
+	renamed, err := store.UpdateMember(t.Context(), alice.ID, ptr("新名字"), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
