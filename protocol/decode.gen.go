@@ -111,6 +111,10 @@ func DecodeMoveMyPlaylistItemsRequest(body []byte) (MoveMyPlaylistItemsRequest, 
 	return decodeMoveMyPlaylistItemsRequest(body, "")
 }
 
+func DecodeListMyTrackPlaylistsRequest(body []byte) (ListMyTrackPlaylistsRequest, error) {
+	return decodeListMyTrackPlaylistsRequest(body, "")
+}
+
 func DecodeCreateRoomRequest(body []byte) (CreateRoomRequest, error) {
 	return decodeCreateRoomRequest(body, "")
 }
@@ -570,6 +574,21 @@ func decodeHelloRequest(raw json.RawMessage, path string) (HelloRequest, error) 
 		return v, err
 	}
 	if v.Ticket, err = decodeString(m["ticket"], field(path, "ticket")); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+func decodeListMyTrackPlaylistsRequest(raw json.RawMessage, path string) (ListMyTrackPlaylistsRequest, error) {
+	var v ListMyTrackPlaylistsRequest
+	m, err := decodeObject(raw, path, "track")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "track"); err != nil {
+		return v, err
+	}
+	if v.Track, err = decodeTrack(m["track"], field(path, "track")); err != nil {
 		return v, err
 	}
 	return v, nil

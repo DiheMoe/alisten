@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "1b53e1e08b0452e4"
+const Version = "cdc97c61b16da452"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -294,6 +294,22 @@ func (v ListMyPlaylistsResponse) MarshalJSON() ([]byte, error) {
 	type plain ListMyPlaylistsResponse
 	if v.Items == nil {
 		v.Items = []MyPlaylist{}
+	}
+	return json.Marshal(plain(v))
+}
+
+type ListMyTrackPlaylistsRequest struct {
+	Track Track `json:"track"`
+}
+
+type ListMyTrackPlaylistsResponse struct {
+	PlaylistIds []string `json:"playlistIds"`
+}
+
+func (v ListMyTrackPlaylistsResponse) MarshalJSON() ([]byte, error) {
+	type plain ListMyTrackPlaylistsResponse
+	if v.PlaylistIds == nil {
+		v.PlaylistIds = []string{}
 	}
 	return json.Marshal(plain(v))
 }
@@ -767,6 +783,7 @@ var (
 	RouteRemoveMyPlaylistItems        = Route{Pattern: "POST /api/me/playlists/{id}/removals", Auth: AuthMember, Status: 204}
 	RouteCopyMyPlaylistItems          = Route{Pattern: "POST /api/me/playlists/{id}/copies", Auth: AuthMember, Status: 200}
 	RouteMoveMyPlaylistItems          = Route{Pattern: "POST /api/me/playlists/{id}/moves", Auth: AuthMember, Status: 204}
+	RouteListMyTrackPlaylists         = Route{Pattern: "POST /api/me/playlist-memberships", Auth: AuthMember, Status: 200}
 	RouteListRooms                    = Route{Pattern: "GET /api/rooms", Auth: AuthNone, Status: 200}
 	RouteGetRoom                      = Route{Pattern: "GET /api/rooms/{ref}", Auth: AuthNone, Status: 200}
 	RouteCreateRoom                   = Route{Pattern: "POST /api/rooms", Auth: AuthNone, Status: 201, Location: true}

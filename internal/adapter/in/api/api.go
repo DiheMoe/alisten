@@ -117,6 +117,7 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	srv.handle(mux, protocol.RouteListMyPlaylistItems, srv.listMyPlaylistItems)
 	srv.handle(mux, protocol.RouteAddMyPlaylistItem, srv.addMyPlaylistItem)
 	srv.handleLimit(mux, protocol.RouteRemoveMyPlaylistItems, maxBatchBodyBytes, srv.removeMyPlaylistItems)
+	srv.handle(mux, protocol.RouteListMyTrackPlaylists, srv.listMyTrackPlaylists)
 	srv.handleLimit(mux, protocol.RouteCopyMyPlaylistItems, maxBatchBodyBytes, srv.copyMyPlaylistItems)
 	srv.handleLimit(mux, protocol.RouteMoveMyPlaylistItems, maxBatchBodyBytes, srv.moveMyPlaylistItems)
 	srv.handle(mux, protocol.RouteListRooms, srv.listRooms)

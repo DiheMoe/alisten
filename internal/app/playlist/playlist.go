@@ -124,6 +124,13 @@ func (s *Service) Remove(ctx context.Context, memberID, id string, tracks []trac
 	return s.playlists.RemovePlaylistItems(ctx, memberID, id, tracks)
 }
 
+func (s *Service) Containing(ctx context.Context, memberID string, t track.Track) ([]string, error) {
+	if err := s.registered(ctx, memberID); err != nil {
+		return nil, err
+	}
+	return s.playlists.TrackPlaylists(ctx, memberID, t)
+}
+
 func (s *Service) Copy(ctx context.Context, memberID, fromID, toID string, tracks []track.Track) (int, error) {
 	if err := s.registered(ctx, memberID); err != nil {
 		return 0, err

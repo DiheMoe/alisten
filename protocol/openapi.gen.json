@@ -743,6 +743,33 @@
         ],
         "type": "object"
       },
+      "ListMyTrackPlaylistsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "track": {
+            "$ref": "#/components/schemas/Track"
+          }
+        },
+        "required": [
+          "track"
+        ],
+        "type": "object"
+      },
+      "ListMyTrackPlaylistsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "playlistIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "playlistIds"
+        ],
+        "type": "object"
+      },
       "ListRoomsResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1725,7 +1752,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "1b53e1e08b0452e4"
+    "version": "cdc97c61b16da452"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2860,6 +2887,49 @@
           }
         ],
         "summary": "修改昵称和头像；email 用来计算头像哈希，已注册的账号同时保存它，去掉首尾空白后应形如 name@example.com，空字符串表示清除"
+      }
+    },
+    "/api/me/playlist-memberships": {
+      "post": {
+        "operationId": "listMyTrackPlaylists",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListMyTrackPlaylistsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListMyTrackPlaylistsResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "这首歌在我的哪些歌单里"
       }
     },
     "/api/me/playlists": {

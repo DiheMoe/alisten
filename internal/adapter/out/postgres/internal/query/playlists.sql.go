@@ -452,3 +452,36 @@ func (q *Queries) TouchPlaylist(ctx context.Context, id string) error {
 	_, err := q.db.Exec(ctx, touchPlaylist, id)
 	return err
 }
+
+const trackPlaylists = `-- name: TrackPlaylists :many
+SELECT p.id FROM playlists p
+JOIN playlist_items i ON i.playlist_id = p.id
+WHERE p.owner_id = $1 AND i.source = $2 AND i.track_id = $3
+ORDER BY p.id
+`
+
+type TrackPlaylistsParams struct {
+	OwnerID string
+	Source  string
+	TrackID string
+}
+
+func (q *Queries) TrackPlaylists(ctx context.Context, arg TrackPlaylistsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, trackPlaylists, arg.OwnerID, arg.Source, arg.TrackID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

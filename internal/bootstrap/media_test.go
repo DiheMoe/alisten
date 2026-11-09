@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -238,6 +239,13 @@ func TestPlaylistLinkTracks(t *testing.T) {
 		t.Errorf("歌单里的曲目 = %+v，期望一首 ID %s、封面 %s", items.Items, link, coverURL)
 	}
 
+	var memberships struct {
+		PlaylistIDs []string `json:"playlistIds"`
+	}
+	call("POST /api/me/playlist-memberships"+auth+"\n\n"+`{"track": {"source": "link", "id": "https://Example.com/Song.mp3"}}`, http.StatusOK, &memberships)
+	if !slices.Equal(memberships.PlaylistIDs, []string{favorites}) {
+		t.Errorf("换一种大小写查所在的歌单 = %v，期望 [%s]", memberships.PlaylistIDs, favorites)
+	}
 	call("POST /api/me/playlists/"+favorites+"/removals"+auth+"\n\n"+`{"tracks": [{"source": "link", "id": "hTTps://example.COM/Song.mp3"}]}`, http.StatusNoContent, nil)
 	call("GET /api/me/playlists/"+favorites+"/items"+auth, http.StatusOK, &items)
 	if len(items.Items) != 0 {

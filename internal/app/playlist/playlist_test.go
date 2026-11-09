@@ -119,6 +119,9 @@ func TestGuestCannotUsePlaylists(t *testing.T) {
 	if _, err := f.svc.Add(t.Context(), guest.ID, "any", sunny); !errors.Is(err, ErrNotRegistered) {
 		t.Errorf("游客收藏 = %v，期望 ErrNotRegistered", err)
 	}
+	if _, err := f.svc.Containing(t.Context(), guest.ID, sunny); !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("游客查询所在的歌单 = %v，期望 ErrNotRegistered", err)
+	}
 	if err := f.svc.Remove(t.Context(), guest.ID, "any", []track.Track{sunny}); !errors.Is(err, ErrNotRegistered) {
 		t.Errorf("游客批量移出 = %v，期望 ErrNotRegistered", err)
 	}

@@ -108,6 +108,18 @@ func (s *server) removeMyPlaylistItems(ctx context.Context, c call) (any, error)
 	return nil, s.Playlists.Remove(ctx, c.member.ID, c.r.PathValue("id"), tracksOf(req.Tracks))
 }
 
+func (s *server) listMyTrackPlaylists(ctx context.Context, c call) (any, error) {
+	req, err := protocol.DecodeListMyTrackPlaylistsRequest(c.body)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := s.Playlists.Containing(ctx, c.member.ID, trackOf(req.Track))
+	if err != nil {
+		return nil, err
+	}
+	return protocol.ListMyTrackPlaylistsResponse{PlaylistIds: ids}, nil
+}
+
 func (s *server) copyMyPlaylistItems(ctx context.Context, c call) (any, error) {
 	req, err := protocol.DecodeCopyMyPlaylistItemsRequest(c.body)
 	if err != nil {

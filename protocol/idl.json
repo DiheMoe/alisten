@@ -987,6 +987,29 @@
       }
     },
     {
+      "name": "listMyTrackPlaylists",
+      "description": "这首歌在我的哪些歌单里",
+      "method": "POST",
+      "path": "/api/me/playlist-memberships",
+      "auth": "member",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "track": {"$ref": "#/$defs/Track"}
+        },
+        "required": ["track"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "playlistIds": {"type": "array", "items": {"type": "string"}}
+        },
+        "required": ["playlistIds"]
+      }
+    },
+    {
       "name": "listRooms",
       "description": "房间列表",
       "method": "GET",

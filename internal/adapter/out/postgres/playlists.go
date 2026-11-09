@@ -218,6 +218,17 @@ func (s *Store) RemovePlaylistItems(ctx context.Context, ownerID, id string, tra
 	return nil
 }
 
+func (s *Store) TrackPlaylists(ctx context.Context, ownerID string, t track.Track) ([]string, error) {
+	ids, err := s.q.TrackPlaylists(ctx, query.TrackPlaylistsParams{OwnerID: ownerID, Source: string(t.Source), TrackID: t.ID})
+	if err != nil {
+		return nil, fmt.Errorf("查询曲目 %s 所在的歌单：%w", t.ID, err)
+	}
+	if ids == nil {
+		ids = []string{}
+	}
+	return ids, nil
+}
+
 func (s *Store) CopyPlaylistItems(ctx context.Context, ownerID, fromID, toID string, tracks []track.Track, limit int) (int, error) {
 	var added int64
 	err := s.owned(ctx, ownerID, fromID)

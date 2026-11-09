@@ -690,6 +690,18 @@ func (s *Store) RemovePlaylistItems(_ context.Context, ownerID, id string, track
 	return nil
 }
 
+func (s *Store) TrackPlaylists(_ context.Context, ownerID string, t track.Track) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ids := []string{}
+	for _, p := range s.playlists {
+		if p.owner == ownerID && slices.ContainsFunc(p.items, func(i port.PlaylistItem) bool { return i.Track == t }) {
+			ids = append(ids, p.id)
+		}
+	}
+	return ids, nil
+}
+
 func (s *Store) CopyPlaylistItems(_ context.Context, ownerID, fromID, toID string, tracks []track.Track, limit int) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

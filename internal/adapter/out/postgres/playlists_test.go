@@ -512,6 +512,30 @@ func TestConcurrentRemovalsAndDeletesDoNotDeadlock(t *testing.T) {
 	}
 }
 
+func TestTrackPlaylistsOnlyListsOwnPlaylists(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	bob := registered(t, store, "bob")
+	favorites := favoritesOf(t, store, alice.ID)
+	commute := filled(t, store, alice.ID, "通勤", "1")
+	filled(t, store, alice.ID, "空", "2")
+	bobFavorites := favoritesOf(t, store, bob.ID)
+	if err := store.AddPlaylistItem(t.Context(), alice.ID, favorites, songItem("1"), 10); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddPlaylistItem(t.Context(), bob.ID, bobFavorites, songItem("1"), 10); err != nil {
+		t.Fatal(err)
+	}
+	ids, err := store.TrackPlaylists(t.Context(), alice.ID, songItem("1").Track)
+	if want := []string{favorites, commute}; err != nil || !slices.Equal(ids, want) {
+		t.Errorf("所在的歌单 = %v, %v，期望只有本人的 %v", ids, err, want)
+	}
+	ids, err = store.TrackPlaylists(t.Context(), alice.ID, songItem("3").Track)
+	if err != nil || ids == nil || len(ids) != 0 {
+		t.Errorf("不在任何歌单里的歌 = %#v, %v，期望空切片", ids, err)
+	}
+}
+
 func TestMovePlaylistItems(t *testing.T) {
 	store, _ := newStore(t)
 	alice := registered(t, store, "alice")

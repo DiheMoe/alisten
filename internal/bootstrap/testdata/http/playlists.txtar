@@ -227,6 +227,24 @@ Authorization: Bearer $alice
 {"items": [{"id": "$favorites", "name": "我喜欢", "favorites": true, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/qilixiang.jpg"}, {"id": "$commute", "name": "上班路上", "favorites": false, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/example.jpg"}]}
 
 -- request --
+POST /api/me/playlist-memberships
+Authorization: Bearer $alice
+
+{"track": {"source": "netease", "id": "186016"}}
+-- response --
+200
+{"playlistIds": ["$favorites", "$commute"]}
+
+-- request --
+POST /api/me/playlist-memberships
+Authorization: Bearer $alice
+
+{"track": {"source": "netease", "id": "999"}}
+-- response --
+200
+{"playlistIds": []}
+
+-- request --
 POST /api/me/playlists/$favorites/removals
 Authorization: Bearer $alice
 

@@ -201,6 +201,10 @@ func TestPlaylistBatchBodyLimit(t *testing.T) {
 	if got := send(t, server, http.MethodPost, "/api/me/playlists/"+favorites+"/removals", tooLarge, auth...); got != want {
 		t.Errorf("超过批量上限的请求体 = %#v，期望 %#v", got, want)
 	}
+	want = failure(protocol.ErrorCodeInvalidArgument, "请求体不能超过 64 KiB")
+	if got := send(t, server, http.MethodPost, "/api/me/playlist-memberships", `{"tracks":`+list+`}`, auth...); got != want {
+		t.Errorf("其他接口超过 64 KiB 的请求体 = %#v，期望 %#v", got, want)
+	}
 }
 
 func TestMalformedPathParametersAreNotFound(t *testing.T) {

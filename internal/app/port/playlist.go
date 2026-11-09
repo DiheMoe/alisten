@@ -51,6 +51,8 @@ type Playlists interface {
 	AddPlaylistItem(ctx context.Context, ownerID, id string, item PlaylistItem, limit int) error
 	// 不在歌单里的歌忽略。
 	RemovePlaylistItems(ctx context.Context, ownerID, id string, tracks []track.Track) error
+	// 只看这个成员自己的歌单；没有命中时返回空切片。
+	TrackPlaylists(ctx context.Context, ownerID string, t track.Track) ([]string, error)
 	// 把 fromID 歌单里的这些歌连同元数据复制到 toID 歌单，返回复制的数量。fromID 不属于 ownerID 时返回 ErrPlaylistNotFound。
 	// 不在 fromID 里的和已在 toID 里的跳过；新复制的排在最前，tracks[0] 最靠前。
 	// 复制之后超过 limit 首时整批拒绝，返回 ErrPlaylistLimit。

@@ -98,3 +98,9 @@ WHERE i.playlist_id = @playlist_id AND i.source = s.source AND i.track_id = k.tr
 
 -- name: TouchPlaylist :exec
 UPDATE playlists SET updated_at = now() WHERE id = @id;
+
+-- name: TrackPlaylists :many
+SELECT p.id FROM playlists p
+JOIN playlist_items i ON i.playlist_id = p.id
+WHERE p.owner_id = @owner_id AND i.source = @source AND i.track_id = @track_id
+ORDER BY p.id;

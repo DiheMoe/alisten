@@ -165,6 +165,14 @@ export interface ListMyPlaylistsResponse {
   items: MyPlaylist[]
 }
 
+export interface ListMyTrackPlaylistsRequest {
+  track: Track
+}
+
+export interface ListMyTrackPlaylistsResponse {
+  playlistIds: string[]
+}
+
 export interface ListRoomsResponse {
   items: RoomListing[]
 }
@@ -246,6 +254,7 @@ export function httpClient(send: HttpSend) {
     removeMyPlaylistItems: (id: string, body: RemoveMyPlaylistItemsRequest) => send<void>({ method: 'POST', path: `/api/me/playlists/${encodeURIComponent(id)}/removals`, auth: 'member', body }),
     copyMyPlaylistItems: (id: string, body: CopyMyPlaylistItemsRequest) => send<CopyMyPlaylistItemsResponse>({ method: 'POST', path: `/api/me/playlists/${encodeURIComponent(id)}/copies`, auth: 'member', body }),
     moveMyPlaylistItems: (id: string, body: MoveMyPlaylistItemsRequest) => send<void>({ method: 'POST', path: `/api/me/playlists/${encodeURIComponent(id)}/moves`, auth: 'member', body }),
+    listMyTrackPlaylists: (body: ListMyTrackPlaylistsRequest) => send<ListMyTrackPlaylistsResponse>({ method: 'POST', path: '/api/me/playlist-memberships', auth: 'member', body }),
     listRooms: () => send<ListRoomsResponse>({ method: 'GET', path: '/api/rooms', auth: 'none' }),
     getRoom: (ref: string) => send<RoomListing>({ method: 'GET', path: `/api/rooms/${encodeURIComponent(ref)}`, auth: 'none' }),
     createRoom: (body: CreateRoomRequest) => send<CreateRoomResponse>({ method: 'POST', path: '/api/rooms', auth: 'none', body }),
