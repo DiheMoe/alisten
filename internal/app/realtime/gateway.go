@@ -28,6 +28,8 @@ const (
 	heartbeatInterval = 5 * time.Second
 	presenceRetryMin  = time.Second
 	presenceRetryMax  = 10 * time.Second
+	// 作废凭证的通知丢失时，用这些凭证建立的会话和事件流最迟在这么久之后断开。
+	credentialCheckInterval = 30 * time.Second
 )
 
 type Gateway struct {
@@ -37,6 +39,7 @@ type Gateway struct {
 	leases   port.Leases
 	liveness port.Liveness
 	bus      port.Bus
+	tickets  port.ExistingTickets
 	logger   *slog.Logger
 	ids      atomic.Uint64
 
@@ -84,7 +87,7 @@ type roomLink struct {
 	confirmed uint64
 }
 
-func New(snapshots port.RoomSnapshots, directory port.RoomDirectory, music *catalog.Service, preparer port.Preparer, cluster Cluster, logger *slog.Logger) (*Host, *Gateway) {
+func New(snapshots port.RoomSnapshots, directory port.RoomDirectory, tickets port.ExistingTickets, music *catalog.Service, preparer port.Preparer, cluster Cluster, logger *slog.Logger) (*Host, *Gateway) {
 	h := newHost(snapshots, directory, preparer, music, cluster, logger)
 	g := &Gateway{
 		self:      cluster.Instance,
@@ -93,6 +96,7 @@ func New(snapshots port.RoomSnapshots, directory port.RoomDirectory, music *cata
 		leases:    cluster.Leases,
 		liveness:  cluster.Liveness,
 		bus:       cluster.Bus,
+		tickets:   tickets,
 		logger:    logger,
 		stopped:   make(chan struct{}),
 		pending:   map[room.RequestID]*pendingRequest{},
@@ -104,13 +108,13 @@ func New(snapshots port.RoomSnapshots, directory port.RoomDirectory, music *cata
 	return h, g
 }
 
-// 会话结束时必须调用 Leave。
-func (g *Gateway) Join(ctx context.Context, roomID string, m member.Member) (*Session, error) {
+// memberSession 是票据签发给的成员会话，credential 是票据在存储中的哈希。会话结束时必须调用 Leave。
+func (g *Gateway) Join(ctx context.Context, roomID string, m member.Member, memberSession, credential []byte) (*Session, error) {
 	link, err := g.hold(ctx, roomID)
 	if err != nil {
 		return nil, err
 	}
-	s := newSession(room.SessionID(g.nextID("s")), roomID, m)
+	s := newSession(room.SessionID(g.nextID("s")), roomID, m, memberSession, credential)
 	s.link = link
 	if !g.register(s) {
 		g.unhold(roomID, link, false)
@@ -198,23 +202,37 @@ func (g *Gateway) Delete(ctx context.Context, roomID string) error {
 	return failed(id, err)
 }
 
+// 以下三个通知在凭证从存储中删除之后发出，只是让连接立即断开的快速路径：发起请求的客户端此时断开也照样发出，
+// 发不出去时只记日志。通知丢失时，各实例定期核对连接所用的凭证，最迟 credentialCheckInterval 之后断开。
+
 // Revoke 在房间成员的票据作废之后通知各实例，以 CloseRevoked 关闭这个房间的会话和成员打开的事件流。
-func (g *Gateway) Revoke(ctx context.Context, roomID string) error {
-	return g.announce(ctx, roomID, port.TicketsRevoked{})
+func (g *Gateway) Revoke(ctx context.Context, roomID string) {
+	g.announce(ctx, roomID, port.TicketsRevoked{})
 }
 
 // RevokeAPIKey 在常驻房间的 API Key 重置之后通知各实例，以 CloseRevoked 关闭用 Key 打开的事件流。
-func (g *Gateway) RevokeAPIKey(ctx context.Context, roomID string) error {
-	return g.announce(ctx, roomID, port.APIKeyReset{})
+func (g *Gateway) RevokeAPIKey(ctx context.Context, roomID string) {
+	g.announce(ctx, roomID, port.APIKeyReset{})
 }
 
-func (g *Gateway) announce(ctx context.Context, roomID string, m port.RoomMessage) error {
-	ctx, cancel := context.WithTimeout(ctx, clusterTimeout)
+// RevokeSessions 在成员会话删除之后通知各实例，以 CloseRevoked 关闭用这些会话的票据建立的会话和事件流。
+func (g *Gateway) RevokeSessions(ctx context.Context, memberSessions [][]byte) {
+	if len(memberSessions) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), clusterTimeout)
+	defer cancel()
+	if err := g.bus.PublishSessionsRevoked(ctx, memberSessions); err != nil {
+		g.logger.WarnContext(ctx, "广播凭证作废的通知失败", "sessions", len(memberSessions), "error", err)
+	}
+}
+
+func (g *Gateway) announce(ctx context.Context, roomID string, m port.RoomMessage) {
+	ctx, cancel := context.WithTimeout(logctx.WithRoom(context.WithoutCancel(ctx), roomID), clusterTimeout)
 	defer cancel()
 	if err := g.bus.PublishRoom(ctx, roomID, m); err != nil {
-		return unavailable(err)
+		g.logger.WarnContext(ctx, "广播凭证作废的通知失败", "notice", fmt.Sprintf("%T", m), "error", err)
 	}
-	return nil
 }
 
 func (g *Gateway) MemberUpdated(ctx context.Context, m member.Member) error {
@@ -470,6 +488,34 @@ func (g *Gateway) memberChanged(m member.Member) {
 	}()
 }
 
+// 在接收消息的 goroutine 上调用，不能阻塞。
+func (g *Gateway) sessionsRevoked(memberSessions [][]byte) {
+	revoked := map[string]bool{}
+	for _, h := range memberSessions {
+		revoked[string(h)] = true
+	}
+	g.mu.Lock()
+	var closing []*sendQueue
+	for _, set := range g.sessions {
+		for s := range set {
+			if revoked[s.memberSession] {
+				closing = append(closing, s.sendQueue)
+			}
+		}
+	}
+	for _, set := range g.observers {
+		for _, o := range set {
+			if revoked[o.memberSession] {
+				closing = append(closing, o.sendQueue)
+			}
+		}
+	}
+	g.mu.Unlock()
+	for _, q := range closing {
+		q.close(CloseRevoked)
+	}
+}
+
 // owner 靠 Join、Leave 和 MemberUpdated 知道谁在线，这几条消息丢失后没有别的办法补回：离开的会话会一直留在在线列表中，
 // 临时房间也因此无法关闭；仍然在线的会话则不在列表中。所以送不到 owner 时要一直重试，直到送达。
 // next 在每次尝试前调用，返回这一次要发的输入；返回 false 表示这条消息已经不必再发。
@@ -608,6 +654,59 @@ func (g *Gateway) heartbeat(ctx context.Context) {
 	}
 }
 
+func (g *Gateway) checkCredentials(ctx context.Context) {
+	ticker := time.NewTicker(credentialCheckInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		g.closeRevoked(ctx)
+	}
+}
+
+// 用一次查询核对本地全部会话和事件流所用的凭证，已经从存储中删除的以 CloseRevoked 关闭。
+// 查询失败时不知道哪些凭证已经作废，这一轮不关闭任何连接。
+func (g *Gateway) closeRevoked(ctx context.Context) {
+	holders := map[string][]*sendQueue{}
+	g.mu.Lock()
+	for _, set := range g.sessions {
+		for s := range set {
+			holders[s.credential] = append(holders[s.credential], s.sendQueue)
+		}
+	}
+	for _, set := range g.observers {
+		for _, o := range set {
+			holders[o.credential] = append(holders[o.credential], o.sendQueue)
+		}
+	}
+	g.mu.Unlock()
+	if len(holders) == 0 {
+		return
+	}
+	credentials := make([][]byte, 0, len(holders))
+	for c := range holders {
+		credentials = append(credentials, []byte(c))
+	}
+	checkCtx, cancel := context.WithTimeout(ctx, storeTimeout)
+	existing, err := g.tickets.ExistingTickets(checkCtx, credentials)
+	cancel()
+	if err != nil {
+		g.logger.WarnContext(ctx, "核对连接所用的凭证失败", "credentials", len(credentials), "error", err)
+		return
+	}
+	for _, c := range existing {
+		delete(holders, string(c))
+	}
+	for _, queues := range holders {
+		for _, q := range queues {
+			q.close(CloseRevoked)
+		}
+	}
+}
+
 func (g *Gateway) joinedRooms() []string {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -628,6 +727,8 @@ func (g *Gateway) receive(ctx context.Context, lost chan<- struct{}) {
 			g.host.deliver(d.Context, d.Input)
 		case port.MemberDelivery:
 			g.memberChanged(d.Member)
+		case port.SessionsRevokedDelivery:
+			g.sessionsRevoked(d.SessionTokenHashes)
 		case port.PreparedDelivery:
 			g.host.preparer.Finished(d.Outcome)
 		case port.SubscriptionLost:

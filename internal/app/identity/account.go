@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dihemoe/alisten/internal/app/port"
+	"github.com/dihemoe/alisten/internal/app/realtime"
 	"github.com/dihemoe/alisten/internal/domain/member"
 )
 
@@ -42,15 +43,17 @@ type Account struct {
 	Email    string
 }
 
+// 删除会话之后，用这些会话的票据建立的房间连接随之断开：网关立即通知各实例，通知丢失时最迟在网关的一个核对周期之后断开。
 type Accounts struct {
 	members port.Members
 	site    port.Site
 	quota   port.AccountQuota
 	devices port.LoginDevices
+	gateway *realtime.Gateway
 }
 
-func NewAccounts(members port.Members, site port.Site, quota port.AccountQuota, devices port.LoginDevices) *Accounts {
-	return &Accounts{members: members, site: site, quota: quota, devices: devices}
+func NewAccounts(members port.Members, site port.Site, quota port.AccountQuota, devices port.LoginDevices, gateway *realtime.Gateway) *Accounts {
+	return &Accounts{members: members, site: site, quota: quota, devices: devices, gateway: gateway}
 }
 
 // 游客没有账号，ok 为 false。
@@ -121,7 +124,8 @@ func (a *Accounts) Login(ctx context.Context, current member.Member, currentToke
 		return Session{}, Account{}, "", err
 	}
 	token, hash := newSecret()
-	err = a.members.ReplaceSession(ctx, hashSecret(currentToken), account.Member.ID, hash, account.PasswordHash)
+	guest := hashSecret(currentToken)
+	err = a.members.ReplaceSession(ctx, guest, account.Member.ID, hash, account.PasswordHash)
 	switch {
 	case errors.Is(err, port.ErrSessionNotFound):
 		return Session{}, Account{}, "", ErrInvalidMemberToken
@@ -130,6 +134,7 @@ func (a *Accounts) Login(ctx context.Context, current member.Member, currentToke
 	case err != nil:
 		return Session{}, Account{}, "", err
 	}
+	a.gateway.RevokeSessions(ctx, [][]byte{guest})
 	return Session{MemberToken: token, Member: account.Member}, Account{Username: account.Username, Email: account.Email}, device, nil
 }
 
@@ -188,7 +193,12 @@ func (a *Accounts) verify(ctx context.Context, username, password string) (port.
 }
 
 func (a *Accounts) Logout(ctx context.Context, token string) error {
-	return a.members.DeleteSession(ctx, hashSecret(token))
+	hash := hashSecret(token)
+	if err := a.members.DeleteSession(ctx, hash); err != nil {
+		return err
+	}
+	a.gateway.RevokeSessions(ctx, [][]byte{hash})
+	return nil
 }
 
 // 修改成功后，账号除了发出请求的这个会话，其他会话都失效。
@@ -215,14 +225,17 @@ func (a *Accounts) ChangePassword(ctx context.Context, memberID, token, currentP
 		return err
 	}
 	// 校验之后密码可能被重置或被别的设备改过：发出请求的会话已经被删掉时按 token 失效处理，同一个会话先改过时当前密码已经不对。
-	err = a.members.ChangePassword(ctx, memberID, account.PasswordHash, hash, hashSecret(token))
+	deleted, err := a.members.ChangePassword(ctx, memberID, account.PasswordHash, hash, hashSecret(token))
 	switch {
 	case errors.Is(err, port.ErrSessionNotFound):
 		return ErrInvalidMemberToken
 	case errors.Is(err, port.ErrAccountPasswordChanged):
 		return ErrWrongCurrentPassword
+	case err != nil:
+		return err
 	}
-	return err
+	a.gateway.RevokeSessions(ctx, deleted)
+	return nil
 }
 
 // Find 和 ResetPassword 只供后台使用，调用方要先校验管理 token。
@@ -245,9 +258,11 @@ func (a *Accounts) ResetPassword(ctx context.Context, username string) (string, 
 	if err != nil {
 		return "", err
 	}
-	if err := a.members.SetPassword(ctx, account.Member.ID, hash); err != nil {
+	deleted, err := a.members.SetPassword(ctx, account.Member.ID, hash)
+	if err != nil {
 		return "", err
 	}
+	a.gateway.RevokeSessions(ctx, deleted)
 	return password, nil
 }
 

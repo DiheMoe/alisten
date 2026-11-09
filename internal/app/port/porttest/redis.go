@@ -282,6 +282,11 @@ func (n *Node) PublishMember(_ context.Context, m member.Member) error {
 	return err
 }
 
+func (n *Node) PublishSessionsRevoked(_ context.Context, sessionTokenHashes [][]byte) error {
+	_, err := n.publish("members", port.SessionsRevokedDelivery{SessionTokenHashes: sessionTokenHashes})
+	return err
+}
+
 func (n *Node) PublishPrepared(_ context.Context, o port.PrepareOutcome) error {
 	_, err := n.publish("tracks.prepared", port.PreparedDelivery{Outcome: o})
 	return err

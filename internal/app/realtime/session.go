@@ -83,6 +83,9 @@ type Session struct {
 	id   room.SessionID
 	room string
 	link *roomLink
+	// 连接所用的票据签发给的成员会话的 token 哈希。
+	memberSession string
+	credential    string
 	// 在发出 Leave 之前设置。重新加入的 Join 可能排在 Leave 之后，网关据此补发 Leave。
 	left atomic.Bool
 
@@ -91,8 +94,8 @@ type Session struct {
 	outstanding int
 }
 
-func newSession(id room.SessionID, roomID string, m member.Member) *Session {
-	return &Session{sendQueue: newSendQueue(), id: id, room: roomID, member: m}
+func newSession(id room.SessionID, roomID string, m member.Member, memberSession, credential []byte) *Session {
+	return &Session{sendQueue: newSendQueue(), id: id, room: roomID, member: m, memberSession: string(memberSession), credential: string(credential)}
 }
 
 func (s *Session) ended() bool {

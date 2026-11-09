@@ -28,3 +28,12 @@ ALTER TABLE members
 ALTER TABLE site
     ALTER COLUMN brand_name DROP NOT NULL,
     ADD COLUMN registration_open boolean NOT NULL DEFAULT true;
+
+-- 票据属于签发它的会话，会话删除时票据随之失效。bot 的 API Key 票据没有会话。
+ALTER TABLE room_tickets ADD COLUMN session_token_hash bytea REFERENCES member_sessions ON DELETE CASCADE;
+
+CREATE INDEX ON room_tickets (session_token_hash);
+
+UPDATE room_tickets t SET session_token_hash = s.token_hash
+FROM member_sessions s
+WHERE s.member_id = t.member_id;

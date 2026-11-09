@@ -198,6 +198,15 @@ func (b *Bus) PublishMember(ctx context.Context, m member.Member) error {
 	return err
 }
 
+func (b *Bus) PublishSessionsRevoked(ctx context.Context, sessionTokenHashes [][]byte) error {
+	data, err := json.Marshal(sessionTokenHashes)
+	if err != nil {
+		return err
+	}
+	_, err = b.publish(ctx, membersChannel, kindSessionsRevoked, data, nil)
+	return err
+}
+
 func (b *Bus) PublishPrepared(ctx context.Context, o port.PrepareOutcome) error {
 	data, err := json.Marshal(o)
 	if err != nil {
@@ -362,6 +371,10 @@ func (b *Bus) delivery(channel string, e envelope) (port.Delivery, error) {
 		var m member.Member
 		err := json.Unmarshal(e.Data, &m)
 		return port.MemberDelivery{Member: m}, err
+	case channel == membersChannel && e.Kind == kindSessionsRevoked:
+		var hashes [][]byte
+		err := json.Unmarshal(e.Data, &hashes)
+		return port.SessionsRevokedDelivery{SessionTokenHashes: hashes}, err
 	case channel == preparedChannel && e.Kind == kindPrepared:
 		var o port.PrepareOutcome
 		err := json.Unmarshal(e.Data, &o)

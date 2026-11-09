@@ -10,18 +10,50 @@ import (
 )
 
 const createTicket = `-- name: CreateTicket :exec
-INSERT INTO room_tickets (token_hash, room_id, member_id) VALUES ($1, $2, $3)
+INSERT INTO room_tickets (token_hash, room_id, member_id, session_token_hash)
+VALUES ($1, $2, $3, $4)
 `
 
 type CreateTicketParams struct {
-	TokenHash []byte
-	RoomID    string
-	MemberID  string
+	TokenHash        []byte
+	RoomID           string
+	MemberID         string
+	SessionTokenHash []byte
 }
 
+// bot 的 API Key 没有会话，session_token_hash 为 NULL。
 func (q *Queries) CreateTicket(ctx context.Context, arg CreateTicketParams) error {
-	_, err := q.db.Exec(ctx, createTicket, arg.TokenHash, arg.RoomID, arg.MemberID)
+	_, err := q.db.Exec(ctx, createTicket,
+		arg.TokenHash,
+		arg.RoomID,
+		arg.MemberID,
+		arg.SessionTokenHash,
+	)
 	return err
+}
+
+const existingTickets = `-- name: ExistingTickets :many
+SELECT token_hash FROM room_tickets WHERE token_hash = ANY($1::bytea[])
+`
+
+func (q *Queries) ExistingTickets(ctx context.Context, tokenHashes [][]byte) ([][]byte, error) {
+	rows, err := q.db.Query(ctx, existingTickets, tokenHashes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items [][]byte
+	for rows.Next() {
+		var token_hash []byte
+		if err := rows.Scan(&token_hash); err != nil {
+			return nil, err
+		}
+		items = append(items, token_hash)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const lockRoomPassword = `-- name: LockRoomPassword :one
@@ -37,7 +69,7 @@ func (q *Queries) LockRoomPassword(ctx context.Context, id string) (string, erro
 }
 
 const ticketHolder = `-- name: TicketHolder :one
-SELECT t.room_id, m.id, m.name, m.avatar_hash, r.bot_member_id IS NOT DISTINCT FROM m.id AS bot
+SELECT t.room_id, m.id, m.name, m.avatar_hash, r.bot_member_id IS NOT DISTINCT FROM m.id AS bot, t.session_token_hash
 FROM room_tickets t
 JOIN members m ON m.id = t.member_id
 JOIN rooms r ON r.id = t.room_id
@@ -45,11 +77,12 @@ WHERE t.token_hash = $1
 `
 
 type TicketHolderRow struct {
-	RoomID     string
-	ID         string
-	Name       string
-	AvatarHash *string
-	Bot        bool
+	RoomID           string
+	ID               string
+	Name             string
+	AvatarHash       *string
+	Bot              bool
+	SessionTokenHash []byte
 }
 
 func (q *Queries) TicketHolder(ctx context.Context, tokenHash []byte) (TicketHolderRow, error) {
@@ -61,6 +94,7 @@ func (q *Queries) TicketHolder(ctx context.Context, tokenHash []byte) (TicketHol
 		&i.Name,
 		&i.AvatarHash,
 		&i.Bot,
+		&i.SessionTokenHash,
 	)
 	return i, err
 }

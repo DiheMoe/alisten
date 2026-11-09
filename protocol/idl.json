@@ -372,7 +372,7 @@
       {"name": "internal", "code": 1011, "description": "握手时发生内部错误"},
       {"name": "serviceRestart", "code": 1012, "description": "服务端实例退出，或实例与 Redis 的订阅连接中断"},
       {"name": "unavailable", "code": 1013, "description": "握手时服务暂时不可用"},
-      {"name": "unauthorized", "code": 4401, "description": "票据无效、用 API Key 握手，或房间设置、修改了密码"},
+      {"name": "unauthorized", "code": 4401, "description": "票据无效、用 API Key 握手、房间设置或修改了密码，或者票据所属的成员会话已被删除（退出登录、修改或重置账号密码）"},
       {"name": "notFound", "code": 4404, "description": "房间不存在，或房间已关闭、被删除"},
       {"name": "handshakeTimeout", "code": 4408, "description": "握手超时"},
       {"name": "clientOutdated", "code": 4426, "description": "前端与服务端的协议版本不一致"},

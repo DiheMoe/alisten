@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/port/porttest"
@@ -25,7 +26,7 @@ var (
 // 只能在 synctest 的 bubble 中调用。
 func (in *instance) observe(t *testing.T, roomID string, m member.Member, bot bool, credential string) *Observer {
 	t.Helper()
-	o, err := in.gateway.Observe(t.Context(), roomID, m, bot, credential)
+	o, err := in.gateway.Observe(t.Context(), roomID, m, nil, bot, credential)
 	if err != nil {
 		t.Fatalf("%s 打开事件流：%v", m.Name, err)
 	}
@@ -94,9 +95,7 @@ func TestRoomNoticesCloseObservers(t *testing.T) {
 		gone, restarted := f.observe(t, deleted, alice, false, "alice"), f.observe(t, other, robot, true, "key")
 		received(t, bot)
 
-		if err := f.gateway.Revoke(t.Context(), locked); err != nil {
-			t.Fatal(err)
-		}
+		f.gateway.Revoke(t.Context(), locked)
 		checkObserved(t, member, fmt.Sprintf("closed %d", CloseRevoked))
 		checkObserved(t, bot)
 		if err := f.gateway.Delete(t.Context(), deleted); err != nil {
@@ -117,13 +116,267 @@ func TestAPIKeyResetClosesOnlyBotObservers(t *testing.T) {
 		received(t, session)
 		received(t, member)
 
-		if err := f.a.gateway.RevokeAPIKey(t.Context(), f.room); err != nil {
-			t.Fatal(err)
-		}
+		f.a.gateway.RevokeAPIKey(t.Context(), f.room)
 		checkObserved(t, bot, fmt.Sprintf("closed %d", CloseRevoked))
 		checkReceived(t, session)
 		checkObserved(t, member)
 	})
+}
+
+func TestRevokedSessionsCloseOnlyTheirConnections(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		f := newClusterFixture(t, store, store)
+		lounge := createRoom(t, store, room.Persistent)
+		join := func(in *instance, roomID string, m member.Member, memberSession string) *Session {
+			t.Helper()
+			s, err := in.gateway.Join(t.Context(), roomID, m, []byte(memberSession), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { in.gateway.Leave(s) })
+			return s
+		}
+		observe := func(in *instance, m member.Member, memberSession []byte, bot bool, credential string) *Observer {
+			t.Helper()
+			o, err := in.gateway.Observe(t.Context(), f.room, m, memberSession, bot, credential)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { in.gateway.Unobserve(o) })
+			return o
+		}
+		revokedOnA, revokedOnB, kept := join(f.a, f.room, alice, "alice-1"), join(f.b, lounge, alice, "alice-1"), join(f.b, f.room, alice, "alice-2")
+		other := join(f.b, f.room, bob, "bob-1")
+		revokedStream, keptStream := observe(f.b, alice, []byte("alice-1"), false, "t1"), observe(f.b, alice, []byte("alice-2"), false, "t2")
+		bot := observe(f.b, robot, nil, true, "key")
+		for _, q := range []interface {
+			Next(context.Context) (Message, CloseReason, error)
+		}{revokedOnA, revokedOnB, kept, other, revokedStream, keptStream, bot} {
+			received(t, q)
+		}
+
+		f.a.gateway.RevokeSessions(t.Context(), [][]byte{[]byte("alice-1"), []byte("carol-1")})
+		revoked := fmt.Sprintf("closed %d", CloseRevoked)
+		checkReceived(t, revokedOnA, revoked)
+		checkReceived(t, revokedOnB, revoked)
+		checkObserved(t, revokedStream, revoked)
+		for _, s := range []*Session{kept, other} {
+			if got := received(t, s); slices.Contains(got, revoked) {
+				t.Errorf("%s 的会话也被关闭了：%v", s.Member().Name, got)
+			}
+		}
+		for _, o := range []*Observer{keptStream, bot} {
+			if got := received(t, o); slices.Contains(got, revoked) {
+				t.Errorf("%s 的事件流也被关闭了：%v", o.member.Name, got)
+			}
+		}
+	})
+}
+
+// 会话和事件流都用 store 中真实的票据建立。作废凭证时只修改 store、不发通知，就像通知丢失了。
+type credentialFixture struct {
+	*instance
+	store *porttest.Store
+	room  string
+}
+
+// 只能在 synctest 的 bubble 中调用。
+func newCredentialFixture(t *testing.T, store *porttest.Store, tickets port.ExistingTickets, logger *slog.Logger) *credentialFixture {
+	t.Helper()
+	in := startLoggingInstance(t, porttest.NewRedis(), "a", store, store, tickets, newSongs(), logger)
+	return &credentialFixture{instance: in, store: store, room: createRoom(t, store, room.Persistent)}
+}
+
+// 返回新成员和它的会话的 token 哈希。
+func (f *credentialFixture) member(t *testing.T, name string) (member.Member, []byte) {
+	t.Helper()
+	session := []byte(name + " 的会话")
+	m, err := f.store.CreateMember(t.Context(), session, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m, session
+}
+
+// 用 session 签发的、哈希为 ticket 的票据加入房间。
+func (f *credentialFixture) join(t *testing.T, m member.Member, session []byte, ticket string) *Session {
+	t.Helper()
+	if err := f.store.CreateTicket(t.Context(), port.NewTicket{TokenHash: []byte(ticket), RoomID: f.room, MemberID: m.ID, SessionTokenHash: session}); err != nil {
+		t.Fatal(err)
+	}
+	s, err := f.gateway.Join(t.Context(), f.room, m, session, []byte(ticket))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.gateway.Leave(s) })
+	return s
+}
+
+// session 为 nil 时 ticket 是房间的 API Key。
+func (f *credentialFixture) observe(t *testing.T, m member.Member, session []byte, ticket string) *Observer {
+	t.Helper()
+	bot := session == nil
+	var err error
+	if bot {
+		err = f.store.ResetRoomAPIKey(t.Context(), f.room, port.NewAPIKey{TokenHash: []byte(ticket)})
+	} else {
+		err = f.store.CreateTicket(t.Context(), port.NewTicket{TokenHash: []byte(ticket), RoomID: f.room, MemberID: m.ID, SessionTokenHash: session})
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	o, err := f.gateway.Observe(t.Context(), f.room, m, session, bot, ticket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.gateway.Unobserve(o) })
+	return o
+}
+
+func TestRevokedCredentialsCloseWithoutNotice(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		f := newCredentialFixture(t, store, store, slog.New(slog.DiscardHandler))
+		alice, aliceSession := f.member(t, "alice")
+		bob, bobSession := f.member(t, "bob")
+		revokedSession, revokedStream := f.join(t, alice, aliceSession, "alice-ws"), f.observe(t, alice, aliceSession, "alice-sse")
+		keptSession, keptStream := f.join(t, bob, bobSession, "bob-ws"), f.observe(t, bob, bobSession, "bob-sse")
+		bot := f.observe(t, robot, nil, "key-1")
+		for _, q := range []interface {
+			Next(context.Context) (Message, CloseReason, error)
+		}{revokedSession, revokedStream, keptSession, keptStream, bot} {
+			received(t, q)
+		}
+
+		if err := store.DeleteSession(t.Context(), aliceSession); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.ResetRoomAPIKey(t.Context(), f.room, port.NewAPIKey{TokenHash: []byte("key-2")}); err != nil {
+			t.Fatal(err)
+		}
+		checkReceived(t, revokedSession)
+		checkObserved(t, revokedStream)
+		checkObserved(t, bot)
+
+		time.Sleep(credentialCheckInterval)
+		revoked := fmt.Sprintf("closed %d", CloseRevoked)
+		checkReceived(t, revokedSession, revoked)
+		checkObserved(t, revokedStream, revoked)
+		checkObserved(t, bot, revoked)
+		checkReceived(t, keptSession)
+		checkObserved(t, keptStream)
+	})
+}
+
+type unreadableTickets struct {
+	*porttest.Store
+	down atomic.Bool
+}
+
+func (s *unreadableTickets) ExistingTickets(ctx context.Context, tokenHashes [][]byte) ([][]byte, error) {
+	if s.down.Load() {
+		return nil, errors.New("连接被拒绝")
+	}
+	return s.Store.ExistingTickets(ctx, tokenHashes)
+}
+
+// 核对失败时不知道哪些凭证已经作废，这一轮不断开任何连接。
+func TestUnreadableCredentialsCloseNothing(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		tickets := &unreadableTickets{Store: store}
+		var logs logBuffer
+		f := newCredentialFixture(t, store, tickets, slog.New(slog.NewJSONHandler(&logs, nil)))
+		alice, session := f.member(t, "alice")
+		s, o := f.join(t, alice, session, "alice-ws"), f.observe(t, alice, session, "alice-sse")
+		received(t, s)
+		received(t, o)
+		if err := store.DeleteSession(t.Context(), session); err != nil {
+			t.Fatal(err)
+		}
+
+		tickets.down.Store(true)
+		time.Sleep(credentialCheckInterval)
+		checkReceived(t, s)
+		checkObserved(t, o)
+		if n := len(logs.entries(t, "核对连接所用的凭证失败")); n != 1 {
+			t.Errorf("核对失败的日志有 %d 条，期望 1 条", n)
+		}
+
+		tickets.down.Store(false)
+		time.Sleep(credentialCheckInterval)
+		revoked := fmt.Sprintf("closed %d", CloseRevoked)
+		checkReceived(t, s, revoked)
+		checkObserved(t, o, revoked)
+	})
+}
+
+// 像 Redis 客户端一样，ctx 结束之后不再发出命令。
+type contextBus struct {
+	port.Bus
+}
+
+func (b contextBus) PublishRoom(ctx context.Context, roomID string, m port.RoomMessage) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return b.Bus.PublishRoom(ctx, roomID, m)
+}
+
+func (b contextBus) PublishSessionsRevoked(ctx context.Context, sessionTokenHashes [][]byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return b.Bus.PublishSessionsRevoked(ctx, sessionTokenHashes)
+}
+
+// 通知在凭证作废之后发出：发起请求的客户端已经断开时照样发出，发不出去时只记日志。
+func TestRevocationNoticesAreBestEffort(t *testing.T) {
+	redis := porttest.NewRedis()
+	node, listener := redis.Node("a"), redis.Node("b")
+	if err := listener.SubscribeInstance(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := listener.SubscribeRoom(t.Context(), "r"); err != nil {
+		t.Fatal(err)
+	}
+	store := porttest.New()
+	var logs logBuffer
+	_, g := New(store, store, unrevoked{}, nil, porttest.NewPreparer(), Cluster{Instance: "a", Leases: node, Liveness: node, Bus: contextBus{node}}, slog.New(slog.NewJSONHandler(&logs, nil)))
+	revokeAll := func(ctx context.Context) {
+		g.RevokeSessions(ctx, [][]byte{[]byte("s")})
+		g.Revoke(ctx, "r")
+		g.RevokeAPIKey(ctx, "r")
+	}
+
+	request, cancel := context.WithCancel(t.Context())
+	cancel()
+	revokeAll(request)
+	var got []string
+	for range 3 {
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		d, err := listener.Receive(ctx)
+		cancel()
+		if err != nil {
+			t.Fatalf("请求取消之后只收到 %v：%v", got, err)
+		}
+		switch d := d.(type) {
+		case port.SessionsRevokedDelivery:
+			got = append(got, "sessions")
+		case port.RoomDelivery:
+			got = append(got, fmt.Sprintf("%T", d.Message))
+		}
+	}
+	if want := []string{"sessions", "port.TicketsRevoked", "port.APIKeyReset"}; !slices.Equal(got, want) {
+		t.Errorf("收到的通知 = %v，期望 %v", got, want)
+	}
+
+	node.SetDown(true)
+	revokeAll(t.Context())
+	if n := len(logs.entries(t, "广播凭证作废的通知失败")); n != 3 {
+		t.Errorf("通知发不出去的日志有 %d 条，期望 3 条", n)
+	}
 }
 
 func TestObserverGetsNewSnapshotWhenRunChanges(t *testing.T) {
@@ -177,7 +430,7 @@ func TestObserverSkipsSnapshotOfEarlierRun(t *testing.T) {
 		redis := porttest.NewRedis()
 		node := redis.Node("a")
 		bus := &heldEmits{Bus: node, release: make(chan struct{})}
-		h, g := New(store, store, songs.music, songs.preparer, Cluster{Instance: "a", Leases: node, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
+		h, g := New(store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: "a", Leases: node, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
 		ctx, stop := context.WithCancel(context.Background())
 		wait, err := Start(ctx, h, g)
 		if err != nil {
@@ -203,7 +456,7 @@ func TestObserverSkipsSnapshotOfEarlierRun(t *testing.T) {
 		opened := make(chan error, 1)
 		go func() {
 			var err error
-			o, err = b.gateway.Observe(context.Background(), id, robot, true, "key")
+			o, err = b.gateway.Observe(context.Background(), id, robot, nil, true, "key")
 			opened <- err
 		}()
 		synctest.Wait()
@@ -225,14 +478,14 @@ func TestObserverLimitPerRoom(t *testing.T) {
 		store := porttest.New()
 		f := newGatewayFixture(t, store, store)
 		full, other := createRoom(t, store, room.Persistent), createRoom(t, store, room.Persistent)
-		first, err := f.gateway.Observe(t.Context(), full, robot, true, "key")
+		first, err := f.gateway.Observe(t.Context(), full, robot, nil, true, "key")
 		if err != nil {
 			t.Fatal(err)
 		}
 		for range observerLimit - 1 {
 			f.observe(t, full, robot, true, "key")
 		}
-		if _, err := f.gateway.Observe(t.Context(), full, alice, false, "alice"); !errors.Is(err, ErrTooManyObservers) {
+		if _, err := f.gateway.Observe(t.Context(), full, alice, nil, false, "alice"); !errors.Is(err, ErrTooManyObservers) {
 			t.Errorf("第 %d 个事件流的错误 = %v，期望 ErrTooManyObservers", observerLimit+1, err)
 		}
 		f.observe(t, other, alice, false, "alice")
@@ -258,7 +511,7 @@ func TestFullRoomReplacesOldestObserverOfSameCredential(t *testing.T) {
 			checkObserved(t, o, "snapshot 1/0 []")
 		}
 
-		if _, err := f.gateway.Observe(t.Context(), id, bob, false, "bob 的另一张票据"); !errors.Is(err, ErrTooManyObservers) {
+		if _, err := f.gateway.Observe(t.Context(), id, bob, nil, false, "bob 的另一张票据"); !errors.Is(err, ErrTooManyObservers) {
 			t.Errorf("名额用完、没有同一凭证的事件流时的错误 = %v，期望 ErrTooManyObservers", err)
 		}
 		for _, o := range open {
@@ -273,7 +526,7 @@ func TestFailedObserveFreesItsSlot(t *testing.T) {
 		f := newGatewayFixture(t, store, store)
 		missing := "01a15778-1911-7a28-8b2e-e08c2a25f388"
 		for i := range observerLimit + 1 {
-			if _, err := f.gateway.Observe(t.Context(), missing, robot, true, fmt.Sprint(i)); !errors.Is(err, port.ErrRoomNotFound) {
+			if _, err := f.gateway.Observe(t.Context(), missing, robot, nil, true, fmt.Sprint(i)); !errors.Is(err, port.ErrRoomNotFound) {
 				t.Fatalf("第 %d 次打开不存在的房间的事件流 = %v，期望 ErrRoomNotFound", i+1, err)
 			}
 		}

@@ -344,6 +344,25 @@ func TestPreparedOutcomes(t *testing.T) {
 	}
 }
 
+func TestSessionsRevoked(t *testing.T) {
+	client := newClient(t)
+	a, b := newBus(t, client, "v1"), newBus(t, client, "v1")
+	for _, f := range []*busFixture{a, b} {
+		if err := f.bus.SubscribeInstance(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hashes := [][]byte{{0x01, 0x02}, {0xff, 0x00, 0x7f}}
+	if err := a.bus.PublishSessionsRevoked(t.Context(), hashes); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []*busFixture{a, b} {
+		if got := f.next(t); !reflect.DeepEqual(got, port.SessionsRevokedDelivery{SessionTokenHashes: hashes}) {
+			t.Errorf("收到 %#v，期望被删除的会话 %x", got, hashes)
+		}
+	}
+}
+
 func TestUnsubscribeRoom(t *testing.T) {
 	client := newClient(t)
 	a, b := newBus(t, client, "v1"), newBus(t, client, "v1")

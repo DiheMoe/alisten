@@ -107,7 +107,7 @@ Location: /api/admin/rooms/$hall/api-key
 {"key": "$resetKey"}
 -- event bot --
 event: close
-data: {"code": 4401, "message": "凭证已失效：房间设置或修改了密码，或者 API Key 已重置"}
+data: {"code": 4401, "message": "凭证已失效：房间设置或修改了密码，API Key 已重置，或者账号在这台设备上退出了登录、密码被修改或重置"}
 
 -- request --
 POST /api/room/messages

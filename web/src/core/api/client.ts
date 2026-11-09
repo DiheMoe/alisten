@@ -1,7 +1,7 @@
 import type { Auth, CreateTicketRequest, CreateTicketResponse, ErrorResponse, HttpRequest } from './http.gen'
 import type { ErrorCode, Member } from '@/core/realtime'
 import { Emitter } from '@/shared/lib/emitter'
-import { deleteMemberToken, loadAdminToken, loadMemberToken, memberTokenKey, saveMemberToken } from './credentials'
+import { deleteAllTickets, deleteMemberToken, loadAdminToken, loadMemberToken, memberTokenKey, saveMemberToken } from './credentials'
 import { httpClient } from './http.gen'
 
 export class ApiError extends Error {
@@ -163,9 +163,11 @@ function renewIdentity(rejected: string): Promise<void> {
 
 // 更换过程中用 unrenewed 读取成员：新 token 也被拒绝时不再更换，避免循环。
 async function replaceIdentity(rejected: string): Promise<void> {
-  // 其他标签页可能已经更换了身份，只删除被拒绝的那个 token。
-  if (loadMemberToken() === rejected)
+  // 其他标签页可能已经更换了身份，只删除被拒绝的那个 token。票据属于被拒绝的身份，一并删除。
+  if (loadMemberToken() === rejected) {
     deleteMemberToken()
+    deleteAllTickets()
+  }
   identityEvents.emit({ kind: 'rejected' })
   let member: Member
   try {

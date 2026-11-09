@@ -92,19 +92,25 @@ type (
 		Outcome PrepareOutcome
 	}
 
+	// 这些会话已经删除，用它们签发的票据建立的会话和事件流要以 4401 断开。
+	SessionsRevokedDelivery struct {
+		SessionTokenHashes [][]byte
+	}
+
 	// 订阅连接曾经断开，断开期间发给本实例的消息都已丢失。
 	SubscriptionLost struct{}
 )
 
-func (RoomDelivery) delivery()     {}
-func (InputDelivery) delivery()    {}
-func (MemberDelivery) delivery()   {}
-func (PreparedDelivery) delivery() {}
-func (SubscriptionLost) delivery() {}
+func (RoomDelivery) delivery()            {}
+func (InputDelivery) delivery()           {}
+func (MemberDelivery) delivery()          {}
+func (PreparedDelivery) delivery()        {}
+func (SessionsRevokedDelivery) delivery() {}
+func (SubscriptionLost) delivery()        {}
 
 // 实现绑定在本实例上：订阅的是本实例的频道，发出的消息带有本实例的 ID。
 type Bus interface {
-	// 订阅本实例的频道、成员资料的频道和准备结果的频道，返回时订阅已经生效。
+	// 订阅本实例的频道、成员的频道和准备结果的频道，返回时订阅已经生效。
 	SubscribeInstance(ctx context.Context) error
 	// 返回时订阅已经生效：此后发布到这个房间频道的消息都会收到。
 	SubscribeRoom(ctx context.Context, roomID string) error
@@ -113,6 +119,8 @@ type Bus interface {
 	// 返回 false 表示目标实例没有订阅它的频道，例如已经停止运行。
 	SendInput(ctx context.Context, instanceID string, in RoomInput) (bool, error)
 	PublishMember(ctx context.Context, m member.Member) error
+	// 各实例都会收到，包括发布的实例。
+	PublishSessionsRevoked(ctx context.Context, sessionTokenHashes [][]byte) error
 	// 各实例都会收到，包括发布的实例。
 	PublishPrepared(ctx context.Context, o PrepareOutcome) error
 	// 按收到的顺序返回下一条消息，直到 ctx 结束；ctx 结束之后 Bus 不能再使用。只能由一个 goroutine 调用。

@@ -131,17 +131,21 @@ func (s *Store) DeleteSession(ctx context.Context, tokenHash []byte) error {
 	return nil
 }
 
-func (s *Store) SetPassword(ctx context.Context, memberID, passwordHash string) error {
+func (s *Store) SetPassword(ctx context.Context, memberID, passwordHash string) ([][]byte, error) {
+	var deleted [][]byte
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		return setPassword(ctx, s.q.WithTx(tx), memberID, passwordHash, nil)
+		var err error
+		deleted, err = setPassword(ctx, s.q.WithTx(tx), memberID, passwordHash, nil)
+		return err
 	})
 	if err != nil {
-		return fmt.Errorf("修改成员 %s 的密码：%w", memberID, err)
+		return nil, fmt.Errorf("修改成员 %s 的密码：%w", memberID, err)
 	}
-	return nil
+	return deleted, nil
 }
 
-func (s *Store) ChangePassword(ctx context.Context, memberID, currentPasswordHash, passwordHash string, keepTokenHash []byte) error {
+func (s *Store) ChangePassword(ctx context.Context, memberID, currentPasswordHash, passwordHash string, keepTokenHash []byte) ([][]byte, error) {
+	var deleted [][]byte
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		// 先锁住成员行，再用新的语句查会话：并发的修改或重置提交之后才开始查，才能看到它删掉的会话。
@@ -162,21 +166,22 @@ func (s *Store) ChangePassword(ctx context.Context, memberID, currentPasswordHas
 		if current != currentPasswordHash {
 			return port.ErrAccountPasswordChanged
 		}
-		return setPassword(ctx, q, memberID, passwordHash, keepTokenHash)
+		deleted, err = setPassword(ctx, q, memberID, passwordHash, keepTokenHash)
+		return err
 	})
 	if err != nil {
-		return fmt.Errorf("修改成员 %s 的密码：%w", memberID, err)
+		return nil, fmt.Errorf("修改成员 %s 的密码：%w", memberID, err)
 	}
-	return nil
+	return deleted, nil
 }
 
-func setPassword(ctx context.Context, q *query.Queries, memberID, passwordHash string, keepTokenHash []byte) error {
+func setPassword(ctx context.Context, q *query.Queries, memberID, passwordHash string, keepTokenHash []byte) ([][]byte, error) {
 	n, err := q.SetMemberPassword(ctx, query.SetMemberPasswordParams{ID: memberID, PasswordHash: &passwordHash})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if n == 0 {
-		return port.ErrMemberNotFound
+		return nil, port.ErrMemberNotFound
 	}
 	return q.DeleteMemberSessions(ctx, query.DeleteMemberSessionsParams{MemberID: memberID, Keep: keepTokenHash})
 }

@@ -43,7 +43,7 @@ func newRoomFixture(t *testing.T) roomFixture {
 	store := porttest.New()
 	music := newCatalog(store, 10)
 	node := porttest.NewRedis().Node("a")
-	host, gateway := realtime.New(store, store, music, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
+	host, gateway := realtime.New(store, store, store, music, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
 	ctx, stop := context.WithCancel(context.Background())
 	wait, err := realtime.Start(ctx, host, gateway)
 	if err != nil {
@@ -232,7 +232,7 @@ func TestRoomRequestOfDisconnectedClientIsNotCounted(t *testing.T) {
 func TestRoomListingShowsOnlineCount(t *testing.T) {
 	f := newRoomFixture(t)
 	id, m, _ := f.enter(t)
-	session, err := f.gateway.Join(t.Context(), id, m)
+	session, err := f.gateway.Join(t.Context(), id, m, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestProfileChangeReachesRooms(t *testing.T) {
 	session := decode[protocol.CreateMemberResponse](t, send(t, f.server, http.MethodPost, "/api/members", "{}"))
 	created := decode[protocol.CreateRoomResponse](t, send(t, f.server, http.MethodPost, "/api/rooms", `{"name":"临时","description":""}`))
 	m := member.Member{ID: session.Member.ID, Name: session.Member.Name}
-	s, err := f.gateway.Join(t.Context(), created.ID, m)
+	s, err := f.gateway.Join(t.Context(), created.ID, m, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

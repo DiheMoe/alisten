@@ -27,16 +27,23 @@ type instance struct {
 	gateway *Gateway
 }
 
+// 测试中的会话和事件流大多没有真实的票据，核对凭证时把它们都当作仍然有效；核对本身的测试用 porttest.Store 中的票据。
+type unrevoked struct{}
+
+func (unrevoked) ExistingTickets(_ context.Context, tokenHashes [][]byte) ([][]byte, error) {
+	return tokenHashes, nil
+}
+
 // 只能在 synctest 的 bubble 中调用。
 func startInstance(t *testing.T, redis *porttest.Redis, id string, snapshots port.RoomSnapshots, store *porttest.Store, songs *songs) *instance {
 	t.Helper()
-	return startLoggingInstance(t, redis, id, snapshots, store, songs, slog.New(slog.DiscardHandler))
+	return startLoggingInstance(t, redis, id, snapshots, store, unrevoked{}, songs, slog.New(slog.DiscardHandler))
 }
 
-func startLoggingInstance(t *testing.T, redis *porttest.Redis, id string, snapshots port.RoomSnapshots, store *porttest.Store, songs *songs, logger *slog.Logger) *instance {
+func startLoggingInstance(t *testing.T, redis *porttest.Redis, id string, snapshots port.RoomSnapshots, store *porttest.Store, tickets port.ExistingTickets, songs *songs, logger *slog.Logger) *instance {
 	t.Helper()
 	node := redis.Node(id)
-	h, g := New(snapshots, store, songs.music, songs.preparer, cluster(node, id), logger)
+	h, g := New(snapshots, store, tickets, songs.music, songs.preparer, cluster(node, id), logger)
 	ctx, stop := context.WithCancel(context.Background())
 	wait, err := Start(ctx, h, g)
 	if err != nil {
@@ -57,7 +64,7 @@ func startLoggingInstance(t *testing.T, redis *porttest.Redis, id string, snapsh
 
 func (in *instance) join(t *testing.T, roomID string, m member.Member) *Session {
 	t.Helper()
-	s, err := in.gateway.Join(t.Context(), roomID, m)
+	s, err := in.gateway.Join(t.Context(), roomID, m, nil, nil)
 	if err != nil {
 		t.Fatalf("%s 加入房间：%v", m.Name, err)
 	}
@@ -366,7 +373,7 @@ func TestShutdownClosesSessions(t *testing.T) {
 		store := porttest.New()
 		f := newGatewayFixture(t, store, store)
 		id := createRoom(t, store, room.Persistent)
-		a, err := f.gateway.Join(t.Context(), id, alice)
+		a, err := f.gateway.Join(t.Context(), id, alice, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -384,7 +391,7 @@ func TestShutdownClosesSessions(t *testing.T) {
 		if err := <-done; err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.gateway.Join(t.Context(), id, bob); !errors.Is(err, ErrUnavailable) {
+		if _, err := f.gateway.Join(t.Context(), id, bob, nil, nil); !errors.Is(err, ErrUnavailable) {
 			t.Errorf("Shutdown 之后加入的错误 = %v，期望 ErrUnavailable", err)
 		}
 	})
@@ -463,7 +470,7 @@ func TestUnsubscribeAfterLastUse(t *testing.T) {
 		sessionOnly := createRoom(t, store, room.Persistent)
 		withHTTP := createRoom(t, store, room.Persistent)
 
-		s, err := f.gateway.Join(t.Context(), sessionOnly, alice)
+		s, err := f.gateway.Join(t.Context(), sessionOnly, alice, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -481,7 +488,7 @@ func TestUnsubscribeAfterLastUse(t *testing.T) {
 			t.Fatal(err)
 		}
 		time.Sleep(30 * time.Second)
-		s, err = f.gateway.Join(t.Context(), withHTTP, alice)
+		s, err = f.gateway.Join(t.Context(), withHTTP, alice, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -596,7 +603,7 @@ func startCountingGateway(t *testing.T, store *porttest.Store) (*Gateway, *portt
 	songs := newSongs()
 	c := cluster(node, "a")
 	c.Bus = bus
-	h, g := New(store, store, songs.music, songs.preparer, c, slog.New(slog.DiscardHandler))
+	h, g := New(store, store, unrevoked{}, songs.music, songs.preparer, c, slog.New(slog.DiscardHandler))
 	ctx, stop := context.WithCancel(context.Background())
 	wait, err := Start(ctx, h, g)
 	if err != nil {
@@ -620,7 +627,7 @@ func TestConfirmedSubscriptionIsNotRepeated(t *testing.T) {
 		store := porttest.New()
 		g, node, bus := startCountingGateway(t, store)
 		id := createRoom(t, store, room.Persistent)
-		s, err := g.Join(t.Context(), id, alice)
+		s, err := g.Join(t.Context(), id, alice, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -657,7 +664,7 @@ func TestConfirmationAcrossDisconnectIsNotReused(t *testing.T) {
 		store := porttest.New()
 		g, node, bus := startCountingGateway(t, store)
 		id := createRoom(t, store, room.Persistent)
-		s, err := g.Join(t.Context(), id, alice)
+		s, err := g.Join(t.Context(), id, alice, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

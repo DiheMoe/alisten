@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"regexp"
 	"testing"
+	"testing/synctest"
 
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/port/porttest"
@@ -27,7 +28,7 @@ func newService(t *testing.T) (*Service, *porttest.Store) {
 
 // 没有调用 realtime.Start：这些测试不运行房间。
 func newGateway(store *porttest.Store, node *porttest.Node, bus port.Bus) *realtime.Gateway {
-	_, gateway := realtime.New(store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
+	_, gateway := realtime.New(store, store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
 	return gateway
 }
 
@@ -152,12 +153,86 @@ func TestIssueTicketFailsWhenPasswordChangesMeanwhile(t *testing.T) {
 	changed := passwordChangedStore{Store: store, newHash: hashPassword(t, "新密码")}
 	node := porttest.NewRedis().Node("a")
 	s := New(store, store, changed, newGateway(store, node, node))
-	alice := createMember(t, s).Member
+	alice := createMember(t, s)
 	id := createRoom(t, store, "旧密码")
 
-	if _, err := s.IssueTicket(t.Context(), alice.ID, id, "旧密码"); !errors.Is(err, ErrWrongPassword) {
+	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, id, "旧密码"); !errors.Is(err, ErrWrongPassword) {
 		t.Errorf("密码在校验之后被修改，错误 = %v，期望 ErrWrongPassword", err)
 	}
+}
+
+func TestTicketBelongsToIssuingSession(t *testing.T) {
+	s, store := newService(t)
+	alice := createMember(t, s)
+	id := createRoom(t, store, "")
+	ticket, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, id, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	holder, err := s.VerifyTicket(t.Context(), ticket)
+	if err != nil || holder.Member != alice.Member || !bytes.Equal(holder.SessionTokenHash, hashSecret(alice.MemberToken)) {
+		t.Errorf("票据的持有者 = %#v, %v，期望属于 alice 签发它的会话", holder, err)
+	}
+}
+
+func TestIssueTicketRejectsDeletedSession(t *testing.T) {
+	s, store := newService(t)
+	alice := createMember(t, s)
+	id := createRoom(t, store, "")
+	if err := store.DeleteSession(t.Context(), hashSecret(alice.MemberToken)); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, id, ""); !errors.Is(err, ErrInvalidMemberToken) {
+		t.Errorf("会话在签发之前被删除，错误 = %v，期望 ErrInvalidMemberToken", err)
+	}
+}
+
+// 第一次查询照常，之后的查询都认为票据已经作废。
+type revokedAfterFirstLookup struct {
+	port.Tickets
+	lookups int
+}
+
+func (r *revokedAfterFirstLookup) TicketHolder(ctx context.Context, tokenHash []byte) (port.TicketHolder, error) {
+	r.lookups++
+	if r.lookups > 1 {
+		return port.TicketHolder{}, port.ErrTicketNotFound
+	}
+	return r.Tickets.TicketHolder(ctx, tokenHash)
+}
+
+func TestEnterRoomLeavesWhenTicketIsRevokedWhileJoining(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		node := porttest.NewRedis().Node("a")
+		host, gateway := realtime.New(store, store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
+		ctx, stop := context.WithCancel(t.Context())
+		wait, err := realtime.Start(ctx, host, gateway)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			_ = host.Shutdown(context.Background())
+			_ = gateway.Shutdown(context.Background())
+			stop()
+			wait()
+		})
+		s := New(store, store, &revokedAfterFirstLookup{Tickets: store}, gateway)
+		alice := createMember(t, s)
+		id := createRoom(t, store, "")
+		ticket, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, id, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := s.EnterRoom(t.Context(), id, ticket); !errors.Is(err, ErrInvalidTicket) {
+			t.Errorf("加入期间票据被作废，错误 = %v，期望 ErrInvalidTicket", err)
+		}
+		if n := gateway.Sessions(); n != 0 {
+			t.Errorf("网关上残留 %d 个会话，期望 0", n)
+		}
+	})
 }
 
 type loggedSubscriptions struct {
@@ -177,12 +252,13 @@ func TestEnterRoomJoinsTheStoredRoom(t *testing.T) {
 	node := porttest.NewRedis().Node("a")
 	var logs bytes.Buffer
 	s := New(store, store, store, newGateway(store, node, loggedSubscriptions{node, slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil)))}))
-	alice := createMember(t, s).Member
+	session := createMember(t, s)
+	alice := session.Member
 	id, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ticket, err := s.IssueTicket(t.Context(), alice.ID, id, "")
+	ticket, err := s.IssueTicket(t.Context(), alice.ID, session.MemberToken, id, "")
 	if err != nil {
 		t.Fatal(err)
 	}

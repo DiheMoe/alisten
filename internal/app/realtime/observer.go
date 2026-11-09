@@ -17,26 +17,28 @@ var ErrTooManyObservers = errors.New("这个房间的事件流超过 5 条，请
 // Observer 是房间的事件流：先收到房间的快照，之后是房间的事件；房间开始新的一次运行时事件重新编号，再收到一份新的快照。
 type Observer struct {
 	*sendQueue
-	room       string
-	link       *roomLink
-	member     member.Member
-	bot        bool
-	credential string
+	room   string
+	link   *roomLink
+	member member.Member
+	// 凭证签发给的成员会话的 token 哈希，API Key 没有会话，为空。
+	memberSession string
+	bot           bool
+	credential    string
 
 	// 由 sendQueue 的 mu 保护：最近一次快照的任期，和收到过的 owner 变更通知中最大的任期。
 	term, latest uint32
 }
 
 // Observe 订阅房间的事件但不加入房间：事件流不出现在在线列表中，不计入投票切歌所需的人数，也不让 AutoDJ 认为房间里有人。
-// m 是凭证的持有者，bot 表示凭证是常驻房间的 API Key，credential 是凭证的哈希。名额用完时，同一凭证打开的最早的事件流以
-// CloseReplaced 关闭，名额让给这一条；没有同一凭证的事件流时返回 ErrTooManyObservers。
+// m 是凭证的持有者，memberSession 是凭证签发给的成员会话，bot 表示凭证是常驻房间的 API Key，credential 是凭证在存储中的哈希。
+// 名额用完时，同一凭证打开的最早的事件流以 CloseReplaced 关闭，名额让给这一条；没有同一凭证的事件流时返回 ErrTooManyObservers。
 // 返回时快照已经放进队列。结束时必须调用一次 Unobserve。
-func (g *Gateway) Observe(ctx context.Context, roomID string, m member.Member, bot bool, credential string) (*Observer, error) {
+func (g *Gateway) Observe(ctx context.Context, roomID string, m member.Member, memberSession []byte, bot bool, credential string) (*Observer, error) {
 	link, err := g.hold(ctx, roomID)
 	if err != nil {
 		return nil, err
 	}
-	o := &Observer{sendQueue: newSendQueue(), room: roomID, link: link, member: m, bot: bot, credential: credential}
+	o := &Observer{sendQueue: newSendQueue(), room: roomID, link: link, member: m, memberSession: string(memberSession), bot: bot, credential: credential}
 	if err := g.watch(o); err != nil {
 		g.unhold(roomID, link, false)
 		return nil, err

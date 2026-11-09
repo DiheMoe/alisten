@@ -30,6 +30,7 @@ type AccountProfile struct {
 }
 
 // 成员 token 只以 SHA-256 哈希的形式出现在端口中。一个成员 token 是成员的一个会话，同一个成员可以有多个会话。
+// 删除会话时，签发给这个会话的票据一并删除。
 type Members interface {
 	// 创建游客和它的第一个会话。
 	CreateMember(ctx context.Context, tokenHash []byte, name string) (member.Member, error)
@@ -45,9 +46,9 @@ type Members interface {
 	// 修改时对会话的删除已经执行，此时创建的会话不会再被删除。两种情况都不做任何修改。
 	ReplaceSession(ctx context.Context, oldTokenHash []byte, memberID string, newTokenHash []byte, passwordHash string) error
 	DeleteSession(ctx context.Context, tokenHash []byte) error
-	// 在同一个事务中修改已注册成员的密码哈希，并删除该成员的全部会话。成员是游客时返回 ErrMemberNotFound。
-	SetPassword(ctx context.Context, memberID, passwordHash string) error
+	// 在同一个事务中修改已注册成员的密码哈希，并删除该成员的全部会话。返回被删除的会话的 token 哈希。成员是游客时返回 ErrMemberNotFound。
+	SetPassword(ctx context.Context, memberID, passwordHash string) ([][]byte, error)
 	// 与 SetPassword 相同，但保留发出请求的 keepTokenHash 的会话。这个会话已经不存在时返回 ErrSessionNotFound；密码哈希已经不是
 	// 校验当前密码时读到的 currentPasswordHash 时返回 ErrAccountPasswordChanged：密码在校验之后被修改或重置过。两种情况都不做任何修改。
-	ChangePassword(ctx context.Context, memberID, currentPasswordHash, passwordHash string, keepTokenHash []byte) error
+	ChangePassword(ctx context.Context, memberID, currentPasswordHash, passwordHash string, keepTokenHash []byte) ([][]byte, error)
 }

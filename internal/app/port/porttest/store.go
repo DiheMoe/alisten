@@ -45,16 +45,18 @@ type storedMember struct {
 type storedTicket struct {
 	roomID    string
 	memberID  string
+	session   string
 	createdAt time.Time
 }
 
 var (
-	_ port.Members       = (*Store)(nil)
-	_ port.Tickets       = (*Store)(nil)
-	_ port.RoomDirectory = (*Store)(nil)
-	_ port.Credentials   = (*Store)(nil)
-	_ port.APIKeys       = (*Store)(nil)
-	_ port.Site          = (*Store)(nil)
+	_ port.Members         = (*Store)(nil)
+	_ port.Tickets         = (*Store)(nil)
+	_ port.ExistingTickets = (*Store)(nil)
+	_ port.RoomDirectory   = (*Store)(nil)
+	_ port.Credentials     = (*Store)(nil)
+	_ port.APIKeys         = (*Store)(nil)
+	_ port.Site            = (*Store)(nil)
 )
 
 func New() *Store {
@@ -203,7 +205,7 @@ func (s *Store) ReplaceSession(_ context.Context, oldTokenHash []byte, memberID 
 	if _, ok := s.sessions[string(newTokenHash)]; ok {
 		return errors.New("token 哈希重复")
 	}
-	delete(s.sessions, string(oldTokenHash))
+	s.deleteSession(string(oldTokenHash))
 	s.sessions[string(newTokenHash)] = memberID
 	return nil
 }
@@ -211,45 +213,56 @@ func (s *Store) ReplaceSession(_ context.Context, oldTokenHash []byte, memberID 
 func (s *Store) DeleteSession(_ context.Context, tokenHash []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.sessions, string(tokenHash))
+	s.deleteSession(string(tokenHash))
 	return nil
 }
 
-func (s *Store) SetPassword(_ context.Context, memberID, passwordHash string) error {
+func (s *Store) SetPassword(_ context.Context, memberID, passwordHash string) ([][]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	m := s.member(memberID)
 	if m == nil || m.username == "" {
-		return port.ErrMemberNotFound
+		return nil, port.ErrMemberNotFound
 	}
 	m.passwordHash = passwordHash
-	s.deleteSessions(memberID, nil)
-	return nil
+	return s.deleteSessions(memberID, nil), nil
 }
 
-func (s *Store) ChangePassword(_ context.Context, memberID, currentPasswordHash, passwordHash string, keepTokenHash []byte) error {
+func (s *Store) ChangePassword(_ context.Context, memberID, currentPasswordHash, passwordHash string, keepTokenHash []byte) ([][]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	m := s.member(memberID)
 	if m == nil || m.username == "" {
-		return port.ErrMemberNotFound
+		return nil, port.ErrMemberNotFound
 	}
 	if owner, ok := s.sessions[string(keepTokenHash)]; !ok || owner != memberID {
-		return port.ErrSessionNotFound
+		return nil, port.ErrSessionNotFound
 	}
 	if m.passwordHash != currentPasswordHash {
-		return port.ErrAccountPasswordChanged
+		return nil, port.ErrAccountPasswordChanged
 	}
 	m.passwordHash = passwordHash
-	s.deleteSessions(memberID, keepTokenHash)
-	return nil
+	return s.deleteSessions(memberID, keepTokenHash), nil
 }
 
 // 调用方持有 s.mu。
-func (s *Store) deleteSessions(memberID string, keepTokenHash []byte) {
-	maps.DeleteFunc(s.sessions, func(hash, id string) bool {
-		return id == memberID && (keepTokenHash == nil || hash != string(keepTokenHash))
-	})
+func (s *Store) deleteSessions(memberID string, keepTokenHash []byte) [][]byte {
+	var deleted [][]byte
+	for hash, id := range s.sessions {
+		if id == memberID && (keepTokenHash == nil || hash != string(keepTokenHash)) {
+			deleted = append(deleted, []byte(hash))
+		}
+	}
+	for _, hash := range deleted {
+		s.deleteSession(string(hash))
+	}
+	return deleted
+}
+
+// 与 postgres 的外键一致：会话的票据随会话一起删除。调用方持有 s.mu。
+func (s *Store) deleteSession(hash string) {
+	delete(s.sessions, hash)
+	maps.DeleteFunc(s.tickets, func(_ string, t storedTicket) bool { return t.session == hash })
 }
 
 func (s *Store) CreateTicket(_ context.Context, t port.NewTicket) error {
@@ -265,10 +278,13 @@ func (s *Store) CreateTicket(_ context.Context, t port.NewTicket) error {
 	if !slices.ContainsFunc(s.members, func(m storedMember) bool { return m.member.ID == t.MemberID }) {
 		return errors.New("成员不存在")
 	}
+	if _, ok := s.sessions[string(t.SessionTokenHash)]; t.SessionTokenHash != nil && !ok {
+		return port.ErrSessionNotFound
+	}
 	if _, ok := s.tickets[string(t.TokenHash)]; ok {
 		return errors.New("票据哈希重复")
 	}
-	s.tickets[string(t.TokenHash)] = storedTicket{roomID: r.Info.ID, memberID: t.MemberID, createdAt: time.Now()}
+	s.tickets[string(t.TokenHash)] = storedTicket{roomID: r.Info.ID, memberID: t.MemberID, session: string(t.SessionTokenHash), createdAt: time.Now()}
 	return nil
 }
 
@@ -281,10 +297,26 @@ func (s *Store) TicketHolder(_ context.Context, tokenHash []byte) (port.TicketHo
 	}
 	for _, m := range s.members {
 		if m.member.ID == t.memberID {
-			return port.TicketHolder{RoomID: t.roomID, Member: m.member, Bot: s.bots[t.roomID] == t.memberID}, nil
+			holder := port.TicketHolder{RoomID: t.roomID, Member: m.member, Bot: s.bots[t.roomID] == t.memberID}
+			if t.session != "" {
+				holder.SessionTokenHash = []byte(t.session)
+			}
+			return holder, nil
 		}
 	}
 	return port.TicketHolder{}, port.ErrTicketNotFound
+}
+
+func (s *Store) ExistingTickets(_ context.Context, tokenHashes [][]byte) ([][]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var existing [][]byte
+	for hash := range s.tickets {
+		if slices.ContainsFunc(tokenHashes, func(h []byte) bool { return string(h) == hash }) {
+			existing = append(existing, []byte(hash))
+		}
+	}
+	return existing, nil
 }
 
 func (s *Store) RoomAPIKeyStatus(_ context.Context, roomID string) (port.APIKeyStatus, error) {

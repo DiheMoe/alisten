@@ -229,8 +229,9 @@ func TestMemberSessions(t *testing.T) {
 	if err := store.Register(t.Context(), alice.ID, "alice", "old"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ChangePassword(t.Context(), alice.ID, "old", "new", tokenHash("alice-1")); err != nil {
-		t.Fatal(err)
+	deleted, err := store.ChangePassword(t.Context(), alice.ID, "old", "new", tokenHash("alice-1"))
+	if want := [][]byte{tokenHash("alice-2"), tokenHash("alice-3")}; err != nil || !sameHashes(deleted, want) {
+		t.Errorf("ChangePassword 返回 %x, %v，期望被删除的 alice-2、alice-3", deleted, err)
 	}
 	if ownerOf(t, store, "alice-1") != alice.ID || ownerOf(t, store, "alice-2") != "" || ownerOf(t, store, "alice-3") != "" {
 		t.Error("ChangePassword 应只留下发出请求的会话")
@@ -246,10 +247,10 @@ func TestMemberSessions(t *testing.T) {
 func TestSetPassword(t *testing.T) {
 	store, _ := newStore(t)
 	guest := createMember(t, store, "guest", "游客-1a2b")
-	if err := store.SetPassword(t.Context(), guest.ID, "hash"); !errors.Is(err, port.ErrMemberNotFound) {
+	if _, err := store.SetPassword(t.Context(), guest.ID, "hash"); !errors.Is(err, port.ErrMemberNotFound) {
 		t.Errorf("给游客设置密码 = %v，期望 ErrMemberNotFound", err)
 	}
-	if err := store.ChangePassword(t.Context(), guest.ID, "", "hash", tokenHash("guest")); !errors.Is(err, port.ErrMemberNotFound) {
+	if _, err := store.ChangePassword(t.Context(), guest.ID, "", "hash", tokenHash("guest")); !errors.Is(err, port.ErrMemberNotFound) {
 		t.Errorf("游客修改密码 = %v，期望 ErrMemberNotFound", err)
 	}
 	alice := createMember(t, store, "alice-1", "游客-3c4d")
@@ -260,8 +261,8 @@ func TestSetPassword(t *testing.T) {
 	if err := store.ReplaceSession(t.Context(), tokenHash("other"), alice.ID, tokenHash("alice-2"), "old"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ChangePassword(t.Context(), alice.ID, "old", "new", tokenHash("alice-1")); err != nil {
-		t.Fatal(err)
+	if deleted, err := store.ChangePassword(t.Context(), alice.ID, "old", "new", tokenHash("alice-1")); err != nil || !sameHashes(deleted, [][]byte{tokenHash("alice-2")}) {
+		t.Errorf("ChangePassword 返回 %x, %v，期望被删除的 alice-2", deleted, err)
 	}
 	if account, err := store.AccountByUsername(t.Context(), "alice"); err != nil || account.PasswordHash != "new" {
 		t.Errorf("修改之后的密码哈希 = %q, %v，期望 new", account.PasswordHash, err)
@@ -269,8 +270,8 @@ func TestSetPassword(t *testing.T) {
 	if ownerOf(t, store, "alice-1") != alice.ID || ownerOf(t, store, "alice-2") != "" {
 		t.Error("修改密码应只留下指定的会话")
 	}
-	if err := store.SetPassword(t.Context(), alice.ID, "newer"); err != nil {
-		t.Fatal(err)
+	if deleted, err := store.SetPassword(t.Context(), alice.ID, "newer"); err != nil || !sameHashes(deleted, [][]byte{tokenHash("alice-1")}) {
+		t.Errorf("SetPassword 返回 %x, %v，期望被删除的 alice-1", deleted, err)
 	}
 	if got := ownerOf(t, store, "alice-1"); got != "" {
 		t.Errorf("SetPassword 应删除全部会话，alice-1 仍属于 %s", got)
@@ -296,7 +297,7 @@ func TestChangePasswordChecksSessionAndPassword(t *testing.T) {
 		{"会话属于别的成员", "h1", "bob", port.ErrSessionNotFound},
 		{"密码哈希已经变了", "h0", "alice-1", port.ErrAccountPasswordChanged},
 	} {
-		if err := store.ChangePassword(t.Context(), alice.ID, tc.current, "h2", tokenHash(tc.keep)); !errors.Is(err, tc.want) {
+		if _, err := store.ChangePassword(t.Context(), alice.ID, tc.current, "h2", tokenHash(tc.keep)); !errors.Is(err, tc.want) {
 			t.Errorf("%s时 = %v，期望 %v", tc.name, err, tc.want)
 		}
 	}
@@ -325,7 +326,8 @@ func changePasswordMeanwhile(t *testing.T, store *Store, pool *pgxpool.Pool, mem
 
 	result := make(chan error, 1)
 	go func() {
-		result <- store.ChangePassword(t.Context(), memberID, "h1", "h3", tokenHash("alice-1"))
+		_, err := store.ChangePassword(t.Context(), memberID, "h1", "h3", tokenHash("alice-1"))
+		result <- err
 	}()
 	waitForLockWait(t, pool, 1)
 	if err := tx.Commit(t.Context()); err != nil {

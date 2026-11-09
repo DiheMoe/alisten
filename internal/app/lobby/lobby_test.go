@@ -14,7 +14,7 @@ import (
 func newService(t *testing.T, store *porttest.Store) (*Service, *realtime.Gateway) {
 	t.Helper()
 	node := porttest.NewRedis().Node("a")
-	host, gateway := realtime.New(store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
+	host, gateway := realtime.New(store, store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
 	ctx, stop := context.WithCancel(context.Background())
 	wait, err := realtime.Start(ctx, host, gateway)
 	if err != nil {
@@ -47,7 +47,7 @@ func TestOnlineCount(t *testing.T) {
 	// 同一个成员的两个会话算两个在线。
 	alice := member.Member{ID: "00000000-0000-7000-8000-00000000000a", Name: "alice"}
 	for range 2 {
-		session, err := gateway.Join(t.Context(), busy, alice)
+		session, err := gateway.Join(t.Context(), busy, alice, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -18,6 +18,8 @@ type NewTicket struct {
 	MemberID  string
 	// 签发前校验密码时依据的密码哈希，空字符串表示房间没有密码。
 	PasswordHash string
+	// 发出请求的会话的 token 哈希：会话删除时票据随之失效。
+	SessionTokenHash []byte
 }
 
 type TicketHolder struct {
@@ -26,11 +28,20 @@ type TicketHolder struct {
 	Member member.Member
 	// 票据是常驻房间的 API Key，持有者是这个房间的 bot 成员。
 	Bot bool
+	// 票据所属的会话的 token 哈希，API Key 没有会话，为 nil。
+	SessionTokenHash []byte
 }
 
 type Tickets interface {
 	// 房间的密码哈希已经不是 t.PasswordHash 时返回 ErrPasswordChanged：密码在校验之后被修改过，
-	// 设置或修改密码时的作废已经执行，此时签发的票据不会再被作废。
+	// 设置或修改密码时的作废已经执行，此时签发的票据不会再被作废。t.SessionTokenHash 的会话已经不存在时返回 ErrSessionNotFound。
 	CreateTicket(ctx context.Context, t NewTicket) error
 	TicketHolder(ctx context.Context, tokenHash []byte) (TicketHolder, error)
+}
+
+// 网关定期用它核对连接所用的凭证，不在存储中的当作已撤销而断开。所以票据只在作废时删除：
+// 如果按时间清理过期的票据，仍在使用这些票据的连接也会被断开。
+type ExistingTickets interface {
+	// 返回 tokenHashes 中仍然存在的票据（包括 API Key），每个只出现一次，顺序不定。
+	ExistingTickets(ctx context.Context, tokenHashes [][]byte) ([][]byte, error)
 }

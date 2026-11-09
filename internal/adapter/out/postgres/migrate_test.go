@@ -179,3 +179,49 @@ func TestMemberSessionsMigrationKeepsMemberTokens(t *testing.T) {
 		t.Errorf("bot 成员原来的 token 在迁移之后 = %v，期望不再有效", err)
 	}
 }
+
+func TestTicketSessionsMigrationBindsTicketsToSessions(t *testing.T) {
+	ctx := t.Context()
+	name := fmt.Sprintf("test_%d", databases.Add(1))
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
+		t.Fatal(err)
+	}
+	cfg := server.Copy()
+	cfg.ConnConfig.Database = name
+	pool := connect(t, cfg)
+	db := stdlib.OpenDBFromPool(pool)
+	t.Cleanup(func() { _ = db.Close() })
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 2); err != nil {
+		t.Fatal(err)
+	}
+	var guest, bot, roomID string
+	if err := pool.QueryRow(ctx, "INSERT INTO members (token_hash, name) VALUES ($1, '游客-1a2b') RETURNING id", tokenHash("guest")).Scan(&guest); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, "INSERT INTO members (token_hash, name) VALUES ($1, 'bot') RETURNING id", tokenHash("bot")).Scan(&bot); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, "INSERT INTO rooms (kind, name, description, bot_member_id) VALUES ('persistent', '大厅', '', $1) RETURNING id", bot).Scan(&roomID); err != nil {
+		t.Fatal(err)
+	}
+	for ticket, memberID := range map[string]string{"guest-ticket": guest, "api-key": bot} {
+		if _, err := pool.Exec(ctx, "INSERT INTO room_tickets (token_hash, room_id, member_id) VALUES ($1, $2, $3)", tokenHash(ticket), roomID, memberID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := provider.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	store := New(pool)
+	if holder, err := store.TicketHolder(ctx, tokenHash("guest-ticket")); err != nil || !bytes.Equal(holder.SessionTokenHash, tokenHash("guest")) {
+		t.Errorf("游客的票据 = %#v, %v，期望归到游客的会话", holder, err)
+	}
+	if holder, err := store.TicketHolder(ctx, tokenHash("api-key")); err != nil || !holder.Bot || holder.SessionTokenHash != nil {
+		t.Errorf("API Key 的票据 = %#v, %v，期望保留，没有会话", holder, err)
+	}
+}

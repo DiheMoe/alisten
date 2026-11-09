@@ -47,7 +47,7 @@ export function RoomApiKeyDialog({ room, onClose }: { room: RoomListing, onClose
     setStatus(undefined)
     setAttempt(n => n + 1)
   }
-  // 失败时 Key 可能已经重置，只是没能通知各实例断开旧 Key 的事件流，所以重新获取状态。
+  // 请求失败时服务端仍可能已经重置了 Key（比如响应没有送达），所以重新获取状态。
   const renew = async (): Promise<string | null> => {
     const result = await adminStore.call(() => api.adminResetRoomApiKey(room.id))
     if (!result)

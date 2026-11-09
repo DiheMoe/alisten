@@ -92,7 +92,6 @@ type RoomChange struct {
 
 // id 必须是 UUID。名称和描述由房间修改，房间落盘之后才返回。设置或修改密码会作废房间成员的票据并断开会话和成员的事件流，
 // 这一步无法撤销，所以放在最后：前面任何一步失败时票据仍然有效，重试也不会再次作废重新签发的票据。
-// 断开的通知发不出去时返回错误，此时票据已经作废。
 // 别名在名称和描述之前修改，别名已被占用时不做任何修改。取消密码不影响已有的票据。
 func (s *Service) UpdateRoom(ctx context.Context, id string, c RoomChange) error {
 	r, err := s.persistentRoom(ctx, id)
@@ -126,7 +125,8 @@ func (s *Service) UpdateRoom(ctx context.Context, id string, c RoomChange) error
 	if *hash == "" {
 		return nil
 	}
-	return s.gateway.Revoke(ctx, r.Info.ID)
+	s.gateway.Revoke(ctx, r.Info.ID)
+	return nil
 }
 
 // id 必须是 UUID。
@@ -148,7 +148,6 @@ func (s *Service) RoomAPIKeyStatus(ctx context.Context, id string) (port.APIKeyS
 }
 
 // id 必须是 UUID。还没有 Key 时生成，已经有时旧 Key 立即失效，用旧 Key 打开的事件流随之断开。
-// 断开事件流的通知发不出去时返回错误，此时 Key 已经重置。
 func (s *Service) ResetRoomAPIKey(ctx context.Context, id string) (string, error) {
 	r, err := s.persistentRoom(ctx, id)
 	if err != nil {
@@ -158,9 +157,7 @@ func (s *Service) ResetRoomAPIKey(ctx context.Context, id string) (string, error
 	if err := s.keys.ResetRoomAPIKey(ctx, r.Info.ID, k); err != nil {
 		return "", err
 	}
-	if err := s.gateway.RevokeAPIKey(ctx, r.Info.ID); err != nil {
-		return "", err
-	}
+	s.gateway.RevokeAPIKey(ctx, r.Info.ID)
 	return key, nil
 }
 

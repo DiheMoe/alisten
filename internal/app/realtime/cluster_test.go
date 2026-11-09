@@ -169,7 +169,7 @@ func newFlakyBusInstance(t *testing.T, store *porttest.Store, logger *slog.Logge
 	songs := newSongs()
 	node := porttest.NewRedis().Node("a")
 	bus := &flakyBus{Bus: node}
-	h, g := New(store, store, songs.music, songs.preparer, Cluster{Instance: "a", Leases: node, Liveness: node, Bus: bus}, logger)
+	h, g := New(store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: "a", Leases: node, Liveness: node, Bus: bus}, logger)
 	return h, g, node, bus
 }
 
@@ -381,7 +381,7 @@ func TestGatewayRejoinsAfterItsAliveKeyExpired(t *testing.T) {
 		a := startInstance(t, redis, "a", store, store, songs)
 		node := redis.Node("b")
 		liveness := &flakyLiveness{Liveness: node}
-		h, g := New(store, store, songs.music, songs.preparer, Cluster{Instance: "b", Leases: node, Liveness: liveness, Bus: node}, slog.New(slog.DiscardHandler))
+		h, g := New(store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: "b", Leases: node, Liveness: liveness, Bus: node}, slog.New(slog.DiscardHandler))
 		ctx, stop := context.WithCancel(context.Background())
 		wait, err := Start(ctx, h, g)
 		if err != nil {
@@ -398,7 +398,7 @@ func TestGatewayRejoinsAfterItsAliveKeyExpired(t *testing.T) {
 		if _, err := a.gateway.Do(t.Context(), id, alice, room.Sync{}); err != nil {
 			t.Fatal(err)
 		}
-		s, err := g.Join(t.Context(), id, bob)
+		s, err := g.Join(t.Context(), id, bob, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -457,7 +457,7 @@ func startFlakyInstance(t *testing.T, redis *porttest.Redis, id string, snapshot
 	t.Helper()
 	node := redis.Node(id)
 	leases, bus := &flakyOwners{Leases: node}, &flakyForwards{Bus: node}
-	h, g := New(snapshots, store, songs.music, songs.preparer, Cluster{Instance: id, Leases: leases, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
+	h, g := New(snapshots, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: id, Leases: leases, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
 	ctx, stop := context.WithCancel(context.Background())
 	wait, err := Start(ctx, h, g)
 	if err != nil {
@@ -694,9 +694,7 @@ func TestRevokeAndDeleteReachOtherInstances(t *testing.T) {
 		received(t, revoked)
 		received(t, gone)
 
-		if err := f.a.gateway.Revoke(t.Context(), f.room); err != nil {
-			t.Fatal(err)
-		}
+		f.a.gateway.Revoke(t.Context(), f.room)
 		checkReceived(t, revoked, fmt.Sprintf("closed %d", CloseRevoked))
 		if err := f.a.gateway.Delete(t.Context(), deleted); err != nil {
 			t.Fatal(err)
@@ -724,7 +722,7 @@ func TestCommandFollowsOwnerAfterLosingTakeover(t *testing.T) {
 		node := f.redis.Node("c")
 		leases := &staleLeases{Leases: node}
 		songs := newSongs()
-		h, g := New(store, store, songs.music, songs.preparer, Cluster{Instance: "c", Leases: leases, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
+		h, g := New(store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: "c", Leases: leases, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
 		ctx, stop := context.WithCancel(context.Background())
 		wait, err := Start(ctx, h, g)
 		if err != nil {

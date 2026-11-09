@@ -102,7 +102,7 @@ func TestFailedRequestsCarryTheRequestIDOfTheOwnerLogs(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := &failingStore{Store: porttest.New()}
 		var logs logBuffer
-		f := startLoggingInstance(t, porttest.NewRedis(), "a", store, store.Store, newSongs(), slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil))))
+		f := startLoggingInstance(t, porttest.NewRedis(), "a", store, store.Store, unrevoked{}, newSongs(), slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil))))
 		id := createRoom(t, store.Store, room.Persistent)
 		a := f.join(t, id, alice)
 		store.fail.Store(true)

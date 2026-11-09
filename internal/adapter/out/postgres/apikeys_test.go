@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -58,7 +59,7 @@ func TestResetRoomAPIKey(t *testing.T) {
 	if _, err := store.TicketHolder(t.Context(), tokenHash("k1")); !errors.Is(err, port.ErrTicketNotFound) {
 		t.Errorf("重置之后旧 Key 的错误 = %v，期望 ErrTicketNotFound", err)
 	}
-	if holder, err := store.TicketHolder(t.Context(), tokenHash("k2")); err != nil || holder != bot {
+	if holder, err := store.TicketHolder(t.Context(), tokenHash("k2")); err != nil || !reflect.DeepEqual(holder, bot) {
 		t.Errorf("重置之后新 Key 的持有者 = %#v, %v，期望 bot 成员不变", holder, err)
 	}
 	if n := memberTickets(t, pool, bot.Member.ID); n != 1 {
@@ -84,7 +85,7 @@ func TestSettingPasswordKeepsAPIKey(t *testing.T) {
 	if err := store.UpdateRoomAccess(t.Context(), id, port.AccessChange{PasswordHash: ptr("h1")}); err != nil {
 		t.Fatal(err)
 	}
-	if holder, err := store.TicketHolder(t.Context(), tokenHash("k1")); err != nil || holder != bot {
+	if holder, err := store.TicketHolder(t.Context(), tokenHash("k1")); err != nil || !reflect.DeepEqual(holder, bot) {
 		t.Errorf("设置密码之后 Key 的持有者 = %#v, %v，期望 Key 仍然有效", holder, err)
 	}
 	if n := ticketCount(t, pool, id); n != 1 {

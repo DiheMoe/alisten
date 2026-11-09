@@ -62,8 +62,9 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 	return err
 }
 
-const deleteMemberSessions = `-- name: DeleteMemberSessions :exec
+const deleteMemberSessions = `-- name: DeleteMemberSessions :many
 DELETE FROM member_sessions WHERE member_id = $1 AND token_hash IS DISTINCT FROM $2::bytea
+RETURNING token_hash
 `
 
 type DeleteMemberSessionsParams struct {
@@ -72,9 +73,24 @@ type DeleteMemberSessionsParams struct {
 }
 
 // keep 为 NULL 时删除这个成员的全部会话。
-func (q *Queries) DeleteMemberSessions(ctx context.Context, arg DeleteMemberSessionsParams) error {
-	_, err := q.db.Exec(ctx, deleteMemberSessions, arg.MemberID, arg.Keep)
-	return err
+func (q *Queries) DeleteMemberSessions(ctx context.Context, arg DeleteMemberSessionsParams) ([][]byte, error) {
+	rows, err := q.db.Query(ctx, deleteMemberSessions, arg.MemberID, arg.Keep)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items [][]byte
+	for rows.Next() {
+		var token_hash []byte
+		if err := rows.Scan(&token_hash); err != nil {
+			return nil, err
+		}
+		items = append(items, token_hash)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const deleteSession = `-- name: DeleteSession :execrows

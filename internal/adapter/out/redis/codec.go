@@ -55,11 +55,12 @@ type (
 )
 
 const (
-	kindEmitted  = "Emitted"
-	kindReplied  = "Replied"
-	kindInput    = "RoomInput"
-	kindMember   = "Member"
-	kindPrepared = "Prepared"
+	kindEmitted         = "Emitted"
+	kindReplied         = "Replied"
+	kindInput           = "RoomInput"
+	kindMember          = "Member"
+	kindSessionsRevoked = "SessionsRevoked"
+	kindPrepared        = "Prepared"
 	// room.Command 的 Action 是接口，不能像 inputs 中的类型那样直接编码。
 	inputCommand = "Command"
 )

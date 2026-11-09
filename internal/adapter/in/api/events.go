@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -10,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dihemoe/alisten/internal/app/identity"
 	"github.com/dihemoe/alisten/internal/app/realtime"
 	"github.com/dihemoe/alisten/protocol"
 )
@@ -23,7 +23,7 @@ const (
 
 var streamCloses = map[realtime.CloseReason]streamClose{
 	realtime.CloseRestart:  {Code: protocol.CloseServiceRestart, Message: "服务端实例退出或订阅中断，请重新连接"},
-	realtime.CloseRevoked:  {Code: protocol.CloseUnauthorized, Message: "凭证已失效：房间设置或修改了密码，或者 API Key 已重置"},
+	realtime.CloseRevoked:  {Code: protocol.CloseUnauthorized, Message: "凭证已失效：房间设置或修改了密码，API Key 已重置，或者账号在这台设备上退出了登录、密码被修改或重置"},
 	realtime.CloseRoomGone: {Code: protocol.CloseNotFound, Message: "房间已关闭或被删除"},
 	realtime.CloseOverflow: {Code: protocol.CloseSendQueueFull, Message: "积压的事件过多，请重新连接"},
 	// 不是 1012：共用一把 Key 的两个 bot 看到它就该停下，而不是重连之后互相顶掉。
@@ -81,9 +81,7 @@ func (s *server) roomEvents(w http.ResponseWriter, r *http.Request) {
 
 // 确认票据失败或 panic 时都要退订，否则事件流的名额和房间频道一直被占着。
 func (s *server) observe(ctx context.Context, c call) (any, error) {
-	// 内存中只留凭证的哈希。
-	credential := sha256.Sum256([]byte(c.ticket))
-	o, err := s.Gateway.Observe(ctx, c.roomID, c.member, c.bot, string(credential[:]))
+	o, err := s.Gateway.Observe(ctx, c.roomID, c.member, c.memberSession, c.bot, string(identity.TicketCredential(c.ticket)))
 	if err != nil {
 		return nil, err
 	}

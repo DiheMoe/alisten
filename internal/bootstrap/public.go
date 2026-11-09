@@ -73,12 +73,12 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 		Bus:      redis.NewBus(rdb, instance, version, metrics, tracer, base.With("component", "bus")),
 	}
 	runtimeLogger := base.With("component", "realtime")
-	host, gateway := realtime.New(measure(media.NewSnapshots(store, objects, runtimeLogger), metrics), store, music, preparer, cluster, runtimeLogger)
+	host, gateway := realtime.New(measure(media.NewSnapshots(store, objects, runtimeLogger), metrics), store, store, music, preparer, cluster, runtimeLogger)
 	registerRuntimeMetrics(metrics, host, gateway)
 	rooms := lobby.New(store, leases)
 	services := api.Services{
 		Identity: identity.New(store, store, store, gateway),
-		Accounts: identity.NewAccounts(store, store, redis.NewAccountQuota(rdb), redis.NewDevices(rdb)),
+		Accounts: identity.NewAccounts(store, store, redis.NewAccountQuota(rdb), redis.NewDevices(rdb), gateway),
 		Lobby:    rooms,
 		Admin:    admin.New(cfg.adminToken, rooms, store, store, store, src.neteaseLogin, src.qqLogin, src.bilibiliLogin, store, gateway),
 		Gateway:  gateway,

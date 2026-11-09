@@ -84,7 +84,8 @@ func (s *Service) UpdateProfile(ctx context.Context, memberID string, p Profile)
 	return m, nil
 }
 
-func (s *Service) IssueTicket(ctx context.Context, memberID, roomID, password string) (string, error) {
+// memberToken 是发出请求的会话，票据属于这个会话：会话删除时票据随之失效。
+func (s *Service) IssueTicket(ctx context.Context, memberID, memberToken, roomID, password string) (string, error) {
 	r, err := s.rooms.FindRoom(ctx, roomID)
 	if err != nil {
 		return "", err
@@ -99,15 +100,24 @@ func (s *Service) IssueTicket(ctx context.Context, memberID, roomID, password st
 		}
 	}
 	ticket, hash := newSecret()
-	err = s.tickets.CreateTicket(ctx, port.NewTicket{TokenHash: hash, RoomID: r.Info.ID, MemberID: memberID, PasswordHash: r.PasswordHash})
+	err = s.tickets.CreateTicket(ctx, port.NewTicket{TokenHash: hash, RoomID: r.Info.ID, MemberID: memberID, PasswordHash: r.PasswordHash, SessionTokenHash: hashSecret(memberToken)})
 	if errors.Is(err, port.ErrPasswordChanged) {
 		// 刚才是按旧密码校验的；客户端重新输入密码后，按新密码校验。
 		return "", ErrWrongPassword
+	}
+	if errors.Is(err, port.ErrSessionNotFound) {
+		// 会话在鉴权之后被删除（例如另一台设备退出登录或修改了密码），此时成员 token 确实已经失效。
+		return "", ErrInvalidMemberToken
 	}
 	if err != nil {
 		return "", err
 	}
 	return ticket, nil
+}
+
+// 连接在网关中登记的凭证，与票据在存储中的哈希相同：网关定期拿它到存储中核对，不同的话仍然有效的连接也会被当作已撤销而断开。
+func TicketCredential(ticket string) []byte {
+	return hashSecret(ticket)
 }
 
 func (s *Service) VerifyTicket(ctx context.Context, ticket string) (port.TicketHolder, error) {
@@ -137,7 +147,16 @@ func (s *Service) EnterRoom(ctx context.Context, roomID, ticket string) (*realti
 	if holder.Bot {
 		return nil, ErrBotSession
 	}
-	return s.gateway.Join(logctx.WithMember(logctx.WithRoom(ctx, r.Info.ID), holder.Member.ID), r.Info.ID, holder.Member)
+	session, err := s.gateway.Join(logctx.WithMember(logctx.WithRoom(ctx, r.Info.ID), holder.Member.ID), r.Info.ID, holder.Member, holder.SessionTokenHash, TicketCredential(ticket))
+	if err != nil {
+		return nil, err
+	}
+	// 作废时先删除票据、再通知断开：会话加入网关之前发出的通知它收不到，所以加入之后再确认一次票据。
+	if _, err := s.VerifyTicket(ctx, ticket); err != nil {
+		s.gateway.Leave(session)
+		return nil, err
+	}
+	return session, nil
 }
 
 func NewAPIKey() (string, port.NewAPIKey) {

@@ -11,6 +11,14 @@ type Handler = (token: string | null) => Response | Promise<Response>
 class FakeStorage {
   readonly #items = new Map<string, string>()
 
+  get length(): number {
+    return this.#items.size
+  }
+
+  key(index: number): string | null {
+    return [...this.#items.keys()][index] ?? null
+  }
+
   getItem(key: string): string | null {
     return this.#items.get(key) ?? null
   }
@@ -172,6 +180,18 @@ describe('token 失效时更换身份', () => {
     expect(events).toEqual([{ kind: 'rejected' }, { kind: 'renewed', member: issued }])
   })
 
+  it('票据属于被拒绝的身份，一并删除', async () => {
+    local.setItem(memberTokenKey, 'expired')
+    local.setItem('alisten.ticket.r1', 't1')
+    local.setItem('alisten.ticket.r2', 't2')
+    routes.set('PATCH /api/me', unauthorized)
+    const { api, IdentityRenewedError } = await load()
+    await expect(api.updateMe({ name: 'alice' })).rejects.toBeInstanceOf(IdentityRenewedError)
+
+    expect(local.getItem('alisten.ticket.r1')).toBeNull()
+    expect(local.getItem('alisten.ticket.r2')).toBeNull()
+  })
+
   it('同时被拒绝的请求只更换一次身份', async () => {
     local.setItem(memberTokenKey, 'expired')
     routes.set('PATCH /api/me', unauthorized)
@@ -202,6 +222,7 @@ describe('token 失效时更换身份', () => {
 
   it('其他标签页已经换了 token 时不删除新的 token', async () => {
     local.setItem(memberTokenKey, 'expired')
+    local.setItem('alisten.ticket.r1', 't1')
     routes.set('PATCH /api/me', () => {
       local.setItem(memberTokenKey, 'good')
       return unauthorized()
@@ -210,6 +231,7 @@ describe('token 失效时更换身份', () => {
     await expect(api.updateMe({ name: 'a' })).rejects.toThrow('刚才的操作没有生效')
 
     expect(local.getItem(memberTokenKey)).toBe('good')
+    expect(local.getItem('alisten.ticket.r1')).toBe('t1')
     expect(callsTo('POST /api/members')).toHaveLength(0)
     expect(events).toEqual([{ kind: 'rejected' }, { kind: 'renewed', member }])
   })
@@ -272,6 +294,7 @@ describe('token 失效时更换身份', () => {
 
   it('修改密码时当前密码错误返回 INVALID_CREDENTIALS，不更换身份', async () => {
     local.setItem(memberTokenKey, 'good')
+    local.setItem('alisten.ticket.r1', 't1')
     routes.set('PUT /api/account/password', () => errorResponse(401, 'INVALID_CREDENTIALS', '当前密码错误'))
     const { api, events, IdentityRenewedError } = await load()
     const error: unknown = await api.changePassword({ currentPassword: 'wrong horse', newPassword: 'correct horse' }).catch((reason: unknown) => reason)
@@ -279,6 +302,7 @@ describe('token 失效时更换身份', () => {
     expect(error).toMatchObject({ code: 'INVALID_CREDENTIALS', status: 401 })
     expect(events).toEqual([])
     expect(local.getItem(memberTokenKey)).toBe('good')
+    expect(local.getItem('alisten.ticket.r1')).toBe('t1')
   })
 
   it('账号密码错误不更换身份', async () => {

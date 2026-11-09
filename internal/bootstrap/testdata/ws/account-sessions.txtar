@@ -1,0 +1,142 @@
+票据属于签发它的会话：账号在两台设备上各自进入同一个房间，一台设备修改密码之后，另一台设备的 WebSocket 以 4401 断开，
+用它的票据打开的事件流收到 4401 的 close；这台设备的旧票据再也不能用来进房或调用房间接口。发出请求的设备不受影响。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/account
+Authorization: Bearer $alice
+
+{"username": "alice", "password": "correct horse"}
+-- response --
+201
+{"account": {"username": "alice"}}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$guest", "member": {"id": "$guestId", "name": "$guestName", "avatarHash": ""}}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $guest
+
+{"username": "alice", "password": "correct horse"}
+-- response --
+201
+{"memberToken": "$alice2", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "device": "$guestDevice"}
+
+-- request --
+POST /api/rooms
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$room
+{"id": "$room"}
+
+-- request --
+POST /api/rooms/$room/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+201
+{"ticket": "$ticketA"}
+
+-- request --
+POST /api/rooms/$room/tickets
+Authorization: Bearer $alice2
+
+{}
+-- response --
+201
+{"ticket": "$ticketB"}
+
+-- connect a --
+-- send a --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$room", "ticket": "$ticketA", "protocolVersion": "$protocolVersion"}}
+-- receive a --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 1, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
+    "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
+
+-- connect b --
+-- send b --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$room", "ticket": "$ticketB", "protocolVersion": "$protocolVersion"}}
+-- receive b --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 2, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
+    "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 2}}}}
+-- receive a --
+{"kind": "event", "type": "members.updated", "term": 1, "seq": 2, "data": {
+  "sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 2}}
+
+-- stream b --
+Authorization: Bearer $ticketB
+-- event b --
+event: snapshot
+data: {"room": {"term": 1, "seq": 2, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
+  "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+  "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 2}}}
+
+-- request --
+PUT /api/account/password
+Authorization: Bearer $alice
+
+{"currentPassword": "correct horse", "newPassword": "battery staple"}
+-- response --
+204
+-- closed b --
+4401
+-- event b --
+event: close
+data: {"code": 4401, "message": "凭证已失效：房间设置或修改了密码，API Key 已重置，或者账号在这台设备上退出了登录、密码被修改或重置"}
+-- receive a --
+{"kind": "event", "type": "members.updated", "term": 1, "seq": 3, "data": {
+  "sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}
+
+-- send a --
+{"kind": "request", "type": "ping", "id": "p1", "data": {"clientTimeMs": 1234}}
+-- receive a --
+{"kind": "response", "type": "ping", "id": "p1", "data": {"clientTimeMs": 1234, "serverTimeMs": 1}}
+
+-- connect again --
+-- send again --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$room", "ticket": "$ticketB", "protocolVersion": "$protocolVersion"}}
+-- receive again --
+{"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "UNAUTHORIZED", "message": "票据无效"}}
+-- closed again --
+4401
+
+-- request --
+GET /api/room
+Authorization: Bearer $ticketB
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "票据无效"}}
+
+-- request --
+POST /api/room/messages
+Authorization: Bearer $ticketA
+
+{"content": "还在"}
+-- response --
+204
+-- receive a --
+{"kind": "event", "type": "chat.message", "term": 1, "seq": 4, "data": {"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "content": "还在", "sentAtMs": 1}}

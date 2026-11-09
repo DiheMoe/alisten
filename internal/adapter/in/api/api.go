@@ -64,6 +64,8 @@ type call struct {
 	member member.Member
 	roomID string
 	ticket string
+	// 票据签发给的成员会话的 token 哈希，API Key 没有会话。
+	memberSession []byte
 	// 票据是常驻房间的 API Key。
 	bot bool
 	// 发出请求的客户端地址，按来源限流时使用。
@@ -207,7 +209,7 @@ func (s *server) serve(ctx context.Context, w http.ResponseWriter, r *http.Reque
 		if err != nil {
 			return ctx, nil, err
 		}
-		c.roomID, c.member, c.bot = holder.RoomID, holder.Member, holder.Bot
+		c.roomID, c.member, c.memberSession, c.bot = holder.RoomID, holder.Member, holder.SessionTokenHash, holder.Bot
 		ctx = logctx.WithMember(logctx.WithRoom(ctx, holder.RoomID), holder.Member.ID)
 	case protocol.AuthAdmin:
 		if err := s.Admin.Authorize(bearer(r)); err != nil {

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"log/slog"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -33,7 +34,7 @@ func newService(t *testing.T, token string) fixture {
 	t.Helper()
 	store := porttest.New()
 	node := porttest.NewRedis().Node("a")
-	host, gateway := realtime.New(store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
+	host, gateway := realtime.New(store, store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
 	ctx, stop := context.WithCancel(context.Background())
 	wait, err := realtime.Start(ctx, host, gateway)
 	if err != nil {
@@ -149,7 +150,7 @@ func (f fixture) enter(t *testing.T, roomID, name string) ([]byte, *realtime.Ses
 	if err := f.store.CreateTicket(t.Context(), port.NewTicket{TokenHash: hash[:], RoomID: roomID, MemberID: m.ID, PasswordHash: r.PasswordHash}); err != nil {
 		t.Fatal(err)
 	}
-	session, err := f.gateway.Join(t.Context(), roomID, m)
+	session, err := f.gateway.Join(t.Context(), roomID, m, nil, hash[:])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +323,7 @@ func TestRoomAPIKey(t *testing.T) {
 	if _, err := holder(key); !errors.Is(err, port.ErrTicketNotFound) {
 		t.Errorf("重置之后旧 Key 的错误 = %v，期望 ErrTicketNotFound", err)
 	}
-	if got, err := holder(reset); err != nil || got != bot {
+	if got, err := holder(reset); err != nil || !reflect.DeepEqual(got, bot) {
 		t.Errorf("重置之后新 Key 的持有者 = %+v, %v，期望 bot 成员不变", got, err)
 	}
 
@@ -331,7 +332,7 @@ func TestRoomAPIKey(t *testing.T) {
 		if err := f.admin.UpdateRoom(t.Context(), id, RoomChange{Password: ptr(password)}); err != nil {
 			t.Fatal(err)
 		}
-		if got, err := holder(reset); err != nil || got != bot {
+		if got, err := holder(reset); err != nil || !reflect.DeepEqual(got, bot) {
 			t.Errorf("密码改为 %q 之后 Key 的持有者 = %+v, %v，期望 Key 仍然有效", password, got, err)
 		}
 	}
@@ -466,24 +467,29 @@ func TestBilibiliQRLogin(t *testing.T) {
 	}
 }
 
-func TestUpdateRoomReportsFailedRevoke(t *testing.T) {
+// 票据已经作废，断开的通知发不出去时照常成功：用旧票据建立的连接由网关定期核对凭证时断开。
+func TestUpdateRoomSucceedsWhenRevokeFails(t *testing.T) {
 	f := newService(t, "secret")
 	id, err := f.admin.CreateRoom(t.Context(), NewRoom{Name: "大厅"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	ticket, _ := f.enter(t, id, "alice")
 	f.node.SetDown(true)
 	err = f.admin.UpdateRoom(t.Context(), id, RoomChange{Password: ptr("芝麻开门")})
 	f.node.SetDown(false)
-	if !errors.Is(err, realtime.ErrUnavailable) {
-		t.Errorf("通知发不出去时的错误 = %v，期望 ErrUnavailable", err)
+	if err != nil {
+		t.Errorf("通知发不出去时 UpdateRoom = %v，期望成功", err)
 	}
 	if r, err := f.store.FindRoom(t.Context(), id); err != nil || r.PasswordHash == "" {
-		t.Errorf("通知之前密码已经设置好，房间 = %#v, %v", r, err)
+		t.Errorf("密码应已经设置好，房间 = %#v, %v", r, err)
+	}
+	if _, err := f.store.TicketHolder(t.Context(), ticket); !errors.Is(err, port.ErrTicketNotFound) {
+		t.Errorf("成员票据的错误 = %v，期望 ErrTicketNotFound", err)
 	}
 }
 
-func TestResetRoomAPIKeyReportsFailedRevoke(t *testing.T) {
+func TestResetRoomAPIKeySucceedsWhenRevokeFails(t *testing.T) {
 	f := newService(t, "secret")
 	id, err := f.admin.CreateRoom(t.Context(), NewRoom{Name: "大厅"})
 	if err != nil {
@@ -496,11 +502,18 @@ func TestResetRoomAPIKeyReportsFailedRevoke(t *testing.T) {
 	f.node.SetDown(true)
 	renewed, err := f.admin.ResetRoomAPIKey(t.Context(), id)
 	f.node.SetDown(false)
-	if renewed != "" || !errors.Is(err, realtime.ErrUnavailable) {
-		t.Errorf("通知发不出去时 = %q, %v，期望不返回 Key，错误为 ErrUnavailable", renewed, err)
+	if err != nil || renewed == "" || renewed == key {
+		t.Fatalf("通知发不出去时 ResetRoomAPIKey = %q, %v，期望返回新 Key", renewed, err)
 	}
-	hash := sha256.Sum256([]byte(key))
-	if _, err := f.store.TicketHolder(t.Context(), hash[:]); !errors.Is(err, port.ErrTicketNotFound) {
-		t.Errorf("通知之前旧 Key 已经失效，它的错误 = %v，期望 ErrTicketNotFound", err)
+	holder := func(key string) error {
+		hash := sha256.Sum256([]byte(key))
+		_, err := f.store.TicketHolder(t.Context(), hash[:])
+		return err
+	}
+	if err := holder(key); !errors.Is(err, port.ErrTicketNotFound) {
+		t.Errorf("旧 Key 的错误 = %v，期望 ErrTicketNotFound", err)
+	}
+	if err := holder(renewed); err != nil {
+		t.Errorf("新 Key 的错误 = %v，期望有效", err)
 	}
 }

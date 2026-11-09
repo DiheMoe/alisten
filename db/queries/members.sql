@@ -45,6 +45,7 @@ SELECT coalesce(password_hash, '')::text AS password_hash FROM members WHERE id 
 -- name: DeleteSession :execrows
 DELETE FROM member_sessions WHERE token_hash = @token_hash;
 
--- name: DeleteMemberSessions :exec
+-- name: DeleteMemberSessions :many
 -- keep 为 NULL 时删除这个成员的全部会话。
-DELETE FROM member_sessions WHERE member_id = @member_id AND token_hash IS DISTINCT FROM sqlc.narg(keep)::bytea;
+DELETE FROM member_sessions WHERE member_id = @member_id AND token_hash IS DISTINCT FROM sqlc.narg(keep)::bytea
+RETURNING token_hash;

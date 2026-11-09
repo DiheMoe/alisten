@@ -16,6 +16,7 @@ func Start(ctx context.Context, h *Host, g *Gateway) (wait func(), err error) {
 	}
 	h.Start()
 	wg.Go(func() { g.heartbeat(ctx) })
+	wg.Go(func() { g.checkCredentials(ctx) })
 	wg.Go(func() { h.Reconcile(ctx) })
 	wg.Go(func() {
 		for {

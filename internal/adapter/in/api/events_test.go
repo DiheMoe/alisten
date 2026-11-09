@@ -145,8 +145,42 @@ func TestRoomEvents(t *testing.T) {
 		if _, err := f.admin.ResetRoomAPIKey(t.Context(), hall); err != nil {
 			t.Fatal(err)
 		}
-		checkEvent(t, r, "event: close", `data: {"code":4401,"message":"凭证已失效：房间设置或修改了密码，或者 API Key 已重置"}`)
+		checkEvent(t, r, "event: close", `data: {"code":4401,"message":"凭证已失效：房间设置或修改了密码，API Key 已重置，或者账号在这台设备上退出了登录、密码被修改或重置"}`)
 		checkEnded(t, r)
+	})
+}
+
+// 网关定期到存储中核对连接所用的凭证：事件流登记的凭证要与存储中的票据哈希相同，否则仍然有效的事件流也会被断开。
+func TestRoomEventsSurviveCredentialCheck(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		f := newWSFixture(t, store, store, store)
+		hall, err := f.admin.CreateRoom(t.Context(), admin.NewRoom{Name: "大厅"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		key, err := f.admin.ResetRoomAPIKey(t.Context(), hall)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _, ticket := f.enter(t, hall)
+		bot, member := f.stream(t, key), f.stream(t, ticket)
+		readEvent(t, bot)
+		readEvent(t, member)
+		// 心跳每 25 秒一次，核对每 30 秒一次：第二次心跳之前已经核对过一次。
+		for range 2 {
+			checkEvent(t, bot, ": ping")
+			checkEvent(t, member, ": ping")
+		}
+
+		// 不经过 admin 重置，就没有断开的通知，只能靠下一次核对断开。
+		_, fresh := identity.NewAPIKey()
+		if err := store.ResetRoomAPIKey(t.Context(), hall, fresh); err != nil {
+			t.Fatal(err)
+		}
+		checkEvent(t, bot, "event: close", `data: {"code":4401,"message":"凭证已失效：房间设置或修改了密码，API Key 已重置，或者账号在这台设备上退出了登录、密码被修改或重置"}`)
+		checkEnded(t, bot)
+		checkEvent(t, member, ": ping")
 	})
 }
 
