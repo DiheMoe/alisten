@@ -38,3 +38,10 @@ func avatarHash(email string) string {
 	sum := md5.Sum([]byte(email))
 	return hex.EncodeToString(sum[:])
 }
+
+// 后台重置密码时生成：96 位随机值的 base64url 编码，共 16 个字符，方便转告用户。
+func newPassword() string {
+	b := make([]byte, 12)
+	rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
+}

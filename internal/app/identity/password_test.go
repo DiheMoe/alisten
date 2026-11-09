@@ -87,3 +87,18 @@ func TestPasswordWorkReturnsItsSlot(t *testing.T) {
 		}
 	}
 }
+
+func TestDummyPasswordHashMatchesNoPassword(t *testing.T) {
+	hash, err := dummyPasswordHash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := dummyPasswordHash(); again != hash {
+		t.Error("假哈希应只生成一次")
+	}
+	for _, password := range []string{"", "correct horse", "12345678"} {
+		if ok, err := checkPassword(t.Context(), hash, password); err != nil || ok {
+			t.Errorf("checkPassword(假哈希, %q) = %v, %v，期望能解析且不匹配", password, ok, err)
+		}
+	}
+}

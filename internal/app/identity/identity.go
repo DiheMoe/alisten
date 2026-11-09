@@ -60,21 +60,21 @@ func (s *Service) Authenticate(ctx context.Context, memberToken string) (member.
 
 type Profile struct {
 	Name *string
-	// 只用来计算头像哈希，不保存；空字符串表示清除头像。
+	// 用来计算头像哈希；已注册的账号同时保存它。空字符串表示清除。
 	Email *string
 }
 
 func (s *Service) UpdateProfile(ctx context.Context, memberID string, p Profile) (member.Member, error) {
-	var avatar *string
+	var avatar, email *string
 	if p.Email != nil {
-		email := strings.TrimSpace(*p.Email)
-		if email != "" && !emailPattern.MatchString(email) {
+		trimmed := strings.TrimSpace(*p.Email)
+		if trimmed != "" && !emailPattern.MatchString(trimmed) {
 			return member.Member{}, ErrInvalidEmail
 		}
-		hash := avatarHash(email)
-		avatar = &hash
+		hash := avatarHash(trimmed)
+		avatar, email = &hash, &trimmed
 	}
-	m, err := s.members.UpdateMember(ctx, memberID, p.Name, avatar, nil)
+	m, err := s.members.UpdateMember(ctx, memberID, p.Name, avatar, email)
 	if err != nil {
 		return member.Member{}, err
 	}

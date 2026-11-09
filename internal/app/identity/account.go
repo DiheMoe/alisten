@@ -1,0 +1,275 @@
+package identity
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"net/netip"
+	"time"
+
+	"github.com/dihemoe/alisten/internal/app/port"
+	"github.com/dihemoe/alisten/internal/domain/member"
+)
+
+var (
+	ErrRegistrationClosed   = errors.New("注册已关闭")
+	ErrAlreadyLoggedIn      = errors.New("已经登录了账号，先退出再登录其他账号")
+	ErrInvalidCredentials   = errors.New("用户名或密码错误")
+	ErrWrongCurrentPassword = errors.New("当前密码错误")
+	ErrNotRegistered        = errors.New("还没有注册账号")
+	ErrTooManyAttempts      = errors.New("尝试次数太多，请稍后再试。")
+	ErrAccountNotFound      = errors.New("没有这个用户名的账号")
+)
+
+// 注册、登录和修改密码都要做一次 argon2id 计算：额度既防止猜密码，也防止耗尽计算槽位。
+const (
+	registerBurst   = 5
+	registerRefill  = 10 * time.Minute
+	loginIPBurst    = 10
+	loginIPRefill   = time.Minute
+	loginUserBurst  = 5
+	loginUserRefill = time.Minute
+	passwordBurst   = 5
+	passwordRefill  = time.Minute
+)
+
+const loginDeviceTTL = 180 * 24 * time.Hour
+
+type Account struct {
+	Username string
+	Email    string
+}
+
+type Accounts struct {
+	members port.Members
+	site    port.Site
+	quota   port.AccountQuota
+	devices port.LoginDevices
+}
+
+func NewAccounts(members port.Members, site port.Site, quota port.AccountQuota, devices port.LoginDevices) *Accounts {
+	return &Accounts{members: members, site: site, quota: quota, devices: devices}
+}
+
+// 游客没有账号，ok 为 false。
+func (a *Accounts) Account(ctx context.Context, memberID string) (account Account, ok bool, err error) {
+	profile, err := a.members.AccountProfile(ctx, memberID)
+	if err != nil {
+		return Account{}, false, err
+	}
+	return Account{Username: profile.Username, Email: profile.Email}, profile.Username != "", nil
+}
+
+// 给游客设置用户名和密码，成员和它的会话都不变。username 和 password 已经按协议校验过格式。
+func (a *Accounts) Register(ctx context.Context, memberID, clientIP, username, password string) (Account, error) {
+	settings, err := a.site.Settings(ctx)
+	if err != nil {
+		return Account{}, err
+	}
+	if !settings.RegistrationOpen {
+		return Account{}, ErrRegistrationClosed
+	}
+	if err := a.take(ctx, "register:ip:"+quotaAddr(clientIP), registerBurst, registerRefill); err != nil {
+		return Account{}, err
+	}
+	hash, err := HashPassword(ctx, password)
+	if err != nil {
+		return Account{}, err
+	}
+	if err := a.members.Register(ctx, memberID, username, hash); err != nil {
+		return Account{}, err
+	}
+	return Account{Username: username}, nil
+}
+
+// current 是发出请求的成员，currentToken 是它的成员 token。只有游客能登录：成功后签发账号的新会话，游客的这个会话随即失效。
+// device 是这台设备此前登录时拿到的登录设备凭证，没有时为空字符串，已经按协议校验过格式。成功时返回这台设备此后要带上的凭证：
+// 带来的凭证属于这个账号、签发之后密码也没变过时续期并原样返回，否则签发新的。
+func (a *Accounts) Login(ctx context.Context, current member.Member, currentToken, clientIP, username, password, device string) (Session, Account, string, error) {
+	if _, registered, err := a.Account(ctx, current.ID); err != nil {
+		return Session{}, Account{}, "", err
+	} else if registered {
+		return Session{}, Account{}, "", ErrAlreadyLoggedIn
+	}
+	// 按 IP 限制一个来源的尝试次数，按用户名限制一个账号被尝试的次数：换着 IP 猜同一个账号也会受限。
+	// 带着这个账号的凭证时改按凭证计数：别人反复猜密码耗尽了用户名额度，账号主人的设备仍然能登录。
+	if err := a.take(ctx, "login:ip:"+quotaAddr(clientIP), loginIPBurst, loginIPRefill); err != nil {
+		return Session{}, Account{}, "", err
+	}
+	known, err := a.knownDevice(ctx, device, username)
+	if err != nil {
+		return Session{}, Account{}, "", err
+	}
+	quotaKey := "login:user:" + username
+	if known {
+		quotaKey = "login:device:" + hex.EncodeToString(hashSecret(device))
+	}
+	if err := a.take(ctx, quotaKey, loginUserBurst, loginUserRefill); err != nil {
+		return Session{}, Account{}, "", err
+	}
+	account, err := a.verify(ctx, username, password)
+	if err != nil {
+		return Session{}, Account{}, "", err
+	}
+	if !known {
+		device, _ = newSecret()
+	}
+	// 先存凭证再签发会话：存不了时游客的会话还在，可以重试；签发会话失败时留下的凭证到期自行失效。
+	if err := a.devices.SaveDevice(ctx, hashSecret(device), account.Member.ID, passwordStamp(account.PasswordHash), loginDeviceTTL); err != nil {
+		return Session{}, Account{}, "", err
+	}
+	token, hash := newSecret()
+	err = a.members.ReplaceSession(ctx, hashSecret(currentToken), account.Member.ID, hash, account.PasswordHash)
+	switch {
+	case errors.Is(err, port.ErrSessionNotFound):
+		return Session{}, Account{}, "", ErrInvalidMemberToken
+	case errors.Is(err, port.ErrAccountPasswordChanged):
+		return Session{}, Account{}, "", ErrInvalidCredentials
+	case err != nil:
+		return Session{}, Account{}, "", err
+	}
+	return Session{MemberToken: token, Member: account.Member}, Account{Username: account.Username, Email: account.Email}, device, nil
+}
+
+// 未知、过期、属于别的账号，或者签发之后账号的密码变过（修改、重置）的凭证，都当作没带。
+func (a *Accounts) knownDevice(ctx context.Context, device, username string) (bool, error) {
+	if device == "" {
+		return false, nil
+	}
+	memberID, stamp, err := a.devices.DeviceMember(ctx, hashSecret(device))
+	if errors.Is(err, port.ErrDeviceNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	account, err := a.members.AccountByUsername(ctx, username)
+	if errors.Is(err, port.ErrMemberNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return account.Member.ID == memberID && bytes.Equal(stamp, passwordStamp(account.PasswordHash)), nil
+}
+
+// 登录设备凭证要在改密码之后失效，所以绑定签发时的密码：否则知道旧密码的人可以反复登录先囤下一批凭证，
+// 等账号改了密码，每个凭证仍各有一份独立的猜测额度，按用户名的额度就被绕过了。凭证只存密码哈希的指纹，不存哈希本身。
+func passwordStamp(passwordHash string) []byte {
+	sum := sha256.Sum256([]byte(passwordHash))
+	return sum[:16]
+}
+
+func (a *Accounts) verify(ctx context.Context, username, password string) (port.Account, error) {
+	account, err := a.members.AccountByUsername(ctx, username)
+	if errors.Is(err, port.ErrMemberNotFound) {
+		dummy, err := dummyPasswordHash()
+		if err != nil {
+			return port.Account{}, err
+		}
+		if _, err := checkPassword(ctx, dummy, password); err != nil {
+			return port.Account{}, err
+		}
+		return port.Account{}, ErrInvalidCredentials
+	}
+	if err != nil {
+		return port.Account{}, err
+	}
+	ok, err := checkPassword(ctx, account.PasswordHash, password)
+	if err != nil {
+		return port.Account{}, err
+	}
+	if !ok {
+		return port.Account{}, ErrInvalidCredentials
+	}
+	return account, nil
+}
+
+func (a *Accounts) Logout(ctx context.Context, token string) error {
+	return a.members.DeleteSession(ctx, hashSecret(token))
+}
+
+// 修改成功后，账号除了发出请求的这个会话，其他会话都失效。
+func (a *Accounts) ChangePassword(ctx context.Context, memberID, token, currentPassword, newPassword string) error {
+	profile, err := a.members.AccountProfile(ctx, memberID)
+	if err != nil {
+		return err
+	}
+	username := profile.Username
+	if username == "" {
+		return ErrNotRegistered
+	}
+	if err := a.take(ctx, "password:member:"+memberID, passwordBurst, passwordRefill); err != nil {
+		return err
+	}
+	account, err := a.verify(ctx, username, currentPassword)
+	if errors.Is(err, ErrInvalidCredentials) {
+		return ErrWrongCurrentPassword
+	} else if err != nil {
+		return err
+	}
+	hash, err := HashPassword(ctx, newPassword)
+	if err != nil {
+		return err
+	}
+	// 校验之后密码可能被重置或被别的设备改过：发出请求的会话已经被删掉时按 token 失效处理，同一个会话先改过时当前密码已经不对。
+	err = a.members.ChangePassword(ctx, memberID, account.PasswordHash, hash, hashSecret(token))
+	switch {
+	case errors.Is(err, port.ErrSessionNotFound):
+		return ErrInvalidMemberToken
+	case errors.Is(err, port.ErrAccountPasswordChanged):
+		return ErrWrongCurrentPassword
+	}
+	return err
+}
+
+// Find 和 ResetPassword 只供后台使用，调用方要先校验管理 token。
+func (a *Accounts) Find(ctx context.Context, username string) (port.Account, error) {
+	account, err := a.members.AccountByUsername(ctx, username)
+	if errors.Is(err, port.ErrMemberNotFound) {
+		return port.Account{}, ErrAccountNotFound
+	}
+	return account, err
+}
+
+// 生成随机的新密码，账号在所有设备上的会话随即失效。新密码只出现在返回值中。
+func (a *Accounts) ResetPassword(ctx context.Context, username string) (string, error) {
+	account, err := a.Find(ctx, username)
+	if err != nil {
+		return "", err
+	}
+	password := newPassword()
+	hash, err := HashPassword(ctx, password)
+	if err != nil {
+		return "", err
+	}
+	if err := a.members.SetPassword(ctx, account.Member.ID, hash); err != nil {
+		return "", err
+	}
+	return password, nil
+}
+
+// IPv6 客户端通常分到整个 /64，可以在里面随意换地址，所以按 /64 计数。clientIP 由适配器给出，解析不了时原样使用。
+func quotaAddr(clientIP string) string {
+	addr, err := netip.ParseAddr(clientIP)
+	if err != nil {
+		return clientIP
+	}
+	if addr = addr.Unmap(); addr.Is4() {
+		return addr.String()
+	}
+	return netip.PrefixFrom(addr, 64).Masked().String()
+}
+
+func (a *Accounts) take(ctx context.Context, key string, burst int, refill time.Duration) error {
+	wait, err := a.quota.Take(ctx, key, burst, refill)
+	if err != nil {
+		return err
+	}
+	if wait > 0 {
+		return ErrTooManyAttempts
+	}
+	return nil
+}
