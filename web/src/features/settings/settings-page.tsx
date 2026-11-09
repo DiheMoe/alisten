@@ -7,6 +7,7 @@ import { historyStore, searchLimits } from '@/features/history'
 import { reminderStore, requestNotificationPermission, systemNotificationsSupported, volumeStore } from '@/features/playback'
 import { useStore } from '@/shared/lib/use-store'
 import { notificationStore, Select } from '@/shared/ui'
+import { AccountRow } from './account-section'
 import { appearanceStore, fontSizes, themes } from './appearance-store'
 import { performanceLevels, performanceStore } from './performance-store'
 import { profileStore } from './profile-store'
@@ -68,6 +69,7 @@ export function SettingsPage() {
   const headingRef = useRef<HTMLHeadingElement>(null)
   const member = useStore(profileStore, s => s.member)
   const email = useStore(profileStore, s => s.email)
+  const account = useStore(profileStore, s => s.account)
   const profileFailed = useStore(profileStore, s => s.failed)
   const theme = useStore(appearanceStore, s => s.theme)
   const fontSize = useStore(appearanceStore, s => s.fontSize)
@@ -177,15 +179,16 @@ export function SettingsPage() {
         <div className="settings-page-body">
           <fieldset className="settings-fields" disabled={saving}>
             <div className="settings-content">
-              <section className="settings-section" aria-labelledby="settings-profile-title">
-                <h2 id="settings-profile-title" className="text-ui-lg">个人资料</h2>
+              <section className="settings-section" aria-labelledby="settings-account-title">
+                <h2 id="settings-account-title" className="text-ui-lg">账号</h2>
                 <div className="settings-group">
+                  <AccountRow />
                   <SettingRow id="settings-name" title="昵称" description={member ? '房间里的其他人看到的名字。' : profileFailed ? '暂时无法获取你的资料。' : '正在获取你的资料…'} field>
                     {!member && profileFailed
                       ? <button type="button" className="button-secondary" aria-describedby="settings-name-description" onClick={loadProfile}>重试</button>
                       : <input id="settings-name" aria-describedby="settings-name-description" value={draft.name} onChange={event => update('name', event.target.value)} disabled={!member} required maxLength={80} autoComplete="nickname" />}
                   </SettingRow>
-                  <SettingRow id="settings-email" title="邮箱" description="只用来显示 Gravatar 头像，访问不到 Gravatar 时改用镜像 WeAvatar 或 Cravatar；服务器不会保存邮箱地址，留空就不显示头像。" field>
+                  <SettingRow id="settings-email" title="邮箱" description={account ? '保存在账号里，用来显示头像。留空就不显示。' : '只保存在这台设备上，用来显示头像。留空就不显示。'} field>
                     <input id="settings-email" aria-describedby="settings-email-description" type="email" value={draft.email} onChange={event => update('email', event.target.value)} disabled={!member} maxLength={320} autoComplete="email" placeholder="name@example.com" />
                   </SettingRow>
                 </div>

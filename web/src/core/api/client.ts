@@ -1,7 +1,7 @@
 import type { Auth, CreateTicketRequest, CreateTicketResponse, ErrorResponse, HttpRequest } from './http.gen'
 import type { ErrorCode, Member } from '@/core/realtime'
 import { Emitter } from '@/shared/lib/emitter'
-import { deleteMemberToken, loadAdminToken, loadMemberToken, saveMemberToken } from './credentials'
+import { deleteMemberToken, loadAdminToken, loadMemberToken, memberTokenKey, saveMemberToken } from './credentials'
 import { httpClient } from './http.gen'
 
 export class ApiError extends Error {
@@ -134,13 +134,17 @@ export const api = {
 }
 
 let creatingMember: Promise<string> | null = null
+let usedMemberToken: string | null = null
 
 function memberToken(): Promise<string> {
   const stored = loadMemberToken()
-  if (stored)
+  if (stored) {
+    usedMemberToken = stored
     return Promise.resolve(stored)
+  }
   creatingMember ??= api.createMember().then(({ memberToken }) => {
     saveMemberToken(memberToken)
+    usedMemberToken = memberToken
     return memberToken
   }).finally(() => {
     creatingMember = null
@@ -172,4 +176,16 @@ async function replaceIdentity(rejected: string): Promise<void> {
     throw error
   }
   identityEvents.emit({ kind: 'renewed', member })
+}
+
+// 只有本标签页已经用过 token、并且保存的 token 换成了另一个时才算身份变了。
+// 两个标签页同时创建游客时，对方先写入的 token 会被后写入的覆盖，此时本标签页还没有用过 token，或用的就是最终保存的 token，都不触发，避免互相刷新。
+export function followMemberTokenChanges(onChange: () => void): void {
+  window.addEventListener('storage', (event) => {
+    if (event.key !== memberTokenKey)
+      return
+    const stored = loadMemberToken()
+    if (usedMemberToken !== null && stored !== null && stored !== usedMemberToken)
+      onChange()
+  })
 }

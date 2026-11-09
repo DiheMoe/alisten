@@ -1,4 +1,4 @@
-const memberTokenKey = 'alisten.member-token'
+export const memberTokenKey = 'alisten.member-token'
 const adminTokenKey = 'alisten.admin-token'
 const ticketKeyPrefix = 'alisten.ticket.'
 
@@ -24,6 +24,15 @@ export function saveTicket(roomId: string, ticket: string): void {
 
 export function deleteTicket(roomId: string): void {
   localStorage.removeItem(ticketKeyPrefix + roomId)
+}
+
+// 票据属于签发时的成员，换了身份之后都不能再用。倒序遍历：删除会让后面的键前移。
+export function deleteAllTickets(): void {
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i)
+    if (key?.startsWith(ticketKeyPrefix))
+      localStorage.removeItem(key)
+  }
 }
 
 export function loadAdminToken(): string | null {

@@ -33,6 +33,7 @@
 .settings-page-footer { display: flex; align-items: center; justify-content: flex-end; gap: 20px; flex-shrink: 0; width: 100%; max-width: 1120px; margin: 0 auto; padding: 16px 40px 24px; }
 .settings-save-status { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .settings-page-footer .button-primary { min-width: 96px; }
+.settings-account-actions { flex-wrap: wrap; gap: 8px; }
 @container settings (max-width: 640px) {
   .settings-page-header { padding: 20px 20px 16px; }
   .settings-page-body { padding: 12px 16px 32px; }

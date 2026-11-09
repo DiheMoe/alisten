@@ -269,6 +269,94 @@ describe('token 失效时更换身份', () => {
     expect(events).toEqual([])
     expect(local.getItem(memberTokenKey)).toBe('good')
   })
+
+  it('修改密码时当前密码错误返回 INVALID_CREDENTIALS，不更换身份', async () => {
+    local.setItem(memberTokenKey, 'good')
+    routes.set('PUT /api/account/password', () => errorResponse(401, 'INVALID_CREDENTIALS', '当前密码错误'))
+    const { api, events, IdentityRenewedError } = await load()
+    const error: unknown = await api.changePassword({ currentPassword: 'wrong horse', newPassword: 'correct horse' }).catch((reason: unknown) => reason)
+    expect(error).not.toBeInstanceOf(IdentityRenewedError)
+    expect(error).toMatchObject({ code: 'INVALID_CREDENTIALS', status: 401 })
+    expect(events).toEqual([])
+    expect(local.getItem(memberTokenKey)).toBe('good')
+  })
+
+  it('账号密码错误不更换身份', async () => {
+    local.setItem(memberTokenKey, 'good')
+    routes.set('POST /api/sessions', () => errorResponse(401, 'INVALID_CREDENTIALS', '用户名或密码错误'))
+    const { api, events } = await load()
+    await expect(api.login({ username: 'alice', password: 'wrong horse' })).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS', status: 401 })
+    expect(events).toEqual([])
+    expect(local.getItem(memberTokenKey)).toBe('good')
+  })
+})
+
+describe('其他标签页更换身份', () => {
+  let listeners: ((event: { key: string | null }) => void)[]
+  let changed: ReturnType<typeof vi.fn<() => void>>
+
+  function storageEvent(key: string | null = memberTokenKey) {
+    for (const listener of listeners)
+      listener({ key })
+  }
+
+  beforeEach(() => {
+    listeners = []
+    changed = vi.fn<() => void>()
+    vi.stubGlobal('window', {
+      addEventListener: (type: string, listener: (event: { key: string | null }) => void) => {
+        if (type === 'storage')
+          listeners.push(listener)
+      },
+    })
+  })
+
+  it('本标签页正在使用的 token 被换成另一个时通知切换', async () => {
+    local.setItem(memberTokenKey, 'good')
+    const { api, followMemberTokenChanges } = await load()
+    followMemberTokenChanges(changed)
+    await api.getMe()
+
+    local.setItem(memberTokenKey, 'other')
+    storageEvent()
+    expect(changed).toHaveBeenCalledOnce()
+  })
+
+  it('token 没有变化、无关的 key 或被删除时不切换', async () => {
+    local.setItem(memberTokenKey, 'good')
+    const { api, followMemberTokenChanges } = await load()
+    followMemberTokenChanges(changed)
+    await api.getMe()
+
+    storageEvent()
+    local.setItem('alisten.volume', '80')
+    storageEvent('alisten.volume')
+    local.removeItem(memberTokenKey)
+    storageEvent()
+    expect(changed).not.toHaveBeenCalled()
+  })
+
+  it('两个标签页都没有 token 各自创建游客时，先创建的另一个标签页不触发切换', async () => {
+    const { api, followMemberTokenChanges } = await load()
+    followMemberTokenChanges(changed)
+    const pending = api.getMe()
+
+    local.setItem(memberTokenKey, 'other-tab')
+    storageEvent()
+    expect(changed).not.toHaveBeenCalled()
+    await pending
+  })
+
+  it('本标签页后写入的 token 覆盖了另一个标签页，迟到的事件不触发切换', async () => {
+    const { api, followMemberTokenChanges } = await load()
+    followMemberTokenChanges(changed)
+    const pending = api.getMe()
+    local.setItem(memberTokenKey, 'other-tab')
+    await pending
+    expect(local.getItem(memberTokenKey)).toBe('issued')
+    storageEvent()
+    expect(changed).not.toHaveBeenCalled()
+  })
 })
 
 describe('换取票据', () => {
