@@ -65,6 +65,8 @@ type call struct {
 	ticket string
 	// 票据是常驻房间的 API Key。
 	bot bool
+	// 发出请求的客户端地址，按来源限流时使用。
+	clientIP string
 }
 
 type handlerFunc func(ctx context.Context, c call) (any, error)
@@ -180,7 +182,7 @@ func (s *server) serve(ctx context.Context, w http.ResponseWriter, r *http.Reque
 			logCtx, err = ctx, s.panicked(ctx, r, value)
 		}
 	}()
-	c := call{r: r}
+	c := call{r: r, clientIP: clientIP(r)}
 	switch auth {
 	case protocol.AuthNone:
 	case protocol.AuthMember:
