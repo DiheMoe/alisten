@@ -2,7 +2,6 @@ package redis
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,14 +35,14 @@ func (d *Devices) SaveDevice(ctx context.Context, deviceHash []byte, memberID st
 	if err != nil {
 		return err
 	}
-	if err := d.client.Set(ctx, devicePrefix+hex.EncodeToString(deviceHash), value, ttl).Err(); err != nil {
+	if err := d.client.Set(ctx, codeKey(devicePrefix, deviceHash), value, ttl).Err(); err != nil {
 		return fmt.Errorf("保存登录设备凭证：%w", err)
 	}
 	return nil
 }
 
 func (d *Devices) DeviceMember(ctx context.Context, deviceHash []byte) (string, []byte, error) {
-	value, err := d.client.Get(ctx, devicePrefix+hex.EncodeToString(deviceHash)).Bytes()
+	value, err := d.client.Get(ctx, codeKey(devicePrefix, deviceHash)).Bytes()
 	if errors.Is(err, goredis.Nil) {
 		return "", nil, port.ErrDeviceNotFound
 	}

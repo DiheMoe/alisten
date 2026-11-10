@@ -2,7 +2,6 @@ package redis
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"testing"
@@ -10,11 +9,6 @@ import (
 
 	"github.com/dihemoe/alisten/internal/app/port"
 )
-
-func hashOf(s string) []byte {
-	sum := sha256.Sum256([]byte(s))
-	return sum[:]
-}
 
 func TestLoginDevices(t *testing.T) {
 	client := newClient(t)
