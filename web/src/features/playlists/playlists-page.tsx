@@ -9,6 +9,7 @@ import { profileStore } from '@/features/settings'
 import { useStore } from '@/shared/lib/use-store'
 import { EmptyState, IconButton, Modal, notificationStore, Select, Skeleton } from '@/shared/ui'
 import { CreatePlaylistForm } from './create-playlist-form'
+import { ImportMenu } from './import-menu'
 import { FavoritesMark, PlaylistCover } from './playlist-cover'
 import { formatPlaylistDate } from './playlist-date'
 import { PlaylistMenu } from './playlist-menu'
@@ -145,10 +146,13 @@ export function PlaylistsPage({ onOpen, onRegister }: { onOpen: (playlist: MyPla
                 />
               </div>
             </div>
-            <button type="button" className="button-primary playlists-create" onClick={() => setCreating(true)}>
-              <Plus size={18} strokeWidth={2} aria-hidden="true" />
-              新建歌单
-            </button>
+            <div className="playlists-actions">
+              <ImportMenu onOpen={onOpen} />
+              <button type="button" className="button-primary" onClick={() => setCreating(true)}>
+                <Plus size={18} strokeWidth={2} aria-hidden="true" />
+                新建歌单
+              </button>
+            </div>
           </>
         )}
       </header>

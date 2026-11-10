@@ -5,6 +5,7 @@ import type { SongItem } from '@/shared/ui'
 import { ArrowLeft, ArrowRight, CirclePlus, Clock3, Search, Sparkles } from 'lucide-react'
 import { roomStore, sameTrack } from '@/core/room'
 import { historyStore } from '@/features/history'
+import { SavePlatformPlaylistButton } from '@/features/playlists'
 import { enqueue } from '@/features/queue'
 import { bookTitle } from '@/shared/lib/book-title'
 import { useStore } from '@/shared/lib/use-store'
@@ -346,6 +347,7 @@ export function SearchPage({ inlineSearchClassName, onSearch, onOpenPlaylist }: 
 }
 
 export function PlaylistPage({ title, page, onPage }: { title: string | undefined, page: number, onPage: (page: number) => void }) {
+  const playlist = useStore(searchStore, s => s.playlist)
   const tracks = useStore(searchStore, s => s.tracks)
   const total = useStore(searchStore, s => s.tracksTotal)
   const loading = useStore(searchStore, s => s.loading)
@@ -353,8 +355,9 @@ export function PlaylistPage({ title, page, onPage }: { title: string | undefine
   const connected = useStore(roomStore, s => s.status === 'open')
   return (
     <div className="page-content search-page">
-      <header className="search-page-heading">
+      <header className="search-page-heading search-playlist-heading">
         <h1 className="text-ui-xl">{title ?? '歌单'}</h1>
+        {playlist && <SavePlatformPlaylistButton source={playlist.source} playlistId={playlist.id} name={title} />}
       </header>
       {failed && (
         <div className="search-error" role="alert">

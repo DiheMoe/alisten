@@ -9,9 +9,10 @@ import { roomStore } from '@/core/room'
 import { enqueue } from '@/features/queue'
 import { bookTitle } from '@/shared/lib/book-title'
 import { useStore } from '@/shared/lib/use-store'
-import { ConfirmDialog, EmptyState, Skeleton } from '@/shared/ui'
+import { ConfirmDialog, EmptyState, notificationStore, Skeleton } from '@/shared/ui'
 import { FavoritesMark, PlaylistCover } from './playlist-cover'
 import { formatPlaylistDate } from './playlist-date'
+import { exportFileName, exportPlaylist } from './playlist-file'
 import { PlaylistMenu } from './playlist-menu'
 import { PlaylistTracks } from './playlist-tracks'
 import { playlistsStore, trackKey } from './playlists-store'
@@ -25,6 +26,23 @@ import './playlists.css'
 
 function keysOf(items: readonly MyPlaylistItem[]): string[] {
   return items.map(item => trackKey(item.track))
+}
+
+// 导出服务端的曲目：页面上的曲目可能还没读到，或者带着没同步完的移动和移出。
+async function exportToFile(playlist: MyPlaylist): Promise<void> {
+  try {
+    const { items } = await api.listMyPlaylistItems(playlist.id)
+    const url = URL.createObjectURL(new Blob([exportPlaylist(playlist.name, items, Date.now())], { type: 'application/json' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = exportFileName(playlist.name)
+    link.click()
+    // 下载在 click() 时已经开始，到下一个任务再释放对象 URL。
+    setTimeout(() => URL.revokeObjectURL(url))
+  }
+  catch (error) {
+    notificationStore.error(`没能导出：${errorMessage(error)}`)
+  }
 }
 
 export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void }) {
@@ -224,7 +242,7 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
                 {selecting ? '完成' : '选择'}
               </button>
             )}
-            {playlist && !playlist.favorites && <PlaylistMenu playlist={playlist} align="start" className="my-playlist-menu" onDeleted={onBack} />}
+            {playlist && <PlaylistMenu playlist={playlist} align="start" className="my-playlist-menu" onDeleted={onBack} onExport={() => void exportToFile(playlist)} />}
           </div>
         </div>
       </header>

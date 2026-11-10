@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { profileStore } from '@/features/settings'
 import { useStore } from '@/shared/lib/use-store'
 import { IconButton, Modal, notificationStore, Skeleton } from '@/shared/ui'
-import { openAccountSettings } from './account-settings'
+import { AccountPrompt } from './account-prompt'
 import { CreatePlaylistForm } from './create-playlist-form'
 import { FavoritesMark, PlaylistCover } from './playlist-cover'
 import { sortPlaylists } from './playlist-sort'
@@ -104,23 +104,7 @@ export function SaveToPlaylistDialog(props: SaveToPlaylistProps) {
 
   let body
   if (!account) {
-    body = (
-      <>
-        <p className="text-ui-base muted">注册或登录之后就能把歌保存到歌单。</p>
-        <div className="dialog-actions">
-          <button
-            type="button"
-            className="button-primary"
-            onClick={() => {
-              onClose()
-              openAccountSettings()
-            }}
-          >
-            去账号设置
-          </button>
-        </div>
-      </>
-    )
+    body = <AccountPrompt message="注册或登录之后就能把歌保存到歌单。" onClose={onClose} />
   }
   else if (readFailed || (playlists === null && error !== null)) {
     body = (

@@ -1,118 +1,38 @@
-import type { KeyboardEvent, ToggleEvent } from 'react'
+import type { MenuAction } from './action-menu'
 import type { MyPlaylist } from '@/core/realtime'
-import { Ellipsis, Pencil, Trash2 } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { Ellipsis, FileDown, Pencil, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { ConfirmDialog, Modal } from '@/shared/ui'
+import { ActionMenu } from './action-menu'
 import { playlistsStore } from './playlists-store'
 
-const menuGap = 4
-const viewportMargin = 8
-
-const menuKeys: Record<string, (index: number, count: number) => number> = {
-  ArrowDown: (index, count) => (index + 1) % count,
-  ArrowUp: (index, count) => (index - 1 + count) % count,
-  Home: () => 0,
-  End: (_, count) => count - 1,
-}
-
-export function PlaylistMenu({ playlist, align = 'end', className = '', onDeleted }: {
+export function PlaylistMenu({ playlist, align = 'end', className = '', onDeleted, onExport }: {
   playlist: MyPlaylist
   align?: 'start' | 'end'
   className?: string
   onDeleted?: () => void
+  onExport?: () => void
 }) {
-  const menuId = useId()
-  const buttonRef = useRef<HTMLButtonElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
-
-  // 菜单在顶层按视口定位，不跟随页面滚动，所以滚动和缩放窗口时收起。
-  useEffect(() => {
-    if (!open)
-      return
-    const close = () => menuRef.current?.hidePopover()
-    document.addEventListener('scroll', close, true)
-    window.addEventListener('resize', close)
-    return () => {
-      document.removeEventListener('scroll', close, true)
-      window.removeEventListener('resize', close)
-    }
-  }, [open])
-
-  const items = () => [...menuRef.current!.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-
-  // 显示之前量不到菜单的尺寸：先贴着按钮下方对齐，显示之后超出视口再翻到按钮上方、收进视口。
-  const place = (event: ToggleEvent<HTMLDivElement>) => {
-    if (event.newState !== 'open')
-      return
-    const button = buttonRef.current!.getBoundingClientRect()
-    const { style } = event.currentTarget
-    style.top = `${button.bottom + menuGap}px`
-    style.left = align === 'start' ? `${button.left}px` : 'auto'
-    style.right = align === 'end' ? `${document.documentElement.clientWidth - button.right}px` : 'auto'
-  }
-
-  const onToggle = (event: ToggleEvent<HTMLDivElement>) => {
-    const opened = event.newState === 'open'
-    setOpen(opened)
-    if (!opened)
-      return
-    const menu = event.currentTarget
-    const button = buttonRef.current!.getBoundingClientRect()
-    const rect = menu.getBoundingClientRect()
-    if (rect.bottom > window.innerHeight - viewportMargin)
-      menu.style.top = `${Math.max(viewportMargin, button.top - menuGap - rect.height)}px`
-    const left = Math.max(viewportMargin, Math.min(rect.left, document.documentElement.clientWidth - viewportMargin - rect.width))
-    if (left !== rect.left) {
-      menu.style.left = `${left}px`
-      menu.style.right = 'auto'
-    }
-    items()[0]?.focus()
-  }
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Tab') {
-      event.currentTarget.hidePopover()
-      return
-    }
-    const move = menuKeys[event.key]
-    if (!move)
-      return
-    event.preventDefault()
-    const list = items()
-    list[move(list.indexOf(document.activeElement as HTMLElement), list.length)]?.focus()
-  }
-
-  const choose = (next: 'rename' | 'delete') => {
-    menuRef.current!.hidePopover()
-    setDialog(next)
-  }
-
+  const actions: MenuAction[] = []
+  if (!playlist.favorites)
+    actions.push({ icon: Pencil, label: '重命名', run: () => setDialog('rename') })
+  if (onExport)
+    actions.push({ icon: FileDown, label: '导出', run: onExport })
+  if (!playlist.favorites)
+    actions.push({ icon: Trash2, label: '删除', danger: true, run: () => setDialog('delete') })
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
+      <ActionMenu
+        actions={actions}
+        menuLabel={`“${playlist.name}”的操作`}
+        align={align}
         className={`icon-button playlist-menu-button ${className}`}
-        popoverTarget={menuId}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={`“${playlist.name}”的更多操作`}
+        label={`“${playlist.name}”的更多操作`}
         title="更多操作"
       >
         <Ellipsis size={20} strokeWidth={1.7} aria-hidden="true" />
-      </button>
-      <div ref={menuRef} id={menuId} className="playlist-menu" popover="auto" role="menu" aria-label={`“${playlist.name}”的操作`} onBeforeToggle={place} onToggle={onToggle} onKeyDown={onKeyDown}>
-        <button type="button" role="menuitem" tabIndex={-1} className="playlist-menu-item" onClick={() => choose('rename')}>
-          <Pencil size={16} strokeWidth={1.7} aria-hidden="true" />
-          重命名
-        </button>
-        <button type="button" role="menuitem" tabIndex={-1} className="playlist-menu-item playlist-menu-danger" onClick={() => choose('delete')}>
-          <Trash2 size={16} strokeWidth={1.7} aria-hidden="true" />
-          删除
-        </button>
-      </div>
+      </ActionMenu>
       {dialog === 'rename' && <RenameDialog playlist={playlist} onClose={() => setDialog(null)} />}
       {dialog === 'delete' && (
         <ConfirmDialog
