@@ -27,37 +27,35 @@ export function Pagination({ page, totalPages, onPage, summary }: {
   onPage: (page: number) => void
   summary?: string
 }) {
-  if (totalPages <= 1 && !summary)
+  if (totalPages <= 1)
     return null
   return (
     <nav className="pagination" aria-label="分页">
       {summary && <p className="pagination-summary text-ui-caption">{summary}</p>}
-      {totalPages > 1 && (
-        <div className="pagination-pages">
-          <StepButton label="上一页" enabled={page > 1} onClick={() => onPage(page - 1)}>
-            <ChevronLeft size={18} aria-hidden="true" />
-          </StepButton>
-          {pageItems(page, totalPages).map((item, index, items) => item === 'gap'
-            ? <span className="pagination-gap" aria-hidden="true" key={`gap-after-${items[index - 1]}`}>…</span>
-            : (
-                <button
-                  type="button"
-                  key={item}
-                  aria-label={`第 ${item} 页`}
-                  aria-current={item === page ? 'page' : undefined}
-                  onClick={() => {
-                    if (item !== page)
-                      onPage(item)
-                  }}
-                >
-                  {item}
-                </button>
-              ))}
-          <StepButton label="下一页" enabled={page < totalPages} onClick={() => onPage(page + 1)}>
-            <ChevronRight size={18} aria-hidden="true" />
-          </StepButton>
-        </div>
-      )}
+      <div className="pagination-pages">
+        <StepButton label="上一页" enabled={page > 1} onClick={() => onPage(page - 1)}>
+          <ChevronLeft size={18} aria-hidden="true" />
+        </StepButton>
+        {pageItems(page, totalPages).map((item, index, items) => item === 'gap'
+          ? <span className="pagination-gap" aria-hidden="true" key={`gap-after-${items[index - 1]}`}>…</span>
+          : (
+              <button
+                type="button"
+                key={item}
+                aria-label={`第 ${item} 页`}
+                aria-current={item === page ? 'page' : undefined}
+                onClick={() => {
+                  if (item !== page)
+                    onPage(item)
+                }}
+              >
+                {item}
+              </button>
+            ))}
+        <StepButton label="下一页" enabled={page < totalPages} onClick={() => onPage(page + 1)}>
+          <ChevronRight size={18} aria-hidden="true" />
+        </StepButton>
+      </div>
     </nav>
   )
 }
