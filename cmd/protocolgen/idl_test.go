@@ -246,6 +246,11 @@ func TestParseIDLRejects(t *testing.T) {
 			defs(d)["Track"] = object(map[string]any{"source": ref("Kind"), "id": str()}, "source", "id")
 			d["x-requests"] = []any{roomBinding("GET", "/api/room", map[string]any{"track": ref("Track")}, "track")}
 		}, "x-requests[0].http：GET 请求的字段 track 来自路径或查询串，应是字符串、整数或枚举"},
+		{"DELETE 请求有数组字段", func(d map[string]any) {
+			withKind(d)
+			kinds := map[string]any{"type": "array", "items": ref("Kind"), "maxItems": 10}
+			d["x-requests"] = []any{roomBinding("DELETE", "/api/room/queue", map[string]any{"kinds": kinds}, "kinds")}
+		}, "x-requests[0].http：DELETE 请求的字段 kinds 来自路径或查询串，应是字符串、整数或枚举"},
 		{"204 的房间内请求有响应", func(d map[string]any) {
 			m := roomBinding("POST", "/api/room/messages", map[string]any{})
 			m["http"].(map[string]any)["status"] = 204

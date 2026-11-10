@@ -772,7 +772,7 @@ func (d *idl) checkRoomRoute(where string, m *message, names endpointNames) erro
 	}
 	if b.Method == "GET" || b.Method == "DELETE" {
 		for _, name := range slices.Sorted(maps.Keys(m.Request.Properties)) {
-			if d.jsonType(m.Request.Properties[name]) == "object" {
+			if t := d.jsonType(m.Request.Properties[name]); t != "string" && t != "integer" {
 				return fmt.Errorf("%s：%s 请求的字段 %s 来自路径或查询串，应是字符串、整数或枚举", where, b.Method, name)
 			}
 		}
@@ -780,7 +780,7 @@ func (d *idl) checkRoomRoute(where string, m *message, names endpointNames) erro
 	return names.addRoute(where, b, "房间内请求 "+m.Type+" 的路由")
 }
 
-// 请求的字段已经检查过，不会是数组、布尔或 null，所以只有 string、integer 和 object 三种。
+// 请求的字段已经检查过，不会是 null、布尔或数字，所以只有 string、integer、object 和 array 四种。
 func (d *idl) jsonType(s *schema) string {
 	if s.Ref != "" {
 		return d.Defs[refName(s.Ref)].Type
