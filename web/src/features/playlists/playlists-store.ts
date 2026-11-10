@@ -210,6 +210,49 @@ class PlaylistsStore extends Store<PlaylistsState> {
     }
   }
 
+  // 开启分享和重新生成链接都用它，返回新的分享 ID；失败时返回 null。
+  async share(playlist: MyPlaylist): Promise<string | null> {
+    try {
+      const { shareId } = await api.shareMyPlaylist(playlist.id)
+      this.#changed(playlist.id, { shareId })
+      return shareId
+    }
+    catch (error) {
+      notificationStore.error(errorMessage(error))
+      return null
+    }
+  }
+
+  async unshare(playlist: MyPlaylist): Promise<boolean> {
+    try {
+      await api.unshareMyPlaylist(playlist.id)
+      this.#changed(playlist.id, { shareId: null })
+      return true
+    }
+    catch (error) {
+      notificationStore.error(errorMessage(error))
+      return false
+    }
+  }
+
+  async copyShared(shareId: string, name: string): Promise<MyPlaylist | null> {
+    try {
+      const playlist = await api.copySharedPlaylist(shareId, { name })
+      this.#added(playlist)
+      return playlist
+    }
+    catch (error) {
+      notificationStore.error(errorMessage(error, nameTexts))
+      return null
+    }
+  }
+
+  // 先改列表再重新读取：菜单要立刻显示新的分享状态，重新读取也让进行中的旧读取作废。
+  #changed(id: string, change: Partial<MyPlaylist>): void {
+    this.setState({ playlists: this.state.playlists?.map(p => p.id === id ? { ...p, ...change } : p) ?? null })
+    void this.load()
+  }
+
   // 先放进列表再重新读取：打开新歌单时，列表里要已经有它，否则详情页会以为它被删掉了。
   #added(playlist: MyPlaylist): void {
     this.setState({ playlists: [...(this.state.playlists ?? []), playlist] })

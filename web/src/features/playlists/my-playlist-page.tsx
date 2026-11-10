@@ -242,7 +242,7 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
                 {selecting ? '完成' : '选择'}
               </button>
             )}
-            {playlist && <PlaylistMenu playlist={playlist} align="start" className="my-playlist-menu" onDeleted={onBack} onExport={() => void exportToFile(playlist)} />}
+            {playlist && <PlaylistMenu playlist={playlist} align="start" className="my-playlist-menu" shareable onDeleted={onBack} onExport={() => void exportToFile(playlist)} />}
           </div>
         </div>
       </header>

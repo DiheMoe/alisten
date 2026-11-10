@@ -1,4 +1,4 @@
-import type { Track } from '@/core/realtime'
+import type { MyPlaylist, Track } from '@/core/realtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 class FakeStorage {
@@ -35,6 +35,7 @@ const full = '一个歌单最多 1000 首歌'
 const changed = '歌单已经变了，刷新之后再试'
 const imported = { id: 'p3', name: '导入的歌单', favorites: false, trackCount: 2, createdAtMs: 2, updatedAtMs: 2, coverUrl: null, shareId: null }
 const fileTrack = { track: sunny, title: '晴天', durationMs: 269000 }
+const copied = { id: 'p4', name: '抄来的', favorites: false, trackCount: 2, createdAtMs: 3, updatedAtMs: 3, coverUrl: null, shareId: null }
 
 let requests: string[]
 let release: (() => void)[]
@@ -43,10 +44,12 @@ let failAdd: boolean
 let failCopy: boolean
 let failMove: boolean
 let importFailure: { status: number, code: string, message: string } | null
+let shareFailure: { status: number, code: string, message: string } | null
+let shares: number
 let bodies: unknown[]
 let holdReads: boolean
 let failReads: boolean
-let serverPlaylists: typeof favorites[]
+let serverPlaylists: MyPlaylist[]
 let server: Map<string, Map<string, Track>>
 
 function json(status: number, body: unknown): Response {
@@ -84,6 +87,8 @@ beforeEach(() => {
   failCopy = false
   failMove = false
   importFailure = null
+  shareFailure = null
+  shares = 0
   bodies = []
   holdReads = false
   failReads = false
@@ -152,6 +157,18 @@ beforeEach(() => {
       if (failMove)
         return json(409, { error: { code: 'CONFLICT', message: changed } })
       return new Response(null, { status: 204 })
+    }
+    if (shareFailure && /^(?:POST|DELETE) \/api\/(?:me\/playlists\/\w+\/share|shared-playlists\/[\w-]+\/copies)$/.test(request))
+      return json(shareFailure.status, { error: { code: shareFailure.code, message: shareFailure.message } })
+    const share = /^(POST|DELETE) \/api\/me\/playlists\/(\w+)\/share$/.exec(request)
+    if (share) {
+      const shareId = share[1] === 'POST' ? `share-${++shares}` : null
+      serverPlaylists = serverPlaylists.map(p => p.id === share[2] ? { ...p, shareId } : p)
+      return shareId ? json(200, { shareId }) : new Response(null, { status: 204 })
+    }
+    if (request === 'POST /api/shared-playlists/share-1/copies') {
+      serverPlaylists.push(copied)
+      return json(201, copied)
     }
     throw new Error(`没有预期的请求 ${request}`)
   })
@@ -628,5 +645,92 @@ describe('playlistsStore', () => {
     await settle()
     expect([await first, await second]).toEqual([null, null])
     expect(notificationStore.state.notifications.map(n => n.message)).toEqual(['歌单名要 1 到 50 个字。', '导入太频繁了，稍后再试'])
+  })
+
+  it('share 返回新的分享 ID，列表里立刻换上它，再重新读取', async () => {
+    serverPlaylists.push(commute)
+    const { playlistsStore } = await import('./playlists-store')
+    await playlistsStore.load()
+    requests = []
+    holdReads = true
+    const first = playlistsStore.share(commute)
+    await flush()
+    release.shift()!()
+    expect(await first).toBe('share-1')
+    expect(playlistsStore.state.playlists).toEqual([favorites, { ...commute, shareId: 'share-1' }])
+    const second = playlistsStore.share({ ...commute, shareId: 'share-1' })
+    await flush()
+    release.splice(1, 1)[0]()
+    expect(await second).toBe('share-2')
+    expect(playlistsStore.state.playlists).toEqual([favorites, { ...commute, shareId: 'share-2' }])
+    holdReads = false
+    await settle()
+    expect(requests).toEqual(['POST /api/me/playlists/p2/share', 'GET /api/me/playlists', 'POST /api/me/playlists/p2/share', 'GET /api/me/playlists'])
+    expect(playlistsStore.state.playlists).toEqual([favorites, { ...commute, shareId: 'share-2' }])
+  })
+
+  it('unshare 之后列表里立刻去掉分享 ID，再重新读取', async () => {
+    serverPlaylists.push({ ...commute, shareId: 'share-0' })
+    const { playlistsStore } = await import('./playlists-store')
+    await playlistsStore.load()
+    requests = []
+    holdReads = true
+    const done = playlistsStore.unshare({ ...commute, shareId: 'share-0' })
+    await flush()
+    release.shift()!()
+    expect(await done).toBe(true)
+    expect(playlistsStore.state.playlists).toEqual([favorites, commute])
+    holdReads = false
+    await settle()
+    expect(requests).toEqual(['DELETE /api/me/playlists/p2/share', 'GET /api/me/playlists'])
+    expect(playlistsStore.state.playlists).toEqual([favorites, commute])
+  })
+
+  it('share 和 unshare 失败时提示服务端的文案，列表不变，不重新读取', async () => {
+    serverPlaylists.push(commute)
+    const { playlistsStore } = await import('./playlists-store')
+    const { notificationStore } = await import('@/shared/ui')
+    await playlistsStore.load()
+    requests = []
+    shareFailure = { status: 404, code: 'NOT_FOUND', message: '歌单不存在' }
+    const shared = playlistsStore.share(commute)
+    await settle()
+    const unshared = playlistsStore.unshare(commute)
+    await settle()
+    expect([await shared, await unshared]).toEqual([null, false])
+    expect(requests).toEqual(['POST /api/me/playlists/p2/share', 'DELETE /api/me/playlists/p2/share'])
+    expect(playlistsStore.state.playlists).toEqual([favorites, commute])
+    expect(notificationStore.state.notifications.map(n => n.message)).toEqual(['歌单不存在', '歌单不存在'])
+  })
+
+  it('copyShared 成功后新歌单立刻出现在列表里，再重新读取', async () => {
+    const { playlistsStore } = await import('./playlists-store')
+    await playlistsStore.load()
+    requests = []
+    holdReads = true
+    const done = playlistsStore.copyShared('share-1', '抄来的')
+    await flush()
+    release.shift()!()
+    expect(await done).toEqual(copied)
+    expect(playlistsStore.state.playlists).toEqual([favorites, copied])
+    expect(bodies).toEqual([{ name: '抄来的' }])
+    holdReads = false
+    await settle()
+    expect(requests).toEqual(['POST /api/shared-playlists/share-1/copies', 'GET /api/me/playlists'])
+    expect(playlistsStore.state.playlists).toEqual([favorites, copied])
+  })
+
+  it('copyShared 歌单名不合法时说明规则，其他错误提示服务端的文案', async () => {
+    const { playlistsStore } = await import('./playlists-store')
+    const { notificationStore } = await import('@/shared/ui')
+    shareFailure = { status: 400, code: 'INVALID_ARGUMENT', message: 'name：去掉首尾空白后应有 1 到 50 个字符' }
+    const first = playlistsStore.copyShared('share-1', ' ')
+    await settle()
+    shareFailure = { status: 404, code: 'NOT_FOUND', message: '分享已失效' }
+    const second = playlistsStore.copyShared('share-1', '抄来的')
+    await settle()
+    expect([await first, await second]).toEqual([null, null])
+    expect(requests).toEqual(['POST /api/shared-playlists/share-1/copies', 'POST /api/shared-playlists/share-1/copies'])
+    expect(notificationStore.state.notifications.map(n => n.message)).toEqual(['歌单名要 1 到 50 个字。', '分享已失效'])
   })
 })
