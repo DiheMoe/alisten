@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "moe.dihe.alisten",
+      "sha256_cert_fingerprints": [
+        "60:A8:C9:67:CE:D8:5B:AC:D5:5D:B1:CE:FC:1C:3F:FC:B6:51:5D:C1:A1:70:1A:10:14:77:47:E8:B0:DF:68:94"
+      ]
+    }
+  }
+]
