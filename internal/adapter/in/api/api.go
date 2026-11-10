@@ -36,7 +36,9 @@ const (
 	maxBodyBytes = 64 << 10
 	// 歌单的批量接口一次最多 1000 首，链接曲目的 ID 最长 2048 字节，每首再留 256 字节给来源、字段名和 JSON 的标点。
 	maxBatchBodyBytes = 1000 * (2048 + 256)
-	requestDeadline   = 3 * time.Minute
+	// 导入文件一次最多 1000 首，每首除了曲目还带标题、歌手、专辑和两个地址。nginx 中 /api/me/playlists/imports 的上限要与它保持一致。
+	maxImportBodyBytes = 1 << 20
+	requestDeadline    = 3 * time.Minute
 )
 
 type Services struct {
@@ -120,6 +122,9 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	srv.handle(mux, protocol.RouteListMyTrackPlaylists, srv.listMyTrackPlaylists)
 	srv.handleLimit(mux, protocol.RouteCopyMyPlaylistItems, maxBatchBodyBytes, srv.copyMyPlaylistItems)
 	srv.handleLimit(mux, protocol.RouteMoveMyPlaylistItems, maxBatchBodyBytes, srv.moveMyPlaylistItems)
+	srv.handleLimit(mux, protocol.RouteImportMyPlaylist, maxImportBodyBytes, srv.importMyPlaylist)
+	srv.handle(mux, protocol.RouteResolveMyPlaylistLink, srv.resolveMyPlaylistLink)
+	srv.handle(mux, protocol.RouteImportMyPlatformPlaylist, srv.importMyPlatformPlaylist)
 	srv.handle(mux, protocol.RouteListRooms, srv.listRooms)
 	srv.handle(mux, protocol.RouteGetRoom, srv.getRoom)
 	srv.handle(mux, protocol.RouteCreateRoom, srv.createRoom)
@@ -326,6 +331,9 @@ var knownErrors = []struct {
 	{playlist.ErrPlaylistFull, protocol.ErrorCodeConflict},
 	{playlist.ErrTrackNotReady, protocol.ErrorCodeConflict},
 	{playlist.ErrTooFast, protocol.ErrorCodeRateLimited},
+	{playlist.ErrInvalidPlaylistLink, protocol.ErrorCodeInvalidArgument},
+	{playlist.ErrUnsupportedPlaylist, protocol.ErrorCodeInvalidArgument},
+	{playlist.ErrShortLinkFailed, protocol.ErrorCodeProviderError},
 	{playlistorder.ErrBeforeMoved, protocol.ErrorCodeInvalidArgument},
 	{playlistorder.ErrBeforeMissing, protocol.ErrorCodeConflict},
 	{realtime.ErrRequesterNotAllowed, protocol.ErrorCodeInvalidArgument},

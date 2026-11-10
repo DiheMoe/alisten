@@ -19,6 +19,14 @@ location ^~ /api/ {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_pass http://$serve;
     }
+
+    # 取值必须不小于 serve 对导入文件接口的请求体上限 maxImportBodyBytes（1 MiB），原因同上。
+    location = /api/me/playlists/imports {
+        client_max_body_size 1m;
+        client_body_buffer_size 1m;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass http://$serve;
+    }
 }
 location ^~ /media/ {
     proxy_pass http://$serve;

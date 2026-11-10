@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"time"
 
+	"github.com/dihemoe/alisten/internal/app/playlist"
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/domain/track"
 	"github.com/dihemoe/alisten/protocol"
@@ -143,4 +145,52 @@ func (s *server) moveMyPlaylistItems(ctx context.Context, c call) (any, error) {
 		before = &t
 	}
 	return nil, s.Playlists.Move(ctx, c.member.ID, c.r.PathValue("id"), tracksOf(req.Tracks), before)
+}
+
+func (s *server) importMyPlaylist(ctx context.Context, c call) (any, error) {
+	req, err := protocol.DecodeImportMyPlaylistRequest(c.body)
+	if err != nil {
+		return nil, err
+	}
+	tracks := make([]playlist.ImportedTrack, len(req.Tracks))
+	for i, t := range req.Tracks {
+		tracks[i] = playlist.ImportedTrack{
+			Track:    trackOf(t.Track),
+			Title:    t.Title,
+			Artist:   deref(t.Artist),
+			Album:    deref(t.Album),
+			CoverURL: deref(t.CoverURL),
+			PageURL:  deref(t.PageURL),
+			Duration: time.Duration(t.DurationMs) * time.Millisecond,
+		}
+	}
+	p, n, err := s.Playlists.ImportFile(ctx, c.member.ID, req.Name, tracks)
+	if err != nil {
+		return nil, err
+	}
+	return protocol.ImportMyPlaylistResponse{Playlist: s.playlistDTO(p), Imported: int64(n)}, nil
+}
+
+func (s *server) resolveMyPlaylistLink(ctx context.Context, c call) (any, error) {
+	req, err := protocol.DecodeResolveMyPlaylistLinkRequest(c.body)
+	if err != nil {
+		return nil, err
+	}
+	source, id, err := s.Playlists.ResolveLink(ctx, c.member.ID, req.Link)
+	if err != nil {
+		return nil, err
+	}
+	return protocol.ResolveMyPlaylistLinkResponse{Source: protocol.Source(source), PlaylistID: id}, nil
+}
+
+func (s *server) importMyPlatformPlaylist(ctx context.Context, c call) (any, error) {
+	req, err := protocol.DecodeImportMyPlatformPlaylistRequest(c.body)
+	if err != nil {
+		return nil, err
+	}
+	p, n, err := s.Playlists.ImportPlatform(ctx, c.member.ID, req.Name, track.Source(req.Source), req.PlaylistID)
+	if err != nil {
+		return nil, err
+	}
+	return protocol.ImportMyPlatformPlaylistResponse{Playlist: s.playlistDTO(p), Imported: int64(n)}, nil
 }

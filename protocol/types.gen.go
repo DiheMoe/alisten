@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "cdc97c61b16da452"
+const Version = "ed36759d403f9894"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -272,6 +272,45 @@ type HelloResponse struct {
 	Member       Member       `json:"member"`
 	Room         RoomSnapshot `json:"room"`
 	ServerTimeMs int64        `json:"serverTimeMs"`
+}
+
+type ImportMyPlatformPlaylistRequest struct {
+	Name       string `json:"name"`
+	PlaylistID string `json:"playlistId"`
+	Source     Source `json:"source"`
+}
+
+type ImportMyPlatformPlaylistResponse struct {
+	Imported int64      `json:"imported"`
+	Playlist MyPlaylist `json:"playlist"`
+}
+
+type ImportMyPlaylistRequest struct {
+	Name   string          `json:"name"`
+	Tracks []ImportedTrack `json:"tracks"`
+}
+
+func (v ImportMyPlaylistRequest) MarshalJSON() ([]byte, error) {
+	type plain ImportMyPlaylistRequest
+	if v.Tracks == nil {
+		v.Tracks = []ImportedTrack{}
+	}
+	return json.Marshal(plain(v))
+}
+
+type ImportMyPlaylistResponse struct {
+	Imported int64      `json:"imported"`
+	Playlist MyPlaylist `json:"playlist"`
+}
+
+type ImportedTrack struct {
+	Album      *string `json:"album,omitempty"`
+	Artist     *string `json:"artist,omitempty"`
+	CoverURL   *string `json:"coverUrl,omitempty"`
+	DurationMs int64   `json:"durationMs"`
+	PageURL    *string `json:"pageUrl,omitempty"`
+	Title      string  `json:"title"`
+	Track      Track   `json:"track"`
 }
 
 type ListMyPlaylistItemsResponse struct {
@@ -558,6 +597,15 @@ type RenameMyPlaylistRequest struct {
 	Name string `json:"name"`
 }
 
+type ResolveMyPlaylistLinkRequest struct {
+	Link string `json:"link"`
+}
+
+type ResolveMyPlaylistLinkResponse struct {
+	PlaylistID string `json:"playlistId"`
+	Source     Source `json:"source"`
+}
+
 type RoomActivityEvent struct {
 	Entry    *Entry       `json:"entry,omitempty"`
 	Kind     ActivityKind `json:"kind"`
@@ -784,6 +832,9 @@ var (
 	RouteCopyMyPlaylistItems          = Route{Pattern: "POST /api/me/playlists/{id}/copies", Auth: AuthMember, Status: 200}
 	RouteMoveMyPlaylistItems          = Route{Pattern: "POST /api/me/playlists/{id}/moves", Auth: AuthMember, Status: 204}
 	RouteListMyTrackPlaylists         = Route{Pattern: "POST /api/me/playlist-memberships", Auth: AuthMember, Status: 200}
+	RouteImportMyPlaylist             = Route{Pattern: "POST /api/me/playlists/imports", Auth: AuthMember, Status: 201}
+	RouteResolveMyPlaylistLink        = Route{Pattern: "POST /api/me/playlist-links", Auth: AuthMember, Status: 200}
+	RouteImportMyPlatformPlaylist     = Route{Pattern: "POST /api/me/playlists/platform-imports", Auth: AuthMember, Status: 201}
 	RouteListRooms                    = Route{Pattern: "GET /api/rooms", Auth: AuthNone, Status: 200}
 	RouteGetRoom                      = Route{Pattern: "GET /api/rooms/{ref}", Auth: AuthNone, Status: 200}
 	RouteCreateRoom                   = Route{Pattern: "POST /api/rooms", Auth: AuthNone, Status: 201, Location: true}

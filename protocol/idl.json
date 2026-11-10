@@ -199,6 +199,20 @@
       },
       "required": ["track", "meta"]
     },
+    "ImportedTrack": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "track": {"$ref": "#/$defs/Track"},
+        "title": {"type": "string", "maxLength": 500},
+        "artist": {"type": "string", "maxLength": 500},
+        "album": {"type": "string", "maxLength": 500},
+        "durationMs": {"type": "integer", "minimum": 0, "maximum": 86400000},
+        "coverUrl": {"type": "string", "maxLength": 2048},
+        "pageUrl": {"type": "string", "maxLength": 2048}
+      },
+      "required": ["track", "title", "durationMs"]
+    },
     "Members": {
       "type": "object",
       "additionalProperties": false,
@@ -1007,6 +1021,83 @@
           "playlistIds": {"type": "array", "items": {"type": "string"}}
         },
         "required": ["playlistIds"]
+      }
+    },
+    {
+      "name": "importMyPlaylist",
+      "description": "把导出的歌单文件里的歌导入成一个新歌单，歌单名不合法时用“导入的歌单”；只收前 1000 首，重复的只留第一次出现的位置；曲目表里已有的歌用服务端的元数据，没有的用文件里的，标题为空的跳过；新歌单受“最多 50 个”的限制；返回实际导入的数量",
+      "method": "POST",
+      "path": "/api/me/playlists/imports",
+      "auth": "member",
+      "status": 201,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string", "maxLength": 500},
+          "tracks": {"type": "array", "items": {"$ref": "#/$defs/ImportedTrack"}, "maxItems": 1000}
+        },
+        "required": ["name", "tracks"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "playlist": {"$ref": "#/$defs/MyPlaylist"},
+          "imported": {"type": "integer"}
+        },
+        "required": ["playlist", "imported"]
+      }
+    },
+    {
+      "name": "resolveMyPlaylistLink",
+      "description": "识别平台歌单的链接，短链接会跟随跳转；目前只支持网易云",
+      "method": "POST",
+      "path": "/api/me/playlist-links",
+      "auth": "member",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "link": {"type": "string", "minLength": 1, "maxLength": 2048}
+        },
+        "required": ["link"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {"$ref": "#/$defs/Source"},
+          "playlistId": {"type": "string"}
+        },
+        "required": ["source", "playlistId"]
+      }
+    },
+    {
+      "name": "importMyPlatformPlaylist",
+      "description": "把平台歌单导入成一个新歌单，规则同 importMyPlaylist，元数据取自平台；目前只支持网易云",
+      "method": "POST",
+      "path": "/api/me/playlists/platform-imports",
+      "auth": "member",
+      "status": 201,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"$ref": "#/$defs/PlaylistName"},
+          "source": {"$ref": "#/$defs/Source"},
+          "playlistId": {"type": "string", "minLength": 1, "maxLength": 100}
+        },
+        "required": ["name", "source", "playlistId"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "playlist": {"$ref": "#/$defs/MyPlaylist"},
+          "imported": {"type": "integer"}
+        },
+        "required": ["playlist", "imported"]
       }
     },
     {

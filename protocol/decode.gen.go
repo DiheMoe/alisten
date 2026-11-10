@@ -115,6 +115,18 @@ func DecodeListMyTrackPlaylistsRequest(body []byte) (ListMyTrackPlaylistsRequest
 	return decodeListMyTrackPlaylistsRequest(body, "")
 }
 
+func DecodeImportMyPlaylistRequest(body []byte) (ImportMyPlaylistRequest, error) {
+	return decodeImportMyPlaylistRequest(body, "")
+}
+
+func DecodeResolveMyPlaylistLinkRequest(body []byte) (ResolveMyPlaylistLinkRequest, error) {
+	return decodeResolveMyPlaylistLinkRequest(body, "")
+}
+
+func DecodeImportMyPlatformPlaylistRequest(body []byte) (ImportMyPlatformPlaylistRequest, error) {
+	return decodeImportMyPlatformPlaylistRequest(body, "")
+}
+
 func DecodeCreateRoomRequest(body []byte) (CreateRoomRequest, error) {
 	return decodeCreateRoomRequest(body, "")
 }
@@ -579,6 +591,127 @@ func decodeHelloRequest(raw json.RawMessage, path string) (HelloRequest, error) 
 	return v, nil
 }
 
+func decodeImportMyPlatformPlaylistRequest(raw json.RawMessage, path string) (ImportMyPlatformPlaylistRequest, error) {
+	var v ImportMyPlatformPlaylistRequest
+	m, err := decodeObject(raw, path, "name", "playlistId", "source")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "name", "playlistId", "source"); err != nil {
+		return v, err
+	}
+	if v.Name, err = decodeString(m["name"], field(path, "name")); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.Name, field(path, "name"), 200); err != nil {
+		return v, err
+	}
+	if v.PlaylistID, err = decodeString(m["playlistId"], field(path, "playlistId")); err != nil {
+		return v, err
+	}
+	if err = checkMinLength(v.PlaylistID, field(path, "playlistId"), 1); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.PlaylistID, field(path, "playlistId"), 100); err != nil {
+		return v, err
+	}
+	if v.Source, err = decodeSource(m["source"], field(path, "source")); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+func decodeImportMyPlaylistRequest(raw json.RawMessage, path string) (ImportMyPlaylistRequest, error) {
+	var v ImportMyPlaylistRequest
+	m, err := decodeObject(raw, path, "name", "tracks")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "name", "tracks"); err != nil {
+		return v, err
+	}
+	if v.Name, err = decodeString(m["name"], field(path, "name")); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.Name, field(path, "name"), 500); err != nil {
+		return v, err
+	}
+	if v.Tracks, err = decodeArray(decodeImportedTrack, 1000)(m["tracks"], field(path, "tracks")); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+func decodeImportedTrack(raw json.RawMessage, path string) (ImportedTrack, error) {
+	var v ImportedTrack
+	m, err := decodeObject(raw, path, "album", "artist", "coverUrl", "durationMs", "pageUrl", "title", "track")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "durationMs", "title", "track"); err != nil {
+		return v, err
+	}
+	if r, ok := m["album"]; ok {
+		x, err := decodeString(r, field(path, "album"))
+		if err != nil {
+			return v, err
+		}
+		if err = checkMaxLength(x, field(path, "album"), 500); err != nil {
+			return v, err
+		}
+		v.Album = &x
+	}
+	if r, ok := m["artist"]; ok {
+		x, err := decodeString(r, field(path, "artist"))
+		if err != nil {
+			return v, err
+		}
+		if err = checkMaxLength(x, field(path, "artist"), 500); err != nil {
+			return v, err
+		}
+		v.Artist = &x
+	}
+	if r, ok := m["coverUrl"]; ok {
+		x, err := decodeString(r, field(path, "coverUrl"))
+		if err != nil {
+			return v, err
+		}
+		if err = checkMaxLength(x, field(path, "coverUrl"), 2048); err != nil {
+			return v, err
+		}
+		v.CoverURL = &x
+	}
+	if v.DurationMs, err = decodeInteger(m["durationMs"], field(path, "durationMs")); err != nil {
+		return v, err
+	}
+	if err = checkMinimum(v.DurationMs, field(path, "durationMs"), 0); err != nil {
+		return v, err
+	}
+	if err = checkMaximum(v.DurationMs, field(path, "durationMs"), 86400000); err != nil {
+		return v, err
+	}
+	if r, ok := m["pageUrl"]; ok {
+		x, err := decodeString(r, field(path, "pageUrl"))
+		if err != nil {
+			return v, err
+		}
+		if err = checkMaxLength(x, field(path, "pageUrl"), 2048); err != nil {
+			return v, err
+		}
+		v.PageURL = &x
+	}
+	if v.Title, err = decodeString(m["title"], field(path, "title")); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.Title, field(path, "title"), 500); err != nil {
+		return v, err
+	}
+	if v.Track, err = decodeTrack(m["track"], field(path, "track")); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
 func decodeListMyTrackPlaylistsRequest(raw json.RawMessage, path string) (ListMyTrackPlaylistsRequest, error) {
 	var v ListMyTrackPlaylistsRequest
 	m, err := decodeObject(raw, path, "track")
@@ -865,6 +998,27 @@ func decodeRenameMyPlaylistRequest(raw json.RawMessage, path string) (RenameMyPl
 		return v, err
 	}
 	if err = checkMaxLength(v.Name, field(path, "name"), 200); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+func decodeResolveMyPlaylistLinkRequest(raw json.RawMessage, path string) (ResolveMyPlaylistLinkRequest, error) {
+	var v ResolveMyPlaylistLinkRequest
+	m, err := decodeObject(raw, path, "link")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "link"); err != nil {
+		return v, err
+	}
+	if v.Link, err = decodeString(m["link"], field(path, "link")); err != nil {
+		return v, err
+	}
+	if err = checkMinLength(v.Link, field(path, "link"), 1); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.Link, field(path, "link"), 2048); err != nil {
 		return v, err
 	}
 	return v, nil

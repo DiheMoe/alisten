@@ -22,6 +22,7 @@ import (
 	"github.com/dihemoe/alisten/internal/adapter/out/postgres"
 	"github.com/dihemoe/alisten/internal/adapter/out/queue"
 	"github.com/dihemoe/alisten/internal/adapter/out/redis"
+	"github.com/dihemoe/alisten/internal/adapter/out/shortlink"
 	"github.com/dihemoe/alisten/internal/adapter/out/storage"
 	"github.com/dihemoe/alisten/internal/app/admin"
 	"github.com/dihemoe/alisten/internal/app/catalog"
@@ -33,6 +34,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/prepare"
 	"github.com/dihemoe/alisten/internal/app/realtime"
 	"github.com/dihemoe/alisten/internal/app/site"
+	playlistlink "github.com/dihemoe/alisten/internal/domain/playlist"
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
@@ -80,7 +82,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 	services := api.Services{
 		Identity:  identity.New(store, store, store, gateway),
 		Accounts:  identity.NewAccounts(store, store, redis.NewAccountQuota(rdb), redis.NewDevices(rdb), gateway),
-		Playlists: playlist.New(store, store, store, music, redis.NewAccountQuota(rdb), nil),
+		Playlists: playlist.New(store, store, store, music, redis.NewAccountQuota(rdb), shortlink.New(playlistlink.AllowedRedirectHost, playlistlink.Recognized)),
 		Lobby:     rooms,
 		Admin:     admin.New(cfg.adminToken, rooms, store, store, store, src.neteaseLogin, src.qqLogin, src.bilibiliLogin, store, gateway),
 		Gateway:   gateway,
