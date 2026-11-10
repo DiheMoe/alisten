@@ -56,7 +56,7 @@ export function VolumeInput({ volume, onCommit, id, className = '', disabled = f
             event.currentTarget.blur()
           }}
         />
-        <span className="volume-unit" aria-hidden="true">%</span>
+        <span aria-hidden="true">%</span>
       </div>
     </div>
   )

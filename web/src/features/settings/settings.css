@@ -75,12 +75,13 @@ input.settings-name-input[aria-invalid='true']:not(:focus) { border-color: var(-
 .settings-volume-control { display: flex; align-items: center; gap: 10px; width: 220px; max-width: 100%; }
 /* 浅的 accent 会让浏览器把未填充的一段画成近黑色，在浅色主题的卡片里很扎眼。brand 在浅色主题里是深绿，未填充的一段就是浅色。 */
 .settings-volume-control .volume-slider { flex: 1; min-width: 0; accent-color: var(--color-brand); }
-.settings-volume-control .volume-input-control { display: flex; align-items: center; }
-/* 百分比平时像一段文字，悬停或聚焦时才显出输入框。 */
-.settings-volume-control input.volume-input { box-sizing: border-box; width: 4.5ch; padding: 4px 2px; border-color: transparent; background: transparent; color: var(--color-foreground-subtle); text-align: right; font-size: var(--text-ui-caption); font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
-.settings-volume-control input.volume-input:hover { border-color: var(--color-input-border); }
+/* 百分比平时像一段文字，悬停或聚焦时才显出输入框。边框画在外层，这样框住的是数字连同百分号，平时两者也紧挨着。
+   负的右外边距抵掉右侧的内边距和边框，平时百分号和下面几行的开关右对齐。 */
+.settings-volume-control .volume-input-control { display: flex; align-items: center; margin-right: -5px; padding: 4px; border: 1px solid transparent; border-radius: 8px; color: var(--color-foreground-subtle); font-size: var(--text-ui-caption); }
+.settings-volume-control .volume-input-control:hover { border-color: var(--color-input-border); }
+.settings-volume-control .volume-input-control:focus-within { border-color: var(--color-input-border-focused); background: var(--color-input-focused); }
+.settings-volume-control input.volume-input { box-sizing: content-box; width: 3ch; padding: 0; border: 0; background: transparent; color: inherit; text-align: right; font-size: inherit; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
 .settings-volume-control .volume-input::-webkit-inner-spin-button, .settings-volume-control .volume-input::-webkit-outer-spin-button { margin: 0; -webkit-appearance: none; }
-.settings-volume-control .volume-unit { color: var(--color-foreground-subtle); font-size: var(--text-ui-caption); }
 
 /* 窄的内容区里，换到下一行的分段控件和音量占满整行。 */
 @container section-layout (max-width: 480px) {
