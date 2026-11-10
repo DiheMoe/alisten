@@ -20,8 +20,10 @@ func TestParseLink(t *testing.T) {
 		{"网易云 http", "http://music.163.com/playlist?id=123", Link{Source: track.NetEase, ID: "123", URL: "http://music.163.com/playlist?id=123"}, true},
 		{"QQ 桌面", "https://y.qq.com/n/ryqq/playlist/456", Link{Source: track.QQ, ID: "456", URL: "https://y.qq.com/n/ryqq/playlist/456"}, true},
 		{"QQ 旧版", "https://y.qq.com/n/yqq/playlist/456.html", Link{Source: track.QQ, ID: "456", URL: "https://y.qq.com/n/yqq/playlist/456.html"}, true},
+		{"QQ 新版网页", "https://y.qq.com/n/ryqq_v2/playlist/456?ADTAG=h5_share_playlist&mnst=1.18", Link{Source: track.QQ, ID: "456", URL: "https://y.qq.com/n/ryqq_v2/playlist/456?ADTAG=h5_share_playlist&mnst=1.18"}, true},
 		{"QQ 移动 id", "https://i.y.qq.com/n2/m/share/details/taoge.html?id=456&hosteuin=x", Link{Source: track.QQ, ID: "456", URL: "https://i.y.qq.com/n2/m/share/details/taoge.html?id=456&hosteuin=x"}, true},
 		{"QQ 移动 disstid", "https://i.y.qq.com/n2/m/share/details/taoge.html?disstid=456", Link{Source: track.QQ, ID: "456", URL: "https://i.y.qq.com/n2/m/share/details/taoge.html?disstid=456"}, true},
+		{"QQ 新版分享页", "https://i2.y.qq.com/n3/other/pages/details/playlist.html?app_type=qmlite&&ADTAG=myqq&id=456&hosteuin=x", Link{Source: track.QQ, ID: "456", URL: "https://i2.y.qq.com/n3/other/pages/details/playlist.html?app_type=qmlite&&ADTAG=myqq&id=456&hosteuin=x"}, true},
 		{"网易云短链接", "https://163cn.tv/abc", Link{Source: track.NetEase, Short: true, URL: "https://163cn.tv/abc"}, true},
 		{"QQ 短链接", "https://c6.y.qq.com/base/fcgi-bin/u?__=abc", Link{Source: track.QQ, Short: true, URL: "https://c6.y.qq.com/base/fcgi-bin/u?__=abc"}, true},
 		{"分享文本", "分享歌单：我的歌单 https://163cn.tv/abc (来自网易云音乐)", Link{Source: track.NetEase, Short: true, URL: "https://163cn.tv/abc"}, true},
@@ -37,6 +39,8 @@ func TestParseLink(t *testing.T) {
 		{"QQ 缺少 id", "https://y.qq.com/n/ryqq/playlist/", Link{}, false},
 		{"QQ id 非数字", "https://y.qq.com/n/ryqq/playlist/abc", Link{}, false},
 		{"QQ 移动缺少 id", "https://i.y.qq.com/n2/m/share/details/taoge.html", Link{}, false},
+		{"QQ 新版分享页缺少 id", "https://i2.y.qq.com/n3/other/pages/details/playlist.html?hosteuin=x", Link{}, false},
+		{"QQ 分享域名上的其他页面", "https://i2.y.qq.com/n3/other/pages/details/song.html?id=456", Link{}, false},
 		{"QQ 歌曲链接", "https://y.qq.com/n/ryqq/songDetail/abc", Link{}, false},
 		{"没有链接", "只是一段文字", Link{}, false},
 		{"空", "", Link{}, false},
@@ -56,7 +60,7 @@ func TestParseLink(t *testing.T) {
 func TestAllowedRedirectHost(t *testing.T) {
 	for host, want := range map[string]bool{
 		"163cn.tv": true, "music.163.com": true, "y.music.163.com": true,
-		"c6.y.qq.com": true, "y.qq.com": true, "i.y.qq.com": true, "Y.QQ.com": true,
+		"c6.y.qq.com": true, "y.qq.com": true, "i.y.qq.com": true, "i2.y.qq.com": true, "Y.QQ.com": true,
 		"evil.com": false, "music.163.com.evil.com": false, "qq.com": false, "": false, "127.0.0.1": false,
 	} {
 		if got := AllowedRedirectHost(host); got != want {

@@ -172,24 +172,24 @@ func TestResolveLink(t *testing.T) {
 	f.links["https://163cn.tv/abc"] = "https://music.163.com/playlist?id=456&userid=1"
 	f.links["https://163cn.tv/song"] = "https://music.163.com/song?id=1"
 	f.links["https://163cn.tv/stuck"] = "https://163cn.tv/stuck"
-	f.links["https://163cn.tv/qq"] = "https://y.qq.com/n/ryqq/playlist/789"
+	f.links["https://c6.y.qq.com/base/fcgi-bin/u?__=abc"] = "https://i.y.qq.com/n2/m/share/details/taoge.html?id=789&hosteuin=1"
 	linkQuota := "playlist-link:member:" + alice.ID
 	cases := []struct {
-		raw   string
-		id    string
-		err   error
-		quota []string
+		raw    string
+		source track.Source
+		id     string
+		err    error
+		quota  []string
 	}{
-		{raw: "https://music.163.com/#/playlist?id=123", id: "123"},
-		{raw: "分享歌单：通勤 https://163cn.tv/abc (来自网易云音乐)", id: "456", quota: []string{linkQuota}},
+		{raw: "https://music.163.com/#/playlist?id=123", source: track.NetEase, id: "123"},
+		{raw: "分享歌单：通勤 https://163cn.tv/abc (来自网易云音乐)", source: track.NetEase, id: "456", quota: []string{linkQuota}},
 		{raw: "https://163cn.tv/broken", err: ErrShortLinkFailed, quota: []string{linkQuota}},
 		{raw: "https://163cn.tv/stuck", err: ErrShortLinkFailed, quota: []string{linkQuota}},
 		{raw: "https://163cn.tv/song", err: ErrInvalidPlaylistLink, quota: []string{linkQuota}},
-		{raw: "https://163cn.tv/qq", err: ErrUnsupportedPlaylist, quota: []string{linkQuota}},
 		{raw: "https://example.com/playlist?id=1", err: ErrInvalidPlaylistLink},
 		{raw: "随便一段文字", err: ErrInvalidPlaylistLink},
-		{raw: "https://y.qq.com/n/ryqq/playlist/789", err: ErrUnsupportedPlaylist},
-		{raw: "https://c6.y.qq.com/base/fcgi-bin/u?__=abc", err: ErrUnsupportedPlaylist},
+		{raw: "https://y.qq.com/n/ryqq/playlist/789", source: track.QQ, id: "789"},
+		{raw: "https://c6.y.qq.com/base/fcgi-bin/u?__=abc", source: track.QQ, id: "789", quota: []string{linkQuota}},
 	}
 	for _, c := range cases {
 		before := len(f.quota.keys)
@@ -197,8 +197,8 @@ func TestResolveLink(t *testing.T) {
 		if c.err != nil && !errors.Is(err, c.err) {
 			t.Errorf("ResolveLink(%q) = %v，期望 %v", c.raw, err, c.err)
 		}
-		if c.err == nil && (err != nil || source != track.NetEase || id != c.id) {
-			t.Errorf("ResolveLink(%q) = %q, %q, %v，期望网易云的歌单 %s", c.raw, source, id, err, c.id)
+		if c.err == nil && (err != nil || source != c.source || id != c.id) {
+			t.Errorf("ResolveLink(%q) = %q, %q, %v，期望 %s 的歌单 %s", c.raw, source, id, err, c.source, c.id)
 		}
 		if taken := f.quota.keys[before:]; !slices.Equal(taken, c.quota) {
 			t.Errorf("ResolveLink(%q) 取的额度 = %v，期望 %v：长链接在本地识别，只有解析短链接才取链接额度", c.raw, taken, c.quota)
@@ -230,6 +230,24 @@ func TestImportPlatform(t *testing.T) {
 	}
 }
 
+func TestImportPlatformFromQQ(t *testing.T) {
+	f := newFixture(t)
+	alice := f.member(t, "alice")
+	meta := track.Meta{Title: "晴天", Artist: "周杰伦", PageURL: "https://y.qq.com/n/ryqq/songDetail/0039MnYb0qxYhV", Duration: 269 * time.Second}
+	f.qq.Add("0039MnYb0qxYhV", meta, "", nil)
+	f.qq.AddPlaylist(port.Playlist{ID: "789", Name: "周杰伦"}, "0039MnYb0qxYhV")
+
+	p, n, err := f.svc.ImportPlatform(t.Context(), alice.ID, "周杰伦", track.QQ, "789")
+	if err != nil || n != 1 {
+		t.Fatalf("ImportPlatform = %#v, %d, %v，期望导入 1 首", p, n, err)
+	}
+	items, err := f.svc.Items(t.Context(), alice.ID, p.ID)
+	want := []port.PlaylistItem{{Track: track.Track{Source: track.QQ, ID: "0039MnYb0qxYhV"}, Meta: meta}}
+	if err != nil || !slices.Equal(items, want) {
+		t.Errorf("导入的曲目 = %#v, %v\n期望用 QQ 音乐的元数据 %#v", items, err, want)
+	}
+}
+
 func TestImportPlatformTruncatesThenDedupes(t *testing.T) {
 	f := newFixture(t)
 	alice := f.member(t, "alice")
@@ -254,8 +272,8 @@ func TestImportPlatformRejects(t *testing.T) {
 	f := newFixture(t)
 	alice := f.member(t, "alice")
 	f.netease.AddPlaylist(port.Playlist{ID: "p1"}, sunny.ID)
-	if _, _, err := f.svc.ImportPlatform(t.Context(), alice.ID, "QQ", track.QQ, "p1"); !errors.Is(err, ErrUnsupportedPlaylist) {
-		t.Errorf("QQ 音乐的歌单 = %v，期望 ErrUnsupportedPlaylist", err)
+	if _, _, err := f.svc.ImportPlatform(t.Context(), alice.ID, "B 站", track.Bilibili, "p1"); !errors.Is(err, ErrUnsupportedPlaylist) {
+		t.Errorf("B 站的歌单 = %v，期望 ErrUnsupportedPlaylist", err)
 	}
 	if _, _, err := f.svc.ImportPlatform(t.Context(), alice.ID, " ", track.NetEase, "p1"); !errors.Is(err, ErrInvalidName) {
 		t.Errorf("空的歌单名 = %v，期望 ErrInvalidName", err)

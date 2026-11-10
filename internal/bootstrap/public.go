@@ -42,7 +42,7 @@ import (
 
 type sources struct {
 	netease       port.NetEaseSource
-	qq            port.Source
+	qq            port.PlaylistSource
 	bilibili      port.BilibiliSource
 	bilibiliLinks port.BilibiliLinks
 	playback      map[track.Source]port.PlayURLs

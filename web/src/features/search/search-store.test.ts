@@ -255,10 +255,10 @@ describe('搜索请求', () => {
     expect(notificationStore.state.notifications).toHaveLength(1)
   })
 
-  it('只有网易云搜歌单：其他来源的全部类别只搜歌曲', async () => {
+  it('搜 QQ 音乐的全部类别时，也同时搜歌曲和歌单', async () => {
     const { searchStore, keywordSearch } = await load()
     searchStore.show(keywordSearch('a', 'qq', 'all'))
-    expect(calls.map(({ name }) => name)).toEqual(['searchTracks'])
+    expect(calls.map(({ name }) => name)).toEqual(['searchTracks', 'searchPlaylists'])
   })
 
   it('关键词太长时提示长度上限', async () => {

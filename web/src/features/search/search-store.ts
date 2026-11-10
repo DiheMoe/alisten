@@ -58,13 +58,8 @@ interface SearchState extends Results {
 
 const noResults: Results = { tracks: [], tracksTotal: 0, playlists: [], playlistsTotal: 0, recommendations: [] }
 
-// 只有网易云能取歌单内的歌曲，其他平台的歌单搜到了也打不开，所以不搜。
-export function canOpenPlaylists(source: Source): boolean {
-  return source === 'netease'
-}
-
 export function keywordSearch(keyword: string, source: SearchSource, category: SearchCategory, page = 1): KeywordQuery {
-  return { view: category === 'playlists' && !canOpenPlaylists(source) ? 'all' : category, keyword, source, page }
+  return { view: category, keyword, source, page }
 }
 
 // 用户发起的搜索记入搜索历史，包括提交、点最近搜索、换来源和类别。翻页、推荐、打开歌单，以及前进、后退还原的搜索都不记。
@@ -223,7 +218,7 @@ class SearchStore extends Store<SearchState> {
     const tracks = (at: number) => requests.searchTracks({ source, keyword, page: at, pageSize }).then(({ items, total }) => ({ tracks: items, tracksTotal: total }))
     const playlists = (at: number) => requests.searchPlaylists({ source, keyword, page: at, pageSize }).then(({ items, total }) => ({ playlists: items, playlistsTotal: total }))
     if (view === 'all')
-      return canOpenPlaylists(source) ? [tracks(1), playlists(1)] : [tracks(1)]
+      return [tracks(1), playlists(1)]
     return [view === 'tracks' ? tracks(page) : playlists(page)]
   }
 

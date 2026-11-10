@@ -101,10 +101,15 @@ type Source interface {
 	Resolve(ctx context.Context, id string) (Resolved, error)
 }
 
-// 只有网易云提供歌单内的歌曲和相似歌曲。
-type NetEaseSource interface {
+// 网易云和 QQ 音乐能读取歌单内的歌曲。PlaylistTracks 按歌单原本的顺序返回，至少包含前 1000 首，因为导入歌单只收前 1000 首。
+type PlaylistSource interface {
 	Source
 	PlaylistTracks(ctx context.Context, playlistID string) ([]Song, error)
+}
+
+// 只有网易云提供相似歌曲。
+type NetEaseSource interface {
+	PlaylistSource
 	SimilarTracks(ctx context.Context, id string) ([]Song, error)
 }
 

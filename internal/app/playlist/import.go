@@ -22,7 +22,7 @@ const (
 
 var (
 	ErrInvalidPlaylistLink = errors.New("不是网易云或 QQ 音乐的歌单链接")
-	ErrUnsupportedPlaylist = errors.New("暂时只能导入网易云的歌单")
+	ErrUnsupportedPlaylist = errors.New("只能导入网易云或 QQ 音乐的歌单")
 	ErrShortLinkFailed     = errors.New("没能打开这个短链接")
 )
 
@@ -65,9 +65,9 @@ func (s *Service) ResolveLink(ctx context.Context, memberID, raw string) (track.
 	if err := s.registered(ctx, memberID); err != nil {
 		return "", "", err
 	}
-	link, err := importable(playlistlink.ParseLink(raw))
-	if err != nil {
-		return "", "", err
+	link, ok := playlistlink.ParseLink(raw)
+	if !ok {
+		return "", "", ErrInvalidPlaylistLink
 	}
 	if !link.Short {
 		return link.Source, link.ID, nil
@@ -79,9 +79,9 @@ func (s *Service) ResolveLink(ctx context.Context, memberID, raw string) (track.
 	if err != nil {
 		return "", "", fmt.Errorf("解析短链接 %s：%w：%w", link.URL, err, ErrShortLinkFailed)
 	}
-	resolved, err := importable(playlistlink.ParseLink(final))
-	if err != nil {
-		return "", "", err
+	resolved, ok := playlistlink.ParseLink(final)
+	if !ok {
+		return "", "", ErrInvalidPlaylistLink
 	}
 	if resolved.Short {
 		return "", "", fmt.Errorf("短链接 %s 停在了 %s：%w", link.URL, final, ErrShortLinkFailed)
@@ -97,7 +97,7 @@ func (s *Service) ImportPlatform(ctx context.Context, memberID, name string, sou
 	if err != nil {
 		return port.PlaylistRecord{}, 0, err
 	}
-	if source != track.NetEase {
+	if source != track.NetEase && source != track.QQ {
 		return port.PlaylistRecord{}, 0, ErrUnsupportedPlaylist
 	}
 	if err := s.take(ctx, "playlist-import:member:"+memberID, outboundBurst, outboundRefill); err != nil {
@@ -138,16 +138,6 @@ func firstOccurrences[T any](items []T, key func(T) track.Track) []T {
 		}
 	}
 	return kept
-}
-
-func importable(link playlistlink.Link, ok bool) (playlistlink.Link, error) {
-	switch {
-	case !ok:
-		return playlistlink.Link{}, ErrInvalidPlaylistLink
-	case link.Source != track.NetEase:
-		return playlistlink.Link{}, ErrUnsupportedPlaylist
-	}
-	return link, nil
 }
 
 // 曲目表里没有的歌只能用文件里的元数据。文件可以随意改写，所以地址只留平台自己的 https 地址。

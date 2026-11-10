@@ -255,12 +255,31 @@ func TestPlaylistSongsSkipsRoomQuota(t *testing.T) {
 	if f.quota.calls != 0 {
 		t.Errorf("取了 %d 次房间的搜索额度，导入不走房间的额度", f.quota.calls)
 	}
-	if _, err := f.svc.PlaylistSongs(t.Context(), track.QQ, "p1"); !errors.Is(err, port.ErrProviderFailed) {
-		t.Errorf("QQ 音乐的歌单 = %v，期望 ErrProviderFailed", err)
+	qqSongs := []port.Song{song(track.QQ, "0039MnYb0qxYhV", "晴天"), song(track.QQ, "004Z8Ihr0JIu5s", "七里香")}
+	f.add(f.qq, qqSongs...)
+	f.qq.AddPlaylist(port.Playlist{ID: "q1", Name: "周杰伦"}, "004Z8Ihr0JIu5s", "0039MnYb0qxYhV")
+	if got, err := f.svc.PlaylistSongs(t.Context(), track.QQ, "q1"); err != nil || !reflect.DeepEqual(got, []port.Song{qqSongs[1], qqSongs[0]}) {
+		t.Errorf("QQ 音乐歌单内的歌曲 = %v, %v，期望按歌单的顺序", got, err)
+	}
+	if _, err := f.svc.PlaylistSongs(t.Context(), track.Bilibili, "p1"); !errors.Is(err, port.ErrProviderFailed) {
+		t.Errorf("B 站的歌单 = %v，期望 ErrProviderFailed", err)
 	}
 	f.netease.Fail(errors.New("网易云不可用"))
 	if _, err := f.svc.PlaylistSongs(t.Context(), track.NetEase, "p1"); !errors.Is(err, port.ErrProviderFailed) {
 		t.Errorf("上游出错时的错误 = %v，期望 ErrProviderFailed", err)
+	}
+}
+
+func TestPlaylistTracksTakesRoomQuota(t *testing.T) {
+	f := newFixture(t, history{})
+	songs := []port.Song{song(track.QQ, "0039MnYb0qxYhV", "晴天")}
+	f.add(f.qq, songs...)
+	f.qq.AddPlaylist(port.Playlist{ID: "q1", Name: "周杰伦"}, "0039MnYb0qxYhV")
+	if got, err := f.svc.PlaylistTracks(t.Context(), f.ephemeral, track.QQ, "q1"); err != nil || !reflect.DeepEqual(got, songs) || f.quota.calls != 1 {
+		t.Errorf("在临时房间里打开 QQ 音乐的歌单 = %v, %v，取了 %d 次额度，期望取到歌曲、取 1 次额度", got, err, f.quota.calls)
+	}
+	if _, err := f.svc.PlaylistTracks(t.Context(), f.ephemeral, track.Bilibili, "q1"); !errors.Is(err, port.ErrProviderFailed) || f.quota.calls != 1 {
+		t.Errorf("B 站的歌单 = %v，取了 %d 次额度，期望 ErrProviderFailed，而且不取额度", err, f.quota.calls)
 	}
 }
 

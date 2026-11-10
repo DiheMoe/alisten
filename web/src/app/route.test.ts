@@ -32,7 +32,9 @@ describe('parseRoute', () => {
     ['/r/my-room/search?q=%E6%99%B4%E5%A4%A9&source=netease&view=playlists&page=2&panel=chat', { name: 'search', ref: 'my-room', panel: 'chat', query: { view: 'playlists', keyword: '晴天', source: 'netease', page: 2 } }],
     ['/r/my-room/search?source=netease&view=tracks', { name: 'search', ref: 'my-room', panel: null, query: { view: 'tracks', keyword: '', source: 'netease', page: 1 } }],
     ['/r/my-room/search?view=recommend', { name: 'search', ref: 'my-room', panel: null, query: { view: 'recommend' } }],
+    ['/r/my-room/search?q=a&source=qq&view=playlists', { name: 'search', ref: 'my-room', panel: null, query: { view: 'playlists', keyword: 'a', source: 'qq', page: 1 } }],
     ['/r/my-room/playlists/netease/123?page=3&panel=queue', { name: 'playlist', ref: 'my-room', panel: 'queue', source: 'netease', id: '123', page: 3 }],
+    ['/r/my-room/playlists/qq/123', { name: 'playlist', ref: 'my-room', panel: null, source: 'qq', id: '123', page: 1 }],
     ['/s/AbC_-1x', { name: 'shared-playlist', shareId: 'AbC_-1x', panel: null }],
     ['/s/AbC_-1x?panel=queue', { name: 'shared-playlist', shareId: 'AbC_-1x', panel: 'queue' }],
   ])('%s', (url, route) => {
@@ -50,7 +52,6 @@ describe('parseRoute', () => {
     ['/r/my-room?panel=lyrics', '/r/my-room'],
     ['/r/my-room/search?q=%20a%20', '/r/my-room/search?q=a&source=qq'],
     ['/r/my-room/search?q=a&source=kuwo&view=lyrics&page=0', '/r/my-room/search?q=a&source=qq'],
-    ['/r/my-room/search?q=a&source=qq&view=playlists', '/r/my-room/search?q=a&source=qq'],
     ['/r/my-room/search?q=a&page=2', '/r/my-room/search?q=a&source=qq'],
     ['/r/my-room/search?view=tracks&page=2', '/r/my-room/search?view=tracks'],
     ['/r/my-room/search?view=recommend&q=a&source=netease&page=2', '/r/my-room/search?view=recommend'],
@@ -64,7 +65,7 @@ describe('parseRoute', () => {
     expect(route && formatRoute(route)).toBe(canonical)
   })
 
-  it.each(['/r/', '/r/my-room/listen', '/r/my-room/queue/extra', '/settings/profile', '/settings/', '/settings/account/extra', '/admin/', '/admin/overview', '/r/my-room/playlists/qq/123', '/r/my-room/playlists/netease', '/s/', '/s/abc/def'])('%s 不对应任何页面', (url) => {
+  it.each(['/r/', '/r/my-room/listen', '/r/my-room/queue/extra', '/settings/profile', '/settings/', '/settings/account/extra', '/admin/', '/admin/overview', '/r/my-room/playlists/bilibili/123', '/r/my-room/playlists/netease', '/s/', '/s/abc/def'])('%s 不对应任何页面', (url) => {
     expect(parse(url)).toBeNull()
   })
 

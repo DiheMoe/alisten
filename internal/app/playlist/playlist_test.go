@@ -94,6 +94,7 @@ type fixture struct {
 	tracks  tracksTable
 	quota   *accountQuota
 	netease *porttest.Source
+	qq      *porttest.Source
 	links   shortLinks
 }
 
@@ -102,12 +103,13 @@ func newFixture(t *testing.T) fixture {
 	store := porttest.New()
 	netease := porttest.NewSource(track.NetEase)
 	netease.Add(sunny.ID, sunnyMeta, "", nil)
+	qq := porttest.NewSource(track.QQ)
 	bilibili := porttest.NewBilibili()
 	tracks := tracksTable{}
-	music := catalog.New(netease, porttest.NewSource(track.QQ), bilibili, bilibili, tracks, noHistory{}, store, roomQuota{})
+	music := catalog.New(netease, qq, bilibili, bilibili, tracks, noHistory{}, store, roomQuota{})
 	q := &accountQuota{}
 	links := shortLinks{}
-	return fixture{svc: New(store, store, tracks, music, q, links), store: store, tracks: tracks, quota: q, netease: netease, links: links}
+	return fixture{svc: New(store, store, tracks, music, q, links), store: store, tracks: tracks, quota: q, netease: netease, qq: qq, links: links}
 }
 
 func (f fixture) member(t *testing.T, username string) member.Member {

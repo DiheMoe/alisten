@@ -163,10 +163,14 @@ func contractSources() sources {
 	netease.Reject("404", "网易云没有提供这首歌的播放地址")
 	netease.SetSimilar("186016", "185811")
 	netease.AddPlaylist(port.Playlist{ID: "3778678", Name: "周杰伦精选", CoverURL: "https://p1.music.126.net/jay.jpg", Creator: "alice", Description: "", TrackCount: 2, PlayCount: 100}, "186016", "185811")
+	qq := porttest.NewSource(track.QQ)
+	qq.Add("004Z8Ihr0JIu5s", track.Meta{Title: "七里香", Artist: "周杰伦", Album: "七里香", CoverURL: "https://y.gtimg.cn/music/photo_new/T002R300x300M000003DFRzD192KKD.jpg", PageURL: "https://y.qq.com/n/ryqq/songDetail/004Z8Ihr0JIu5s", Duration: 299 * time.Second},
+		"", nil)
+	qq.AddPlaylist(port.Playlist{ID: "7039422370", Name: "周杰伦精选"}, "004Z8Ihr0JIu5s")
 	bilibili := contractBilibili()
 	return sources{
 		netease:       netease,
-		qq:            porttest.NewSource(track.QQ),
+		qq:            qq,
 		bilibili:      bilibili,
 		bilibiliLinks: bilibili,
 		playback:      map[track.Source]port.PlayURLs{track.NetEase: netease},

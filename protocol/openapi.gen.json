@@ -2378,7 +2378,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "d68525cd68ef691f"
+    "version": "42749e16714e0d7c"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3981,7 +3981,7 @@
             "memberToken": []
           }
         ],
-        "summary": "识别平台歌单的链接，短链接会跟随跳转。目前只支持网易云"
+        "summary": "识别网易云和 QQ 音乐的歌单链接，短链接会跟随跳转"
       }
     },
     "/api/me/playlist-memberships": {
@@ -4184,7 +4184,7 @@
             "memberToken": []
           }
         ],
-        "summary": "把平台歌单导入成一个新歌单，元数据取自平台。只收前 1000 首，重复的歌只留第一次出现的位置。歌单名不合法时返回 INVALID_ARGUMENT，不会像 importMyPlaylist 那样改用“导入的歌单”。新歌单受“最多 50 个”的限制。返回实际导入的数量。目前只支持网易云"
+        "summary": "把平台歌单导入成一个新歌单，元数据取自平台。只收前 1000 首，重复的歌只留第一次出现的位置。歌单名不合法时返回 INVALID_ARGUMENT，不会像 importMyPlaylist 那样改用“导入的歌单”。新歌单受“最多 50 个”的限制。返回实际导入的数量。只支持网易云和 QQ 音乐，其他音源返回 INVALID_ARGUMENT"
       }
     },
     "/api/me/playlists/{id}": {

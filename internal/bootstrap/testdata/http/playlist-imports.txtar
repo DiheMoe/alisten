@@ -1,4 +1,4 @@
-歌单导入：只有已注册的账号能导入。导入文件时，曲目表里已有的歌用服务端的元数据，没有的用文件里的元数据。文件里的封面和页面链接不是平台自己的 https 地址时被丢弃，链接曲目没有封面。重复的歌只留第一次出现的位置，标题为空的跳过，来源中的第一首排在歌单最前。链接可以识别出平台歌单，目前只能导入网易云的歌单。
+歌单导入：只有已注册的账号能导入。导入文件时，曲目表里已有的歌用服务端的元数据，没有的用文件里的元数据。文件里的封面和页面链接不是平台自己的 https 地址时被丢弃，链接曲目没有封面。重复的歌只留第一次出现的位置，标题为空的跳过，来源中的第一首排在歌单最前。链接可以识别出网易云和 QQ 音乐的歌单，也只能导入这两个平台的歌单。
 
 -- request --
 POST /api/members
@@ -169,10 +169,28 @@ Authorization: Bearer $alice
 {"playlist": {"id": "$platform", "name": "周杰伦精选", "favorites": false, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/example.jpg", "shareId": null}, "imported": 2}
 
 -- request --
+POST /api/me/playlist-links
+Authorization: Bearer $alice
+
+{"link": "https://y.qq.com/n/ryqq/playlist/7039422370"}
+-- response --
+200
+{"source": "qq", "playlistId": "7039422370"}
+
+-- request --
 POST /api/me/playlists/platform-imports
 Authorization: Bearer $alice
 
-{"name": "QQ", "source": "qq", "playlistId": "1"}
+{"name": "QQ 精选", "source": "qq", "playlistId": "7039422370"}
+-- response --
+201
+{"playlist": {"id": "$qqPlatform", "name": "QQ 精选", "favorites": false, "trackCount": 1, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://y.gtimg.cn/music/photo_new/T002R300x300M000003DFRzD192KKD.jpg", "shareId": null}, "imported": 1}
+
+-- request --
+POST /api/me/playlists/platform-imports
+Authorization: Bearer $alice
+
+{"name": "B 站", "source": "bilibili", "playlistId": "1"}
 -- response --
 400
-{"error": {"code": "INVALID_ARGUMENT", "message": "暂时只能导入网易云的歌单"}}
+{"error": {"code": "INVALID_ARGUMENT", "message": "只能导入网易云或 QQ 音乐的歌单"}}

@@ -95,7 +95,7 @@ function ImportLinkDialog({ onClose, onImported }: { onClose: () => void, onImpo
       >
         <label>
           歌单链接
-          <input data-autofocus required placeholder="粘贴网易云音乐的歌单链接或分享文字" value={link} onChange={event => setLink(event.target.value)} />
+          <input data-autofocus required placeholder="粘贴网易云音乐或 QQ 音乐的歌单链接、分享文字" value={link} onChange={event => setLink(event.target.value)} />
         </label>
         <label>
           歌单名

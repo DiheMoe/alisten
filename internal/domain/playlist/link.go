@@ -19,7 +19,7 @@ type Link struct {
 var (
 	urlPattern = regexp.MustCompile(`(?i)https?://[^\s<>"'，。；！？、）】》]+`)
 	digits     = regexp.MustCompile(`^[0-9]+$`)
-	qqPath     = regexp.MustCompile(`^/n/(?:ryqq|yqq)/playlist/([0-9]+)(?:\.html)?$`)
+	qqPath     = regexp.MustCompile(`^/n/(?:ryqq|ryqq_v2|yqq)/playlist/([0-9]+)(?:\.html)?$`)
 )
 
 // 重定向只能落在这些主机上，按小写比较。
@@ -30,6 +30,7 @@ var redirectHosts = map[string]bool{
 	"c6.y.qq.com":     true,
 	"y.qq.com":        true,
 	"i.y.qq.com":      true,
+	"i2.y.qq.com":     true,
 }
 
 func AllowedRedirectHost(host string) bool {
@@ -72,8 +73,8 @@ func ParseLink(raw string) (Link, bool) {
 		if m := qqPath.FindStringSubmatch(u.Path); m != nil {
 			return Link{Source: track.QQ, ID: m[1], URL: link}, true
 		}
-	case "i.y.qq.com":
-		if u.Path != "/n2/m/share/details/taoge.html" {
+	case "i.y.qq.com", "i2.y.qq.com":
+		if u.Path != "/n2/m/share/details/taoge.html" && u.Path != "/n3/other/pages/details/playlist.html" {
 			return Link{}, false
 		}
 		q := u.Query()

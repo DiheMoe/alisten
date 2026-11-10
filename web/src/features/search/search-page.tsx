@@ -11,7 +11,7 @@ import { bookTitle } from '@/shared/lib/book-title'
 import { useStore } from '@/shared/lib/use-store'
 import { Artwork, AsyncIconButton, EmptyState, IconButton, PlayingBars, Select, Skeleton, SongArtwork, SongList } from '@/shared/ui'
 import { SearchBox } from './search-box'
-import { canOpenPlaylists, keywordSearch, pageSize, recordSearch, searchStore } from './search-store'
+import { keywordSearch, pageSize, recordSearch, searchStore } from './search-store'
 import './search.css'
 
 const categories: { view: SearchCategory, label: string }[] = [
@@ -278,7 +278,7 @@ export function SearchPage({ inlineSearchClassName, onSearch, onOpenPlaylist }: 
       <div className="search-filter-bar">
         <SearchBox className={`search-inline ${inlineSearchClassName}`} recent={false} onSearch={onSearch} />
         <div className="search-filter-chips" role="group" aria-label="搜索类别">
-          {categories.filter(category => category.view !== 'playlists' || canOpenPlaylists(source)).map(category => (
+          {categories.map(category => (
             <button
               type="button"
               key={category.view}

@@ -33,7 +33,7 @@ func (e *RejectedLinkError) Error() string { return e.Reason }
 
 type Service struct {
 	netease  port.NetEaseSource
-	qq       port.Source
+	qq       port.PlaylistSource
 	bilibili port.BilibiliSource
 	links    port.BilibiliLinks
 	tracks   port.Tracks
@@ -42,7 +42,7 @@ type Service struct {
 	quota    port.RoomQuota
 }
 
-func New(netease port.NetEaseSource, qq port.Source, bilibili port.BilibiliSource, links port.BilibiliLinks, tracks port.Tracks, history port.PlayHistory, rooms port.RoomDirectory, quota port.RoomQuota) *Service {
+func New(netease port.NetEaseSource, qq port.PlaylistSource, bilibili port.BilibiliSource, links port.BilibiliLinks, tracks port.Tracks, history port.PlayHistory, rooms port.RoomDirectory, quota port.RoomQuota) *Service {
 	return &Service{netease: netease, qq: qq, bilibili: bilibili, links: links, tracks: tracks, history: history, rooms: rooms, quota: quota}
 }
 
@@ -78,8 +78,8 @@ func (s *Service) SearchPlaylists(ctx context.Context, roomID string, source tra
 }
 
 func (s *Service) PlaylistTracks(ctx context.Context, roomID string, source track.Source, playlistID string) ([]port.Song, error) {
-	if source != track.NetEase {
-		return nil, unsupported(source, "歌单内的歌曲")
+	if _, err := s.playlistSource(source); err != nil {
+		return nil, err
 	}
 	if err := s.take(ctx, roomID); err != nil {
 		return nil, err
@@ -89,10 +89,11 @@ func (s *Service) PlaylistTracks(ctx context.Context, roomID string, source trac
 
 // 不取房间的搜索额度，因为导入歌单按成员另外限流。
 func (s *Service) PlaylistSongs(ctx context.Context, source track.Source, playlistID string) ([]port.Song, error) {
-	if source != track.NetEase {
-		return nil, unsupported(source, "歌单内的歌曲")
+	src, err := s.playlistSource(source)
+	if err != nil {
+		return nil, err
 	}
-	songs, err := s.netease.PlaylistTracks(ctx, playlistID)
+	songs, err := src.PlaylistTracks(ctx, playlistID)
 	if err != nil {
 		return nil, upstream(source, "获取歌单内的歌曲", err)
 	}
@@ -280,6 +281,16 @@ func (s *Service) metaSource(source track.Source) (func(context.Context, string)
 		return s.bilibili.TrackMeta, nil
 	}
 	return nil, unsupported(source, "点歌前查询元数据")
+}
+
+func (s *Service) playlistSource(source track.Source) (port.PlaylistSource, error) {
+	switch source {
+	case track.NetEase:
+		return s.netease, nil
+	case track.QQ:
+		return s.qq, nil
+	}
+	return nil, unsupported(source, "歌单内的歌曲")
 }
 
 func (s *Service) searchable(source track.Source) (port.Source, error) {

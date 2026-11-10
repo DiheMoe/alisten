@@ -3,7 +3,7 @@ import type { AdminSection } from '@/features/admin'
 import type { SearchSource } from '@/features/history'
 import type { SearchQuery } from '@/features/search'
 import type { SettingsSection } from '@/features/settings'
-import { canOpenPlaylists, defaultSearchSource, keywordSearch } from '@/features/search'
+import { defaultSearchSource, keywordSearch } from '@/features/search'
 
 export type RoomPage = 'listen' | 'queue' | 'chat'
 export type Panel = 'queue' | 'history' | 'chat'
@@ -144,7 +144,7 @@ export function parseRoute({ pathname, search, hash }: Pick<Location, 'pathname'
   }
   const playlist = /^\/playlists\/([^/]+)\/([^/]+)$/.exec(subpath)
   const source = parseSource(playlist?.[1] ?? null)
-  if (!playlist || !source || !canOpenPlaylists(source))
+  if (!playlist || !source)
     return null
   return { name: 'playlist', ref, panel, source, id: playlist[2], page: parsePage(params) }
 }
