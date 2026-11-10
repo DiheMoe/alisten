@@ -44,6 +44,8 @@ type Members interface {
 	// 在同一个事务中删除 oldTokenHash 的会话，给 memberID 创建 newTokenHash 的会话。oldTokenHash 的会话已经不存在时返回
 	// ErrSessionNotFound；memberID 的密码哈希已经不是 passwordHash 时返回 ErrAccountPasswordChanged：密码在校验之后被修改过，
 	// 修改时对会话的删除已经执行，此时创建的会话不会再被删除。两种情况都不做任何修改。
+	// 同一个事务中把 oldTokenHash 所属成员的播放历史移到 memberID，并入的规则与 ListenRecorder.RecordListen 相同，
+	// memberID 关闭了记录时不并入；两者是同一个成员时不动。
 	ReplaceSession(ctx context.Context, oldTokenHash []byte, memberID string, newTokenHash []byte, passwordHash string) error
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	// 在同一个事务中修改已注册成员的密码哈希，并删除该成员的全部会话。返回被删除的会话的 token 哈希。成员是游客时返回 ErrMemberNotFound。

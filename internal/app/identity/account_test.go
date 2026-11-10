@@ -15,6 +15,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/port/porttest"
 	"github.com/dihemoe/alisten/internal/domain/member"
+	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
 const clientIP = "203.0.113.7"
@@ -249,6 +250,30 @@ func TestLogin(t *testing.T) {
 	}
 	if want := []string{"login:ip:" + clientIP, "login:user:alice"}; !slices.Equal(q.taken, want) {
 		t.Errorf("取的额度 = %v，期望 %v", q.taken, want)
+	}
+}
+
+func TestLoginMovesGuestListensIntoAccount(t *testing.T) {
+	a, s, store, _, _ := newAccounts(t)
+	alice := registerAccount(t, a, s, "alice", "correct horse")
+	guest := createMember(t, s)
+	heard := time.Date(2026, 11, 10, 20, 0, 0, 0, time.UTC)
+	sunny := port.Listen{Track: track.Track{Source: track.NetEase, ID: "186016"}, Meta: track.Meta{Title: "晴天"}, HeardAt: heard}
+	rain := port.Listen{Track: track.Track{Source: track.NetEase, ID: "185811"}, Meta: track.Meta{Title: "七里香"}, HeardAt: heard.Add(time.Minute)}
+	if err := store.RecordListen(t.Context(), []string{alice.Member.ID}, sunny); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordListen(t.Context(), []string{guest.Member.ID}, rain); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", ""); err != nil {
+		t.Fatal(err)
+	}
+	if listens, err := store.MemberListens(t.Context(), alice.Member.ID); err != nil || !slices.Equal(listens, []port.Listen{rain, sunny}) {
+		t.Errorf("登录之后账号的历史 = %#v, %v，期望并入游客听过的《七里香》", listens, err)
+	}
+	if listens, err := store.MemberListens(t.Context(), guest.Member.ID); err != nil || len(listens) != 0 {
+		t.Errorf("登录之后游客的历史 = %#v, %v，期望移走", listens, err)
 	}
 }
 

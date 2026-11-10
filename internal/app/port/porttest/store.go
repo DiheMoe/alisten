@@ -36,6 +36,8 @@ type Store struct {
 	brandName          string
 	registrationClosed bool
 	playlists          []*storedPlaylist
+	// 成员 ID 到播放历史，按 MemberListens 的顺序排列。
+	listens map[string][]port.Listen
 }
 
 type storedMember struct {
@@ -43,6 +45,8 @@ type storedMember struct {
 	username     string
 	email        string
 	passwordHash string
+	// 零值表示记录播放历史，与 members.record_listens 的默认值一致。
+	listensOff bool
 }
 
 type storedTicket struct {
@@ -70,6 +74,7 @@ func New() *Store {
 		tickets:  map[string]storedTicket{},
 		bots:     map[string]string{},
 		cookies:  map[string]string{},
+		listens:  map[string][]port.Listen{},
 	}
 }
 
@@ -205,7 +210,8 @@ func (s *Store) ReplaceSession(_ context.Context, oldTokenHash []byte, memberID 
 	if m.passwordHash != passwordHash {
 		return port.ErrAccountPasswordChanged
 	}
-	if _, ok := s.sessions[string(oldTokenHash)]; !ok {
+	previous, ok := s.sessions[string(oldTokenHash)]
+	if !ok {
 		return port.ErrSessionNotFound
 	}
 	if _, ok := s.sessions[string(newTokenHash)]; ok {
@@ -213,6 +219,15 @@ func (s *Store) ReplaceSession(_ context.Context, oldTokenHash []byte, memberID 
 	}
 	s.deleteSession(string(oldTokenHash))
 	s.sessions[string(newTokenHash)] = memberID
+	if previous != memberID {
+		moved := s.listens[previous]
+		delete(s.listens, previous)
+		if !m.listensOff {
+			for _, l := range moved {
+				s.addListen(memberID, l)
+			}
+		}
+	}
 	return nil
 }
 

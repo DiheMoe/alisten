@@ -10,7 +10,7 @@ import (
 )
 
 const accountByUsername = `-- name: AccountByUsername :one
-SELECT id, name, avatar_hash, created_at, username, password_hash, email FROM members WHERE username = $1
+SELECT id, name, avatar_hash, created_at, username, password_hash, email, record_listens FROM members WHERE username = $1
 `
 
 func (q *Queries) AccountByUsername(ctx context.Context, username *string) (Member, error) {
@@ -24,13 +24,14 @@ func (q *Queries) AccountByUsername(ctx context.Context, username *string) (Memb
 		&i.Username,
 		&i.PasswordHash,
 		&i.Email,
+		&i.RecordListens,
 	)
 	return i, err
 }
 
 const createMember = `-- name: CreateMember :one
 INSERT INTO members (name) VALUES ($1)
-RETURNING id, name, avatar_hash, created_at, username, password_hash, email
+RETURNING id, name, avatar_hash, created_at, username, password_hash, email, record_listens
 `
 
 func (q *Queries) CreateMember(ctx context.Context, name string) (Member, error) {
@@ -44,6 +45,7 @@ func (q *Queries) CreateMember(ctx context.Context, name string) (Member, error)
 		&i.Username,
 		&i.PasswordHash,
 		&i.Email,
+		&i.RecordListens,
 	)
 	return i, err
 }
@@ -122,6 +124,7 @@ SELECT coalesce(password_hash, '')::text AS password_hash FROM members WHERE id 
 `
 
 // 让修改密码等到这次登录提交之后，它随后删除会话时会删掉这次登录签发的会话。
+// 用互斥的 FOR NO KEY UPDATE，不用 FOR SHARE：同一个账号的几次登录依次并入游客的历史，否则两边会按相反的顺序抢同一批历史行而死锁。
 func (q *Queries) LockMemberPassword(ctx context.Context, id string) (string, error) {
 	row := q.db.QueryRow(ctx, lockMemberPassword, id)
 	var password_hash string
@@ -146,7 +149,7 @@ func (q *Queries) MemberAccountProfile(ctx context.Context, id string) (MemberAc
 }
 
 const memberByToken = `-- name: MemberByToken :one
-SELECT id, name, avatar_hash, created_at, username, password_hash, email FROM members WHERE id = (SELECT member_id FROM member_sessions WHERE token_hash = $1)
+SELECT id, name, avatar_hash, created_at, username, password_hash, email, record_listens FROM members WHERE id = (SELECT member_id FROM member_sessions WHERE token_hash = $1)
 `
 
 func (q *Queries) MemberByToken(ctx context.Context, tokenHash []byte) (Member, error) {
@@ -160,6 +163,7 @@ func (q *Queries) MemberByToken(ctx context.Context, tokenHash []byte) (Member, 
 		&i.Username,
 		&i.PasswordHash,
 		&i.Email,
+		&i.RecordListens,
 	)
 	return i, err
 }
@@ -217,13 +221,24 @@ func (q *Queries) SetMemberPassword(ctx context.Context, arg SetMemberPasswordPa
 	return result.RowsAffected(), nil
 }
 
+const takeSession = `-- name: TakeSession :one
+DELETE FROM member_sessions WHERE token_hash = $1 RETURNING member_id
+`
+
+func (q *Queries) TakeSession(ctx context.Context, tokenHash []byte) (string, error) {
+	row := q.db.QueryRow(ctx, takeSession, tokenHash)
+	var member_id string
+	err := row.Scan(&member_id)
+	return member_id, err
+}
+
 const updateMember = `-- name: UpdateMember :one
 UPDATE members
 SET name = coalesce($1, name),
     avatar_hash = CASE WHEN $2::text IS NULL THEN avatar_hash ELSE NULLIF($2::text, '') END,
     email = CASE WHEN username IS NULL THEN NULL WHEN $3::text IS NULL THEN email ELSE NULLIF($3::text, '') END
 WHERE id = $4
-RETURNING id, name, avatar_hash, created_at, username, password_hash, email
+RETURNING id, name, avatar_hash, created_at, username, password_hash, email, record_listens
 `
 
 type UpdateMemberParams struct {
@@ -250,6 +265,7 @@ func (q *Queries) UpdateMember(ctx context.Context, arg UpdateMemberParams) (Mem
 		&i.Username,
 		&i.PasswordHash,
 		&i.Email,
+		&i.RecordListens,
 	)
 	return i, err
 }

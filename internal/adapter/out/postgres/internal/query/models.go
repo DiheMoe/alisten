@@ -9,13 +9,14 @@ import (
 )
 
 type Member struct {
-	ID           string
-	Name         string
-	AvatarHash   *string
-	CreatedAt    time.Time
-	Username     *string
-	PasswordHash *string
-	Email        *string
+	ID            string
+	Name          string
+	AvatarHash    *string
+	CreatedAt     time.Time
+	Username      *string
+	PasswordHash  *string
+	Email         *string
+	RecordListens bool
 }
 
 type PlaylistItem struct {

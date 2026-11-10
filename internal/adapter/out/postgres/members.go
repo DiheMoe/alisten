@@ -116,14 +116,20 @@ func (s *Store) ReplaceSession(ctx context.Context, oldTokenHash []byte, memberI
 		if current != passwordHash {
 			return port.ErrAccountPasswordChanged
 		}
-		n, err := q.DeleteSession(ctx, oldTokenHash)
+		previous, err := q.TakeSession(ctx, oldTokenHash)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return port.ErrSessionNotFound
+		}
 		if err != nil {
 			return err
 		}
-		if n == 0 {
-			return port.ErrSessionNotFound
+		if err := q.CreateSession(ctx, query.CreateSessionParams{TokenHash: newTokenHash, MemberID: memberID}); err != nil {
+			return err
 		}
-		return q.CreateSession(ctx, query.CreateSessionParams{TokenHash: newTokenHash, MemberID: memberID})
+		if previous == memberID {
+			return nil
+		}
+		return moveListens(ctx, q, previous, memberID)
 	})
 	if err != nil {
 		return fmt.Errorf("给成员 %s 更换会话：%w", memberID, err)

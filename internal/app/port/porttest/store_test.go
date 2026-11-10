@@ -46,6 +46,30 @@ func TestAddPlaylistItemKeepsMilliseconds(t *testing.T) {
 	}
 }
 
+func TestRecordListenKeepsWhatPostgreSQLKeeps(t *testing.T) {
+	store := New()
+	m, err := store.CreateMember(t.Context(), []byte("token"), "甲")
+	if err != nil {
+		t.Fatal(err)
+	}
+	heard := time.Date(2026, 11, 10, 20, 0, 0, 1234567, time.UTC)
+	l := port.Listen{Track: track.Track{Source: "netease", ID: "1"}, Meta: track.Meta{Title: "歌", Duration: 3*time.Minute + 1234*time.Microsecond}, HeardAt: heard}
+	if err := store.RecordListen(t.Context(), []string{m.ID}, l); err != nil {
+		t.Fatal(err)
+	}
+	listens, err := store.MemberListens(t.Context(), m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listens) != 1 || listens[0].Meta.Duration != 3*time.Minute+time.Millisecond || !listens[0].HeardAt.Equal(heard.Truncate(time.Microsecond)) {
+		t.Errorf("历史 = %#v，期望时长按毫秒、时间按微秒截断", listens)
+	}
+	l.Meta.Title = "坏\x00标题"
+	if err := store.RecordListen(t.Context(), []string{m.ID}, l); err == nil {
+		t.Error("含 NUL 的标题应报错")
+	}
+}
+
 func TestImportPlaylistRejectsWhatPostgreSQLRejects(t *testing.T) {
 	store := New()
 	m, err := store.CreateMember(t.Context(), []byte("token"), "甲")

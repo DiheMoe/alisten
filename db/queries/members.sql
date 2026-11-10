@@ -40,10 +40,14 @@ SELECT EXISTS (SELECT FROM member_sessions WHERE token_hash = @token_hash AND me
 
 -- name: LockMemberPassword :one
 -- 让修改密码等到这次登录提交之后，它随后删除会话时会删掉这次登录签发的会话。
+-- 用互斥的 FOR NO KEY UPDATE，不用 FOR SHARE：同一个账号的几次登录依次并入游客的历史，否则两边会按相反的顺序抢同一批历史行而死锁。
 SELECT coalesce(password_hash, '')::text AS password_hash FROM members WHERE id = @id FOR NO KEY UPDATE;
 
 -- name: DeleteSession :execrows
 DELETE FROM member_sessions WHERE token_hash = @token_hash;
+
+-- name: TakeSession :one
+DELETE FROM member_sessions WHERE token_hash = @token_hash RETURNING member_id;
 
 -- name: DeleteMemberSessions :many
 -- keep 为 NULL 时删除这个成员的全部会话。
