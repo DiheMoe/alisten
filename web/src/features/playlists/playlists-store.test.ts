@@ -33,6 +33,8 @@ const meta = { title: '晴天', artist: '周杰伦', album: '叶惠美', coverUr
 const notReady = '这首歌还在准备，准备好之后再保存'
 const full = '一个歌单最多 1000 首歌'
 const changed = '歌单已经变了，刷新之后再试'
+const imported = { id: 'p3', name: '导入的歌单', favorites: false, trackCount: 2, createdAtMs: 2, updatedAtMs: 2, coverUrl: null }
+const fileTrack = { track: sunny, title: '晴天', durationMs: 269000 }
 
 let requests: string[]
 let release: (() => void)[]
@@ -40,6 +42,7 @@ let failRemove: boolean
 let failAdd: boolean
 let failCopy: boolean
 let failMove: boolean
+let importFailure: { status: number, code: string, message: string } | null
 let bodies: unknown[]
 let holdReads: boolean
 let failReads: boolean
@@ -80,6 +83,7 @@ beforeEach(() => {
   failAdd = false
   failCopy = false
   failMove = false
+  importFailure = null
   bodies = []
   holdReads = false
   failReads = false
@@ -110,6 +114,14 @@ beforeEach(() => {
     }
     if (init.body)
       bodies.push(JSON.parse(String(init.body)))
+    if (importFailure && /^POST \/api\/me\/(?:playlists\/(?:imports|platform-imports)|playlist-links)$/.test(request))
+      return json(importFailure.status, { error: { code: importFailure.code, message: importFailure.message } })
+    if (request === 'POST /api/me/playlists/imports' || request === 'POST /api/me/playlists/platform-imports') {
+      serverPlaylists.push(imported)
+      return json(201, { playlist: imported, imported: 2 })
+    }
+    if (request === 'POST /api/me/playlist-links')
+      return json(200, { source: 'netease', playlistId: '3778678' })
     const write = /^POST \/api\/me\/playlists\/(\w+)\/(items|removals|copies|moves)$/.exec(request)
     if (write?.[2] === 'items') {
       if (failAdd)
@@ -518,5 +530,103 @@ describe('playlistsStore', () => {
     holdReads = false
     await settle()
     expect(playlistsStore.state.playlists).toEqual([favorites, commute])
+  })
+
+  it('importFile 导入成功后新歌单立刻出现在列表里，再重新读取', async () => {
+    const { playlistsStore } = await import('./playlists-store')
+    await playlistsStore.load()
+    requests = []
+    holdReads = true
+    const done = playlistsStore.importFile('通勤', [fileTrack])
+    await flush()
+    release.shift()!()
+    expect(await done).toEqual({ playlist: imported, imported: 2 })
+    expect(playlistsStore.state.playlists).toEqual([favorites, imported])
+    expect(bodies).toEqual([{ name: '通勤', tracks: [fileTrack] }])
+    holdReads = false
+    await settle()
+    expect(requests).toEqual(['POST /api/me/playlists/imports', 'GET /api/me/playlists'])
+    expect(playlistsStore.state.playlists).toEqual([favorites, imported])
+  })
+
+  it('importFile 遇到 INVALID_ARGUMENT 时说是文件的问题，不重新读取', async () => {
+    const { playlistsStore } = await import('./playlists-store')
+    const { notificationStore } = await import('@/shared/ui')
+    importFailure = { status: 400, code: 'INVALID_ARGUMENT', message: 'tracks[0].track.id：不是合法的链接' }
+    const done = playlistsStore.importFile('通勤', [fileTrack])
+    await settle()
+    expect(await done).toBeNull()
+    expect(requests).toEqual(['POST /api/me/playlists/imports'])
+    expect(notificationStore.state.notifications.map(n => n.message)).toEqual(['文件里有不符合要求的内容，没有导入。'])
+  })
+
+  it('importFile 超过歌单数上限时提示服务端的文案', async () => {
+    const { playlistsStore } = await import('./playlists-store')
+    const { notificationStore } = await import('@/shared/ui')
+    importFailure = { status: 409, code: 'CONFLICT', message: '最多只能建 50 个歌单' }
+    const done = playlistsStore.importFile('通勤', [fileTrack])
+    await settle()
+    expect(await done).toBeNull()
+    expect(notificationStore.state.notifications.map(n => n.message)).toEqual(['最多只能建 50 个歌单'])
+  })
+
+  it('resolveLink 返回音源和歌单 ID，不重新读取歌单', async () => {
+    const { playlistsStore } = await import('./playlists-store')
+    const link = '分享歌单：通勤 https://163cn.tv/abc'
+    const done = playlistsStore.resolveLink(link)
+    await settle()
+    expect(await done).toEqual({ source: 'netease', playlistId: '3778678' })
+    expect(requests).toEqual(['POST /api/me/playlist-links'])
+    expect(bodies).toEqual([{ link }])
+  })
+
+  it('resolveLink 认不出链接时提示服务端的文案', async () => {
+    const { playlistsStore } = await import('./playlists-store')
+    const { notificationStore } = await import('@/shared/ui')
+    importFailure = { status: 400, code: 'INVALID_ARGUMENT', message: '不是网易云或 QQ 音乐的歌单链接' }
+    const done = playlistsStore.resolveLink('https://example.com/')
+    await settle()
+    expect(await done).toBeNull()
+    expect(notificationStore.state.notifications.map(n => n.message)).toEqual(['不是网易云或 QQ 音乐的歌单链接'])
+  })
+
+  it('resolveLink 超过 2048 字节的文本不发出', async () => {
+    const { playlistsStore } = await import('./playlists-store')
+    const { notificationStore } = await import('@/shared/ui')
+    expect(await playlistsStore.resolveLink('歌'.repeat(683))).toBeNull()
+    expect(requests).toEqual([])
+    expect(notificationStore.state.notifications.map(n => n.message)).toEqual(['文字太长了，只粘贴歌单的链接或分享文字就好。'])
+    const done = playlistsStore.resolveLink('歌'.repeat(682))
+    await settle()
+    await done
+    expect(requests).toEqual(['POST /api/me/playlist-links'])
+  })
+
+  it('importPlatform 导入成功后新歌单立刻出现在列表里，再重新读取', async () => {
+    const { playlistsStore } = await import('./playlists-store')
+    holdReads = true
+    const done = playlistsStore.importPlatform('通勤', 'netease', '3778678')
+    await flush()
+    release.shift()!()
+    expect(await done).toEqual({ playlist: imported, imported: 2 })
+    expect(playlistsStore.state.playlists).toEqual([imported])
+    expect(bodies).toEqual([{ name: '通勤', source: 'netease', playlistId: '3778678' }])
+    holdReads = false
+    await settle()
+    expect(requests).toEqual(['POST /api/me/playlists/platform-imports', 'GET /api/me/playlists'])
+    expect(playlistsStore.state.playlists).toEqual([favorites, imported])
+  })
+
+  it('importPlatform 歌单名不合法时说明规则，其他错误提示服务端的文案', async () => {
+    const { playlistsStore } = await import('./playlists-store')
+    const { notificationStore } = await import('@/shared/ui')
+    importFailure = { status: 400, code: 'INVALID_ARGUMENT', message: '歌单名不合法' }
+    const first = playlistsStore.importPlatform(' ', 'netease', '3778678')
+    await settle()
+    importFailure = { status: 429, code: 'RATE_LIMITED', message: '导入太频繁了，稍后再试' }
+    const second = playlistsStore.importPlatform('通勤', 'netease', '3778678')
+    await settle()
+    expect([await first, await second]).toEqual([null, null])
+    expect(notificationStore.state.notifications.map(n => n.message)).toEqual(['歌单名要 1 到 50 个字。', '导入太频繁了，稍后再试'])
   })
 })

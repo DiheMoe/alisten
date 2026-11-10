@@ -1,4 +1,6 @@
-import type { MyPlaylist, Track } from '@/core/realtime'
+import type { ImportMyPlatformPlaylistResponse, ImportMyPlaylistResponse, ResolveMyPlaylistLinkResponse } from '@/core/api'
+import type { ErrorTexts } from '@/core/errors'
+import type { ImportedTrack, MyPlaylist, Source, Track } from '@/core/realtime'
 import { api } from '@/core/api'
 import { errorMessage } from '@/core/errors'
 import { profileStore } from '@/features/settings'
@@ -27,6 +29,10 @@ interface PlaylistsState {
 const empty: PlaylistsState = { playlists: null, error: null, loadedAt: 0, memberships: new Map() }
 
 const nameTexts = { INVALID_ARGUMENT: '歌单名要 1 到 50 个字。' }
+const fileTexts = { INVALID_ARGUMENT: '文件里有不符合要求的内容，没有导入。' }
+// 接口只收 1 到 2048 字节的文本：太长的这里不发出，对话框不提交空的，INVALID_ARGUMENT 就只剩认不出链接，这时的 message 是写给用户的。
+const maxLinkBytes = 2048
+const linkTexts: ErrorTexts = { INVALID_ARGUMENT: message => message }
 
 class PlaylistsStore extends Store<PlaylistsState> {
   #account: string | null = null
@@ -94,9 +100,46 @@ class PlaylistsStore extends Store<PlaylistsState> {
   async create(name: string): Promise<MyPlaylist | null> {
     try {
       const playlist = await api.createMyPlaylist({ name })
-      this.setState({ playlists: [...(this.state.playlists ?? []), playlist] })
-      void this.load()
+      this.#added(playlist)
       return playlist
+    }
+    catch (error) {
+      notificationStore.error(errorMessage(error, nameTexts))
+      return null
+    }
+  }
+
+  async importFile(name: string, tracks: ImportedTrack[]): Promise<ImportMyPlaylistResponse | null> {
+    try {
+      const imported = await api.importMyPlaylist({ name, tracks })
+      this.#added(imported.playlist)
+      return imported
+    }
+    catch (error) {
+      notificationStore.error(errorMessage(error, fileTexts))
+      return null
+    }
+  }
+
+  async resolveLink(link: string): Promise<ResolveMyPlaylistLinkResponse | null> {
+    if (new TextEncoder().encode(link).length > maxLinkBytes) {
+      notificationStore.error('文字太长了，只粘贴歌单的链接或分享文字就好。')
+      return null
+    }
+    try {
+      return await api.resolveMyPlaylistLink({ link })
+    }
+    catch (error) {
+      notificationStore.error(errorMessage(error, linkTexts))
+      return null
+    }
+  }
+
+  async importPlatform(name: string, source: Source, playlistId: string): Promise<ImportMyPlatformPlaylistResponse | null> {
+    try {
+      const imported = await api.importMyPlatformPlaylist({ name, source, playlistId })
+      this.#added(imported.playlist)
+      return imported
     }
     catch (error) {
       notificationStore.error(errorMessage(error, nameTexts))
@@ -165,6 +208,12 @@ class PlaylistsStore extends Store<PlaylistsState> {
       notificationStore.error(errorMessage(error))
       return false
     }
+  }
+
+  // 先放进列表再重新读取：打开新歌单时，列表里要已经有它，否则详情页会以为它被删掉了。
+  #added(playlist: MyPlaylist): void {
+    this.setState({ playlists: [...(this.state.playlists ?? []), playlist] })
+    void this.load()
   }
 
   // 请求进行中又改了勾选时，等它完成之后按最新的勾选再发；失败时恢复成服务端的状态，不再发出。
