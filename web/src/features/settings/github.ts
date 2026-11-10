@@ -1,6 +1,8 @@
 import type { FinishGithubLoginResponse } from '@/core/api'
 import type { GitHubIntent } from '@/core/realtime'
-import { api } from '@/core/api'
+import { api, IdentityRenewedError } from '@/core/api'
+import { errorMessage } from '@/core/errors'
+import { notificationStore } from '@/shared/ui'
 
 // GitHub 跳回来时仍在发起授权的这个标签页，所以 nonce 存在 sessionStorage：别的标签页、别的浏览器拿到兑换码也没有它。
 // 意图也存在这里，回来之后据此决定接下来做什么。
@@ -24,6 +26,18 @@ export async function startGithubLogin(intent: GitHubIntent, currentPassword?: s
   sessionStorage.setItem(intentKey, intent)
   const { url } = await api.startGithubLogin({ intent, nonce, currentPassword })
   return url
+}
+
+// 返回 false 时，失败原因已经通过通知显示；成功时页面随即跳到 GitHub。
+export async function goToGitHub(intent: GitHubIntent, currentPassword?: string): Promise<boolean> {
+  try {
+    window.location.assign(await startGithubLogin(intent, currentPassword))
+    return true
+  }
+  catch (error) {
+    notificationStore.error(error instanceof IdentityRenewedError ? '没有跳转到 GitHub，再试一次。' : errorMessage(error))
+    return false
+  }
 }
 
 export type GithubLanding

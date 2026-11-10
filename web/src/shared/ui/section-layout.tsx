@@ -54,6 +54,7 @@ function moveFocus(event: KeyboardEvent<HTMLElement>): void {
 
 // 宽屏：左侧分类栏加右侧内容，current 为 null 时按 defaultSection 高亮，children 也应当是它的内容。
 // 窄屏：current 为 null 时只显示分类列表，header 在列表上方；否则只显示 children，顶部的返回按钮调用 onSelect(null)。
+// header 里带 data-section 的元素是那个分类的入口，比如 hiddenInList 的那一项：从详情回到列表时，焦点落回它。
 // children 里第一个 h2 是分类的标题：从分类栏切换过去之后，焦点落在它上面。
 export function SectionLayout<T extends string>({ title, eyebrow, sections, current, defaultSection, onSelect, header, footer, children }: {
   title: string
@@ -68,18 +69,27 @@ export function SectionLayout<T extends string>({ title, eyebrow, sections, curr
 }) {
   const isWide = useSyncExternalStore(subscribeWide, () => wide().matches)
   const navRef = useRef<HTMLElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  // 地址改写之后 current 才会变，所以先记下切换完成后焦点要去哪里。
-  const focusAfterRef = useRef<{ to: 'content' } | { to: 'item', id: T } | null>(null)
+  // 地址改写之后 current 才会变，所以先记下切换完成后焦点要不要去标题。
+  const focusContentRef = useRef(false)
+  const previousRef = useRef(current)
   const shown = current ?? defaultSection
 
   useEffect(() => {
-    const target = focusAfterRef.current
-    focusAfterRef.current = null
-    if (target?.to === 'content')
+    const previous = previousRef.current
+    previousRef.current = current
+    const toContent = focusContentRef.current
+    focusContentRef.current = false
+    if (previous === current)
+      return
+    // 窄屏上列表和详情互相替换，宽屏上内容区按分类重新挂载：原来有焦点的元素已经不在了，焦点落到了 body。
+    // 切换也可能来自 header 里的入口或者浏览器的后退、前进；焦点还在分类栏或顶栏上时留在原处。
+    const narrow = !wide().matches
+    if (narrow && current === null)
+      [...listRef.current?.querySelectorAll<HTMLElement>('[data-section]') ?? []].find(item => item.dataset.section === previous)?.focus()
+    else if (toContent || (narrow && previous === null) || document.activeElement === document.body)
       focusHeading(contentRef.current)
-    else if (target?.to === 'item')
-      [...navRef.current?.querySelectorAll<HTMLElement>('[data-section]') ?? []].find(item => item.dataset.section === target.id)?.focus()
   }, [current])
 
   // 窄的主区域里分类栏是横向滚动的一行，当前项可能在视野之外。
@@ -93,7 +103,7 @@ export function SectionLayout<T extends string>({ title, eyebrow, sections, curr
       focusHeading(contentRef.current)
       return
     }
-    focusAfterRef.current = { to: 'content' }
+    focusContentRef.current = true
     onSelect(id)
   }
 
@@ -140,7 +150,7 @@ export function SectionLayout<T extends string>({ title, eyebrow, sections, curr
   if (current === null) {
     return (
       <div className="section-layout">
-        <div className="section-layout-list" key="list">
+        <div ref={listRef} className="section-layout-list" key="list">
           {heading}
           {header}
           <nav ref={navRef} className="section-group" aria-label={title} onKeyDown={moveFocus}>
@@ -167,10 +177,7 @@ export function SectionLayout<T extends string>({ title, eyebrow, sections, curr
           type="button"
           className="section-layout-back"
           aria-label={`返回${title}`}
-          onClick={() => {
-            focusAfterRef.current = { to: 'item', id: current }
-            onSelect(null)
-          }}
+          onClick={() => onSelect(null)}
         >
           <ChevronLeft size={20} aria-hidden="true" />
           {title}

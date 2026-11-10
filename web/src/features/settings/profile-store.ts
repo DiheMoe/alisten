@@ -67,25 +67,27 @@ class ProfileStore extends Store<ProfileState> {
     return true
   }
 
-  // 返回 false 时，失败原因已经通过通知显示。
-  async save(changes: { name?: string, email?: string }): Promise<boolean> {
-    return await this.#update(changes) === null
+  // 一次只改一项，失败时才能说清是哪一项不合格：客户端不能按服务端的 message 区分字段。失败时抛出 Error，message 是给用户看的原因。
+  async save(changes: { name: string } | { email: string }): Promise<void> {
+    const error = await this.#update(changes)
+    if (error === null)
+      return
+    const invalid = 'name' in changes ? '昵称不能为空。' : '邮箱要写成 name@example.com 这样的格式。'
+    throw new Error(error instanceof IdentityRenewedError ? '没有保存，再试一次。' : errorMessage(error, { INVALID_ARGUMENT: invalid }))
   }
 
-  // 返回 false 时，失败原因已经通过通知显示。
-  async setRecordListens(on: boolean): Promise<boolean> {
+  // 失败时抛出 Error，message 是给用户看的原因。
+  async setRecordListens(on: boolean): Promise<void> {
     try {
       await (on ? api.enableListenRecording() : api.disableListenRecording())
-      this.setState({ recordListens: on })
-      return true
     }
     catch (error) {
-      notificationStore.error(error instanceof IdentityRenewedError ? '设置没有保存，再保存一次。' : errorMessage(error))
-      return false
+      throw new Error(error instanceof IdentityRenewedError ? '没有保存，再试一次。' : errorMessage(error))
     }
+    this.setState({ recordListens: on })
   }
 
-  // 失败时返回错误，失败原因已经通过通知显示。
+  // 失败时返回错误。
   async #update(changes: { name?: string, email?: string }): Promise<unknown> {
     try {
       const { member } = await api.updateMe(changes)
@@ -109,8 +111,6 @@ class ProfileStore extends Store<ProfileState> {
       return null
     }
     catch (error) {
-      // 客户端不能按服务端的 message 区分是哪个字段不合格。
-      notificationStore.error(error instanceof IdentityRenewedError ? '个人资料没有保存，再保存一次。' : errorMessage(error, { INVALID_ARGUMENT: '昵称不能为空；邮箱要写成 name@example.com 这样的格式。' }))
       return error
     }
   }
@@ -137,6 +137,9 @@ class ProfileStore extends Store<ProfileState> {
     if (!email)
       return
     const error = await this.#update({ email })
+    if (error === null)
+      return
+    notificationStore.error(error instanceof IdentityRenewedError ? '个人资料没有保存，再保存一次。' : errorMessage(error, { INVALID_ARGUMENT: '昵称不能为空；邮箱要写成 name@example.com 这样的格式。' }))
     // 服务端不接受的副本重试也不会成功，删掉免得每次加载都报错；其他错误（网络、服务端故障）留到下次再试。
     if (error instanceof ApiError && error.code === 'INVALID_ARGUMENT')
       localStorage.removeItem(emailKey)

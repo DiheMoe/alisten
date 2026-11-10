@@ -39,8 +39,8 @@ let patchError: { status: number, code: string } | null
 let extraRoutes: Map<string, () => Response>
 
 async function load() {
-  const [{ profileStore, switchIdentity }, { identityEvents }] = await Promise.all([import('./profile-store'), import('@/core/api')])
-  return { profileStore, switchIdentity, identityEvents }
+  const [{ profileStore, switchIdentity }, { identityEvents }, { notificationStore }] = await Promise.all([import('./profile-store'), import('@/core/api'), import('@/shared/ui')])
+  return { profileStore, switchIdentity, identityEvents, notificationStore }
 }
 
 beforeEach(() => {
@@ -232,12 +232,12 @@ describe('邮箱', () => {
     const { profileStore } = await load()
     await profileStore.load()
 
-    expect(await profileStore.save({ email: ' Alice@Example.COM ' })).toBe(true)
+    await profileStore.save({ email: ' Alice@Example.COM ' })
     expect(updates).toEqual([{ email: ' Alice@Example.COM ' }])
     expect(profileStore.state).toMatchObject({ email: 'Alice@Example.COM', account: { username: 'alice', email: 'Alice@Example.COM', github: false } })
     expect(local.getItem(emailKey)).toBeNull()
 
-    expect(await profileStore.save({ email: '' })).toBe(true)
+    await profileStore.save({ email: '' })
     expect(profileStore.state.email).toBe('')
     expect(profileStore.state.account).toEqual({ username: 'alice', github: false })
   })
@@ -245,7 +245,7 @@ describe('邮箱', () => {
   it('游客保存到本机', async () => {
     const { profileStore } = await load()
     await profileStore.load()
-    expect(await profileStore.save({ email: 'guest@example.com' })).toBe(true)
+    await profileStore.save({ email: 'guest@example.com' })
     expect(local.getItem(emailKey)).toBe('guest@example.com')
     expect(profileStore.state.email).toBe('guest@example.com')
   })
@@ -323,12 +323,28 @@ describe('邮箱', () => {
     expect(updates).toEqual([])
   })
 
+  it('保存失败时抛出按字段说明的原因，不弹通知，资料不变', async () => {
+    me = { member, account: { username: 'alice', email: 'alice@example.com', github: false } }
+    const { profileStore, notificationStore } = await load()
+    await profileStore.load()
+
+    patchError = { status: 400, code: 'INVALID_ARGUMENT' }
+    await expect(profileStore.save({ email: 'alice' })).rejects.toThrow('邮箱要写成 name@example.com 这样的格式。')
+    await expect(profileStore.save({ name: '' })).rejects.toThrow('昵称不能为空。')
+    patchError = null
+    patchFails = true
+    await expect(profileStore.save({ name: 'bob' })).rejects.toThrow('无法连接服务器，请检查网络后再试。')
+
+    expect(profileStore.state).toMatchObject({ member, email: 'alice@example.com' })
+    expect(notificationStore.state.notifications).toEqual([])
+  })
+
   it('用户清空账号的邮箱时一并删除本机残留的副本，之后加载不再转存', async () => {
     local.setItem(emailKey, 'guest@example.com')
     me = { member, account: { username: 'alice', email: 'alice@example.com', github: false } }
     const { profileStore } = await load()
     await profileStore.load()
-    expect(await profileStore.save({ email: '' })).toBe(true)
+    await profileStore.save({ email: '' })
     expect(local.getItem(emailKey)).toBeNull()
 
     updates.length = 0
@@ -358,20 +374,21 @@ describe('记录播放历史', () => {
     expect(profileStore.state.recordListens).toBeNull()
     await profileStore.load()
     expect(profileStore.state.recordListens).toBe(false)
-    expect(await profileStore.setRecordListens(true)).toBe(true)
+    await profileStore.setRecordListens(true)
     expect(profileStore.state.recordListens).toBe(true)
-    expect(await profileStore.setRecordListens(false)).toBe(true)
+    await profileStore.setRecordListens(false)
     expect(profileStore.state.recordListens).toBe(false)
     expect(switched).toEqual(['on', 'off'])
   })
 
-  it('修改失败时开关不变', async () => {
+  it('修改失败时抛出原因，不弹通知，开关不变', async () => {
     me = { member, recordListens: true }
     extraRoutes.set('DELETE /api/me/listen-recording', () => new Response(JSON.stringify({ error: { code: 'UNAVAILABLE', message: '暂时不可用' } }), { status: 503 }))
-    const { profileStore } = await load()
+    const { profileStore, notificationStore } = await load()
     await profileStore.load()
-    expect(await profileStore.setRecordListens(false)).toBe(false)
+    await expect(profileStore.setRecordListens(false)).rejects.toThrow('暂时不可用')
     expect(profileStore.state.recordListens).toBe(true)
+    expect(notificationStore.state.notifications).toEqual([])
   })
 
   it('身份被拒绝时开关未知，换成新的游客之后是默认的开启', async () => {

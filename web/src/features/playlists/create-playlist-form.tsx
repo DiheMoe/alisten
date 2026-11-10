@@ -1,5 +1,6 @@
 import type { MyPlaylist } from '@/core/realtime'
 import { useState } from 'react'
+import { isImeKey } from '@/shared/lib/ime'
 import { playlistsStore } from './playlists-store'
 
 export function CreatePlaylistForm({ onCreated, onCancel }: { onCreated: (playlist: MyPlaylist) => void, onCancel: () => void }) {
@@ -9,7 +10,7 @@ export function CreatePlaylistForm({ onCreated, onCancel }: { onCreated: (playli
     <form
       className="form-stack"
       onKeyDown={(event) => {
-        if (event.key !== 'Escape' || event.nativeEvent.isComposing)
+        if (event.key !== 'Escape' || isImeKey(event.nativeEvent))
           return
         // 拦下对话框的 Esc：在“保存到歌单”里，Esc 只回到列表。
         event.preventDefault()

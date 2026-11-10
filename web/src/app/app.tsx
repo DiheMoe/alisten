@@ -193,7 +193,13 @@ function RoutedSettings() {
   const route = useStore(navigationStore, s => s.route)
   if (route.name !== 'settings')
     return null
-  return <SettingsPage section={route.section} />
+  return (
+    <SettingsPage
+      section={route.section}
+      onSection={section => section === null ? navigationStore.up({ ...route, section }) : navigationStore.navigate({ ...route, section })}
+      onOpenHistory={() => navigationStore.open('history')}
+    />
+  )
 }
 
 function RoutedAdmin({ onEntered }: { onEntered: (ref: string) => void }) {
@@ -327,7 +333,7 @@ export function App() {
                   {page === 'playlists' && (
                     <PlaylistsPage
                       onOpen={playlist => navigationStore.navigate({ name: 'my-playlist', id: playlist.id, panel: navigationStore.state.route.panel }, playlist.name)}
-                      onRegister={() => navigationStore.open('settings')}
+                      onRegister={() => navigationStore.navigate({ name: 'settings', section: 'account', panel: navigationStore.state.route.panel })}
                     />
                   )}
                   {page === 'my-playlist' && <RoutedMyPlaylist />}

@@ -19,11 +19,6 @@ export function systemNotificationsSupported(): boolean {
   return 'Notification' in window && 'serviceWorker' in navigator
 }
 
-// 只能在用户操作的事件里调用：Safari 和 Firefox 不接受其他时候发起的权限申请。
-export async function requestNotificationPermission(): Promise<boolean> {
-  return await Notification.requestPermission() === 'granted'
-}
-
 class ReminderStore extends Store<ReminderSettings> {
   #room: RoomState | null = null
   #firstSeen = new Map<string, number>()
