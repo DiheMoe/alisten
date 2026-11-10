@@ -82,7 +82,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 	rooms := lobby.New(store, leases)
 	services := api.Services{
 		Identity:  identity.New(store, store, store, gateway),
-		Accounts:  identity.NewAccounts(store, store, redis.NewAccountQuota(rdb), redis.NewDevices(rdb), gateway),
+		Accounts:  identity.NewAccounts(store, store, redis.NewAccountQuota(rdb), redis.NewCodes(rdb), redis.NewDevices(rdb), gateway),
 		Playlists: playlist.New(store, store, store, music, redis.NewAccountQuota(rdb), shortlink.New(playlistlink.AllowedRedirectHost, playlistlink.Recognized)),
 		Lobby:     rooms,
 		Admin:     admin.New(cfg.adminToken, rooms, store, store, store, src.neteaseLogin, src.qqLogin, src.bilibiliLogin, store, gateway),

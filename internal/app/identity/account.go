@@ -51,15 +51,16 @@ func accountOf(a port.Account) Account {
 
 // 删除会话之后，用这些会话的票据建立的房间连接随之断开：网关立即通知各实例，通知丢失时最迟在网关的一个核对周期之后断开。
 type Accounts struct {
-	members port.Members
-	site    port.Site
-	quota   port.AccountQuota
-	devices port.LoginDevices
-	gateway *realtime.Gateway
+	members  port.Members
+	site     port.Site
+	quota    port.AccountQuota
+	pairings port.PairingCodes
+	devices  port.LoginDevices
+	gateway  *realtime.Gateway
 }
 
-func NewAccounts(members port.Members, site port.Site, quota port.AccountQuota, devices port.LoginDevices, gateway *realtime.Gateway) *Accounts {
-	return &Accounts{members: members, site: site, quota: quota, devices: devices, gateway: gateway}
+func NewAccounts(members port.Members, site port.Site, quota port.AccountQuota, pairings port.PairingCodes, devices port.LoginDevices, gateway *realtime.Gateway) *Accounts {
+	return &Accounts{members: members, site: site, quota: quota, pairings: pairings, devices: devices, gateway: gateway}
 }
 
 // 游客没有账号，ok 为 false。
@@ -126,10 +127,8 @@ func (a *Accounts) addCredentials(ctx context.Context, memberID, token, clientIP
 // device 是这台设备此前登录时拿到的登录设备凭证，没有时为空字符串，已经按协议校验过格式。成功时返回这台设备此后要带上的凭证：
 // 带来的凭证属于这个账号、签发之后密码也没变过时续期并原样返回，否则签发新的。
 func (a *Accounts) Login(ctx context.Context, current member.Member, currentToken, clientIP, username, password, device string) (Session, Account, string, error) {
-	if _, registered, err := a.Account(ctx, current.ID); err != nil {
+	if err := a.requireGuest(ctx, current.ID); err != nil {
 		return Session{}, Account{}, "", err
-	} else if registered {
-		return Session{}, Account{}, "", ErrAlreadyLoggedIn
 	}
 	// 按 IP 限制一个来源的尝试次数，按用户名限制一个账号被尝试的次数：换着 IP 猜同一个账号也会受限。
 	// 带着这个账号的凭证时改按凭证计数：别人反复猜密码耗尽了用户名额度，账号主人的设备仍然能登录。
@@ -158,19 +157,14 @@ func (a *Accounts) Login(ctx context.Context, current member.Member, currentToke
 	if err := a.devices.SaveDevice(ctx, hashSecret(device), account.Member.ID, passwordStamp(account.PasswordHash), loginDeviceTTL); err != nil {
 		return Session{}, Account{}, "", err
 	}
-	token, hash := newSecret()
-	guest := hashSecret(currentToken)
-	err = a.members.ReplaceSession(ctx, guest, account.Member.ID, hash, account.PasswordHash)
-	switch {
-	case errors.Is(err, port.ErrSessionNotFound):
-		return Session{}, Account{}, "", ErrInvalidMemberToken
-	case errors.Is(err, port.ErrAccountPasswordChanged):
+	session, err := a.signIn(ctx, currentToken, account)
+	if errors.Is(err, port.ErrAccountPasswordChanged) {
 		return Session{}, Account{}, "", ErrInvalidCredentials
-	case err != nil:
+	}
+	if err != nil {
 		return Session{}, Account{}, "", err
 	}
-	a.gateway.RevokeSessions(ctx, [][]byte{guest})
-	return Session{MemberToken: token, Member: account.Member}, accountOf(account), device, nil
+	return session, accountOf(account), device, nil
 }
 
 // 未知、过期、属于别的账号，或者签发之后账号的密码变过（修改、重置、补设）的凭证，都当作没带。
@@ -200,6 +194,32 @@ func (a *Accounts) knownDevice(ctx context.Context, device, username string) (bo
 func passwordStamp(passwordHash string) []byte {
 	sum := sha256.Sum256([]byte(passwordHash))
 	return sum[:16]
+}
+
+// 只有游客能登录：已经登录了账号的设备要先退出。
+func (a *Accounts) requireGuest(ctx context.Context, memberID string) error {
+	if _, registered, err := a.Account(ctx, memberID); err != nil {
+		return err
+	} else if registered {
+		return ErrAlreadyLoggedIn
+	}
+	return nil
+}
+
+// 给发出请求的游客签发 account 的新会话，游客的这个会话随即失效。account.PasswordHash 是校验时读到的密码哈希，
+// 此后密码被修改或重置过时返回 port.ErrAccountPasswordChanged，由调用方按各自的登录方式告诉用户。
+func (a *Accounts) signIn(ctx context.Context, currentToken string, account port.Account) (Session, error) {
+	token, hash := newSecret()
+	guest := hashSecret(currentToken)
+	err := a.members.ReplaceSession(ctx, guest, account.Member.ID, hash, account.PasswordHash)
+	if errors.Is(err, port.ErrSessionNotFound) {
+		return Session{}, ErrInvalidMemberToken
+	}
+	if err != nil {
+		return Session{}, err
+	}
+	a.gateway.RevokeSessions(ctx, [][]byte{guest})
+	return Session{MemberToken: token, Member: account.Member}, nil
 }
 
 func (a *Accounts) verify(ctx context.Context, username, password string) (port.Account, error) {

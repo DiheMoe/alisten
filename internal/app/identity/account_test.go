@@ -64,7 +64,7 @@ func newAccounts(t *testing.T) (a *Accounts, s *Service, store *porttest.Store, 
 			}
 		}
 	}
-	return NewAccounts(store, store, q, porttest.NewDevices(), gateway), New(store, store, store, gateway), store, q, revoked
+	return NewAccounts(store, store, q, porttest.NewCodes(), porttest.NewDevices(), gateway), New(store, store, store, gateway), store, q, revoked
 }
 
 // 不计顺序。
@@ -335,7 +335,7 @@ func newDeviceAccounts(t *testing.T) (*Accounts, *Service, *porttest.Store, *fak
 	gateway := newGateway(store, node, node)
 	q := &fakeQuota{exhausted: map[string]bool{}}
 	devices := &recordingDevices{Devices: porttest.NewDevices()}
-	return NewAccounts(store, store, q, devices, gateway), New(store, store, store, gateway), store, q, devices
+	return NewAccounts(store, store, q, porttest.NewCodes(), devices, gateway), New(store, store, store, gateway), store, q, devices
 }
 
 func deviceQuota(device string) string {
@@ -736,7 +736,7 @@ func TestAccountOperationsSucceedWhenRevocationFails(t *testing.T) {
 	node := porttest.NewRedis().Node("a")
 	gateway := newGateway(store, node, noRevocation{node})
 	s := New(store, store, store, gateway)
-	a := NewAccounts(store, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewDevices(), gateway)
+	a := NewAccounts(store, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewCodes(), porttest.NewDevices(), gateway)
 	alice := registerAccount(t, a, s, "alice", "correct horse")
 
 	guest := createMember(t, s)
@@ -803,7 +803,7 @@ func TestLoginRejectedWhenGuestSessionOrPasswordChangesMeanwhile(t *testing.T) {
 	}
 
 	node := porttest.NewRedis().Node("a")
-	changing := NewAccounts(passwordChangedMembers{store}, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewDevices(), newGateway(store, node, node))
+	changing := NewAccounts(passwordChangedMembers{store}, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewCodes(), porttest.NewDevices(), newGateway(store, node, node))
 	guest = createMember(t, s)
 	if _, _, _, err := changing.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", ""); !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("密码在校验之后被修改，Login = %v，期望 ErrInvalidCredentials", err)
@@ -830,7 +830,7 @@ func TestChangePasswordRejectedWhenPasswordChangesMeanwhile(t *testing.T) {
 	alice := registerAccount(t, a, s, "alice", "correct horse")
 	node := porttest.NewRedis().Node("a")
 	racing := func(meanwhile func()) *Accounts {
-		return NewAccounts(passwordReadMembers{store, meanwhile}, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewDevices(), newGateway(store, node, node))
+		return NewAccounts(passwordReadMembers{store, meanwhile}, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewCodes(), porttest.NewDevices(), newGateway(store, node, node))
 	}
 
 	var reset string

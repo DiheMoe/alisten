@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
 	"strings"
@@ -37,6 +38,16 @@ func avatarHash(email string) string {
 	}
 	sum := md5.Sum([]byte(email))
 	return hex.EncodeToString(sum[:])
+}
+
+// 配对码要能手动输入：去掉了容易认错的 0、O、1、I，剩下 32 个字符，每个字符正好对应 5 位随机值。
+var pairingEncoding = base32.NewEncoding("23456789ABCDEFGHJKLMNPQRSTUVWXYZ").WithPadding(base32.NoPadding)
+
+// 40 位随机值，8 个字符。
+func newPairingCode() string {
+	b := make([]byte, 5)
+	rand.Read(b)
+	return pairingEncoding.EncodeToString(b)
 }
 
 // 后台重置密码时生成：96 位随机值的 base64url 编码，共 16 个字符，方便转告用户。
