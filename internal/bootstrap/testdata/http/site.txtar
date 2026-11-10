@@ -106,4 +106,4 @@ Authorization: Bearer $guest
 {"username": "guest", "password": "correct horse"}
 -- response --
 201
-{"account": {"username": "guest"}}
+{"account": {"username": "guest", "github": false}}

@@ -167,15 +167,15 @@ describe('账号状态', () => {
   })
 
   it('取回资料时一并取回账号', async () => {
-    me = { member, account: { username: 'alice' } }
+    me = { member, account: { username: 'alice', github: false } }
     const { profileStore } = await load()
     await profileStore.load()
-    expect(profileStore.state).toMatchObject({ member, account: { username: 'alice' } })
+    expect(profileStore.state).toMatchObject({ member, account: { username: 'alice', github: false } })
   })
 
   it('游客没有账号', async () => {
     const { profileStore } = await load()
-    await profileStore.registered({ username: 'alice' })
+    await profileStore.registered({ username: 'alice', github: false })
     await profileStore.load()
     expect(profileStore.state).toMatchObject({ member, account: null })
   })
@@ -183,18 +183,18 @@ describe('账号状态', () => {
   it('注册之后设置账号', async () => {
     const { profileStore } = await load()
     await profileStore.load()
-    await profileStore.registered({ username: 'alice' })
-    expect(profileStore.state).toMatchObject({ member, account: { username: 'alice' } })
+    await profileStore.registered({ username: 'alice', github: false })
+    expect(profileStore.state).toMatchObject({ member, account: { username: 'alice', github: false } })
   })
 
   it('身份被拒绝或更换之后没有账号', async () => {
     const { profileStore, identityEvents } = await load()
     profileStore.start()
-    await profileStore.registered({ username: 'alice' })
+    await profileStore.registered({ username: 'alice', github: false })
     identityEvents.emit({ kind: 'rejected' })
     expect(profileStore.state).toMatchObject({ member: null, account: null })
 
-    await profileStore.registered({ username: 'alice' })
+    await profileStore.registered({ username: 'alice', github: false })
     identityEvents.emit({ kind: 'renewed', member: renewed })
     expect(profileStore.state).toMatchObject({ member: renewed, account: null })
   })
@@ -207,14 +207,14 @@ describe('邮箱', () => {
 
   it('已注册时取自账号，不读本机', async () => {
     local.setItem(emailKey, 'local@example.com')
-    me = { member, account: { username: 'alice', email: 'Alice@Example.COM' } }
+    me = { member, account: { username: 'alice', email: 'Alice@Example.COM', github: false } }
     const { profileStore } = await load()
     profileStore.start()
     await profileStore.load()
     expect(profileStore.state.email).toBe('Alice@Example.COM')
 
     local.removeItem(emailKey)
-    me = { member, account: { username: 'alice' } }
+    me = { member, account: { username: 'alice', github: false } }
     await profileStore.load()
     expect(profileStore.state.email).toBe('')
   })
@@ -228,18 +228,18 @@ describe('邮箱', () => {
   })
 
   it('已注册时保存到账号，不写本机', async () => {
-    me = { member, account: { username: 'alice' } }
+    me = { member, account: { username: 'alice', github: false } }
     const { profileStore } = await load()
     await profileStore.load()
 
     expect(await profileStore.save({ email: ' Alice@Example.COM ' })).toBe(true)
     expect(updates).toEqual([{ email: ' Alice@Example.COM ' }])
-    expect(profileStore.state).toMatchObject({ email: 'Alice@Example.COM', account: { username: 'alice', email: 'Alice@Example.COM' } })
+    expect(profileStore.state).toMatchObject({ email: 'Alice@Example.COM', account: { username: 'alice', email: 'Alice@Example.COM', github: false } })
     expect(local.getItem(emailKey)).toBeNull()
 
     expect(await profileStore.save({ email: '' })).toBe(true)
     expect(profileStore.state.email).toBe('')
-    expect(profileStore.state.account).toEqual({ username: 'alice' })
+    expect(profileStore.state.account).toEqual({ username: 'alice', github: false })
   })
 
   it('游客保存到本机', async () => {
@@ -255,17 +255,17 @@ describe('邮箱', () => {
     const { profileStore } = await load()
     profileStore.start()
     await profileStore.load()
-    await profileStore.registered({ username: 'alice' })
+    await profileStore.registered({ username: 'alice', github: false })
 
     expect(updates).toEqual([{ email: 'guest@example.com' }])
     expect(local.getItem(emailKey)).toBeNull()
-    expect(profileStore.state).toMatchObject({ email: 'guest@example.com', account: { username: 'alice', email: 'guest@example.com' } })
+    expect(profileStore.state).toMatchObject({ email: 'guest@example.com', account: { username: 'alice', email: 'guest@example.com', github: false } })
   })
 
   it('注册时本机没有邮箱就不发请求', async () => {
     const { profileStore } = await load()
     await profileStore.load()
-    await profileStore.registered({ username: 'alice' })
+    await profileStore.registered({ username: 'alice', github: false })
     expect(updates).toEqual([])
   })
 
@@ -274,21 +274,21 @@ describe('邮箱', () => {
     patchFails = true
     const { profileStore } = await load()
     profileStore.start()
-    await profileStore.registered({ username: 'alice' })
+    await profileStore.registered({ username: 'alice', github: false })
     expect(local.getItem(emailKey)).toBe('guest@example.com')
 
     patchFails = false
-    me = { member, account: { username: 'alice' } }
+    me = { member, account: { username: 'alice', github: false } }
     await profileStore.load()
     expect(updates).toEqual([{ email: 'guest@example.com' }])
     expect(local.getItem(emailKey)).toBeNull()
-    expect(profileStore.state).toMatchObject({ email: 'guest@example.com', account: { username: 'alice', email: 'guest@example.com' } })
+    expect(profileStore.state).toMatchObject({ email: 'guest@example.com', account: { username: 'alice', email: 'guest@example.com', github: false } })
   })
 
   it('服务端判定本机的邮箱不合格时删除副本，之后加载不再转存', async () => {
     local.setItem(emailKey, 'legacy')
     patchError = { status: 400, code: 'INVALID_ARGUMENT' }
-    me = { member, account: { username: 'alice' } }
+    me = { member, account: { username: 'alice', github: false } }
     const { profileStore } = await load()
     await profileStore.load()
     expect(local.getItem(emailKey)).toBeNull()
@@ -301,7 +301,7 @@ describe('邮箱', () => {
   it('重试仍失败时保留本机的副本，下次加载再试', async () => {
     local.setItem(emailKey, 'guest@example.com')
     patchFails = true
-    me = { member, account: { username: 'alice' } }
+    me = { member, account: { username: 'alice', github: false } }
     const { profileStore } = await load()
     await profileStore.load()
     expect(local.getItem(emailKey)).toBe('guest@example.com')
@@ -313,26 +313,26 @@ describe('邮箱', () => {
   })
 
   it('已注册且本机没有副本，或账号已有邮箱时，加载不发更新请求', async () => {
-    me = { member, account: { username: 'alice' } }
+    me = { member, account: { username: 'alice', github: false } }
     const { profileStore } = await load()
     await profileStore.load()
 
     local.setItem(emailKey, 'guest@example.com')
-    me = { member, account: { username: 'alice', email: 'alice@example.com' } }
+    me = { member, account: { username: 'alice', email: 'alice@example.com', github: false } }
     await profileStore.load()
     expect(updates).toEqual([])
   })
 
   it('用户清空账号的邮箱时一并删除本机残留的副本，之后加载不再转存', async () => {
     local.setItem(emailKey, 'guest@example.com')
-    me = { member, account: { username: 'alice', email: 'alice@example.com' } }
+    me = { member, account: { username: 'alice', email: 'alice@example.com', github: false } }
     const { profileStore } = await load()
     await profileStore.load()
     expect(await profileStore.save({ email: '' })).toBe(true)
     expect(local.getItem(emailKey)).toBeNull()
 
     updates.length = 0
-    me = { member, account: { username: 'alice' } }
+    me = { member, account: { username: 'alice', github: false } }
     await profileStore.load()
     expect(updates).toEqual([])
   })

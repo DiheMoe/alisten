@@ -1,0 +1,133 @@
+设备配对：已注册的账号生成配对码，游客兑换之后登录这个账号，原来的游客 token 随即失效；配对码只能兑换一次，游客不能生成，生成它的会话退出之后配对码作废。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/account/pairing-codes
+Authorization: Bearer $alice
+
+{}
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "还没有注册账号"}}
+
+-- request --
+POST /api/account
+Authorization: Bearer $alice
+
+{"username": "alice", "password": "correct horse"}
+-- response --
+201
+{"account": {"username": "alice", "github": false}}
+
+-- request --
+POST /api/account/pairing-codes
+Authorization: Bearer $alice
+
+{}
+-- response --
+201
+{"code": "$code", "qrImage": "$qr", "expiresAtMs": 1}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$bob", "member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""}}
+
+-- request --
+POST /api/sessions/pairing
+Authorization: Bearer $bob
+
+{"code": "abcd2345"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "code：格式不正确"}}
+
+-- request --
+POST /api/sessions/pairing
+Authorization: Bearer $bob
+
+{"code": "$code"}
+-- response --
+201
+{"memberToken": "$alice2", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice", "github": false}}
+
+-- request --
+GET /api/me
+Authorization: Bearer $bob
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "成员 token 无效"}}
+
+-- request --
+GET /api/me
+Authorization: Bearer $alice2
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice", "github": false}, "recordListens": true}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$carol", "member": {"id": "$carolId", "name": "$carolName", "avatarHash": ""}}
+
+-- request --
+POST /api/sessions/pairing
+Authorization: Bearer $carol
+
+{"code": "$code"}
+-- response --
+401
+{"error": {"code": "INVALID_CREDENTIALS", "message": "配对码不对或已经过期"}}
+
+-- request --
+POST /api/account/pairing-codes
+Authorization: Bearer $alice2
+
+{}
+-- response --
+201
+{"code": "$code2", "qrImage": "$qr2", "expiresAtMs": 1}
+
+-- request --
+POST /api/sessions/pairing
+Authorization: Bearer $alice
+
+{"code": "$code2"}
+-- response --
+409
+{"error": {"code": "CONFLICT", "message": "已经登录了账号，先退出再登录其他账号"}}
+
+-- request --
+DELETE /api/sessions/current
+Authorization: Bearer $alice2
+-- response --
+204
+
+-- request --
+POST /api/sessions/pairing
+Authorization: Bearer $carol
+
+{"code": "$code2"}
+-- response --
+401
+{"error": {"code": "INVALID_CREDENTIALS", "message": "配对码不对或已经过期"}}
+
+-- request --
+GET /api/me
+Authorization: Bearer $carol
+-- response --
+200
+{"member": {"id": "$carolId", "name": "$carolName", "avatarHash": ""}, "recordListens": true}

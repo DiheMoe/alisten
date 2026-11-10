@@ -8,12 +8,13 @@ import (
 )
 
 var (
-	patternAdminCreateRoomRequestSlug = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
-	patternAdminUpdateRoomRequestSlug = regexp.MustCompile(`^[a-z0-9-]{0,32}$`)
-	patternLoginRequestDevice         = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
-	patternLoginRequestUsername       = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
-	patternRegisterRequestUsername    = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
-	patternTrackIDWhenBilibili        = regexp.MustCompile(`^BV[1-9A-HJ-NP-Za-km-z]{10}(?:/([2-9]|[1-9][0-9]{1,3}))?$`)
+	patternAdminCreateRoomRequestSlug   = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
+	patternAdminUpdateRoomRequestSlug   = regexp.MustCompile(`^[a-z0-9-]{0,32}$`)
+	patternLoginRequestDevice           = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
+	patternLoginRequestUsername         = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
+	patternRedeemPairingCodeRequestCode = regexp.MustCompile(`^[2-9A-HJ-NP-Z]{8}$`)
+	patternRegisterRequestUsername      = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
+	patternTrackIDWhenBilibili          = regexp.MustCompile(`^BV[1-9A-HJ-NP-Za-km-z]{10}(?:/([2-9]|[1-9][0-9]{1,3}))?$`)
 )
 
 func decodeConnectionRequest(typ string, raw json.RawMessage, path string) (any, bool, error) {
@@ -201,6 +202,14 @@ func DecodeShareMyPlaylistRequest(body []byte) (ShareMyPlaylistRequest, error) {
 
 func DecodeCopySharedPlaylistRequest(body []byte) (CopySharedPlaylistRequest, error) {
 	return decodeCopySharedPlaylistRequest(body, "")
+}
+
+func DecodeCreatePairingCodeRequest(body []byte) (CreatePairingCodeRequest, error) {
+	return decodeCreatePairingCodeRequest(body, "")
+}
+
+func DecodeRedeemPairingCodeRequest(body []byte) (RedeemPairingCodeRequest, error) {
+	return decodeRedeemPairingCodeRequest(body, "")
 }
 
 func decodeAddMyPlaylistItemRequest(raw json.RawMessage, path string) (AddMyPlaylistItemRequest, error) {
@@ -552,6 +561,12 @@ func decodeCreateMyPlaylistRequest(raw json.RawMessage, path string) (CreateMyPl
 		return v, err
 	}
 	return v, nil
+}
+
+func decodeCreatePairingCodeRequest(raw json.RawMessage, path string) (CreatePairingCodeRequest, error) {
+	var v CreatePairingCodeRequest
+	_, err := decodeObject(raw, path)
+	return v, err
 }
 
 func decodeCreateRoomRequest(raw json.RawMessage, path string) (CreateRoomRequest, error) {
@@ -978,6 +993,24 @@ func decodeRecommendListRequest(raw json.RawMessage, path string) (RecommendList
 	var v RecommendListRequest
 	_, err := decodeObject(raw, path)
 	return v, err
+}
+
+func decodeRedeemPairingCodeRequest(raw json.RawMessage, path string) (RedeemPairingCodeRequest, error) {
+	var v RedeemPairingCodeRequest
+	m, err := decodeObject(raw, path, "code")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "code"); err != nil {
+		return v, err
+	}
+	if v.Code, err = decodeString(m["code"], field(path, "code")); err != nil {
+		return v, err
+	}
+	if err = checkPattern(v.Code, field(path, "code"), patternRedeemPairingCodeRequestCode); err != nil {
+		return v, err
+	}
+	return v, nil
 }
 
 func decodeRegisterRequest(raw json.RawMessage, path string) (RegisterRequest, error) {

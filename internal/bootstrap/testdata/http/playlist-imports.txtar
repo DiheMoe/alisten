@@ -42,7 +42,7 @@ Authorization: Bearer $alice
 {"username": "alice", "password": "correct horse"}
 -- response --
 201
-{"account": {"username": "alice"}}
+{"account": {"username": "alice", "github": false}}
 
 -- request --
 POST /api/rooms

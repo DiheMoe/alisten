@@ -90,7 +90,11 @@ class ProfileStore extends Store<ProfileState> {
         // 用户对账号邮箱的修改是最终决定，本机残留的副本不能再覆盖它。
         if (changes.email !== undefined)
           localStorage.removeItem(emailKey)
-        this.setState({ member, email, account: { username: account.username, ...(email && { email }) }, failed: false })
+        const next: Account = { ...account }
+        delete next.email
+        if (email)
+          next.email = email
+        this.setState({ member, email, account: next, failed: false })
       }
       else {
         const email = changes.email ?? this.state.email

@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "cbfa923a9cbe9f0a"
+const Version = "0023496d94e1b43f"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -12,7 +12,8 @@ type APIKey struct {
 
 type Account struct {
 	Email    *string `json:"email,omitempty"`
-	Username string  `json:"username"`
+	Github   bool    `json:"github"`
+	Username *string `json:"username,omitempty"`
 }
 
 type ActivityKind string
@@ -194,6 +195,14 @@ type CreateMemberResponse struct {
 
 type CreateMyPlaylistRequest struct {
 	Name string `json:"name"`
+}
+
+type CreatePairingCodeRequest struct{}
+
+type CreatePairingCodeResponse struct {
+	Code        string `json:"code"`
+	ExpiresAtMs int64  `json:"expiresAtMs"`
+	QrImage     string `json:"qrImage"`
 }
 
 type CreateRoomRequest struct {
@@ -598,6 +607,16 @@ func (v RecommendListResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(plain(v))
 }
 
+type RedeemPairingCodeRequest struct {
+	Code string `json:"code"`
+}
+
+type RedeemPairingCodeResponse struct {
+	Account     Account `json:"account"`
+	Member      Member  `json:"member"`
+	MemberToken string  `json:"memberToken"`
+}
+
 type RegisterRequest struct {
 	Password string `json:"password"`
 	Username string `json:"username"`
@@ -926,6 +945,8 @@ var (
 	RouteUnshareMyPlaylist            = Route{Pattern: "DELETE /api/me/playlists/{id}/share", Auth: AuthMember, Status: 204}
 	RouteGetSharedPlaylist            = Route{Pattern: "GET /api/shared-playlists/{shareId}", Auth: AuthNone, Status: 200}
 	RouteCopySharedPlaylist           = Route{Pattern: "POST /api/shared-playlists/{shareId}/copies", Auth: AuthMember, Status: 201}
+	RouteCreatePairingCode            = Route{Pattern: "POST /api/account/pairing-codes", Auth: AuthMember, Status: 201}
+	RouteRedeemPairingCode            = Route{Pattern: "POST /api/sessions/pairing", Auth: AuthMember, Status: 201}
 )
 
 var RoomRoutes = []RoomRoute{

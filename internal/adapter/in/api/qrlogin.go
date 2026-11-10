@@ -87,13 +87,20 @@ func qrLogin(session port.QRLoginSession) (protocol.QRLogin, error) {
 		if session.LoginURL == "" {
 			return protocol.QRLogin{}, fmt.Errorf("音源没有给出二维码图片和登录链接：%w", port.ErrProviderFailed)
 		}
-		code, err := qr.Encode(session.LoginURL, qr.M)
-		if err != nil {
+		var err error
+		if image, err = qrDataURI(session.LoginURL); err != nil {
 			return protocol.QRLogin{}, fmt.Errorf("把登录链接编码成二维码：%w：%w", err, port.ErrProviderFailed)
 		}
-		image = "data:image/png;base64," + base64.StdEncoding.EncodeToString(code.PNG())
 	}
 	return protocol.QRLogin{Key: session.Key, QrImage: image, ExpiresAtMs: session.ExpiresAt.UnixMilli()}, nil
+}
+
+func qrDataURI(text string) (string, error) {
+	code, err := qr.Encode(text, qr.M)
+	if err != nil {
+		return "", err
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(code.PNG()), nil
 }
 
 func qrLoginResult(r port.QRLoginResult) protocol.QRLoginResult {

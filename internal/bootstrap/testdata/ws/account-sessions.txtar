@@ -16,7 +16,7 @@ Authorization: Bearer $alice
 {"username": "alice", "password": "correct horse"}
 -- response --
 201
-{"account": {"username": "alice"}}
+{"account": {"username": "alice", "github": false}}
 
 -- request --
 POST /api/members
@@ -33,7 +33,7 @@ Authorization: Bearer $guest
 {"username": "alice", "password": "correct horse"}
 -- response --
 201
-{"memberToken": "$alice2", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "device": "$guestDevice"}
+{"memberToken": "$alice2", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice", "github": false}, "device": "$guestDevice"}
 
 -- request --
 POST /api/rooms

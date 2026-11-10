@@ -16,7 +16,7 @@ Authorization: Bearer $alice
 {"username": "alice", "password": "correct horse"}
 -- response --
 201
-{"account": {"username": "alice"}}
+{"account": {"username": "alice", "github": false}}
 
 -- request --
 POST /api/members
@@ -33,7 +33,7 @@ Authorization: Bearer $laptop
 {"username": "alice", "password": "correct horse"}
 -- response --
 201
-{"memberToken": "$alice2", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "device": "$device"}
+{"memberToken": "$alice2", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice", "github": false}, "device": "$device"}
 
 -- request --
 DELETE /api/sessions/current
@@ -127,7 +127,7 @@ Authorization: Bearer $laptop2
 {"username": "alice", "password": "correct horse", "device": "$device"}
 -- response --
 201
-{"memberToken": "$alice3", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "device": "$device"}
+{"memberToken": "$alice3", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice", "github": false}, "device": "$device"}
 
 -- request --
 PUT /api/account/password

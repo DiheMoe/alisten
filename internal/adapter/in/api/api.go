@@ -57,6 +57,8 @@ type Services struct {
 
 	// 浏览器访问对象存储时使用的地址前缀，结尾没有 /。
 	StorageURL string
+	// 网页的 origin，结尾没有 /。
+	PublicURL string
 }
 
 type server struct {
@@ -169,6 +171,8 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	srv.handle(mux, protocol.RouteUnshareMyPlaylist, srv.unshareMyPlaylist)
 	srv.handle(mux, protocol.RouteGetSharedPlaylist, srv.getSharedPlaylist)
 	srv.handle(mux, protocol.RouteCopySharedPlaylist, srv.copySharedPlaylist)
+	srv.handle(mux, protocol.RouteCreatePairingCode, srv.createPairingCode)
+	srv.handle(mux, protocol.RouteRedeemPairingCode, srv.redeemPairingCode)
 	mux.HandleFunc("GET /ws", srv.websocket)
 	mux.HandleFunc("GET /api/room/events", srv.roomEvents)
 	mux.HandleFunc("GET /media/{source}/{id}", srv.redirectMedia)
@@ -357,6 +361,8 @@ var knownErrors = []struct {
 	{errClientOutdated, protocol.ErrorCodeClientOutdated},
 	{errPanicked, protocol.ErrorCodeInternal},
 	{port.ErrShareNotFound, protocol.ErrorCodeNotFound},
+	{identity.ErrInvalidPairingCode, protocol.ErrorCodeInvalidCredentials},
+	{port.ErrNoPassword, protocol.ErrorCodeConflict},
 }
 
 func errorInfo(err error) (info protocol.ErrorInfo, expected bool) {

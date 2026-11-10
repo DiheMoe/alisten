@@ -95,6 +95,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 		Listens:   listen.New(store),
 
 		StorageURL: cfg.storageURL,
+		PublicURL:  cfg.publicOrigin,
 	}
 	httpLogger := base.With("component", "http")
 	return public{

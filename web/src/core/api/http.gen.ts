@@ -133,6 +133,14 @@ export interface CreateMyPlaylistRequest {
   name: string
 }
 
+export type CreatePairingCodeRequest = Record<string, never>
+
+export interface CreatePairingCodeResponse {
+  code: string
+  expiresAtMs: number
+  qrImage: string
+}
+
 export interface CreateRoomRequest {
   description: string
   name: string
@@ -225,6 +233,16 @@ export interface LoginResponse {
 export interface MoveMyPlaylistItemsRequest {
   before?: Track
   tracks: Track[]
+}
+
+export interface RedeemPairingCodeRequest {
+  code: string
+}
+
+export interface RedeemPairingCodeResponse {
+  account: Account
+  member: Member
+  memberToken: string
 }
 
 export interface RegisterRequest {
@@ -348,5 +366,7 @@ export function httpClient(send: HttpSend) {
     unshareMyPlaylist: (id: string) => send<void>({ method: 'DELETE', path: `/api/me/playlists/${encodeURIComponent(id)}/share`, auth: 'member' }),
     getSharedPlaylist: (shareId: string) => send<SharedPlaylist>({ method: 'GET', path: `/api/shared-playlists/${encodeURIComponent(shareId)}`, auth: 'none' }),
     copySharedPlaylist: (shareId: string, body: CopySharedPlaylistRequest) => send<MyPlaylist>({ method: 'POST', path: `/api/shared-playlists/${encodeURIComponent(shareId)}/copies`, auth: 'member', body }),
+    createPairingCode: () => send<CreatePairingCodeResponse>({ method: 'POST', path: '/api/account/pairing-codes', auth: 'member', body: {} }),
+    redeemPairingCode: (body: RedeemPairingCodeRequest) => send<RedeemPairingCodeResponse>({ method: 'POST', path: '/api/sessions/pairing', auth: 'member', body }),
   }
 }

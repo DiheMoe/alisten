@@ -31,7 +31,7 @@ Authorization: Bearer $alice
 {"username": "alice", "password": "correct horse"}
 -- response --
 201
-{"account": {"username": "alice"}}
+{"account": {"username": "alice", "github": false}}
 
 -- request --
 GET /api/me/playlists
@@ -282,7 +282,7 @@ Authorization: Bearer $bob
 {"username": "bob", "password": "correct horse"}
 -- response --
 201
-{"account": {"username": "bob"}}
+{"account": {"username": "bob", "github": false}}
 
 -- request --
 GET /api/me/playlists

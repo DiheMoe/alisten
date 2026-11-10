@@ -15,14 +15,14 @@ Authorization: Bearer $alice
 {"username": "alice", "password": "correct horse"}
 -- response --
 201
-{"account": {"username": "alice"}}
+{"account": {"username": "alice", "github": false}}
 
 -- request --
 GET /api/me
 Authorization: Bearer $alice
 -- response --
 200
-{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "recordListens": true}
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice", "github": false}, "recordListens": true}
 
 -- request --
 PATCH /api/me
@@ -38,7 +38,7 @@ GET /api/me
 Authorization: Bearer $alice
 -- response --
 200
-{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "account": {"username": "alice", "email": "Alice@Example.COM"}, "recordListens": true}
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "account": {"username": "alice", "email": "Alice@Example.COM", "github": false}, "recordListens": true}
 
 -- request --
 POST /api/account
@@ -132,14 +132,14 @@ Authorization: Bearer $bob
 {"username": "alice", "password": "correct horse"}
 -- response --
 201
-{"memberToken": "$alice2", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "account": {"username": "alice", "email": "Alice@Example.COM"}, "device": "$bobDevice"}
+{"memberToken": "$alice2", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "account": {"username": "alice", "email": "Alice@Example.COM", "github": false}, "device": "$bobDevice"}
 
 -- request --
 GET /api/me
 Authorization: Bearer $alice2
 -- response --
 200
-{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "account": {"username": "alice", "email": "Alice@Example.COM"}, "recordListens": true}
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "account": {"username": "alice", "email": "Alice@Example.COM", "github": false}, "recordListens": true}
 
 -- request --
 PATCH /api/me
@@ -155,7 +155,7 @@ GET /api/me
 Authorization: Bearer $alice
 -- response --
 200
-{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "recordListens": true}
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice", "github": false}, "recordListens": true}
 
 -- request --
 GET /api/me
@@ -255,4 +255,4 @@ Authorization: Bearer $dave
 {"username": "alice", "password": "$resetPassword"}
 -- response --
 201
-{"memberToken": "$alice4", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "device": "$daveDevice"}
+{"memberToken": "$alice4", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice", "github": false}, "device": "$daveDevice"}

@@ -21,12 +21,17 @@
             "description": "账号设置了邮箱时才有",
             "type": "string"
           },
+          "github": {
+            "description": "绑定了 GitHub",
+            "type": "boolean"
+          },
           "username": {
+            "description": "设置了用户名和密码时才有，只绑定了 GitHub 的账号没有",
             "type": "string"
           }
         },
         "required": [
-          "username"
+          "github"
         ],
         "type": "object"
       },
@@ -520,6 +525,33 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "CreatePairingCodeRequest": {
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "CreatePairingCodeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "配对码：8 位，由数字 2–9 和除 I、O 以外的大写字母组成",
+            "pattern": "^[2-9A-HJ-NP-Z]{8}$",
+            "type": "string"
+          },
+          "expiresAtMs": {
+            "type": "integer"
+          },
+          "qrImage": {
+            "description": "内容为 ALISTEN_PUBLIC_URL/pair#<配对码> 的二维码，PNG 的 data: URI",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "qrImage",
+          "expiresAtMs"
         ],
         "type": "object"
       },
@@ -1425,6 +1457,40 @@
         ],
         "type": "object"
       },
+      "RedeemPairingCodeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "配对码：8 位，由数字 2–9 和除 I、O 以外的大写字母组成",
+            "pattern": "^[2-9A-HJ-NP-Z]{8}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "RedeemPairingCodeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/Account"
+          },
+          "member": {
+            "$ref": "#/components/schemas/Member"
+          },
+          "memberToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "memberToken",
+          "member",
+          "account"
+        ],
+        "type": "object"
+      },
       "RegisterRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2033,7 +2099,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "cbfa923a9cbe9f0a"
+    "version": "0023496d94e1b43f"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2077,7 +2143,50 @@
             "memberToken": []
           }
         ],
-        "summary": "游客注册账号：设置用户名和密码，成员和成员 token 都不变；站点关闭注册时返回 FORBIDDEN"
+        "summary": "游客注册账号：设置用户名和密码，成员和成员 token 都不变；站点关闭注册时返回 FORBIDDEN。只绑定了 GitHub 的账号也用它补设用户名和密码，不受注册开关限制"
+      }
+    },
+    "/api/account/pairing-codes": {
+      "post": {
+        "operationId": "createPairingCode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePairingCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatePairingCodeResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "已注册的账号生成配对码，新设备兑换之后登录这个账号：5 分钟内有效，只能兑换一次，发出请求的成员 token 失效时随之作废；游客调用时返回 FORBIDDEN"
       }
     },
     "/api/account/password": {
@@ -2113,7 +2222,7 @@
             "memberToken": []
           }
         ],
-        "summary": "修改密码：账号在其他设备上的成员 token 随即失效，发出请求的这个不变；当前密码错误时返回 INVALID_CREDENTIALS"
+        "summary": "修改密码：账号在其他设备上的成员 token 随即失效，发出请求的这个不变；当前密码错误时返回 INVALID_CREDENTIALS，账号还没有设置密码时返回 CONFLICT"
       }
     },
     "/api/admin/accounts/{username}": {
@@ -4770,6 +4879,49 @@
           }
         ],
         "summary": "退出登录：发出请求的成员 token 随即失效"
+      }
+    },
+    "/api/sessions/pairing": {
+      "post": {
+        "operationId": "redeemPairingCode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedeemPairingCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedeemPairingCodeResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "游客兑换配对码，登录生成它的账号：返回账号的新成员 token，发出请求的游客 token 随即失效；配对码不对或已过期时返回 INVALID_CREDENTIALS，已经登录了账号时返回 CONFLICT"
       }
     },
     "/api/shared-playlists/{shareId}": {

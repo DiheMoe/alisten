@@ -16,7 +16,7 @@ Authorization: Bearer $alice
 {"username": "alice", "password": "correct horse"}
 -- response --
 201
-{"account": {"username": "alice"}}
+{"account": {"username": "alice", "github": false}}
 
 -- request --
 GET /api/me/listens
@@ -215,7 +215,7 @@ Authorization: Bearer $bob
 {"username": "alice", "password": "correct horse"}
 -- response --
 201
-{"memberToken": "$alice2", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "device": "$bobDevice"}
+{"memberToken": "$alice2", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice", "github": false}, "device": "$bobDevice"}
 -- closed again --
 4401
 -- receive alice --

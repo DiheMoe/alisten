@@ -70,8 +70,39 @@ func (s *server) adminResetAccountPassword(ctx context.Context, c call) (any, er
 	return protocol.AdminResetAccountPasswordResponse{Password: password}, nil
 }
 
+func (s *server) createPairingCode(ctx context.Context, c call) (any, error) {
+	if _, err := protocol.DecodeCreatePairingCodeRequest(c.body); err != nil {
+		return nil, err
+	}
+	code, err := s.Accounts.CreatePairingCode(ctx, c.member.ID, bearer(c.r))
+	if err != nil {
+		return nil, err
+	}
+	// 配对码放在片段里，不会出现在请求和 Referer 中。
+	image, err := qrDataURI(s.PublicURL + "/pair#" + code.Code)
+	if err != nil {
+		return nil, err
+	}
+	return protocol.CreatePairingCodeResponse{Code: code.Code, QrImage: image, ExpiresAtMs: code.ExpiresAt.UnixMilli()}, nil
+}
+
+func (s *server) redeemPairingCode(ctx context.Context, c call) (any, error) {
+	req, err := protocol.DecodeRedeemPairingCodeRequest(c.body)
+	if err != nil {
+		return nil, err
+	}
+	session, account, err := s.Accounts.RedeemPairingCode(ctx, c.member, bearer(c.r), c.clientIP, req.Code)
+	if err != nil {
+		return nil, err
+	}
+	return protocol.RedeemPairingCodeResponse{MemberToken: session.MemberToken, Member: memberDTO(session.Member), Account: accountDTO(account)}, nil
+}
+
 func accountDTO(a identity.Account) protocol.Account {
-	dto := protocol.Account{Username: a.Username}
+	dto := protocol.Account{Github: a.GitHub}
+	if a.Username != "" {
+		dto.Username = &a.Username
+	}
 	if a.Email != "" {
 		dto.Email = &a.Email
 	}
