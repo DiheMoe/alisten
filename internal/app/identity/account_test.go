@@ -64,7 +64,8 @@ func newAccounts(t *testing.T) (a *Accounts, s *Service, store *porttest.Store, 
 			}
 		}
 	}
-	return NewAccounts(store, store, q, porttest.NewCodes(), porttest.NewDevices(), gateway), New(store, store, store, gateway), store, q, revoked
+	codes := porttest.NewCodes()
+	return NewAccounts(store, store, q, codes, codes, porttest.NewDevices(), gateway), New(store, store, store, gateway), store, q, revoked
 }
 
 // 不计顺序。
@@ -335,7 +336,7 @@ func newDeviceAccounts(t *testing.T) (*Accounts, *Service, *porttest.Store, *fak
 	gateway := newGateway(store, node, node)
 	q := &fakeQuota{exhausted: map[string]bool{}}
 	devices := &recordingDevices{Devices: porttest.NewDevices()}
-	return NewAccounts(store, store, q, porttest.NewCodes(), devices, gateway), New(store, store, store, gateway), store, q, devices
+	return NewAccounts(store, store, q, porttest.NewCodes(), porttest.NewCodes(), devices, gateway), New(store, store, store, gateway), store, q, devices
 }
 
 func deviceQuota(device string) string {
@@ -736,7 +737,7 @@ func TestAccountOperationsSucceedWhenRevocationFails(t *testing.T) {
 	node := porttest.NewRedis().Node("a")
 	gateway := newGateway(store, node, noRevocation{node})
 	s := New(store, store, store, gateway)
-	a := NewAccounts(store, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewCodes(), porttest.NewDevices(), gateway)
+	a := NewAccounts(store, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewCodes(), porttest.NewCodes(), porttest.NewDevices(), gateway)
 	alice := registerAccount(t, a, s, "alice", "correct horse")
 
 	guest := createMember(t, s)
@@ -803,7 +804,7 @@ func TestLoginRejectedWhenGuestSessionOrPasswordChangesMeanwhile(t *testing.T) {
 	}
 
 	node := porttest.NewRedis().Node("a")
-	changing := NewAccounts(passwordChangedMembers{store}, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewCodes(), porttest.NewDevices(), newGateway(store, node, node))
+	changing := NewAccounts(passwordChangedMembers{store}, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewCodes(), porttest.NewCodes(), porttest.NewDevices(), newGateway(store, node, node))
 	guest = createMember(t, s)
 	if _, _, _, err := changing.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", ""); !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("密码在校验之后被修改，Login = %v，期望 ErrInvalidCredentials", err)
@@ -830,7 +831,7 @@ func TestChangePasswordRejectedWhenPasswordChangesMeanwhile(t *testing.T) {
 	alice := registerAccount(t, a, s, "alice", "correct horse")
 	node := porttest.NewRedis().Node("a")
 	racing := func(meanwhile func()) *Accounts {
-		return NewAccounts(passwordReadMembers{store, meanwhile}, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewCodes(), porttest.NewDevices(), newGateway(store, node, node))
+		return NewAccounts(passwordReadMembers{store, meanwhile}, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewCodes(), porttest.NewCodes(), porttest.NewDevices(), newGateway(store, node, node))
 	}
 
 	var reset string
@@ -902,6 +903,14 @@ func TestGitHubOnlyAccount(t *testing.T) {
 	}
 }
 
+// 跳过 GitHub 授权，直接给会话记下用 GitHub 确认过身份。完整的确认流程见 TestGitHubVerify。
+func verifiedByGitHub(t *testing.T, a *Accounts, s Session) {
+	t.Helper()
+	if err := a.verifications.SaveVerification(t.Context(), hashSecret(s.MemberToken), githubVerificationTTL); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // 只绑定了 GitHub 的账号补设用户名和密码，不是注册新账号：注册关闭时也可以。
 func TestGitHubAccountSetsPasswordWhileRegistrationClosed(t *testing.T) {
 	a, s, store, q, _ := newAccounts(t)
@@ -916,6 +925,7 @@ func TestGitHubAccountSetsPasswordWhileRegistrationClosed(t *testing.T) {
 	if _, err := a.Register(t.Context(), guest.Member.ID, guest.MemberToken, clientIP, "bob", "correct horse"); !errors.Is(err, ErrRegistrationClosed) {
 		t.Fatalf("关闭注册时游客注册 = %v，期望 ErrRegistrationClosed", err)
 	}
+	verifiedByGitHub(t, a, gh)
 	q.taken = nil
 	account, err := a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "alice", "correct horse")
 	if want := (Account{Username: "alice", Email: "gh@example.com", GitHub: true}); err != nil || account != want {
@@ -929,6 +939,58 @@ func TestGitHubAccountSetsPasswordWhileRegistrationClosed(t *testing.T) {
 	}
 	if _, err := a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "alice2", "correct horse"); !errors.Is(err, port.ErrAlreadyRegistered) {
 		t.Errorf("再设置一次用户名 = %v，期望 ErrAlreadyRegistered", err)
+	}
+}
+
+// 拿到只绑定了 GitHub 的账号的一个会话（这里是兑换了配对码），不能抢先设成自己的用户名和密码：要先用账号绑定的 GitHub 确认，
+// 确认只对确认时的那个会话有效。本人确认之后设置，其他设备全部退出，对方随之下线。
+func TestGitHubAccountCredentialsNeedGitHubVerification(t *testing.T) {
+	a, s, store, _, revoked := newAccounts(t)
+	gh := githubAccount(t, s, store, 42)
+	mallory := createMember(t, s)
+	stolen, _, err := a.RedeemPairingCode(t.Context(), mallory.Member, mallory.MemberToken, clientIP, createPairingCode(t, a, gh))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stolenTicket := issueTicket(t, s, stolen, createRoom(t, store, ""))
+	revoked()
+
+	if _, err := a.Register(t.Context(), gh.Member.ID, stolen.MemberToken, clientIP, "mallory", "mallory horse"); !errors.Is(err, ErrGitHubUnverified) {
+		t.Errorf("没有用 GitHub 确认就补设 = %v，期望 ErrGitHubUnverified", err)
+	}
+	verifiedByGitHub(t, a, gh)
+	if _, err := a.Register(t.Context(), gh.Member.ID, stolen.MemberToken, clientIP, "mallory", "mallory horse"); !errors.Is(err, ErrGitHubUnverified) {
+		t.Errorf("用别的会话的确认补设 = %v，期望 ErrGitHubUnverified", err)
+	}
+	if got, _, _ := a.Account(t.Context(), gh.Member.ID); got != (Account{GitHub: true}) {
+		t.Fatalf("没有确认时账号 = %#v，期望仍然没有用户名和密码", got)
+	}
+
+	registerAccount(t, a, s, "taken", "correct horse")
+	if _, err := a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "taken", "correct horse"); !errors.Is(err, port.ErrUsernameTaken) {
+		t.Errorf("用户名已被占用时 = %v，期望 ErrUsernameTaken", err)
+	}
+	account, err := a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "octocat", "correct horse")
+	if err != nil || account != (Account{Username: "octocat", GitHub: true}) {
+		t.Fatalf("换个用户名再补设 = %#v, %v，期望用户名被占用不消耗确认", account, err)
+	}
+	if ok, err := a.verifications.Verified(t.Context(), hashSecret(gh.MemberToken)); err != nil || ok {
+		t.Errorf("补设之后的确认 = %v, %v，期望已经用掉", ok, err)
+	}
+	if _, ok := tokenOwner(t, store, gh.MemberToken); !ok {
+		t.Error("补设不影响发出请求的会话")
+	}
+	if _, ok := tokenOwner(t, store, stolen.MemberToken); ok {
+		t.Error("补设之后其他会话应失效")
+	}
+	if got := revoked(); !sameHashes(got, stolen.MemberToken) {
+		t.Errorf("补设之后广播的会话 = %x，期望其他设备的会话", got)
+	}
+	if ticketValid(t, s, stolenTicket) {
+		t.Error("补设之后其他设备的票据应失效")
+	}
+	if err := a.ChangePassword(t.Context(), gh.Member.ID, gh.MemberToken, "correct horse", "battery staple"); err != nil {
+		t.Errorf("本人随后修改密码 = %v", err)
 	}
 }
 

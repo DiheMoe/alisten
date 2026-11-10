@@ -222,7 +222,7 @@ func TestRedeemRejectedWhenPasswordChangesMeanwhile(t *testing.T) {
 	alice := registerAccount(t, a, s, "alice", "correct horse")
 	codes := porttest.NewCodes()
 	node := porttest.NewRedis().Node("a")
-	changing := NewAccounts(passwordChangedMembers{store}, store, &fakeQuota{exhausted: map[string]bool{}}, codes, porttest.NewDevices(), newGateway(store, node, node))
+	changing := NewAccounts(passwordChangedMembers{store}, store, &fakeQuota{exhausted: map[string]bool{}}, codes, codes, porttest.NewDevices(), newGateway(store, node, node))
 	code, err := changing.CreatePairingCode(t.Context(), alice.Member.ID, alice.MemberToken)
 	if err != nil {
 		t.Fatal(err)

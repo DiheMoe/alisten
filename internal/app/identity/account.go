@@ -51,16 +51,17 @@ func accountOf(a port.Account) Account {
 
 // 删除会话之后，用这些会话的票据建立的房间连接随之断开：网关立即通知各实例，通知丢失时最迟在网关的一个核对周期之后断开。
 type Accounts struct {
-	members  port.Members
-	site     port.Site
-	quota    port.AccountQuota
-	pairings port.PairingCodes
-	devices  port.LoginDevices
-	gateway  *realtime.Gateway
+	members       port.Members
+	site          port.Site
+	quota         port.AccountQuota
+	pairings      port.PairingCodes
+	verifications port.GitHubVerifications
+	devices       port.LoginDevices
+	gateway       *realtime.Gateway
 }
 
-func NewAccounts(members port.Members, site port.Site, quota port.AccountQuota, pairings port.PairingCodes, devices port.LoginDevices, gateway *realtime.Gateway) *Accounts {
-	return &Accounts{members: members, site: site, quota: quota, pairings: pairings, devices: devices, gateway: gateway}
+func NewAccounts(members port.Members, site port.Site, quota port.AccountQuota, pairings port.PairingCodes, verifications port.GitHubVerifications, devices port.LoginDevices, gateway *realtime.Gateway) *Accounts {
+	return &Accounts{members: members, site: site, quota: quota, pairings: pairings, verifications: verifications, devices: devices, gateway: gateway}
 }
 
 // 游客没有账号，ok 为 false。
@@ -105,8 +106,18 @@ func (a *Accounts) Register(ctx context.Context, memberID, token, clientIP, user
 	return Account{Username: username, Email: profile.Email, GitHub: profile.GitHub}, nil
 }
 
-// 补设之后，账号除了发出请求的这个会话，其他会话都失效，与修改密码相同。补设不是注册新账号，注册关闭时照样可以。
+// 拿到会话的人不能抢先给只绑定了 GitHub 的账号设成自己的密码：发出请求的会话要在 10 分钟内用账号绑定的 GitHub 确认过身份
+// （GitHub.Exchange 的 verify）。补设之后，账号除了这个会话，其他会话都失效，与修改密码相同：对方随之下线。
+// 补设不是注册新账号，注册关闭时照样可以。
 func (a *Accounts) addCredentials(ctx context.Context, memberID, token, clientIP, username, password, email string) (Account, error) {
+	tokenHash := hashSecret(token)
+	verified, err := a.verifications.Verified(ctx, tokenHash)
+	if err != nil {
+		return Account{}, err
+	}
+	if !verified {
+		return Account{}, ErrGitHubUnverified
+	}
 	if err := a.take(ctx, "register:ip:"+quotaAddr(clientIP), registerBurst, registerRefill); err != nil {
 		return Account{}, err
 	}
@@ -114,12 +125,14 @@ func (a *Accounts) addCredentials(ctx context.Context, memberID, token, clientIP
 	if err != nil {
 		return Account{}, err
 	}
-	// 同一个账号只能补设一次，由存储保证。
-	deleted, err := a.members.AddCredentials(ctx, memberID, username, hash, hashSecret(token))
+	// 失败时（比如用户名已被占用）确认保留，换个用户名可以重试；同一个账号只能补设一次，由存储保证。
+	deleted, err := a.members.AddCredentials(ctx, memberID, username, hash, tokenHash)
 	if err != nil {
 		return Account{}, err
 	}
 	a.gateway.RevokeSessions(ctx, deleted)
+	// 账号已经有了用户名，这次确认再也用不上：删不掉也只是等它过期，不影响补设的结果。
+	_ = a.verifications.DeleteVerification(ctx, tokenHash)
 	return Account{Username: username, Email: email, GitHub: true}, nil
 }
 
@@ -270,13 +283,8 @@ func (a *Accounts) ChangePassword(ctx context.Context, memberID, token, currentP
 	case username == "":
 		return ErrNotRegistered
 	}
-	if err := a.take(ctx, "password:member:"+memberID, passwordBurst, passwordRefill); err != nil {
-		return err
-	}
-	account, err := a.verify(ctx, username, currentPassword)
-	if errors.Is(err, ErrInvalidCredentials) {
-		return ErrWrongCurrentPassword
-	} else if err != nil {
+	account, err := a.checkCurrentPassword(ctx, memberID, username, currentPassword)
+	if err != nil {
 		return err
 	}
 	hash, err := HashPassword(ctx, newPassword)
@@ -295,6 +303,19 @@ func (a *Accounts) ChangePassword(ctx context.Context, memberID, token, currentP
 	}
 	a.gateway.RevokeSessions(ctx, deleted)
 	return nil
+}
+
+// 修改密码、绑定和解绑 GitHub 都要输入当前密码：只凭一个会话不能更换登录凭证，否则拿到会话的人换上自己的凭证之后，
+// 本人修改密码、后台重置密码都赶不走他。额度按成员计数，这几种操作共用。
+func (a *Accounts) checkCurrentPassword(ctx context.Context, memberID, username, password string) (port.Account, error) {
+	if err := a.take(ctx, "password:member:"+memberID, passwordBurst, passwordRefill); err != nil {
+		return port.Account{}, err
+	}
+	account, err := a.verify(ctx, username, password)
+	if errors.Is(err, ErrInvalidCredentials) {
+		return port.Account{}, ErrWrongCurrentPassword
+	}
+	return account, err
 }
 
 // Find 和 ResetPassword 只供后台使用，调用方要先校验管理 token。
