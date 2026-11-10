@@ -17,6 +17,7 @@ export type Route
     | { name: RoomPage, ref: string, panel: Panel | null }
     | { name: 'search', ref: string, panel: Panel | null, query: SearchQuery }
     | { name: 'playlist', ref: string, panel: Panel | null, source: Source, id: string, page: number }
+    | { name: 'shared-playlist', shareId: string, panel: Panel | null }
 
 export type Page = Route['name']
 
@@ -75,6 +76,9 @@ export function parseRoute({ pathname, search }: Pick<Location, 'pathname' | 'se
   const own = /^\/playlists\/([^/]+)$/.exec(pathname)
   if (own)
     return { name: 'my-playlist', id: own[1], panel }
+  const shared = /^\/s\/([^/]+)$/.exec(pathname)
+  if (shared)
+    return { name: 'shared-playlist', shareId: shared[1], panel }
   // 不做 decodeURIComponent：UUID、别名和歌单 ID 不含需要转义的字符，而它遇到不合法的转义序列会抛出异常。
   const room = /^\/r\/([^/]+)(\/.*)?$/.exec(pathname)
   if (!room)
@@ -112,6 +116,8 @@ function pathOf(route: Route): string {
       return `/r/${route.ref}`
     case 'playlist':
       return `/r/${route.ref}/playlists/${route.source}/${route.id}`
+    case 'shared-playlist':
+      return `/s/${route.shareId}`
     default:
       return `/r/${route.ref}/${route.name}`
   }
@@ -142,6 +148,8 @@ export function isNewEntry(from: Route, to: Route): boolean {
     return to.query.view !== 'recommend' && to.query.keyword !== (from.query.view === 'recommend' ? '' : from.query.keyword)
   if (from.name === 'playlist' && to.name === 'playlist')
     return to.source !== from.source || to.id !== from.id
+  if (from.name === 'shared-playlist' && to.name === 'shared-playlist')
+    return from.shareId !== to.shareId
   return false
 }
 

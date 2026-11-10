@@ -113,6 +113,9 @@
 .my-playlist-select { min-width: 64px; border-radius: 999px; }
 .my-playlist-menu { border: 1px solid var(--color-border); border-radius: 50%; }
 .my-playlist-hint { margin-top: 12px; }
+.shared-playlist-owner { display: flex; align-items: center; gap: 8px; max-width: 100%; }
+.shared-playlist-owner > .avatar { width: 24px; }
+.shared-playlist-owner > span:not(.avatar) { min-width: 0; }
 
 .playlist-tracks { position: relative; }
 .playlist-track { user-select: none; -webkit-user-select: none; }

@@ -8,7 +8,7 @@ import { ChatPanel } from '@/features/chat'
 import { HistoryPage } from '@/features/history'
 import { ListenPage } from '@/features/lyrics'
 import { AudioEngine, ManualStartPrompt, PlayerBar, playerStore } from '@/features/playback'
-import { MyPlaylistPage, PlaylistsPage } from '@/features/playlists'
+import { MyPlaylistPage, PlaylistsPage, SharedPlaylistPage } from '@/features/playlists'
 import { QueuePage, voteSkip } from '@/features/queue'
 import { copyInviteLink, EntryDialog, Lobby, roomEntryStore, RoomGate } from '@/features/rooms'
 import { HeaderSearch, PlaylistPage, SearchPage, searchStore } from '@/features/search'
@@ -52,6 +52,7 @@ const pageClasses: Partial<Record<Page, string>> = {
   'playlists': 'scrollbar-hidden',
   'my-playlist': 'scrollbar-hidden',
   'settings': 'settings-view',
+  'shared-playlist': 'scrollbar-hidden',
 }
 
 function closeMenu(element: HTMLElement): void {
@@ -222,6 +223,13 @@ function RoutedPlaylist() {
   return <PlaylistPage title={title} page={route.page} onPage={page => navigationStore.navigate({ ...route, page })} />
 }
 
+function RoutedSharedPlaylist() {
+  const route = useStore(navigationStore, s => s.route)
+  if (route.name !== 'shared-playlist')
+    return null
+  return <SharedPlaylistPage shareId={route.shareId} />
+}
+
 export function App() {
   const page = useStore(navigationStore, s => s.route.name)
   const panel = useStore(navigationStore, s => s.route.panel)
@@ -280,6 +288,7 @@ export function App() {
                   )}
                   {page === 'my-playlist' && <RoutedMyPlaylist />}
                   {page === 'settings' && <SettingsPage />}
+                  {page === 'shared-playlist' && <RoutedSharedPlaylist />}
                 </Suspense>
               </ErrorBoundary>
             </main>

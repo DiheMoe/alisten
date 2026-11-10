@@ -27,6 +27,8 @@ describe('parseRoute', () => {
     ['/r/my-room/search?source=netease&view=tracks', { name: 'search', ref: 'my-room', panel: null, query: { view: 'tracks', keyword: '', source: 'netease', page: 1 } }],
     ['/r/my-room/search?view=recommend', { name: 'search', ref: 'my-room', panel: null, query: { view: 'recommend' } }],
     ['/r/my-room/playlists/netease/123?page=3&panel=queue', { name: 'playlist', ref: 'my-room', panel: 'queue', source: 'netease', id: '123', page: 3 }],
+    ['/s/AbC_-1x', { name: 'shared-playlist', shareId: 'AbC_-1x', panel: null }],
+    ['/s/AbC_-1x?panel=queue', { name: 'shared-playlist', shareId: 'AbC_-1x', panel: 'queue' }],
   ])('%s', (url, route) => {
     expect(parse(url)).toEqual(route)
     expect(formatRoute(route)).toBe(url)
@@ -49,7 +51,7 @@ describe('parseRoute', () => {
     expect(route && formatRoute(route)).toBe(canonical)
   })
 
-  it.each(['/r/', '/r/my-room/listen', '/r/my-room/queue/extra', '/settings/profile', '/r/my-room/playlists/qq/123', '/r/my-room/playlists/netease'])('%s 不对应任何页面', (url) => {
+  it.each(['/r/', '/r/my-room/listen', '/r/my-room/queue/extra', '/settings/profile', '/r/my-room/playlists/qq/123', '/r/my-room/playlists/netease', '/s/', '/s/abc/def'])('%s 不对应任何页面', (url) => {
     expect(parse(url)).toBeNull()
   })
 })
@@ -87,6 +89,11 @@ describe('isNewEntry', () => {
     const playlist = (id: string, page: number): Route => ({ name: 'playlist', ref: 'a', panel: null, source: 'netease', id, page })
     expect(isNewEntry(playlist('1', 1), playlist('2', 1))).toBe(true)
     expect(isNewEntry(playlist('1', 1), playlist('1', 2))).toBe(false)
+  })
+
+  it('打开另一个分享写入新记录，同一个分享只换侧栏时替换当前地址', () => {
+    expect(isNewEntry({ name: 'shared-playlist', shareId: 'a', panel: null }, { name: 'shared-playlist', shareId: 'b', panel: null })).toBe(true)
+    expect(isNewEntry({ name: 'shared-playlist', shareId: 'a', panel: null }, { name: 'shared-playlist', shareId: 'a', panel: 'queue' })).toBe(false)
   })
 })
 

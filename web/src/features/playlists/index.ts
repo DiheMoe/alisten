@@ -7,3 +7,4 @@ export { SavePlatformPlaylistButton } from './save-platform-playlist'
 export { SaveToPlaylistButton, SaveToPlaylistDialog } from './save-to-playlist'
 export const PlaylistsPage = lazyPage(() => import('./playlists-page').then(module => module.PlaylistsPage))
 export const MyPlaylistPage = lazyPage(() => import('./my-playlist-page').then(module => module.MyPlaylistPage))
+export const SharedPlaylistPage = lazyPage(() => import('./shared-playlist-page').then(module => module.SharedPlaylistPage))
