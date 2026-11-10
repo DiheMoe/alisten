@@ -20,3 +20,9 @@ type Tracks interface {
 	PreparedTrack(ctx context.Context, t track.Track) (p PreparedTrack, ok bool, err error)
 	SavePreparedTrack(ctx context.Context, t track.Track, p PreparedTrack) error
 }
+
+type TrackLookup interface {
+	PreparedTrack(ctx context.Context, t track.Track) (p PreparedTrack, ok bool, err error)
+	// 与 PreparedTrack 读出的 Meta 相同，时长是准备得到的时长。
+	TrackMetas(ctx context.Context, ts []track.Track) (map[track.Track]track.Meta, error)
+}

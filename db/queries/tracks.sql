@@ -12,3 +12,9 @@ ON CONFLICT (source, track_id) DO UPDATE SET
     lyric = excluded.lyric, lyric_words = excluded.lyric_words, lyric_trans = excluded.lyric_trans,
     media_key = excluded.media_key, media_size = excluded.media_size,
     prepared_at = now();
+
+-- name: TrackMetas :many
+SELECT t.source, t.track_id, t.title, t.artist, t.album, t.cover_url, t.cover_key, t.page_url, t.duration_ms
+FROM unnest(@sources::text[]) WITH ORDINALITY AS s(source, ord)
+JOIN unnest(@track_ids::text[]) WITH ORDINALITY AS k(track_id, ord) USING (ord)
+JOIN tracks t ON t.source = s.source AND t.track_id = k.track_id;

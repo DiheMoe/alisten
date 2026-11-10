@@ -41,6 +41,9 @@ type Playlists interface {
 	MemberPlaylists(ctx context.Context, ownerID string) ([]PlaylistRecord, error)
 	// 已有 limit 个歌单（含“我喜欢”）时返回 ErrPlaylistLimit。
 	CreatePlaylist(ctx context.Context, ownerID, name string, limit int) (PlaylistRecord, error)
+	// 新建歌单并写入 items，items[0] 排在最前；返回的记录带曲目数和封面。已有 limit 个歌单（含“我喜欢”）时返回 ErrPlaylistLimit。
+	// 调用方保证 items 中没有重复的歌、不超过歌单的曲目上限。
+	ImportPlaylist(ctx context.Context, ownerID, name string, items []PlaylistItem, limit int) (PlaylistRecord, error)
 	// “我喜欢”返回 ErrFavoritesFixed。
 	RenamePlaylist(ctx context.Context, ownerID, id, name string) error
 	// “我喜欢”返回 ErrFavoritesFixed。

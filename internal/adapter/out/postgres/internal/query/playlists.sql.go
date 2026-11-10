@@ -182,6 +182,20 @@ func (q *Queries) InsertPlaylistItem(ctx context.Context, arg InsertPlaylistItem
 	return err
 }
 
+type InsertPlaylistItemsParams struct {
+	PlaylistID string
+	Source     string
+	TrackID    string
+	Title      string
+	Artist     *string
+	Album      *string
+	CoverURL   *string
+	CoverKey   *string
+	DurationMs int64
+	PageURL    string
+	Position   int64
+}
+
 const lockFavorites = `-- name: LockFavorites :exec
 SELECT id FROM playlists WHERE owner_id = $1 AND kind = 'favorites' FOR UPDATE
 `

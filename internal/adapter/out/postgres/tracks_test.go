@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"maps"
 	"testing"
 	"time"
 
@@ -122,5 +123,44 @@ func TestLinkTrackRoundTrip(t *testing.T) {
 	saveRoom(t, store, term, snap)
 	if _, snap = takeRoom(t, store, id); !snap.Waiting[0].Ready || snap.Waiting[0].Meta != saved.Meta {
 		t.Errorf("恢复出的条目 = %+v，期望已就绪，元数据取自曲目表", snap.Waiting[0])
+	}
+}
+
+func TestTrackMetas(t *testing.T) {
+	store, _ := newStore(t)
+	link := track.Track{Source: track.Link, ID: "https://example.com/a.mp3"}
+	saved := map[track.Track]port.PreparedTrack{
+		netease("1"): {
+			Meta:   track.Meta{Title: "晴天", Artist: "周杰伦", Album: "叶惠美", CoverURL: "https://p1.music.126.net/a.jpg", PageURL: "https://music.163.com/#/song?id=1", Duration: time.Minute},
+			Result: track.Prepared{Duration: 61500 * time.Millisecond, Gain: 0.5, Lyric: "词", LyricWords: "逐字", LyricTrans: "翻译"},
+		},
+		link: {
+			Meta:      track.Meta{Title: "a.mp3", CoverKey: "link/abc/cover.webp", PageURL: link.ID, Duration: 3 * time.Second},
+			Result:    track.Prepared{Duration: 3 * time.Second, Gain: 1},
+			MediaKey:  "abc",
+			MediaSize: 12290,
+		},
+	}
+	want := map[track.Track]track.Meta{}
+	for tr, p := range saved {
+		if err := store.SavePreparedTrack(t.Context(), tr, p); err != nil {
+			t.Fatal(err)
+		}
+		read, _, err := store.PreparedTrack(t.Context(), tr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want[tr] = read.Meta
+	}
+	if want[netease("1")].Duration != 61500*time.Millisecond {
+		t.Fatalf("PreparedTrack 读出的时长 = %v，期望准备得到的时长", want[netease("1")].Duration)
+	}
+	wanted := []track.Track{netease("2"), netease("1"), {Source: track.QQ, ID: "1"}, link, netease("1")}
+	got, err := store.TrackMetas(t.Context(), wanted)
+	if err != nil || !maps.Equal(got, want) {
+		t.Errorf("批量读取 = %#v, %v\n期望只有命中的、与 PreparedTrack 读出的元数据一致 %#v：音源和 ID 都要对上，重复的只算一次", got, err, want)
+	}
+	if got, err := store.TrackMetas(t.Context(), nil); err != nil || len(got) != 0 {
+		t.Errorf("什么也不查 = %#v, %v，期望空的结果", got, err)
 	}
 }

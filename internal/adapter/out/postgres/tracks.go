@@ -13,7 +13,10 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
-var _ port.Tracks = (*Store)(nil)
+var (
+	_ port.Tracks      = (*Store)(nil)
+	_ port.TrackLookup = (*Store)(nil)
+)
 
 func (s *Store) PreparedTrack(ctx context.Context, t track.Track) (port.PreparedTrack, bool, error) {
 	row, err := s.q.PreparedTrack(ctx, query.PreparedTrackParams{Source: string(t.Source), TrackID: t.ID})
@@ -25,6 +28,19 @@ func (s *Store) PreparedTrack(ctx context.Context, t track.Track) (port.Prepared
 	}
 	meta, result := prepared(row.Title, orEmpty(row.Artist), orEmpty(row.Album), orEmpty(row.CoverURL), orEmpty(row.CoverKey), row.PageURL, row.DurationMs, row.Gain, orEmpty(row.Lyric), orEmpty(row.LyricWords), orEmpty(row.LyricTrans))
 	return port.PreparedTrack{Meta: meta, Result: result, MediaKey: orEmpty(row.MediaKey), MediaSize: orZero(row.MediaSize)}, true, nil
+}
+
+func (s *Store) TrackMetas(ctx context.Context, ts []track.Track) (map[track.Track]track.Meta, error) {
+	sources, ids := splitTracks(ts)
+	rows, err := s.q.TrackMetas(ctx, query.TrackMetasParams{Sources: sources, TrackIds: ids})
+	if err != nil {
+		return nil, fmt.Errorf("读取 %d 首歌的元数据：%w", len(ts), err)
+	}
+	found := make(map[track.Track]track.Meta, len(rows))
+	for _, r := range rows {
+		found[track.Track{Source: track.Source(r.Source), ID: r.TrackID}] = storedMeta(r.Title, orEmpty(r.Artist), orEmpty(r.Album), orEmpty(r.CoverURL), orEmpty(r.CoverKey), r.PageURL, r.DurationMs)
+	}
+	return found, nil
 }
 
 func (s *Store) SavePreparedTrack(ctx context.Context, t track.Track, p port.PreparedTrack) error {
@@ -53,9 +69,12 @@ func (s *Store) SavePreparedTrack(ctx context.Context, t track.Track, p port.Pre
 }
 
 func prepared(title, artist, album, coverURL, coverKey, pageURL string, durationMs int64, gain float64, lyric, lyricWords, lyricTrans string) (track.Meta, track.Prepared) {
-	d := time.Duration(durationMs) * time.Millisecond
-	return track.Meta{Title: title, Artist: artist, Album: album, CoverURL: coverURL, CoverKey: track.ObjectKey(coverKey), PageURL: pageURL, Duration: d},
-		track.Prepared{Duration: d, Gain: gain, Lyric: lyric, LyricWords: lyricWords, LyricTrans: lyricTrans}
+	meta := storedMeta(title, artist, album, coverURL, coverKey, pageURL, durationMs)
+	return meta, track.Prepared{Duration: meta.Duration, Gain: gain, Lyric: lyric, LyricWords: lyricWords, LyricTrans: lyricTrans}
+}
+
+func storedMeta(title, artist, album, coverURL, coverKey, pageURL string, durationMs int64) track.Meta {
+	return track.Meta{Title: title, Artist: artist, Album: album, CoverURL: coverURL, CoverKey: track.ObjectKey(coverKey), PageURL: pageURL, Duration: time.Duration(durationMs) * time.Millisecond}
 }
 
 func orZero(p *int64) int64 {

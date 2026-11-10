@@ -45,3 +45,21 @@ func TestAddPlaylistItemKeepsMilliseconds(t *testing.T) {
 		t.Errorf("Duration = %v，期望 %v", items[0].Meta.Duration, want)
 	}
 }
+
+func TestImportPlaylistRejectsWhatPostgreSQLRejects(t *testing.T) {
+	store := New()
+	m, err := store.CreateMember(t.Context(), []byte("token"), "甲")
+	if err != nil {
+		t.Fatal(err)
+	}
+	song := port.PlaylistItem{Track: track.Track{Source: "netease", ID: "1"}, Meta: track.Meta{Title: "歌"}}
+	broken := port.PlaylistItem{Track: track.Track{Source: "netease", ID: "2"}, Meta: track.Meta{Title: "坏\x00标题"}}
+	for name, items := range map[string][]port.PlaylistItem{"重复的歌": {song, song}, "含 NUL 的标题": {song, broken}} {
+		if _, err := store.ImportPlaylist(t.Context(), m.ID, "导入", items, 10); err == nil {
+			t.Errorf("%s应报错", name)
+		}
+	}
+	if lists, _ := store.MemberPlaylists(t.Context(), m.ID); len(lists) != 0 {
+		t.Errorf("失败之后的歌单 = %#v，期望一个也没有建", lists)
+	}
+}

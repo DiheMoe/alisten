@@ -610,3 +610,82 @@ func TestMovePlaylistItemsAdvancesUpdatedAt(t *testing.T) {
 		t.Error("移动之后更新时间没有推进")
 	}
 }
+
+func TestImportPlaylist(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	items := []port.PlaylistItem{songItem("3"), clipItem, songItem("1")}
+	imported, err := store.ImportPlaylist(t.Context(), alice.ID, "导入的歌单", items, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := store.PlaylistItems(t.Context(), alice.ID, imported.ID); err != nil || !slices.Equal(got, items) {
+		t.Errorf("导入之后的曲目 = %#v, %v，期望与来源同序 %#v", got, err, items)
+	}
+	lists, err := store.MemberPlaylists(t.Context(), alice.ID)
+	if err != nil || len(lists) != 2 {
+		t.Fatalf("歌单 = %#v, %v，期望“我喜欢”和导入的歌单", lists, err)
+	}
+	read := lists[1]
+	if imported.ID != read.ID || imported.Name != "导入的歌单" || imported.Favorites || imported.TrackCount != 3 ||
+		!imported.CreatedAt.Equal(read.CreatedAt) || !imported.UpdatedAt.Equal(read.UpdatedAt) {
+		t.Errorf("导入返回 %#v，期望与读出的 %#v 一致、共 3 首", imported, read)
+	}
+	if want := (port.Cover{URL: songItem("3").Meta.CoverURL}); imported.Cover == nil || *imported.Cover != want || read.Cover == nil || *read.Cover != want {
+		t.Errorf("封面 = %+v / %+v，期望排在最前的 %+v", imported.Cover, read.Cover, want)
+	}
+	if err := store.AddPlaylistItem(t.Context(), alice.ID, imported.ID, songItem("9"), 1000); err != nil {
+		t.Fatal(err)
+	}
+	if got := displayIDs(t, store, alice.ID, imported.ID); !slices.Equal(got, []string{"9", "3", clipItem.Track.ID, "1"}) {
+		t.Errorf("导入之后再加入 = %v，期望新加入的排在最前", got)
+	}
+}
+
+func TestImportEmptyPlaylist(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	imported, err := store.ImportPlaylist(t.Context(), alice.ID, "空的", nil, 50)
+	if err != nil || imported.Name != "空的" || imported.TrackCount != 0 || imported.Cover != nil {
+		t.Fatalf("导入空列表 = %#v, %v，期望建出一个没有曲目的歌单", imported, err)
+	}
+	if got, err := store.PlaylistItems(t.Context(), alice.ID, imported.ID); err != nil || len(got) != 0 {
+		t.Errorf("曲目 = %#v, %v，期望为空", got, err)
+	}
+}
+
+func TestImportPlaylistRollsBackAsAWhole(t *testing.T) {
+	store, pool := newStore(t)
+	alice := registered(t, store, "alice")
+	items := []port.PlaylistItem{songItem("1"), songItem("2")}
+	if _, err := store.ImportPlaylist(t.Context(), alice.ID, "超限", items, 1); !errors.Is(err, port.ErrPlaylistLimit) {
+		t.Errorf("歌单数到了上限 = %v，期望 ErrPlaylistLimit", err)
+	}
+	broken := songItem("3")
+	broken.Meta.Title = "坏\x00标题"
+	if _, err := store.ImportPlaylist(t.Context(), alice.ID, "写入失败", append(items, broken), 50); err == nil {
+		t.Error("有一首写不进去时应报错")
+	}
+	if lists, err := store.MemberPlaylists(t.Context(), alice.ID); err != nil || len(lists) != 1 {
+		t.Errorf("失败之后的歌单 = %#v, %v，期望只剩“我喜欢”", lists, err)
+	}
+	var count int
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM playlist_items`).Scan(&count); err != nil || count != 0 {
+		t.Errorf("失败之后的曲目数 = %d, %v，期望 0", count, err)
+	}
+}
+
+func TestConcurrentImportsRespectLimit(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	var wg sync.WaitGroup
+	for i := range 10 {
+		wg.Go(func() {
+			_, _ = store.ImportPlaylist(t.Context(), alice.ID, "导入"+strconv.Itoa(i), []port.PlaylistItem{songItem(strconv.Itoa(i))}, 5)
+		})
+	}
+	wg.Wait()
+	if lists, err := store.MemberPlaylists(t.Context(), alice.ID); err != nil || len(lists) != 5 {
+		t.Errorf("并发导入之后有 %d 个歌单, %v，期望正好 5 个（含“我喜欢”）", len(lists), err)
+	}
+}

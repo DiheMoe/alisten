@@ -50,6 +50,10 @@ SELECT count(*) FROM playlist_items WHERE playlist_id = @playlist_id;
 INSERT INTO playlist_items (playlist_id, source, track_id, title, artist, album, cover_url, cover_key, duration_ms, page_url, position)
 VALUES (@playlist_id, @source, @track_id, @title, @artist, @album, @cover_url, @cover_key, @duration_ms, @page_url, @position);
 
+-- name: InsertPlaylistItems :copyfrom
+INSERT INTO playlist_items (playlist_id, source, track_id, title, artist, album, cover_url, cover_key, duration_ms, page_url, position)
+VALUES (@playlist_id, @source, @track_id, @title, @artist, @album, @cover_url, @cover_key, @duration_ms, @page_url, @position);
+
 -- name: SetPlaylistSeq :exec
 UPDATE playlists SET item_seq = @item_seq, updated_at = now() WHERE id = @id;
 

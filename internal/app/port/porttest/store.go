@@ -591,6 +591,44 @@ func (s *Store) CreatePlaylist(_ context.Context, ownerID, name string, limit in
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	p, err := s.newPlaylist(ownerID, name, limit)
+	if err != nil {
+		return port.PlaylistRecord{}, err
+	}
+	return port.PlaylistRecord{ID: p.id, Name: name, CreatedAt: p.created, UpdatedAt: p.updated}, nil
+}
+
+func (s *Store) ImportPlaylist(_ context.Context, ownerID, name string, items []port.PlaylistItem, limit int) (port.PlaylistRecord, error) {
+	if err := checkText(name); err != nil {
+		return port.PlaylistRecord{}, err
+	}
+	seen := make(map[track.Track]bool, len(items))
+	for _, item := range items {
+		m := item.Meta
+		if err := checkText(item.Track.ID, m.Title, m.Artist, m.Album, m.CoverURL, string(m.CoverKey), m.PageURL); err != nil {
+			return port.PlaylistRecord{}, err
+		}
+		if seen[item.Track] {
+			return port.PlaylistRecord{}, fmt.Errorf("歌单里已经有 %s/%s：违反主键约束", item.Track.Source, item.Track.ID)
+		}
+		seen[item.Track] = true
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, err := s.newPlaylist(ownerID, name, limit)
+	if err != nil {
+		return port.PlaylistRecord{}, err
+	}
+	for i := len(items) - 1; i >= 0; i-- {
+		item := items[i]
+		item.Meta.Duration = item.Meta.Duration.Truncate(time.Millisecond)
+		p.items = append(p.items, item)
+	}
+	return port.PlaylistRecord{ID: p.id, Name: name, TrackCount: len(p.items), CreatedAt: p.created, UpdatedAt: p.updated, Cover: p.cover()}, nil
+}
+
+// 调用方持有 s.mu。
+func (s *Store) newPlaylist(ownerID, name string, limit int) (*storedPlaylist, error) {
 	n := 0
 	for _, p := range s.playlists {
 		if p.owner == ownerID {
@@ -598,12 +636,12 @@ func (s *Store) CreatePlaylist(_ context.Context, ownerID, name string, limit in
 		}
 	}
 	if n >= limit {
-		return port.PlaylistRecord{}, port.ErrPlaylistLimit
+		return nil, port.ErrPlaylistLimit
 	}
 	now := time.Now()
 	p := &storedPlaylist{id: s.newID(), owner: ownerID, name: name, created: now, updated: now}
 	s.playlists = append(s.playlists, p)
-	return port.PlaylistRecord{ID: p.id, Name: name, CreatedAt: now, UpdatedAt: now}, nil
+	return p, nil
 }
 
 func (s *Store) RenamePlaylist(_ context.Context, ownerID, id, name string) error {

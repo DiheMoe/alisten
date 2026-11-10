@@ -106,3 +106,57 @@ func (q *Queries) SavePreparedTrack(ctx context.Context, arg SavePreparedTrackPa
 	)
 	return err
 }
+
+const trackMetas = `-- name: TrackMetas :many
+SELECT t.source, t.track_id, t.title, t.artist, t.album, t.cover_url, t.cover_key, t.page_url, t.duration_ms
+FROM unnest($1::text[]) WITH ORDINALITY AS s(source, ord)
+JOIN unnest($2::text[]) WITH ORDINALITY AS k(track_id, ord) USING (ord)
+JOIN tracks t ON t.source = s.source AND t.track_id = k.track_id
+`
+
+type TrackMetasParams struct {
+	Sources  []string
+	TrackIds []string
+}
+
+type TrackMetasRow struct {
+	Source     string
+	TrackID    string
+	Title      string
+	Artist     *string
+	Album      *string
+	CoverURL   *string
+	CoverKey   *string
+	PageURL    string
+	DurationMs int64
+}
+
+func (q *Queries) TrackMetas(ctx context.Context, arg TrackMetasParams) ([]TrackMetasRow, error) {
+	rows, err := q.db.Query(ctx, trackMetas, arg.Sources, arg.TrackIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TrackMetasRow
+	for rows.Next() {
+		var i TrackMetasRow
+		if err := rows.Scan(
+			&i.Source,
+			&i.TrackID,
+			&i.Title,
+			&i.Artist,
+			&i.Album,
+			&i.CoverURL,
+			&i.CoverKey,
+			&i.PageURL,
+			&i.DurationMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

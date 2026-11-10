@@ -9,6 +9,48 @@ import (
 	"context"
 )
 
+// iteratorForInsertPlaylistItems implements pgx.CopyFromSource.
+type iteratorForInsertPlaylistItems struct {
+	rows                 []InsertPlaylistItemsParams
+	skippedFirstNextCall bool
+}
+
+func (r *iteratorForInsertPlaylistItems) Next() bool {
+	if len(r.rows) == 0 {
+		return false
+	}
+	if !r.skippedFirstNextCall {
+		r.skippedFirstNextCall = true
+		return true
+	}
+	r.rows = r.rows[1:]
+	return len(r.rows) > 0
+}
+
+func (r iteratorForInsertPlaylistItems) Values() ([]interface{}, error) {
+	return []interface{}{
+		r.rows[0].PlaylistID,
+		r.rows[0].Source,
+		r.rows[0].TrackID,
+		r.rows[0].Title,
+		r.rows[0].Artist,
+		r.rows[0].Album,
+		r.rows[0].CoverURL,
+		r.rows[0].CoverKey,
+		r.rows[0].DurationMs,
+		r.rows[0].PageURL,
+		r.rows[0].Position,
+	}, nil
+}
+
+func (r iteratorForInsertPlaylistItems) Err() error {
+	return nil
+}
+
+func (q *Queries) InsertPlaylistItems(ctx context.Context, arg []InsertPlaylistItemsParams) (int64, error) {
+	return q.db.CopyFrom(ctx, []string{"playlist_items"}, []string{"playlist_id", "source", "track_id", "title", "artist", "album", "cover_url", "cover_key", "duration_ms", "page_url", "position"}, &iteratorForInsertPlaylistItems{rows: arg})
+}
+
 // iteratorForInsertPlays implements pgx.CopyFromSource.
 type iteratorForInsertPlays struct {
 	rows                 []InsertPlaysParams

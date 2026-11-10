@@ -49,25 +49,74 @@ func (s *Store) MemberPlaylists(ctx context.Context, ownerID string) ([]port.Pla
 
 func (s *Store) CreatePlaylist(ctx context.Context, ownerID, name string, limit int) (port.PlaylistRecord, error) {
 	var created query.CreatePlaylistRow
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		q := s.q.WithTx(tx)
-		if err := q.LockFavorites(ctx, ownerID); err != nil {
-			return err
-		}
-		n, err := q.CountPlaylists(ctx, ownerID)
-		if err != nil {
-			return err
-		}
-		if n >= int64(limit) {
-			return port.ErrPlaylistLimit
-		}
-		created, err = q.CreatePlaylist(ctx, query.CreatePlaylistParams{OwnerID: ownerID, Name: name})
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) (err error) {
+		created, err = createPlaylist(ctx, s.q.WithTx(tx), ownerID, name, limit)
 		return err
 	})
 	if err != nil {
 		return port.PlaylistRecord{}, fmt.Errorf("成员 %s 新建歌单：%w", ownerID, err)
 	}
 	return port.PlaylistRecord{ID: created.ID, Name: name, CreatedAt: created.CreatedAt, UpdatedAt: created.UpdatedAt}, nil
+}
+
+func (s *Store) ImportPlaylist(ctx context.Context, ownerID, name string, items []port.PlaylistItem, limit int) (port.PlaylistRecord, error) {
+	var created query.CreatePlaylistRow
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) (err error) {
+		q := s.q.WithTx(tx)
+		if created, err = createPlaylist(ctx, q, ownerID, name, limit); err != nil {
+			return err
+		}
+		seq := int64(len(items))
+		rows := make([]query.InsertPlaylistItemsParams, len(items))
+		for i, item := range items {
+			t, m := item.Track, item.Meta
+			rows[i] = query.InsertPlaylistItemsParams{
+				PlaylistID: created.ID,
+				Source:     string(t.Source),
+				TrackID:    t.ID,
+				Title:      m.Title,
+				Artist:     nullable(m.Artist),
+				Album:      nullable(m.Album),
+				CoverURL:   nullable(m.CoverURL),
+				CoverKey:   nullable(string(m.CoverKey)),
+				DurationMs: m.Duration.Milliseconds(),
+				PageURL:    m.PageURL,
+				Position:   seq - int64(i),
+			}
+		}
+		if _, err = q.InsertPlaylistItems(ctx, rows); err != nil {
+			return err
+		}
+		return q.SetPlaylistSeq(ctx, query.SetPlaylistSeqParams{ID: created.ID, ItemSeq: seq})
+	})
+	if err != nil {
+		return port.PlaylistRecord{}, fmt.Errorf("成员 %s 导入 %d 首歌到新歌单：%w", ownerID, len(items), err)
+	}
+	return port.PlaylistRecord{ID: created.ID, Name: name, TrackCount: len(items), CreatedAt: created.CreatedAt, UpdatedAt: created.UpdatedAt, Cover: firstCover(items)}, nil
+}
+
+// 要在事务中调用：“我喜欢”的行锁持续到新建之后，同一个账号并发新建时才会依次计数。
+func createPlaylist(ctx context.Context, q *query.Queries, ownerID, name string, limit int) (query.CreatePlaylistRow, error) {
+	if err := q.LockFavorites(ctx, ownerID); err != nil {
+		return query.CreatePlaylistRow{}, err
+	}
+	n, err := q.CountPlaylists(ctx, ownerID)
+	if err != nil {
+		return query.CreatePlaylistRow{}, err
+	}
+	if n >= int64(limit) {
+		return query.CreatePlaylistRow{}, port.ErrPlaylistLimit
+	}
+	return q.CreatePlaylist(ctx, query.CreatePlaylistParams{OwnerID: ownerID, Name: name})
+}
+
+func firstCover(items []port.PlaylistItem) *port.Cover {
+	for _, item := range items {
+		if m := item.Meta; m.CoverURL != "" || m.CoverKey != "" {
+			return &port.Cover{URL: m.CoverURL, Key: m.CoverKey}
+		}
+	}
+	return nil
 }
 
 func (s *Store) RenamePlaylist(ctx context.Context, ownerID, id, name string) error {
