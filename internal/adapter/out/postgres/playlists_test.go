@@ -689,3 +689,159 @@ func TestConcurrentImportsRespectLimit(t *testing.T) {
 		t.Errorf("并发导入之后有 %d 个歌单, %v，期望正好 5 个（含“我喜欢”）", len(lists), err)
 	}
 }
+
+func TestSharePlaylist(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	bob := registered(t, store, "bob")
+	hash := "0bc83cb571cd1c50ba6f3e8a78ef1346"
+	if _, err := store.UpdateMember(t.Context(), alice.ID, nil, &hash, nil); err != nil {
+		t.Fatal(err)
+	}
+	favorites := favoritesOf(t, store, alice.ID)
+	if err := store.AddPlaylistItem(t.Context(), alice.ID, favorites, sunnyItem, 1000); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddPlaylistItem(t.Context(), alice.ID, favorites, clipItem, 1000); err != nil {
+		t.Fatal(err)
+	}
+	before := updatedAt(t, store, alice.ID, favorites)
+	if err := store.SetPlaylistShare(t.Context(), alice.ID, favorites, "share-1"); err != nil {
+		t.Fatal(err)
+	}
+	if lists, err := store.MemberPlaylists(t.Context(), alice.ID); err != nil || lists[0].ShareID != "share-1" {
+		t.Errorf("歌单 = %#v, %v，期望带上分享 ID", lists, err)
+	}
+	if !updatedAt(t, store, alice.ID, favorites).Equal(before) {
+		t.Error("分享改变了歌单的更新时间")
+	}
+	shared, err := store.SharedPlaylist(t.Context(), "share-1")
+	want := port.SharedPlaylist{Name: "我喜欢", Favorites: true, OwnerName: alice.Name, OwnerAvatarHash: hash, Items: []port.PlaylistItem{clipItem, sunnyItem}}
+	if err != nil || shared.Name != want.Name || shared.Favorites != want.Favorites || shared.OwnerName != want.OwnerName ||
+		shared.OwnerAvatarHash != want.OwnerAvatarHash || !slices.Equal(shared.Items, want.Items) {
+		t.Errorf("分享的歌单 = %#v, %v，期望 %#v", shared, err, want)
+	}
+
+	if err := store.SetPlaylistShare(t.Context(), alice.ID, favorites, "share-2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SharedPlaylist(t.Context(), "share-1"); !errors.Is(err, port.ErrShareNotFound) {
+		t.Errorf("重新生成之后的旧链接 = %v，期望 ErrShareNotFound", err)
+	}
+	if shared, err := store.SharedPlaylist(t.Context(), "share-2"); err != nil || len(shared.Items) != 2 {
+		t.Errorf("新链接 = %#v, %v", shared, err)
+	}
+	for _, id := range []string{favorites, "not-a-uuid", "00000000-0000-7000-8000-000000000000"} {
+		if err := store.SetPlaylistShare(t.Context(), bob.ID, id, "share-3"); !errors.Is(err, port.ErrPlaylistNotFound) {
+			t.Errorf("分享别人或不存在的歌单 %s = %v，期望 ErrPlaylistNotFound", id, err)
+		}
+		if err := store.SetPlaylistShare(t.Context(), bob.ID, id, ""); !errors.Is(err, port.ErrPlaylistNotFound) {
+			t.Errorf("停止分享别人或不存在的歌单 %s = %v，期望 ErrPlaylistNotFound", id, err)
+		}
+	}
+
+	for range 2 {
+		if err := store.SetPlaylistShare(t.Context(), alice.ID, favorites, ""); err != nil {
+			t.Fatalf("停止分享 = %v，期望重复停止也成功", err)
+		}
+	}
+	if _, err := store.SharedPlaylist(t.Context(), "share-2"); !errors.Is(err, port.ErrShareNotFound) {
+		t.Errorf("停止分享之后 = %v，期望 ErrShareNotFound", err)
+	}
+	if lists, err := store.MemberPlaylists(t.Context(), alice.ID); err != nil || lists[0].ShareID != "" {
+		t.Errorf("停止分享之后的歌单 = %#v, %v，期望没有分享 ID", lists, err)
+	}
+}
+
+func TestShareIDIsUnique(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	bob := registered(t, store, "bob")
+	if err := store.SetPlaylistShare(t.Context(), alice.ID, favoritesOf(t, store, alice.ID), "share-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetPlaylistShare(t.Context(), bob.ID, favoritesOf(t, store, bob.ID), "share-1"); err == nil {
+		t.Error("同一个分享 ID 设给第二个歌单时应报错")
+	}
+	if shared, err := store.SharedPlaylist(t.Context(), "share-1"); err != nil || shared.OwnerName != alice.Name {
+		t.Errorf("分享 = %#v, %v，期望仍是第一个歌单", shared, err)
+	}
+}
+
+func TestDeletedPlaylistIsNoLongerShared(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	list := filled(t, store, alice.ID, "通勤", "1")
+	if err := store.SetPlaylistShare(t.Context(), alice.ID, list, "share-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeletePlaylist(t.Context(), alice.ID, list); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SharedPlaylist(t.Context(), "share-1"); !errors.Is(err, port.ErrShareNotFound) {
+		t.Errorf("删除歌单之后 = %v，期望 ErrShareNotFound", err)
+	}
+}
+
+func TestCopySharedPlaylist(t *testing.T) {
+	store, _ := newStore(t)
+	alice := registered(t, store, "alice")
+	bob := registered(t, store, "bob")
+	source := filled(t, store, alice.ID, "通勤", "1", "2", "3")
+	if err := store.MovePlaylistItems(t.Context(), alice.ID, source, trackList("1"), &trackList("3")[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetPlaylistShare(t.Context(), alice.ID, source, "share-1"); err != nil {
+		t.Fatal(err)
+	}
+	original := displayIDs(t, store, alice.ID, source)
+
+	copied, err := store.CopySharedPlaylist(t.Context(), bob.ID, "share-1", "抄来的", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (port.Cover{URL: songItem("1").Meta.CoverURL}); copied.Name != "抄来的" || copied.Favorites || copied.TrackCount != 3 ||
+		copied.ShareID != "" || copied.Cover == nil || *copied.Cover != want {
+		t.Errorf("复制返回 %#v，期望 3 首、封面是排在最前的 %+v、没有分享", copied, want)
+	}
+	lists, err := store.MemberPlaylists(t.Context(), bob.ID)
+	if err != nil || len(lists) != 2 {
+		t.Fatalf("歌单 = %#v, %v，期望“我喜欢”和复制的歌单", lists, err)
+	}
+	if read := lists[1]; read.ID != copied.ID || read.Name != copied.Name || read.TrackCount != 3 || read.ShareID != "" ||
+		!read.CreatedAt.Equal(copied.CreatedAt) || !read.UpdatedAt.Equal(copied.UpdatedAt) {
+		t.Errorf("读出的 %#v，期望与复制返回的 %#v 一致", read, copied)
+	}
+	items, err := store.PlaylistItems(t.Context(), bob.ID, copied.ID)
+	sourceItems, _ := store.PlaylistItems(t.Context(), alice.ID, source)
+	if err != nil || !slices.Equal(items, sourceItems) {
+		t.Errorf("复制的曲目 = %#v, %v，期望与原歌单相同 %#v", items, err, sourceItems)
+	}
+	if err := store.AddPlaylistItem(t.Context(), bob.ID, copied.ID, songItem("9"), 1000); err != nil {
+		t.Fatal(err)
+	}
+	if got := displayIDs(t, store, bob.ID, copied.ID); !slices.Equal(got, append([]string{"9"}, original...)) {
+		t.Errorf("复制之后再加入 = %v，期望新加入的排在最前、其余保持 %v", got, original)
+	}
+	if got := displayIDs(t, store, alice.ID, source); !slices.Equal(got, original) {
+		t.Errorf("原歌单 = %v，期望不变 %v", got, original)
+	}
+
+	empty := filled(t, store, alice.ID, "空的")
+	if err := store.SetPlaylistShare(t.Context(), alice.ID, empty, "share-2"); err != nil {
+		t.Fatal(err)
+	}
+	if copied, err := store.CopySharedPlaylist(t.Context(), bob.ID, "share-2", "空的", 50); err != nil || copied.TrackCount != 0 || copied.Cover != nil {
+		t.Errorf("复制空歌单 = %#v, %v，期望建出一个没有曲目的歌单", copied, err)
+	}
+
+	if _, err := store.CopySharedPlaylist(t.Context(), bob.ID, "share-1", "超限", 3); !errors.Is(err, port.ErrPlaylistLimit) {
+		t.Errorf("歌单数到了上限 = %v，期望 ErrPlaylistLimit", err)
+	}
+	if _, err := store.CopySharedPlaylist(t.Context(), bob.ID, "share-x", "失效", 50); !errors.Is(err, port.ErrShareNotFound) {
+		t.Errorf("读不到的分享 = %v，期望 ErrShareNotFound", err)
+	}
+	if lists, err := store.MemberPlaylists(t.Context(), bob.ID); err != nil || len(lists) != 3 {
+		t.Errorf("失败之后有 %d 个歌单, %v，期望没有多建", len(lists), err)
+	}
+}

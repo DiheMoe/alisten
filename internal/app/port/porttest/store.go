@@ -553,6 +553,7 @@ type storedPlaylist struct {
 	favorites        bool
 	items            []port.PlaylistItem
 	created, updated time.Time
+	shareID          string
 }
 
 func (p *storedPlaylist) cover() *port.Cover {
@@ -590,6 +591,7 @@ func (s *Store) MemberPlaylists(_ context.Context, ownerID string) ([]port.Playl
 			CreatedAt:  p.created,
 			UpdatedAt:  p.updated,
 			Cover:      p.cover(),
+			ShareID:    p.shareID,
 		}
 		if p.favorites {
 			lists = append([]port.PlaylistRecord{r}, lists...)
@@ -698,11 +700,16 @@ func (s *Store) PlaylistItems(_ context.Context, ownerID, id string) ([]port.Pla
 	if p == nil {
 		return nil, port.ErrPlaylistNotFound
 	}
+	return p.display(), nil
+}
+
+// 新加入的在前。
+func (p *storedPlaylist) display() []port.PlaylistItem {
 	items := make([]port.PlaylistItem, 0, len(p.items))
 	for i := len(p.items) - 1; i >= 0; i-- {
 		items = append(items, p.items[i])
 	}
-	return items, nil
+	return items
 }
 
 func (s *Store) AddPlaylistItem(_ context.Context, ownerID, id string, item port.PlaylistItem, limit int) error {
@@ -807,4 +814,65 @@ func (s *Store) MovePlaylistItems(_ context.Context, ownerID, id string, tracks 
 	}
 	p.updated = time.Now()
 	return nil
+}
+
+func (s *Store) SetPlaylistShare(_ context.Context, ownerID, id, shareID string) error {
+	if err := checkText(shareID); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.playlist(ownerID, id)
+	if p == nil {
+		return port.ErrPlaylistNotFound
+	}
+	if other := s.shared(shareID); other != nil && other != p {
+		return fmt.Errorf("分享 ID %s 已被其他歌单使用：违反唯一约束", shareID)
+	}
+	p.shareID = shareID
+	return nil
+}
+
+// 调用方持有 s.mu。
+func (s *Store) shared(shareID string) *storedPlaylist {
+	for _, p := range s.playlists {
+		if shareID != "" && p.shareID == shareID {
+			return p
+		}
+	}
+	return nil
+}
+
+func (s *Store) SharedPlaylist(_ context.Context, shareID string) (port.SharedPlaylist, error) {
+	if err := checkText(shareID); err != nil {
+		return port.SharedPlaylist{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.shared(shareID)
+	if p == nil {
+		return port.SharedPlaylist{}, port.ErrShareNotFound
+	}
+	owner := s.member(p.owner).member
+	return port.SharedPlaylist{Name: p.name, Favorites: p.favorites, OwnerName: owner.Name, OwnerAvatarHash: owner.AvatarHash, Items: p.display()}, nil
+}
+
+func (s *Store) CopySharedPlaylist(_ context.Context, ownerID, shareID, name string, limit int) (port.PlaylistRecord, error) {
+	if err := checkText(shareID, name); err != nil {
+		return port.PlaylistRecord{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, err := s.newPlaylist(ownerID, name, limit)
+	if err != nil {
+		return port.PlaylistRecord{}, err
+	}
+	from := s.shared(shareID)
+	if from == nil {
+		// 与 PostgreSQL 的事务一样先新建再复制，读不到分享时撤销新建的歌单。
+		s.playlists = slices.DeleteFunc(s.playlists, func(other *storedPlaylist) bool { return other == p })
+		return port.PlaylistRecord{}, port.ErrShareNotFound
+	}
+	p.items = slices.Clone(from.items)
+	return port.PlaylistRecord{ID: p.id, Name: name, TrackCount: len(p.items), CreatedAt: p.created, UpdatedAt: p.updated, Cover: p.cover()}, nil
 }

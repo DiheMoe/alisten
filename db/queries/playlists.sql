@@ -2,7 +2,7 @@
 INSERT INTO playlists (owner_id, kind, name) VALUES (@owner_id, 'favorites', '我喜欢');
 
 -- name: MemberPlaylists :many
-SELECT p.id, p.kind, p.name, p.created_at, p.updated_at, count(i.track_id)::bigint AS track_count
+SELECT p.id, p.kind, p.name, p.created_at, p.updated_at, p.share_id, count(i.track_id)::bigint AS track_count
 FROM playlists p
 LEFT JOIN playlist_items i ON i.playlist_id = p.id
 WHERE p.owner_id = @owner_id
@@ -108,3 +108,33 @@ SELECT p.id FROM playlists p
 JOIN playlist_items i ON i.playlist_id = p.id
 WHERE p.owner_id = @owner_id AND i.source = @source AND i.track_id = @track_id
 ORDER BY p.id;
+
+-- name: SetPlaylistShare :execrows
+UPDATE playlists SET share_id = @share_id WHERE id = @id AND owner_id = @owner_id;
+
+-- name: SharedPlaylist :one
+SELECT p.id, p.kind, p.name, m.name AS owner_name, m.avatar_hash AS owner_avatar_hash
+FROM playlists p
+JOIN members m ON m.id = p.owner_id
+WHERE p.share_id = sqlc.arg(share_id)::text;
+
+-- name: CopySharedPlaylistItems :one
+-- 确认分享还在和复制曲目在同一条语句里，看到的是同一个快照：要么完整复制，要么读不到分享。不锁来源歌单：两个人同时复制
+-- 对方分享的“我喜欢”时，各自已经锁住了自己的“我喜欢”，再去锁对方的就会互相等待。
+WITH shared AS (
+    SELECT id FROM playlists WHERE share_id = sqlc.arg(share_id)::text
+), copied AS (
+    INSERT INTO playlist_items (playlist_id, source, track_id, title, artist, album, cover_url, cover_key, duration_ms, page_url, position)
+    SELECT sqlc.arg(to_id), i.source, i.track_id, i.title, i.artist, i.album, i.cover_url, i.cover_key, i.duration_ms, i.page_url,
+           row_number() OVER (ORDER BY i.position)
+    FROM playlist_items i
+    JOIN shared s ON s.id = i.playlist_id
+    RETURNING 1
+)
+SELECT EXISTS (SELECT FROM shared) AS found, (SELECT count(*) FROM copied)::bigint AS copied;
+
+-- name: PlaylistCover :one
+SELECT cover_url, cover_key FROM playlist_items
+WHERE playlist_id = @playlist_id AND (cover_url IS NOT NULL OR cover_key IS NOT NULL)
+ORDER BY position DESC
+LIMIT 1;

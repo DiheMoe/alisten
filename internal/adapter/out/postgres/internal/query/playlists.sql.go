@@ -53,6 +53,39 @@ func (q *Queries) CopyPlaylistItems(ctx context.Context, arg CopyPlaylistItemsPa
 	return result.RowsAffected(), nil
 }
 
+const copySharedPlaylistItems = `-- name: CopySharedPlaylistItems :one
+WITH shared AS (
+    SELECT id FROM playlists WHERE share_id = $1::text
+), copied AS (
+    INSERT INTO playlist_items (playlist_id, source, track_id, title, artist, album, cover_url, cover_key, duration_ms, page_url, position)
+    SELECT $2, i.source, i.track_id, i.title, i.artist, i.album, i.cover_url, i.cover_key, i.duration_ms, i.page_url,
+           row_number() OVER (ORDER BY i.position)
+    FROM playlist_items i
+    JOIN shared s ON s.id = i.playlist_id
+    RETURNING 1
+)
+SELECT EXISTS (SELECT FROM shared) AS found, (SELECT count(*) FROM copied)::bigint AS copied
+`
+
+type CopySharedPlaylistItemsParams struct {
+	ShareID string
+	ToID    string
+}
+
+type CopySharedPlaylistItemsRow struct {
+	Found  bool
+	Copied int64
+}
+
+// 确认分享还在和复制曲目在同一条语句里，看到的是同一个快照：要么完整复制，要么读不到分享。不锁来源歌单：两个人同时复制
+// 对方分享的“我喜欢”时，各自已经锁住了自己的“我喜欢”，再去锁对方的就会互相等待。
+func (q *Queries) CopySharedPlaylistItems(ctx context.Context, arg CopySharedPlaylistItemsParams) (CopySharedPlaylistItemsRow, error) {
+	row := q.db.QueryRow(ctx, copySharedPlaylistItems, arg.ShareID, arg.ToID)
+	var i CopySharedPlaylistItemsRow
+	err := row.Scan(&i.Found, &i.Copied)
+	return i, err
+}
+
 const countPlaylistItems = `-- name: CountPlaylistItems :one
 SELECT count(*) FROM playlist_items WHERE playlist_id = $1
 `
@@ -258,7 +291,7 @@ func (q *Queries) MemberPlaylistCovers(ctx context.Context, ownerID string) ([]M
 }
 
 const memberPlaylists = `-- name: MemberPlaylists :many
-SELECT p.id, p.kind, p.name, p.created_at, p.updated_at, count(i.track_id)::bigint AS track_count
+SELECT p.id, p.kind, p.name, p.created_at, p.updated_at, p.share_id, count(i.track_id)::bigint AS track_count
 FROM playlists p
 LEFT JOIN playlist_items i ON i.playlist_id = p.id
 WHERE p.owner_id = $1
@@ -272,6 +305,7 @@ type MemberPlaylistsRow struct {
 	Name       string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+	ShareID    *string
 	TrackCount int64
 }
 
@@ -290,6 +324,7 @@ func (q *Queries) MemberPlaylists(ctx context.Context, ownerID string) ([]Member
 			&i.Name,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ShareID,
 			&i.TrackCount,
 		); err != nil {
 			return nil, err
@@ -300,6 +335,25 @@ func (q *Queries) MemberPlaylists(ctx context.Context, ownerID string) ([]Member
 		return nil, err
 	}
 	return items, nil
+}
+
+const playlistCover = `-- name: PlaylistCover :one
+SELECT cover_url, cover_key FROM playlist_items
+WHERE playlist_id = $1 AND (cover_url IS NOT NULL OR cover_key IS NOT NULL)
+ORDER BY position DESC
+LIMIT 1
+`
+
+type PlaylistCoverRow struct {
+	CoverURL *string
+	CoverKey *string
+}
+
+func (q *Queries) PlaylistCover(ctx context.Context, playlistID string) (PlaylistCoverRow, error) {
+	row := q.db.QueryRow(ctx, playlistCover, playlistID)
+	var i PlaylistCoverRow
+	err := row.Scan(&i.CoverURL, &i.CoverKey)
+	return i, err
 }
 
 const playlistHasItem = `-- name: PlaylistHasItem :one
@@ -456,6 +510,52 @@ type SetPlaylistSeqParams struct {
 func (q *Queries) SetPlaylistSeq(ctx context.Context, arg SetPlaylistSeqParams) error {
 	_, err := q.db.Exec(ctx, setPlaylistSeq, arg.ItemSeq, arg.ID)
 	return err
+}
+
+const setPlaylistShare = `-- name: SetPlaylistShare :execrows
+UPDATE playlists SET share_id = $1 WHERE id = $2 AND owner_id = $3
+`
+
+type SetPlaylistShareParams struct {
+	ShareID *string
+	ID      string
+	OwnerID string
+}
+
+func (q *Queries) SetPlaylistShare(ctx context.Context, arg SetPlaylistShareParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setPlaylistShare, arg.ShareID, arg.ID, arg.OwnerID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const sharedPlaylist = `-- name: SharedPlaylist :one
+SELECT p.id, p.kind, p.name, m.name AS owner_name, m.avatar_hash AS owner_avatar_hash
+FROM playlists p
+JOIN members m ON m.id = p.owner_id
+WHERE p.share_id = $1::text
+`
+
+type SharedPlaylistRow struct {
+	ID              string
+	Kind            string
+	Name            string
+	OwnerName       string
+	OwnerAvatarHash *string
+}
+
+func (q *Queries) SharedPlaylist(ctx context.Context, shareID string) (SharedPlaylistRow, error) {
+	row := q.db.QueryRow(ctx, sharedPlaylist, shareID)
+	var i SharedPlaylistRow
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Name,
+		&i.OwnerName,
+		&i.OwnerAvatarHash,
+	)
+	return i, err
 }
 
 const touchPlaylist = `-- name: TouchPlaylist :exec

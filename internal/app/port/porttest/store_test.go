@@ -87,3 +87,28 @@ func TestImportPlaylistRejectsWhatPostgreSQLRejects(t *testing.T) {
 		t.Errorf("失败之后的歌单 = %#v，期望一个也没有建", lists)
 	}
 }
+
+func TestSetPlaylistShareRejectsDuplicates(t *testing.T) {
+	store := New()
+	m, err := store.CreateMember(t.Context(), []byte("token"), "甲")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := store.CreatePlaylist(t.Context(), m.ID, "一", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.CreatePlaylist(t.Context(), m.ID, "二", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetPlaylistShare(t.Context(), m.ID, first.ID, "share"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetPlaylistShare(t.Context(), m.ID, second.ID, "share"); err == nil {
+		t.Error("同一个分享 ID 设给第二个歌单时应报错")
+	}
+	if err := store.SetPlaylistShare(t.Context(), m.ID, first.ID, "share"); err != nil {
+		t.Errorf("重新设成自己已有的分享 ID = %v，期望成功", err)
+	}
+}

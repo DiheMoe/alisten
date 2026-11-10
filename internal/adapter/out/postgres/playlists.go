@@ -42,6 +42,7 @@ func (s *Store) MemberPlaylists(ctx context.Context, ownerID string) ([]port.Pla
 			CreatedAt:  r.CreatedAt,
 			UpdatedAt:  r.UpdatedAt,
 			Cover:      covers[r.ID],
+			ShareID:    orEmpty(r.ShareID),
 		}
 	}
 	return lists, nil
@@ -180,6 +181,10 @@ func (s *Store) PlaylistItems(ctx context.Context, ownerID, id string) ([]port.P
 	if err != nil {
 		return nil, fmt.Errorf("读取歌单 %s 的曲目：%w", id, err)
 	}
+	return playlistItems(rows), nil
+}
+
+func playlistItems(rows []query.PlaylistItem) []port.PlaylistItem {
 	items := make([]port.PlaylistItem, len(rows))
 	for i, r := range rows {
 		items[i] = port.PlaylistItem{
@@ -195,7 +200,7 @@ func (s *Store) PlaylistItems(ctx context.Context, ownerID, id string) ([]port.P
 			},
 		}
 	}
-	return items, nil
+	return items
 }
 
 func (s *Store) AddPlaylistItem(ctx context.Context, ownerID, id string, item port.PlaylistItem, limit int) error {
@@ -353,6 +358,86 @@ func (s *Store) MovePlaylistItems(ctx context.Context, ownerID, id string, track
 		return fmt.Errorf("调整歌单 %s 的顺序：%w", id, err)
 	}
 	return nil
+}
+
+func (s *Store) SetPlaylistShare(ctx context.Context, ownerID, id, shareID string) error {
+	if !isUUID(id) {
+		return port.ErrPlaylistNotFound
+	}
+	n, err := s.q.SetPlaylistShare(ctx, query.SetPlaylistShareParams{ID: id, OwnerID: ownerID, ShareID: nullable(shareID)})
+	if err == nil && n == 0 {
+		err = port.ErrPlaylistNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("设置歌单 %s 的分享：%w", id, err)
+	}
+	return nil
+}
+
+func (s *Store) SharedPlaylist(ctx context.Context, shareID string) (port.SharedPlaylist, error) {
+	var shared port.SharedPlaylist
+	// 歌单和曲目在同一个快照里读：分开读时，删除歌单可能恰好发生在两次读取之间，读到歌单还在、曲目却已经没了。
+	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		p, err := q.SharedPlaylist(ctx, shareID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return port.ErrShareNotFound
+		}
+		if err != nil {
+			return err
+		}
+		rows, err := q.PlaylistItems(ctx, p.ID)
+		if err != nil {
+			return err
+		}
+		shared = port.SharedPlaylist{
+			Name:            p.Name,
+			Favorites:       p.Kind == favoritesKind,
+			OwnerName:       p.OwnerName,
+			OwnerAvatarHash: orEmpty(p.OwnerAvatarHash),
+			Items:           playlistItems(rows),
+		}
+		return nil
+	})
+	if err != nil {
+		return port.SharedPlaylist{}, fmt.Errorf("读取分享的歌单：%w", err)
+	}
+	return shared, nil
+}
+
+func (s *Store) CopySharedPlaylist(ctx context.Context, ownerID, shareID, name string, limit int) (port.PlaylistRecord, error) {
+	var record port.PlaylistRecord
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		created, err := createPlaylist(ctx, q, ownerID, name, limit)
+		if err != nil {
+			return err
+		}
+		copied, err := q.CopySharedPlaylistItems(ctx, query.CopySharedPlaylistItemsParams{ShareID: shareID, ToID: created.ID})
+		if err != nil {
+			return err
+		}
+		if !copied.Found {
+			return port.ErrShareNotFound
+		}
+		if err := q.SetPlaylistSeq(ctx, query.SetPlaylistSeqParams{ID: created.ID, ItemSeq: copied.Copied}); err != nil {
+			return err
+		}
+		record = port.PlaylistRecord{ID: created.ID, Name: name, TrackCount: int(copied.Copied), CreatedAt: created.CreatedAt, UpdatedAt: created.UpdatedAt}
+		cover, err := q.PlaylistCover(ctx, created.ID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		record.Cover = &port.Cover{URL: orEmpty(cover.CoverURL), Key: track.ObjectKey(orEmpty(cover.CoverKey))}
+		return nil
+	})
+	if err != nil {
+		return port.PlaylistRecord{}, fmt.Errorf("成员 %s 复制分享的歌单：%w", ownerID, err)
+	}
+	return record, nil
 }
 
 func splitTracks(tracks []track.Track) (sources, ids []string) {
