@@ -1,21 +1,21 @@
-import type { PlayRecord } from './records'
+import type { MyListen } from '@/core/realtime'
 import { CirclePlus, Download, History, Search, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { roomStore, sameTrack } from '@/core/room'
 import { SaveToPlaylistButton } from '@/features/playlists'
 import { enqueue, sourceName } from '@/features/queue'
 import { bookTitle } from '@/shared/lib/book-title'
 import { formatClock } from '@/shared/lib/time'
 import { useStore } from '@/shared/lib/use-store'
-import { AsyncIconButton, EmptyState, IconButton, Modal, notificationStore, PlayingBars, SongArtwork } from '@/shared/ui'
+import { AsyncIconButton, ConfirmDialog, EmptyState, IconButton, notificationStore, PlayingBars, Skeleton, SongArtwork } from '@/shared/ui'
 import { historyStore } from './history-store'
 import './history.css'
 
 const batchSize = 80
 
-function matches(record: PlayRecord, query: string): boolean {
+function matches(listen: MyListen, query: string): boolean {
   const keyword = query.trim().toLowerCase()
-  const { title, artist, album } = record.meta
+  const { title, artist, album } = listen.meta
   return !keyword || `${title} ${artist} ${album}`.toLowerCase().includes(keyword)
 }
 
@@ -23,10 +23,10 @@ function playedOn(ms: number): string {
   return new Date(ms).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-function HistoryRow({ record, compact, connected, playing }: { record: PlayRecord, compact: boolean, connected: boolean, playing: boolean }) {
-  const { title, artist, album, coverUrl, pageUrl } = record.meta
+function HistoryRow({ listen, compact, connected, playing }: { listen: MyListen, compact: boolean, connected: boolean, playing: boolean }) {
+  const { title, artist, album, coverUrl, pageUrl } = listen.meta
   const performer = artist || '未知艺术家'
-  const source = sourceName(record.track)
+  const source = sourceName(listen.track)
   return (
     <div className="song-row" data-playing={playing || undefined}>
       <SongArtwork coverUrl={coverUrl} title={title} href={pageUrl} sourceName={source} />
@@ -37,24 +37,24 @@ function HistoryRow({ record, compact, connected, playing }: { record: PlayRecor
         </span>
         <span className="text-ui-sm muted truncate">{[performer, source, album].filter(Boolean).join(' · ')}</span>
       </div>
-      {!compact && <time className="history-time text-ui-sm muted" dateTime={new Date(record.playedAtMs).toISOString()}>{formatClock(record.playedAtMs)}</time>}
+      {!compact && <time className="history-time text-ui-sm muted" dateTime={new Date(listen.heardAtMs).toISOString()}>{formatClock(listen.heardAtMs)}</time>}
       <AsyncIconButton
         icon={CirclePlus}
         className="song-action"
         label={`点歌${bookTitle(title)}`}
         disabled={!connected}
         onAction={async () => {
-          await enqueue(record.track)
+          await enqueue(listen.track)
         }}
       />
-      <SaveToPlaylistButton track={record.track} title={title} className="song-action song-action-secondary" />
-      <IconButton
+      <SaveToPlaylistButton track={listen.track} title={title} className="song-action song-action-secondary" />
+      <AsyncIconButton
         icon={Trash2}
         className="song-action song-action-secondary"
         label={`删除${bookTitle(title)}的播放记录`}
-        onClick={() => {
-          historyStore.removePlay(record)
-          notificationStore.success('已删除播放记录')
+        onAction={async () => {
+          if (await historyStore.remove(listen))
+            notificationStore.success('已删除播放记录')
         }}
       />
     </div>
@@ -62,13 +62,48 @@ function HistoryRow({ record, compact, connected, playing }: { record: PlayRecor
 }
 
 export function HistoryPage({ compact = false, filter = '', onFilter }: { compact?: boolean, filter?: string, onFilter?: (filter: string) => void }) {
-  const plays = useStore(historyStore, s => s.plays)
+  const listens = useStore(historyStore, s => s.listens)
+  const error = useStore(historyStore, s => s.error)
   const connected = useStore(roomStore, s => s.status === 'open')
   const playing = useStore(roomStore, s => s.room?.nowPlaying?.entry.track)
   const [limit, setLimit] = useState(batchSize)
   const [confirming, setConfirming] = useState(false)
-  const visible = plays.filter(record => matches(record, filter))
+  useEffect(() => historyStore.open(), [])
+  const all = listens ?? []
+  const visible = all.filter(listen => matches(listen, filter))
   const shown = visible.slice(0, limit)
+  let body
+  if (listens === null) {
+    body = error === null
+      ? <Skeleton rows={4} />
+      : (
+          <EmptyState icon={History} title="播放历史没有读出来" action={<button type="button" className="button-secondary" onClick={() => void historyStore.load()}>重试</button>}>
+            {error}
+          </EmptyState>
+        )
+  }
+  else if (shown.length) {
+    body = (
+      <ol className="history-list">
+        {shown.map((listen, index) => {
+          const day = playedOn(listen.heardAtMs)
+          return (
+            <li key={`${listen.track.source}:${listen.track.id}`}>
+              {(index === 0 || playedOn(shown[index - 1].heardAtMs) !== day) && <h2 className="history-date text-ui-sm muted">{day}</h2>}
+              <HistoryRow listen={listen} compact={compact} connected={connected} playing={sameTrack(listen.track, playing)} />
+            </li>
+          )
+        })}
+      </ol>
+    )
+  }
+  else {
+    body = (
+      <EmptyState icon={History} title={filter ? '没有找到相关记录' : '你的音乐足迹，从这里开始'}>
+        {filter ? '换个关键词，再找找看。' : '你在房间里听过的歌会记在这里。'}
+      </EmptyState>
+    )
+  }
   return (
     <section className={compact ? 'history-panel' : 'page-content history-page'} aria-label="播放历史">
       {!compact && (
@@ -90,53 +125,33 @@ export function HistoryPage({ compact = false, filter = '', onFilter }: { compac
                 aria-label="搜索播放历史"
               />
             </label>
-            <IconButton icon={Download} label="导出播放历史" disabled={!plays.length} onClick={() => historyStore.exportPlays()} />
-            <IconButton icon={Trash2} label="清空播放历史" disabled={!plays.length} onClick={() => setConfirming(true)} />
+            <IconButton icon={Download} label="导出播放历史" disabled={!all.length} onClick={() => historyStore.exportListens()} />
+            <IconButton icon={Trash2} label="清空播放历史" disabled={!all.length} onClick={() => setConfirming(true)} />
           </div>
-          <div className="section-heading">
-            <span className="text-ui-sm muted">{`${plays.length} 首歌曲 · 保存在这台设备上`}</span>
-          </div>
+          {listens && (
+            <div className="section-heading">
+              <span className="text-ui-sm muted">{`${listens.length} 首歌曲`}</span>
+            </div>
+          )}
         </>
       )}
-      {shown.length
-        ? (
-            <ol className="history-list">
-              {shown.map((record, index) => {
-                const day = playedOn(record.playedAtMs)
-                return (
-                  <li key={`${record.track.source}:${record.track.id}`}>
-                    {(index === 0 || playedOn(shown[index - 1].playedAtMs) !== day) && <h2 className="history-date text-ui-sm muted">{day}</h2>}
-                    <HistoryRow record={record} compact={compact} connected={connected} playing={sameTrack(record.track, playing)} />
-                  </li>
-                )
-              })}
-            </ol>
-          )
-        : (
-            <EmptyState icon={History} title={filter ? '没有找到相关记录' : '你的音乐足迹，从这里开始'}>
-              {filter ? '换个关键词，再找找看。' : '房间播放过的歌曲会保存在这台设备上，方便再次点歌。'}
-            </EmptyState>
-          )}
+      {body}
       {visible.length > limit && (
         <button type="button" className="button-secondary load-more" onClick={() => setLimit(n => n + batchSize)}>显示更多</button>
       )}
       {confirming && (
-        <Modal title="清空播放历史" onClose={() => setConfirming(false)}>
-          <p className="text-ui-base muted">将清空这台设备上的全部播放记录。</p>
-          <div className="dialog-actions">
-            <button type="button" className="button-secondary" onClick={() => setConfirming(false)}>取消</button>
-            <button
-              type="button"
-              className="button-destructive"
-              onClick={() => {
-                historyStore.clearPlays()
-                setConfirming(false)
-              }}
-            >
-              清空
-            </button>
-          </div>
-        </Modal>
+        <ConfirmDialog
+          title="清空播放历史"
+          confirmLabel="清空"
+          danger
+          onConfirm={async () => {
+            if (await historyStore.clear())
+              setConfirming(false)
+          }}
+          onClose={() => setConfirming(false)}
+        >
+          将清空你的全部播放记录，登录同一个账号的其他设备上也会一起清空。
+        </ConfirmDialog>
       )}
     </section>
   )

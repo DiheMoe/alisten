@@ -27,7 +27,7 @@ interface SettingsDraft {
   reducedMotion: boolean
   searchesEnabled: boolean
   searchLimit: number
-  playsEnabled: boolean
+  recordListens: boolean
 }
 
 type DraftKey = keyof SettingsDraft
@@ -70,6 +70,7 @@ export function SettingsPage() {
   const member = useStore(profileStore, s => s.member)
   const email = useStore(profileStore, s => s.email)
   const account = useStore(profileStore, s => s.account)
+  const recordListens = useStore(profileStore, s => s.recordListens)
   const profileFailed = useStore(profileStore, s => s.failed)
   const theme = useStore(appearanceStore, s => s.theme)
   const fontSize = useStore(appearanceStore, s => s.fontSize)
@@ -81,7 +82,6 @@ export function SettingsPage() {
   const reducedMotion = useStore(performanceStore, s => s.reducedMotion)
   const searchesEnabled = useStore(historyStore, s => s.searchesEnabled)
   const searchLimit = useStore(historyStore, s => s.searchLimit)
-  const playsEnabled = useStore(historyStore, s => s.playsEnabled)
   const [changes, setChanges] = useState<Partial<SettingsDraft>>({})
   const [saving, setSaving] = useState(false)
   // state 要到下一次渲染才更新，连续提交时由这个 ref 阻止重复保存。
@@ -90,7 +90,7 @@ export function SettingsPage() {
     headingRef.current?.focus({ preventScroll: true })
     loadProfile()
   }, [])
-  const current: SettingsDraft = { name: member?.name ?? '', email, theme, fontSize, volume, muted, reminderEnabled, systemNotifications, level, reducedMotion, searchesEnabled, searchLimit, playsEnabled }
+  const current: SettingsDraft = { name: member?.name ?? '', email, theme, fontSize, volume, muted, reminderEnabled, systemNotifications, level, reducedMotion, searchesEnabled, searchLimit, recordListens: recordListens ?? false }
   const draft: SettingsDraft = { ...current, ...changes }
   const changed = (keys: DraftKey[]) => keys.some(key => draft[key] !== current[key])
   const dirty = changed(Object.keys(changes) as DraftKey[])
@@ -146,9 +146,15 @@ export function SettingsPage() {
         performanceStore.update(draft.level, draft.reducedMotion)
         saved.push('level', 'reducedMotion')
       }
-      if (changed(['searchesEnabled', 'searchLimit', 'playsEnabled'])) {
-        historyStore.updateSettings({ searchesEnabled: draft.searchesEnabled, searchLimit: draft.searchLimit, playsEnabled: draft.playsEnabled })
-        saved.push('searchesEnabled', 'searchLimit', 'playsEnabled')
+      if (changed(['searchesEnabled', 'searchLimit'])) {
+        historyStore.updateSettings({ searchesEnabled: draft.searchesEnabled, searchLimit: draft.searchLimit })
+        saved.push('searchesEnabled', 'searchLimit')
+      }
+      if (changed(['recordListens'])) {
+        if (await profileStore.setRecordListens(draft.recordListens))
+          saved.push('recordListens')
+        else
+          failed = true
       }
       setChanges((previous) => {
         const rest = { ...previous }
@@ -268,8 +274,8 @@ export function SettingsPage() {
                       options={searchLimits.map(limit => ({ value: String(limit), label: `${limit} 条` }))}
                     />
                   </SettingRow>
-                  <SettingRow id="settings-play-history" title="记录播放历史" description="把房间播放过的歌曲保存在这台设备上。">
-                    <input id="settings-play-history" aria-describedby="settings-play-history-description" className="settings-switch" type="checkbox" role="switch" checked={draft.playsEnabled} onChange={event => update('playsEnabled', event.target.checked)} />
+                  <SettingRow id="settings-play-history" title="记录播放历史" description={recordListens === null && profileFailed ? '暂时无法获取这项设置。' : '把你在房间里听过的歌记进播放历史。'}>
+                    <input id="settings-play-history" aria-describedby="settings-play-history-description" className="settings-switch" type="checkbox" role="switch" checked={draft.recordListens} disabled={recordListens === null} onChange={event => update('recordListens', event.target.checked)} />
                   </SettingRow>
                 </div>
               </section>

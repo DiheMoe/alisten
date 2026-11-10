@@ -8,11 +8,20 @@ import { notificationStore } from '@/shared/ui'
 // 游客的邮箱只保存在本机，服务端只保存它的哈希；已注册账号的邮箱保存在账号里。
 const emailKey = 'alisten.email'
 
-class ProfileStore extends Store<{ member: Member | null, account: Account | null, email: string, failed: boolean }> {
+interface ProfileState {
+  member: Member | null
+  account: Account | null
+  email: string
+  // 是否记录播放历史，保存在服务端；还没有读到时为 null。
+  recordListens: boolean | null
+  failed: boolean
+}
+
+class ProfileStore extends Store<ProfileState> {
   #loading: Promise<void> | null = null
 
   constructor() {
-    super({ member: null, account: null, email: '', failed: false })
+    super({ member: null, account: null, email: '', recordListens: null, failed: false })
   }
 
   start(): void {
@@ -58,6 +67,19 @@ class ProfileStore extends Store<{ member: Member | null, account: Account | nul
     return await this.#update(changes) === null
   }
 
+  // 返回 false 时，失败原因已经通过通知显示。
+  async setRecordListens(on: boolean): Promise<boolean> {
+    try {
+      await (on ? api.enableListenRecording() : api.disableListenRecording())
+      this.setState({ recordListens: on })
+      return true
+    }
+    catch (error) {
+      notificationStore.error(error instanceof IdentityRenewedError ? '设置没有保存，再保存一次。' : errorMessage(error))
+      return false
+    }
+  }
+
   // 失败时返回错误，失败原因已经通过通知显示。
   async #update(changes: { name?: string, email?: string }): Promise<unknown> {
     try {
@@ -87,8 +109,8 @@ class ProfileStore extends Store<{ member: Member | null, account: Account | nul
   async #load(): Promise<void> {
     this.setState({ failed: false })
     try {
-      const { member, account } = await api.getMe()
-      this.setState({ member, account: account ?? null, email: account ? account.email ?? '' : localStorage.getItem(emailKey) ?? '', failed: false })
+      const { member, account, recordListens } = await api.getMe()
+      this.setState({ member, account: account ?? null, email: account ? account.email ?? '' : localStorage.getItem(emailKey) ?? '', recordListens, failed: false })
       if (account && !account.email)
         await this.#moveLocalEmail()
     }
@@ -116,10 +138,11 @@ class ProfileStore extends Store<{ member: Member | null, account: Account | nul
       case 'rejected':
         // 本机保存的邮箱属于原来的身份。
         localStorage.removeItem(emailKey)
-        this.setState({ member: null, account: null, email: '', failed: false })
+        this.setState({ member: null, account: null, email: '', recordListens: null, failed: false })
         return
       case 'renewed':
-        this.setState({ member: event.member, account: null, failed: false })
+        // 新的游客按默认记录播放历史。
+        this.setState({ member: event.member, account: null, recordListens: true, failed: false })
         notificationStore.info('原来的身份已经失效，已为你换了一个新的身份。', 8000)
         return
       case 'renewalFailed':

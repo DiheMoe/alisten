@@ -337,3 +337,51 @@ describe('邮箱', () => {
     expect(updates).toEqual([])
   })
 })
+
+describe('记录播放历史', () => {
+  beforeEach(() => {
+    local.setItem(memberTokenKey, 'good')
+  })
+
+  it('取回资料时一并取回开关，修改时调用对应的接口', async () => {
+    me = { member, recordListens: false }
+    const switched: string[] = []
+    extraRoutes.set('PUT /api/me/listen-recording', () => {
+      switched.push('on')
+      return new Response(null, { status: 204 })
+    })
+    extraRoutes.set('DELETE /api/me/listen-recording', () => {
+      switched.push('off')
+      return new Response(null, { status: 204 })
+    })
+    const { profileStore } = await load()
+    expect(profileStore.state.recordListens).toBeNull()
+    await profileStore.load()
+    expect(profileStore.state.recordListens).toBe(false)
+    expect(await profileStore.setRecordListens(true)).toBe(true)
+    expect(profileStore.state.recordListens).toBe(true)
+    expect(await profileStore.setRecordListens(false)).toBe(true)
+    expect(profileStore.state.recordListens).toBe(false)
+    expect(switched).toEqual(['on', 'off'])
+  })
+
+  it('修改失败时开关不变', async () => {
+    me = { member, recordListens: true }
+    extraRoutes.set('DELETE /api/me/listen-recording', () => new Response(JSON.stringify({ error: { code: 'UNAVAILABLE', message: '暂时不可用' } }), { status: 503 }))
+    const { profileStore } = await load()
+    await profileStore.load()
+    expect(await profileStore.setRecordListens(false)).toBe(false)
+    expect(profileStore.state.recordListens).toBe(true)
+  })
+
+  it('身份被拒绝时开关未知，换成新的游客之后是默认的开启', async () => {
+    me = { member, recordListens: false }
+    const { profileStore, identityEvents } = await load()
+    profileStore.start()
+    await profileStore.load()
+    identityEvents.emit({ kind: 'rejected' })
+    expect(profileStore.state.recordListens).toBeNull()
+    identityEvents.emit({ kind: 'renewed', member: renewed })
+    expect(profileStore.state.recordListens).toBe(true)
+  })
+})
