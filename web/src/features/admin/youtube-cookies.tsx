@@ -4,6 +4,7 @@ import { api } from '@/core/api'
 import { formatDateTime } from '@/shared/lib/time'
 import { ConfirmDialog, Modal, notificationStore } from '@/shared/ui'
 import { adminStore } from './admin-store'
+import { StatusPill } from './section-head'
 import { canSubmitYoutubeCookies, shouldWarnAboutPlaintext, youtubeCookiesText, youtubeCookiesTooLarge, youtubeCookiesView } from './youtube-cookies-view'
 
 function YouTubeCookiesDialog({ onSaved, onClose }: { onSaved: () => void, onClose: () => void }) {
@@ -65,15 +66,19 @@ function YouTubeCookiesDialog({ onSaved, onClose }: { onSaved: () => void, onClo
 }
 
 export function YouTubeCookies() {
+  const titleId = useId()
   const [credential, setCredential] = useState<YoutubeCredentialState>()
   const [attempt, setAttempt] = useState(0)
   const [editing, setEditing] = useState(false)
   const [clearing, setClearing] = useState(false)
   useEffect(() => {
     let active = true
-    void adminStore.call(() => api.adminGetYoutubeCredential()).then((result) => {
+    adminStore.attempt(() => api.adminGetYoutubeCredential()).then((result) => {
       if (active)
         setCredential(result)
+    }, (error: Error) => {
+      if (active)
+        setCredential(error)
     })
     return () => {
       active = false
@@ -85,16 +90,23 @@ export function YouTubeCookies() {
     setAttempt(n => n + 1)
   }
   return (
-    <li className="admin-row">
-      <div className="admin-row-copy">
-        <strong className="text-ui-base">YouTube</strong>
-        <span className="text-ui-sm muted" role="status">{view.status}</span>
-        {view.updatedAtMs !== null && <span className="text-ui-sm muted">{`最近填写于 ${formatDateTime(view.updatedAtMs)}`}</span>}
-        {shouldWarnAboutPlaintext(window.location) && <span className="error-text text-ui-sm" role="alert">{youtubeCookiesText.plaintextWarning}</span>}
+    <article className="admin-card" aria-labelledby={titleId}>
+      <div className="admin-card-top">
+        <h3 id={titleId}>YouTube</h3>
+        <StatusPill tone="neutral">{view.status}</StatusPill>
       </div>
-      <div className="admin-row-actions">
-        <button type="button" className="button-secondary" disabled={credential === undefined} onClick={() => setEditing(true)}>{credential?.set ? '覆盖 cookies' : '填写 cookies'}</button>
-        {credential?.set && <button type="button" className="button-secondary" onClick={() => setClearing(true)}>清除</button>}
+      {credential instanceof Error && <p className="admin-card-detail">{credential.message}</p>}
+      {view.updatedAtMs !== null && <p className="admin-card-detail">{`${formatDateTime(view.updatedAtMs)} 更新`}</p>}
+      {shouldWarnAboutPlaintext(window.location) && <p className="admin-card-detail error-text" role="alert">{youtubeCookiesText.plaintextWarning}</p>}
+      <div className="admin-card-actions">
+        {credential instanceof Error
+          ? <button type="button" className="button-secondary" onClick={refetch}>重试</button>
+          : (
+              <>
+                <button type="button" className="button-secondary" disabled={credential === undefined} onClick={() => setEditing(true)}>{credential?.set ? '更新' : '填写 cookies'}</button>
+                {credential?.set && <button type="button" className="button-secondary" onClick={() => setClearing(true)}>清除</button>}
+              </>
+            )}
       </div>
       {editing && (
         <YouTubeCookiesDialog
@@ -106,6 +118,7 @@ export function YouTubeCookies() {
           onClose={() => setEditing(false)}
         />
       )}
+      {/* 清除之后“清除”按钮不再显示，重新读取期间“填写 cookies”也不能点：焦点落到分类标题。 */}
       {clearing && (
         <ConfirmDialog
           title="清除 YouTube cookies"
@@ -119,10 +132,11 @@ export function YouTubeCookies() {
             notificationStore.success('已清除 YouTube cookies')
           }}
           onClose={() => setClearing(false)}
+          returnFocus={() => document.getElementById('admin-sources-title')}
         >
           清除后，下载 YouTube 链接时不再携带 cookies。
         </ConfirmDialog>
       )}
-    </li>
+    </article>
   )
 }

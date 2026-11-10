@@ -1,9 +1,8 @@
-import type { MenuAction } from './action-menu'
 import type { MyPlaylist } from '@/core/realtime'
+import type { MenuAction } from '@/shared/ui'
 import { Copy, Ellipsis, FileDown, Link2Off, Pencil, RefreshCw, Share2, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { ConfirmDialog, Modal, notificationStore } from '@/shared/ui'
-import { ActionMenu } from './action-menu'
+import { ActionMenu, ConfirmDialog, Modal, notificationStore } from '@/shared/ui'
 import { playlistsStore } from './playlists-store'
 
 async function copyShareLink(shareId: string, copied: string): Promise<void> {

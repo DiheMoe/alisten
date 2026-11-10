@@ -1,6 +1,6 @@
 import type { MyListen } from '@/core/realtime'
 import { CirclePlus, Download, History, Search, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { roomStore, sameTrack } from '@/core/room'
 import { SaveToPlaylistButton } from '@/features/playlists'
 import { enqueue, sourceName } from '@/features/queue'
@@ -68,6 +68,7 @@ export function HistoryPage({ compact = false, filter = '', onFilter }: { compac
   const playing = useStore(roomStore, s => s.room?.nowPlaying?.entry.track)
   const [limit, setLimit] = useState(batchSize)
   const [confirming, setConfirming] = useState(false)
+  const titleRef = useRef<HTMLHeadingElement>(null)
   useEffect(() => historyStore.open(), [])
   const all = listens ?? []
   const visible = all.filter(listen => matches(listen, filter))
@@ -109,7 +110,7 @@ export function HistoryPage({ compact = false, filter = '', onFilter }: { compac
       {!compact && (
         <>
           <div className="page-title">
-            <h1 className="text-ui-xl">播放历史</h1>
+            <h1 ref={titleRef} className="text-ui-xl" tabIndex={-1}>播放历史</h1>
             <p className="text-ui-base muted">重温那些一起听过的旋律。</p>
           </div>
           <div className="history-toolbar">
@@ -149,6 +150,7 @@ export function HistoryPage({ compact = false, filter = '', onFilter }: { compac
               setConfirming(false)
           }}
           onClose={() => setConfirming(false)}
+          returnFocus={() => titleRef.current}
         >
           将清空你的全部播放记录，登录同一个账号的其他设备上也会一起清空。
         </ConfirmDialog>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Modal } from './modal'
 
-export function ConfirmDialog({ title, children, confirmLabel, danger = false, closeOnConfirm = false, onConfirm, onClose }: {
+export function ConfirmDialog({ title, children, confirmLabel, danger = false, closeOnConfirm = false, onConfirm, onClose, returnFocus }: {
   title: string
   children: string
   confirmLabel: string
@@ -10,10 +10,11 @@ export function ConfirmDialog({ title, children, confirmLabel, danger = false, c
   closeOnConfirm?: boolean
   onConfirm: () => Promise<void>
   onClose: () => void
+  returnFocus?: () => HTMLElement | null
 }) {
   const [busy, setBusy] = useState(false)
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal title={title} onClose={onClose} returnFocus={returnFocus}>
       <p className="text-ui-base muted">{children}</p>
       <div className="dialog-actions">
         <button type="button" className="button-secondary" onClick={onClose}>取消</button>

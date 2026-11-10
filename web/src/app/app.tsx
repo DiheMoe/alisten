@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import type { Page, Panel, RoomPage } from './route'
+import type { Page, Panel, RoomPage, Route } from './route'
 import type { SearchQuery } from '@/features/search'
 import { ChevronLeft, ChevronRight, Headphones, History, House, Library, ListMusic, MessageCircle, MoreHorizontal, Search, Settings, Share2, UserRound, Wifi, WifiOff, X } from 'lucide-react'
 import { Suspense } from 'react'
@@ -47,6 +47,7 @@ const mobileMenu: { page: RoomPage, label: string, icon: LucideIcon }[] = [
 ]
 
 const pageClasses: Partial<Record<Page, string>> = {
+  'admin': 'settings-view',
   'queue': 'scrollbar-hidden',
   'history': 'scrollbar-hidden',
   'playlists': 'scrollbar-hidden',
@@ -199,7 +200,22 @@ function RoutedAdmin({ onEntered }: { onEntered: (ref: string) => void }) {
   const route = useStore(navigationStore, s => s.route)
   if (route.name !== 'admin')
     return null
-  return <AdminPage section={route.section} q={route.q} page={route.page} sort={route.sort} onEntered={onEntered} />
+  return (
+    <AdminPage
+      section={route.section}
+      q={route.q}
+      page={route.page}
+      sort={route.sort}
+      onNavigate={({ section, q = '', page = 1, sort = 'stored' }) => {
+        const next: Route = { name: 'admin', section, panel: route.panel, q, page, sort }
+        if (section === null)
+          navigationStore.up(next)
+        else
+          navigationStore.navigate(next)
+      }}
+      onEntered={onEntered}
+    />
+  )
 }
 
 function RoutedHistory() {

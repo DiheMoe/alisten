@@ -2,12 +2,13 @@ import type { MovePlan } from './track-order'
 import type { MyPlaylist, MyPlaylistItem, Track } from '@/core/realtime'
 import type { SongAction } from '@/shared/ui'
 import { ArrowLeft, CirclePlus, ListMusic, ListPlus, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '@/core/api'
 import { errorMessage } from '@/core/errors'
 import { roomStore } from '@/core/room'
 import { enqueue } from '@/features/queue'
 import { bookTitle } from '@/shared/lib/book-title'
+import { rowAfterRemoval } from '@/shared/lib/removal-focus'
 import { useStore } from '@/shared/lib/use-store'
 import { ConfirmDialog, EmptyState, notificationStore, Skeleton } from '@/shared/ui'
 import { FavoritesMark, PlaylistCover } from './playlist-cover'
@@ -60,6 +61,9 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
   const [saving, setSaving] = useState<{ track: Track, title: string } | null>(null)
   const [savingSelected, setSavingSelected] = useState(false)
   const [confirmingRemoval, setConfirmingRemoval] = useState(false)
+  // 移出之后焦点要去的那一首（null 表示歌单名）：移出的行、随选择清空而消失的选择栏和确认框都带走了焦点。每次换一个新对象，同一个目标也能再次触发。
+  const [refocus, setRefocus] = useState<{ key: string | null } | null>(null)
+  const titleRef = useRef<HTMLHeadingElement>(null)
   const [edits] = useState(() => new TrackEdits(() => setAttempt(n => n + 1)))
   // 歌单的更新时间变了就重新读取：加入、移出、移动和复制都会推进它，歌曲数不变时顺序也可能变了。
   useEffect(() => {
@@ -85,6 +89,14 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
     return () => window.removeEventListener('focus', refresh)
   }, [])
   const selecting = picking || selection.keys.size > 0
+  // 多选时落到勾选框上，平时落到行上，和列表里的方向键一样。
+  useEffect(() => {
+    if (!refocus)
+      return
+    const row = refocus.key === null ? null : document.querySelector<HTMLElement>(`.my-playlist-page [data-key="${CSS.escape(refocus.key)}"]`)
+    const target = row?.querySelector<HTMLElement>('.playlist-track-check') ?? row ?? titleRef.current
+    target?.focus()
+  }, [refocus])
   // 对话框和菜单自己处理 Esc。
   useEffect(() => {
     if (!selecting)
@@ -124,6 +136,7 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
     const previousSelection = selection
     setItems(rest)
     setSelection(retain(selection, keysOf(rest)))
+    setRefocus({ key: rowAfterRemoval(keysOf(current), keysOf(rest), [...gone]) })
     await edits.run(() => playlistsStore.removeItems(target, tracks), () => {
       setItems(current)
       setSelection(previousSelection)
@@ -227,7 +240,7 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
       <header className="my-playlist-header">
         <PlaylistCover cover={playlist?.coverUrl ?? null} favorites={playlist?.favorites ?? false} size="lg" />
         <div className="my-playlist-info">
-          <h1 id="my-playlist-title" className="my-playlist-name">
+          <h1 ref={titleRef} id="my-playlist-title" className="my-playlist-name" tabIndex={-1}>
             {playlist || listed ? <span>{playlist?.name ?? '歌单'}</span> : <span className="my-playlist-name-pending" role="img" aria-label="正在加载" />}
             {playlist?.favorites && <FavoritesMark size={22} />}
           </h1>

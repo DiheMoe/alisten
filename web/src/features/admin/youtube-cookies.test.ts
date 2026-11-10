@@ -62,9 +62,9 @@ describe('youtubeCookiesText', () => {
 })
 
 describe('youtubeCookiesView', () => {
-  const cases: { name: string, state: AdminGetYoutubeCredentialResponse | null | undefined, want: ReturnType<typeof youtubeCookiesView> }[] = [
-    { name: '正在查询', state: undefined, want: { status: '正在查询…', updatedAtMs: null } },
-    { name: '查询失败', state: null, want: { status: '查询失败', updatedAtMs: null } },
+  const cases: { name: string, state: AdminGetYoutubeCredentialResponse | Error | undefined, want: ReturnType<typeof youtubeCookiesView> }[] = [
+    { name: '正在查询', state: undefined, want: { status: '正在查询', updatedAtMs: null } },
+    { name: '查询失败', state: new Error('网络不通'), want: { status: '查询失败', updatedAtMs: null } },
     { name: '未配置', state: { set: false, updatedAtMs: 0 }, want: { status: '未配置', updatedAtMs: null } },
     { name: '已配置并显示更新时间', state: { set: true, updatedAtMs: 1_793_184_000_000 }, want: { status: '已配置', updatedAtMs: 1_793_184_000_000 } },
   ]

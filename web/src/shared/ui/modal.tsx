@@ -5,10 +5,17 @@ import { createPortal } from 'react-dom'
 import { registerModalHistory } from '@/shared/lib/session-history'
 import { IconButton } from './icon-button'
 
-export function Modal({ title, children, onClose }: { title: string, children: ReactNode, onClose: () => void }) {
+export function Modal({ title, children, onClose, returnFocus }: {
+  title: string
+  children: ReactNode
+  onClose: () => void
+  // 关闭时焦点回到打开前的元素；它已经不能获得焦点（比如触发对话框的那一行被删掉了、按钮被禁用了）时，落到 returnFocus 返回的元素上。
+  returnFocus?: () => HTMLElement | null
+}) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   const close = useEffectEvent(onClose)
+  const fallbackFocus = useEffectEvent(() => returnFocus?.() ?? null)
   useEffect(() => {
     const dialog = dialogRef.current!
     const previousFocus = document.activeElement as HTMLElement | null
@@ -20,6 +27,8 @@ export function Modal({ title, children, onClose }: { title: string, children: R
       unregister()
       dialog.close()
       previousFocus?.focus()
+      if (document.activeElement !== previousFocus)
+        fallbackFocus()?.focus()
     }
   }, [])
   return createPortal(

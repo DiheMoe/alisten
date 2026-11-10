@@ -106,14 +106,14 @@ export function ActionMenu({ actions, menuLabel, align = 'end', className, label
       >
         {children}
       </button>
-      <div ref={menuRef} id={menuId} className="playlist-menu" popover="auto" role="menu" aria-label={menuLabel} onBeforeToggle={place} onToggle={onToggle} onKeyDown={onKeyDown}>
+      <div ref={menuRef} id={menuId} className="action-menu" popover="auto" role="menu" aria-label={menuLabel} onBeforeToggle={place} onToggle={onToggle} onKeyDown={onKeyDown}>
         {actions.map(({ icon: Icon, label, danger, run }) => (
           <button
             key={label}
             type="button"
             role="menuitem"
             tabIndex={-1}
-            className={danger ? 'playlist-menu-item playlist-menu-danger' : 'playlist-menu-item'}
+            className={danger ? 'action-menu-item action-menu-danger' : 'action-menu-item'}
             onClick={() => {
               menuRef.current!.hidePopover()
               run()

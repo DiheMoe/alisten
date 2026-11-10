@@ -1,68 +1,27 @@
-import type { QrLoginTarget } from './qr-login-dialog'
-import type { CredentialState } from './source-account-view'
-import { useEffect, useState } from 'react'
-import { api } from '@/core/api'
+import type { Credential, Source, SourceId } from './source-credentials'
+import { useId, useState } from 'react'
 import { notificationStore } from '@/shared/ui'
-import { adminStore } from './admin-store'
 import { QrLoginDialog } from './qr-login-dialog'
+import { SectionHead, StatusPill } from './section-head'
 import { afterChinese, sourceAccountView } from './source-account-view'
+import { sources } from './source-credentials'
 import { YouTubeCookies } from './youtube-cookies'
 
-interface Source {
-  name: string
-  credential: () => Promise<NonNullable<CredentialState>>
-  targets: QrLoginTarget[]
-}
-
-const sources: Source[] = [
-  {
-    name: 'QQ 音乐',
-    credential: () => api.adminGetQqCredential(),
-    targets: [
-      { label: 'QQ 扫码', start: () => api.adminStartQqLogin({ type: 'qq' }), check: key => api.adminCheckQqLogin({ type: 'qq', key }) },
-      { label: '微信扫码', start: () => api.adminStartQqLogin({ type: 'wx' }), check: key => api.adminCheckQqLogin({ type: 'wx', key }) },
-    ],
-  },
-  {
-    name: '网易云音乐',
-    credential: () => api.adminGetNeteaseCredential(),
-    targets: [
-      { label: '网易云音乐扫码', start: () => api.adminStartNeteaseLogin(), check: key => api.adminCheckNeteaseLogin({ key }) },
-    ],
-  },
-  {
-    name: '哔哩哔哩',
-    credential: () => api.adminGetBilibiliCredential(),
-    targets: [
-      { label: '哔哩哔哩扫码', start: () => api.adminStartBilibiliLogin(), check: key => api.adminCheckBilibiliLogin({ key }) },
-    ],
-  },
-]
-
-function SourceAccount({ source }: { source: Source }) {
-  const [credential, setCredential] = useState<CredentialState>()
-  const [attempt, setAttempt] = useState(0)
+function SourceCard({ source, credential: { state, reload } }: { source: Source, credential: Credential }) {
+  const titleId = useId()
   const [signingIn, setSigningIn] = useState(false)
-  useEffect(() => {
-    let active = true
-    void adminStore.call(source.credential).then((result) => {
-      if (active)
-        setCredential(result)
-    })
-    return () => {
-      active = false
-    }
-  }, [source, attempt])
-  const view = sourceAccountView(credential, source.name)
+  const view = sourceAccountView(state, source.name)
   return (
-    <li className="admin-row">
-      <div className="admin-row-copy">
-        <strong className="text-ui-base">{source.name}</strong>
-        <span className="text-ui-sm muted" role="status">{view.status}</span>
-        {view.details.map(detail => <span key={detail} className="text-ui-sm muted">{detail}</span>)}
+    <article className="admin-card" aria-labelledby={titleId}>
+      <div className="admin-card-top">
+        <h3 id={titleId}>{source.name}</h3>
+        <StatusPill tone={view.tone}>{view.status}</StatusPill>
       </div>
-      <div className="admin-row-actions">
-        <button type="button" className="button-secondary" disabled={credential === undefined} onClick={() => setSigningIn(true)}>{credential?.set ? '重新登录' : '扫码登录'}</button>
+      {view.detail && <p className="admin-card-detail">{view.detail}</p>}
+      <div className="admin-card-actions">
+        {state instanceof Error
+          ? <button type="button" className="button-secondary" onClick={reload}>重试</button>
+          : <button type="button" className={state?.set ? 'button-secondary' : 'button-primary'} disabled={state === undefined} onClick={() => setSigningIn(true)}>{state?.set ? '重新登录' : '扫码登录'}</button>}
       </div>
       {signingIn && (
         <QrLoginDialog
@@ -71,26 +30,23 @@ function SourceAccount({ source }: { source: Source }) {
           onSuccess={() => {
             setSigningIn(false)
             notificationStore.success(`已登录${afterChinese(source.name)}`)
-            setCredential(undefined)
-            setAttempt(n => n + 1)
+            reload()
           }}
           onClose={() => setSigningIn(false)}
         />
       )}
-    </li>
+    </article>
   )
 }
 
-export function SourceAccounts() {
+export function SourceAccounts({ credentials }: { credentials: Record<SourceId, Credential> }) {
   return (
-    <section className="admin-section" aria-labelledby="admin-accounts-title">
-      <div className="section-heading">
-        <h2 id="admin-accounts-title" className="text-ui-lg">音源账号</h2>
-      </div>
-      <ul className="admin-list">
-        {sources.map(source => <SourceAccount key={source.name} source={source} />)}
+    <section className="admin-section" aria-labelledby="admin-sources-title">
+      <SectionHead id="admin-sources-title" title="音源" description="扫码登录各平台的账号，用来搜索和播放它们的歌曲。" />
+      <div className="admin-cards">
+        {(Object.keys(sources) as SourceId[]).map(id => <SourceCard key={id} source={sources[id]} credential={credentials[id]} />)}
         <YouTubeCookies />
-      </ul>
+      </div>
     </section>
   )
 }

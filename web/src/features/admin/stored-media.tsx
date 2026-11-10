@@ -7,6 +7,7 @@ import { bookTitle } from '@/shared/lib/book-title'
 import { formatDateTime } from '@/shared/lib/time'
 import { ConfirmDialog, IconButton, notificationStore, Skeleton } from '@/shared/ui'
 import { adminStore } from './admin-store'
+import { LoadFailed, SectionHead } from './section-head'
 
 function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`
@@ -38,17 +39,11 @@ export function StoredMedia() {
   }
   return (
     <section className="admin-section" aria-labelledby="admin-media-title">
-      <div className="section-heading">
-        <h2 id="admin-media-title" className="text-ui-lg">已存储的媒体</h2>
+      <SectionHead id="admin-media-title" title="媒体" description="服务器上缓存的音频。删除后，下次有人点这首歌时会重新下载。">
         {media && <span className="text-ui-sm muted">{media.total ? `${media.total} 首 · ${formatSize(media.totalBytes)}` : '0 首'}</span>}
-      </div>
+      </SectionHead>
       {failed
-        ? (
-            <div className="admin-empty admin-failed">
-              <p className="text-ui-caption muted">暂时无法获取已存储的媒体。</p>
-              <button type="button" className="button-secondary" onClick={retry}>重试</button>
-            </div>
-          )
+        ? <LoadFailed message="暂时无法获取已存储的媒体。" onRetry={retry} />
         : !media
             ? <Skeleton rows={3} />
             : !media.items.length

@@ -73,6 +73,12 @@
 .song-badge { flex-shrink: 0; padding: 1px 8px; border-radius: 999px; background: var(--color-surface); color: var(--color-foreground-subtle); }
 .song-album { max-width: 22%; width: 150px; }
 .song-duration { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.action-menu { inset: auto; margin: 0; min-width: 148px; padding: 6px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-popover); color: var(--color-foreground); box-shadow: 0 12px 32px var(--color-shadow); transform-origin: top center; }
+.action-menu:popover-open { display: flex; flex-direction: column; gap: 2px; animation: popover-in 160ms cubic-bezier(.2, .8, .2, 1) both; }
+.action-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--color-foreground); text-align: left; white-space: nowrap; }
+.action-menu-item:hover, .action-menu-item:focus-visible { outline: none; background: var(--color-hover); }
+.action-menu-item > svg { color: var(--color-foreground-subtle); }
+.action-menu-danger, .action-menu-danger > svg { color: var(--color-destructive); }
 .modal { width: min(480px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 48px); margin: auto; padding: 0; overflow: auto; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-popover); color: var(--color-foreground); box-shadow: 0 24px 64px var(--color-shadow); font-size: var(--text-ui-base); }
 .modal::backdrop { background: var(--color-overlay); }
 .modal-header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--color-border); background: var(--color-popover); }
@@ -115,6 +121,14 @@
 .pagination-step[aria-disabled='true'] { cursor: default; opacity: .45; }
 .pagination-step[aria-disabled='true']:active { transform: none; }
 .pagination-gap { min-width: 20px; color: var(--color-foreground-subtlest); text-align: center; user-select: none; }
+.save-status { display: inline-flex; white-space: nowrap; }
+.save-status-saving { color: var(--color-foreground-subtle); }
+/* 显示 1.5 秒后用 0.4 秒淡出；减少动态效果时不淡出，到时直接消失。 */
+.save-status-saved { display: inline-flex; align-items: center; gap: 4px; color: var(--color-success); animation: save-status-saved 1900ms ease forwards; }
+@keyframes save-status-saved {
+  0%, 79% { opacity: 1; }
+  100% { opacity: 0; }
+}
 .inline-text-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 220px; min-width: 0; max-width: 320px; }
 .inline-text-field-box { position: relative; }
 .inline-text-field input { padding: 8px 12px; border-radius: 10px; transition: border-color 150ms, background-color 150ms; }
@@ -132,6 +146,7 @@
   to { transform: translateY(0); }
 }
 :root[data-performance='low'] .modal { animation-duration: 120ms; }
+:root[data-performance='low'] .action-menu:popover-open { animation: fade-in 160ms ease both; }
 @media (max-width: 1100px) {
   .page-content { padding: 24px; }
   .song-album { display: none; }
