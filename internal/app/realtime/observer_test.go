@@ -343,7 +343,7 @@ func TestRevocationNoticesAreBestEffort(t *testing.T) {
 	}
 	store := porttest.New()
 	var logs logBuffer
-	_, g := New(store, store, unrevoked{}, nil, porttest.NewPreparer(), Cluster{Instance: "a", Leases: node, Liveness: node, Bus: contextBus{node}}, slog.New(slog.NewJSONHandler(&logs, nil)))
+	_, g := New(store, store, store, unrevoked{}, nil, porttest.NewPreparer(), Cluster{Instance: "a", Leases: node, Liveness: node, Bus: contextBus{node}}, slog.New(slog.NewJSONHandler(&logs, nil)))
 	revokeAll := func(ctx context.Context) {
 		g.RevokeSessions(ctx, [][]byte{[]byte("s")})
 		g.Revoke(ctx, "r")
@@ -430,7 +430,7 @@ func TestObserverSkipsSnapshotOfEarlierRun(t *testing.T) {
 		redis := porttest.NewRedis()
 		node := redis.Node("a")
 		bus := &heldEmits{Bus: node, release: make(chan struct{})}
-		h, g := New(store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: "a", Leases: node, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
+		h, g := New(store, store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: "a", Leases: node, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
 		ctx, stop := context.WithCancel(context.Background())
 		wait, err := Start(ctx, h, g)
 		if err != nil {

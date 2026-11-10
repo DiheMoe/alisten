@@ -49,6 +49,7 @@ type Host struct {
 	self      string
 	snapshots port.RoomSnapshots
 	directory port.RoomDirectory
+	listens   port.ListenRecorder
 	preparer  port.Preparer
 	catalog   *catalog.Service
 	leases    port.Leases
@@ -120,11 +121,12 @@ type hostedRoom struct {
 	timers      map[room.Token]*time.Timer
 }
 
-func newHost(snapshots port.RoomSnapshots, directory port.RoomDirectory, preparer port.Preparer, music *catalog.Service, cluster Cluster, logger *slog.Logger) *Host {
+func newHost(snapshots port.RoomSnapshots, directory port.RoomDirectory, listens port.ListenRecorder, preparer port.Preparer, music *catalog.Service, cluster Cluster, logger *slog.Logger) *Host {
 	return &Host{
 		self:       cluster.Instance,
 		snapshots:  snapshots,
 		directory:  directory,
+		listens:    listens,
 		preparer:   preparer,
 		catalog:    music,
 		leases:     cluster.Leases,
@@ -592,6 +594,8 @@ func (h *Host) execute(ctx context.Context, r *hostedRoom, effects []room.Effect
 			r.info = e.Snapshot.Info
 		case room.RecordPlay:
 			// 已经和 Persist 在同一个事务中写入。
+		case room.RecordListen:
+			h.recordListen(ctx, e)
 		case room.Emit:
 			if m, ok := e.Event.(room.MembersChanged); ok && !h.setOnline(ctx, r, len(m.Sessions)) {
 				return false
@@ -677,6 +681,16 @@ func (h *Host) persist(ctx context.Context, r *hostedRoom, s room.Snapshot, play
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storeTimeout)
 	defer cancel()
 	return h.snapshots.SaveRoom(ctx, r.term, s, plays)
+}
+
+// 播放历史不是房间的状态：写入失败不放弃房间。与落盘一样不随 ctx 取消。
+func (h *Host) recordListen(ctx context.Context, l room.RecordListen) {
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storeTimeout)
+	defer cancel()
+	listen := port.Listen{Track: l.Entry.Track, Meta: l.Entry.Meta, HeardAt: l.StartedAt}
+	if err := h.listens.RecordListen(writeCtx, l.Members, listen); err != nil {
+		h.logger.WarnContext(ctx, "写入播放历史失败", "error", err)
+	}
 }
 
 func (h *Host) remove(ctx context.Context, r *hostedRoom) error {

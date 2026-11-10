@@ -76,7 +76,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 		Bus:      redis.NewBus(rdb, instance, version, metrics, tracer, base.With("component", "bus")),
 	}
 	runtimeLogger := base.With("component", "realtime")
-	host, gateway := realtime.New(measure(media.NewSnapshots(store, objects, runtimeLogger), metrics), store, store, music, preparer, cluster, runtimeLogger)
+	host, gateway := realtime.New(measure(media.NewSnapshots(store, objects, runtimeLogger), metrics), store, store, store, music, preparer, cluster, runtimeLogger)
 	registerRuntimeMetrics(metrics, host, gateway)
 	rooms := lobby.New(store, leases)
 	services := api.Services{

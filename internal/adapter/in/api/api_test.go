@@ -39,7 +39,7 @@ const allowedOrigin = "https://allowed.example"
 func services(store *porttest.Store, rooms port.RoomDirectory, adminToken string) Services {
 	music := newCatalog(rooms, 10)
 	node := porttest.NewRedis().Node("a")
-	_, gateway := realtime.New(store, rooms, store, music, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
+	_, gateway := realtime.New(store, rooms, store, store, music, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
 	l := lobby.New(rooms, node)
 	return Services{
 		Identity: identity.New(store, rooms, store, gateway),

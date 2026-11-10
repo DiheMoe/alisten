@@ -161,7 +161,7 @@ func newHostFixture(t *testing.T, snapshots port.RoomSnapshots, store *porttest.
 	redis := porttest.NewRedis()
 	node := redis.Node("a")
 	return startHost(t, &hostFixture{store: store, redis: redis, node: node, spy: spy{redis.Node("spy")}},
-		newHost(snapshots, store, songs.preparer, songs.music, cluster(node, "a"), slog.New(slog.DiscardHandler)))
+		newHost(snapshots, store, store, songs.preparer, songs.music, cluster(node, "a"), slog.New(slog.DiscardHandler)))
 }
 
 func startHost(t *testing.T, f *hostFixture, h *Host) *hostFixture {
@@ -289,6 +289,128 @@ func TestPersistFailureAbandonsRoom(t *testing.T) {
 	})
 }
 
+// 写入时把此前发布的房间消息和这次写入按发生的先后记进同一个日志。
+type orderedListens struct {
+	*porttest.Store
+	spy  spy
+	fail bool
+
+	mu  sync.Mutex
+	log []string
+}
+
+func (l *orderedListens) RecordListen(ctx context.Context, memberIDs []string, listen port.Listen) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, m := range l.spy.take() {
+		l.log = append(l.log, describe(m))
+	}
+	l.log = append(l.log, fmt.Sprintf("listen %d %s", len(memberIDs), listen.Track.ID))
+	if l.fail {
+		return errors.New("连接中断")
+	}
+	return l.Store.RecordListen(ctx, memberIDs, listen)
+}
+
+func (l *orderedListens) messages() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, m := range l.spy.take() {
+		l.log = append(l.log, describe(m))
+	}
+	log := l.log
+	l.log = nil
+	return log
+}
+
+func newListenFixture(t *testing.T, fail bool, logger *slog.Logger) (*hostFixture, *orderedListens) {
+	t.Helper()
+	store := porttest.New()
+	songs := newSongs()
+	songs.add(sunny, sunnyM, sunnyP)
+	redis := porttest.NewRedis()
+	node := redis.Node("a")
+	listens := &orderedListens{Store: store, spy: spy{redis.Node("spy")}, fail: fail}
+	f := startHost(t, &hostFixture{store: store, redis: redis, node: node, spy: listens.spy},
+		newHost(store, store, listens, songs.preparer, songs.music, cluster(node, "a"), logger))
+	return f, listens
+}
+
+func createMembers(t *testing.T, store *porttest.Store, names ...string) []member.Member {
+	t.Helper()
+	members := make([]member.Member, len(names))
+	for i, name := range names {
+		m, err := store.CreateMember(t.Context(), []byte(name), name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		members[i] = m
+	}
+	return members
+}
+
+func checkLog(t *testing.T, got []string, want ...string) {
+	t.Helper()
+	if !slices.Equal(got, want) {
+		t.Errorf("房间消息和写入的先后：\n%s\n期望：\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestListensAreWrittenBeforeTheBroadcast(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f, listens := newListenFixture(t, false, slog.New(slog.DiscardHandler))
+		members := createMembers(t, f.store, "alice", "bob")
+		a, b := members[0], members[1]
+		id := f.createRoom(t, room.Persistent)
+		start := time.Now()
+
+		f.send(t, id, room.Join{Session: "s1", Member: a})
+		f.send(t, id, command("r1", a, room.Enqueue{Track: sunny, Meta: sunnyM}))
+		checkLog(t, listens.messages(),
+			"started 1",
+			"1/1 room.MembersChanged",
+			"1/2 room.Activity",
+			"1/3 room.QueueChanged",
+			"reply r1 room.EnqueueResult",
+			"listen 1 186016",
+			"1/4 room.QueueChanged",
+			"1/5 room.PlaybackChanged",
+		)
+		f.send(t, id, room.Join{Session: "s2", Member: b})
+		checkLog(t, listens.messages(), "listen 1 186016", "1/6 room.MembersChanged")
+
+		startedAt := start.Add(200 * time.Millisecond)
+		for _, m := range members {
+			got, err := f.store.MemberListens(t.Context(), m.ID)
+			if err != nil || len(got) != 1 || got[0].Track != sunny || got[0].Meta.Title != sunnyM.Title || !got[0].HeardAt.Equal(startedAt) {
+				t.Errorf("%s 的历史 = %+v, %v，期望《晴天》，时间是开播的 %v", m.Name, got, err, startedAt)
+			}
+		}
+	})
+}
+
+func TestListenFailureKeepsRoomRunning(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var logs logBuffer
+		f, listens := newListenFixture(t, true, slog.New(slog.NewJSONHandler(&logs, nil)))
+		a := createMembers(t, f.store, "alice")[0]
+		id := f.createRoom(t, room.Persistent)
+
+		f.send(t, id, room.Join{Session: "s1", Member: a})
+		f.send(t, id, command("r1", a, room.Enqueue{Track: sunny, Meta: sunnyM}))
+		if got := listens.messages(); !slices.Contains(got, "1/5 room.PlaybackChanged") {
+			t.Errorf("写入失败之后的房间消息 = %v，期望照常广播开播", got)
+		}
+		if owner := f.owner(t, id); owner != "a" {
+			t.Errorf("写入失败之后房间的 owner = %q，期望不放弃房间", owner)
+		}
+		entries := logs.entries(t, "写入播放历史失败")
+		if len(entries) != 1 || entries[0]["level"] != "WARN" {
+			t.Errorf("写入失败的日志 = %v，期望一条 WARN", entries)
+		}
+	})
+}
+
 // 每次 Restore 的 token 都从 1 开始：放弃房间时如果不停下计时器，它会提前关闭重新接管后的房间。
 func TestTimersOfAbandonedRoomAreDiscarded(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -341,7 +463,7 @@ func TestPrepareOfAbandonedRunIsDiscarded(t *testing.T) {
 		redis := porttest.NewRedis()
 		node := redis.Node("a")
 		f := startHost(t, &hostFixture{store: store.Store, redis: redis, node: node, spy: spy{redis.Node("spy")}},
-			newHost(store, store.Store, preparer, newSongs().music, cluster(node, "a"), slog.New(slog.DiscardHandler)))
+			newHost(store, store.Store, store.Store, preparer, newSongs().music, cluster(node, "a"), slog.New(slog.DiscardHandler)))
 		id := f.createRoom(t, room.Persistent)
 		f.send(t, id, command("r1", alice, room.Enqueue{Track: sunny, Meta: sunnyM}))
 		f.spy.take()
@@ -461,7 +583,7 @@ func TestHostAcceptsRoomsOnlyBetweenStartAndShutdown(t *testing.T) {
 		songs := newSongs()
 		redis := porttest.NewRedis()
 		watcher := spy{redis.Node("spy")}
-		h := newHost(store, store, songs.preparer, songs.music, cluster(redis.Node("a"), "a"), slog.New(slog.DiscardHandler))
+		h := newHost(store, store, store, songs.preparer, songs.music, cluster(redis.Node("a"), "a"), slog.New(slog.DiscardHandler))
 		id, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "房间"})
 		if err != nil {
 			t.Fatal(err)
@@ -673,7 +795,7 @@ func newFlakyFixture(t *testing.T) (*hostFixture, *flakyLeases) {
 	node := redis.Node("a")
 	leases := &flakyLeases{Leases: node, resume: make(chan struct{})}
 	f := startHost(t, &hostFixture{store: store, redis: redis, node: node, spy: spy{redis.Node("spy")}},
-		newHost(store, store, songs.preparer, songs.music, Cluster{Instance: "a", Leases: leases, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler)))
+		newHost(store, store, store, songs.preparer, songs.music, Cluster{Instance: "a", Leases: leases, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler)))
 	return f, leases
 }
 
@@ -876,7 +998,7 @@ func TestFailedReleaseNoticeIsLogged(t *testing.T) {
 		node := redis.Node("a")
 		var logs logBuffer
 		f := startHost(t, &hostFixture{store: store, redis: redis, node: node, spy: spy{redis.Node("spy")}},
-			newHost(store, store, songs.preparer, songs.music, Cluster{Instance: "a", Leases: node, Liveness: node, Bus: noReleaseNotice{node}}, slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil)))))
+			newHost(store, store, store, songs.preparer, songs.music, Cluster{Instance: "a", Leases: node, Liveness: node, Bus: noReleaseNotice{node}}, slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil)))))
 		id := f.createRoom(t, room.Persistent)
 		f.send(t, id, room.Join{Session: "s1", Member: alice})
 		if err := f.host.Shutdown(t.Context()); err != nil {
@@ -1000,7 +1122,7 @@ func TestTakeoverFailuresAreLoggedWhenTheyStart(t *testing.T) {
 		node := redis.Node("a")
 		var logs logBuffer
 		f := startHost(t, &hostFixture{store: store.Store, redis: redis, node: node, spy: spy{redis.Node("spy")}},
-			newHost(store, store, songs.preparer, songs.music, cluster(node, "a"), slog.New(slog.NewJSONHandler(&logs, nil))))
+			newHost(store, store, store, songs.preparer, songs.music, cluster(node, "a"), slog.New(slog.NewJSONHandler(&logs, nil))))
 		for range 3 {
 			f.createRoom(t, room.Persistent)
 		}
@@ -1087,7 +1209,7 @@ func TestRecoveredGatewayKeepsItsSessions(t *testing.T) {
 		gateway, unreachable := redis.Node("b"), redis.Node("c")
 		liveness := &recoveringLiveness{Liveness: node, gateway: gateway, unreachable: "c"}
 		f := startHost(t, &hostFixture{store: store, redis: redis, node: node, spy: spy{redis.Node("spy")}},
-			newHost(store, store, songs.preparer, songs.music, Cluster{Instance: "a", Leases: node, Liveness: liveness, Bus: node}, slog.New(slog.DiscardHandler)))
+			newHost(store, store, store, songs.preparer, songs.music, Cluster{Instance: "a", Leases: node, Liveness: liveness, Bus: node}, slog.New(slog.DiscardHandler)))
 		id := f.createRoom(t, room.Persistent)
 		for _, g := range []*porttest.Node{gateway, unreachable} {
 			if _, err := g.Heartbeat(t.Context(), aliveTTL); err != nil {

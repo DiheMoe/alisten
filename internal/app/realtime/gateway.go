@@ -87,8 +87,8 @@ type roomLink struct {
 	confirmed uint64
 }
 
-func New(snapshots port.RoomSnapshots, directory port.RoomDirectory, tickets port.ExistingTickets, music *catalog.Service, preparer port.Preparer, cluster Cluster, logger *slog.Logger) (*Host, *Gateway) {
-	h := newHost(snapshots, directory, preparer, music, cluster, logger)
+func New(snapshots port.RoomSnapshots, directory port.RoomDirectory, listens port.ListenRecorder, tickets port.ExistingTickets, music *catalog.Service, preparer port.Preparer, cluster Cluster, logger *slog.Logger) (*Host, *Gateway) {
+	h := newHost(snapshots, directory, listens, preparer, music, cluster, logger)
 	g := &Gateway{
 		self:      cluster.Instance,
 		host:      h,

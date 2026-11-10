@@ -169,7 +169,7 @@ func newFlakyBusInstance(t *testing.T, store *porttest.Store, logger *slog.Logge
 	songs := newSongs()
 	node := porttest.NewRedis().Node("a")
 	bus := &flakyBus{Bus: node}
-	h, g := New(store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: "a", Leases: node, Liveness: node, Bus: bus}, logger)
+	h, g := New(store, store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: "a", Leases: node, Liveness: node, Bus: bus}, logger)
 	return h, g, node, bus
 }
 
@@ -381,7 +381,7 @@ func TestGatewayRejoinsAfterItsAliveKeyExpired(t *testing.T) {
 		a := startInstance(t, redis, "a", store, store, songs)
 		node := redis.Node("b")
 		liveness := &flakyLiveness{Liveness: node}
-		h, g := New(store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: "b", Leases: node, Liveness: liveness, Bus: node}, slog.New(slog.DiscardHandler))
+		h, g := New(store, store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: "b", Leases: node, Liveness: liveness, Bus: node}, slog.New(slog.DiscardHandler))
 		ctx, stop := context.WithCancel(context.Background())
 		wait, err := Start(ctx, h, g)
 		if err != nil {
@@ -457,7 +457,7 @@ func startFlakyInstance(t *testing.T, redis *porttest.Redis, id string, snapshot
 	t.Helper()
 	node := redis.Node(id)
 	leases, bus := &flakyOwners{Leases: node}, &flakyForwards{Bus: node}
-	h, g := New(snapshots, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: id, Leases: leases, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
+	h, g := New(snapshots, store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: id, Leases: leases, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
 	ctx, stop := context.WithCancel(context.Background())
 	wait, err := Start(ctx, h, g)
 	if err != nil {
@@ -722,7 +722,7 @@ func TestCommandFollowsOwnerAfterLosingTakeover(t *testing.T) {
 		node := f.redis.Node("c")
 		leases := &staleLeases{Leases: node}
 		songs := newSongs()
-		h, g := New(store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: "c", Leases: leases, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
+		h, g := New(store, store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: "c", Leases: leases, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
 		ctx, stop := context.WithCancel(context.Background())
 		wait, err := Start(ctx, h, g)
 		if err != nil {

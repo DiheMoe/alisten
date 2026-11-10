@@ -28,7 +28,7 @@ func newService(t *testing.T) (*Service, *porttest.Store) {
 
 // 没有调用 realtime.Start：这些测试不运行房间。
 func newGateway(store *porttest.Store, node *porttest.Node, bus port.Bus) *realtime.Gateway {
-	_, gateway := realtime.New(store, store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
+	_, gateway := realtime.New(store, store, store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
 	return gateway
 }
 
@@ -206,7 +206,7 @@ func TestEnterRoomLeavesWhenTicketIsRevokedWhileJoining(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()
 		node := porttest.NewRedis().Node("a")
-		host, gateway := realtime.New(store, store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
+		host, gateway := realtime.New(store, store, store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
 		ctx, stop := context.WithCancel(t.Context())
 		wait, err := realtime.Start(ctx, host, gateway)
 		if err != nil {

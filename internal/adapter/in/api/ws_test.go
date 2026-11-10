@@ -134,7 +134,7 @@ func newWSFixtureWithTickets(t *testing.T, store *porttest.Store, tickets port.T
 	music := newCatalog(directory, 10)
 	node := porttest.NewRedis().Node("a")
 	preparer := porttest.NewPreparer()
-	host, gateway := realtime.New(snapshots, store, store, music, preparer, realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
+	host, gateway := realtime.New(snapshots, store, store, store, music, preparer, realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
 	ctx, stop := context.WithCancel(context.Background())
 	wait, err := realtime.Start(ctx, host, gateway)
 	if err != nil {

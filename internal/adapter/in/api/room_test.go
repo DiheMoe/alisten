@@ -43,7 +43,7 @@ func newRoomFixture(t *testing.T) roomFixture {
 	store := porttest.New()
 	music := newCatalog(store, 10)
 	node := porttest.NewRedis().Node("a")
-	host, gateway := realtime.New(store, store, store, music, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
+	host, gateway := realtime.New(store, store, store, store, music, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
 	ctx, stop := context.WithCancel(context.Background())
 	wait, err := realtime.Start(ctx, host, gateway)
 	if err != nil {

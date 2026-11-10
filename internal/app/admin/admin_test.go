@@ -34,7 +34,7 @@ func newService(t *testing.T, token string) fixture {
 	t.Helper()
 	store := porttest.New()
 	node := porttest.NewRedis().Node("a")
-	host, gateway := realtime.New(store, store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
+	host, gateway := realtime.New(store, store, store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
 	ctx, stop := context.WithCancel(context.Background())
 	wait, err := realtime.Start(ctx, host, gateway)
 	if err != nil {

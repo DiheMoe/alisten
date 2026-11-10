@@ -76,7 +76,7 @@ func TestPreparationKeepsRequestValues(t *testing.T) {
 		node := redis.Node("a")
 		preparer := contextPreparer{started: make(chan context.Context, 1)}
 		f := startHost(t, &hostFixture{store: store, redis: redis, node: node, spy: spy{redis.Node("spy")}},
-			newHost(store, store, preparer, newSongs().music, cluster(node, "a"), slog.New(slog.DiscardHandler)))
+			newHost(store, store, store, preparer, newSongs().music, cluster(node, "a"), slog.New(slog.DiscardHandler)))
 		id := f.createRoom(t, room.Persistent)
 
 		ctx, cancel := context.WithCancel(context.WithValue(context.Background(), requestValue{}, "点歌"))

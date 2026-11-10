@@ -43,7 +43,7 @@ func startInstance(t *testing.T, redis *porttest.Redis, id string, snapshots por
 func startLoggingInstance(t *testing.T, redis *porttest.Redis, id string, snapshots port.RoomSnapshots, store *porttest.Store, tickets port.ExistingTickets, songs *songs, logger *slog.Logger) *instance {
 	t.Helper()
 	node := redis.Node(id)
-	h, g := New(snapshots, store, tickets, songs.music, songs.preparer, cluster(node, id), logger)
+	h, g := New(snapshots, store, store, tickets, songs.music, songs.preparer, cluster(node, id), logger)
 	ctx, stop := context.WithCancel(context.Background())
 	wait, err := Start(ctx, h, g)
 	if err != nil {
@@ -603,7 +603,7 @@ func startCountingGateway(t *testing.T, store *porttest.Store) (*Gateway, *portt
 	songs := newSongs()
 	c := cluster(node, "a")
 	c.Bus = bus
-	h, g := New(store, store, unrevoked{}, songs.music, songs.preparer, c, slog.New(slog.DiscardHandler))
+	h, g := New(store, store, store, unrevoked{}, songs.music, songs.preparer, c, slog.New(slog.DiscardHandler))
 	ctx, stop := context.WithCancel(context.Background())
 	wait, err := Start(ctx, h, g)
 	if err != nil {
