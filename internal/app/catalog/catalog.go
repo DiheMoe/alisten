@@ -15,7 +15,7 @@ import (
 const (
 	searchBurst  = 10
 	searchRefill = time.Minute
-	// 最长等待与上游接口 30 秒的超时之和不超过客户端 60 秒的请求超时。
+	// 最长等待加上上游接口 30 秒的超时，不超过客户端 60 秒的请求超时。
 	maxSearchWait    = 30 * time.Second
 	storeTimeout     = 10 * time.Second
 	autoDJCandidates = 25
@@ -24,7 +24,7 @@ const (
 
 var ErrRateLimited = errors.New("搜索过于频繁，请稍后再试。")
 
-// RejectedLinkError 表示链接属于某个音源，但不能点播，例如 B 站的番剧和直播；它的文本就是返回给点歌人的原因。
+// RejectedLinkError 表示链接属于某个音源，但不能点播，例如 B 站的番剧和直播。RejectedLinkError 的文本就是返回给点歌人的原因。
 type RejectedLinkError struct {
 	Reason string
 }
@@ -46,7 +46,7 @@ func New(netease port.NetEaseSource, qq port.Source, bilibili port.BilibiliSourc
 	return &Service{netease: netease, qq: qq, bilibili: bilibili, links: links, tracks: tracks, history: history, rooms: rooms, quota: quota}
 }
 
-// SearchTracks 只在上游一次取回的结果中分页，page 从 1 开始；total 是取回的结果数。
+// SearchTracks 只在上游一次取回的结果中分页，page 从 1 开始。total 是取回的结果数。
 func (s *Service) SearchTracks(ctx context.Context, roomID string, source track.Source, keyword string, page, size int64) (songs []port.Song, total int64, err error) {
 	src, err := s.searchable(source)
 	if err != nil {
@@ -87,7 +87,7 @@ func (s *Service) PlaylistTracks(ctx context.Context, roomID string, source trac
 	return s.PlaylistSongs(ctx, source, playlistID)
 }
 
-// 不取房间的搜索额度：导入歌单按成员另外限流。
+// 不取房间的搜索额度，因为导入歌单按成员另外限流。
 func (s *Service) PlaylistSongs(ctx context.Context, source track.Source, playlistID string) ([]port.Song, error) {
 	if source != track.NetEase {
 		return nil, unsupported(source, "歌单内的歌曲")
@@ -135,7 +135,7 @@ func (s *Service) TrackMeta(ctx context.Context, t track.Track) (track.Meta, err
 	return m, nil
 }
 
-// B 站的链接转成 B 站音源的曲目，其他链接仍是链接曲目：链接准备完成后才有元数据，在此之前以链接本身作为标题。
+// B 站的链接转成 B 站音源的曲目，其他链接仍是链接曲目。链接曲目准备完成后才有元数据，在此之前以链接本身作为标题。
 func (s *Service) ResolveLink(ctx context.Context, link string) (track.Track, track.Meta, error) {
 	id, ok, err := s.links.Recognize(ctx, link)
 	var rejected *port.RejectedError
@@ -300,7 +300,7 @@ func upstream(source track.Source, what string, err error) error {
 	return fmt.Errorf("在%s%s：%w：%w", source, what, err, port.ErrProviderFailed)
 }
 
-// page 从 1 开始，size 至少为 1；两者都来自客户端，乘积可能溢出。
+// page 从 1 开始，size 至少为 1。page 和 size 都来自客户端，乘积可能溢出。
 func paginate[T any](items []T, page, size int64) []T {
 	n := int64(len(items))
 	if page-1 > n/size {

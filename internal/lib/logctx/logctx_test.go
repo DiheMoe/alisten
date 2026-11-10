@@ -61,7 +61,7 @@ func TestFieldsStayAtTopLevelInGroups(t *testing.T) {
 
 func TestDerivedLoggersAreIndependent(t *testing.T) {
 	var buf bytes.Buffer
-	// 逐个打开 group、逐个添加字段，记录它们的切片才会有多余的容量。
+	// 逐个打开 group、逐个添加字段，记录 group 和字段的切片才会有多余的容量。
 	groups := slog.New(NewHandler(slog.NewJSONHandler(&buf, &slog.HandlerOptions{ReplaceAttr: withoutTime}))).WithGroup("a").WithGroup("b").WithGroup("c")
 	attrs := groups.With("p", 1).With("q", 2).With("r", 3)
 	for _, logger := range []*slog.Logger{groups.WithGroup("x"), groups.WithGroup("y"), attrs.With("s", "first"), attrs.With("s", "second"), attrs} {

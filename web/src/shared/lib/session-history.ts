@@ -1,6 +1,6 @@
 export interface Position {
   index: number
-  // 已知的最后一条记录：后退之后，后面的记录还在，可以前进。
+  // 已知的最后一条记录。后退之后，后面的记录还在，所以还可以前进。
   last: number
 }
 
@@ -42,7 +42,7 @@ let position: Position = { index: 0, last: 0 }
 let current: EntryState = { index: 0 }
 let notify = (): void => {}
 const modals: { close: () => void }[] = []
-// 退回标记记录下面的页面要等到 popstate 才算完成，其间的写入排队，落在页面的记录上。
+// 从标记记录退回下面的页面，要等到 popstate 才算完成。这期间的写入先排队，退回之后再落在页面的记录上。
 let awaitingBack = false
 const queued: Write[] = []
 
@@ -62,8 +62,8 @@ function readEntry(state: unknown): EntryState | null {
   return entry
 }
 
-// 调用太频繁时浏览器会抛出 SecurityError，输入筛选词时每次按键都要替换地址：这时只让地址暂时落后，页面照常显示。
-// 写不进弹窗的标记记录时弹窗照常显示，返回键在关掉它的同时也会后退一页。
+// 调用太频繁时浏览器会抛出 SecurityError，而输入筛选词时每次按键都要替换地址。遇到 SecurityError 时只让地址暂时落后，页面照常显示。
+// 写不进弹窗的标记记录时，弹窗照常显示，返回键关掉弹窗的同时也会后退一页。
 function write(change: () => void): boolean {
   try {
     change()
@@ -102,18 +102,18 @@ function onPop(event: PopStateEvent): void {
     return
   }
   if (current.modal && !modals.length) {
-    // 前进到了已经关闭的弹窗留下的标记记录：退回它下面的页面。
+    // 前进到了已经关闭的弹窗留下的标记记录，就退回标记记录下面的页面。
     back()
     return
   }
-  // 先让页面跟上这条记录再关最上层的弹窗：关弹窗时可能接着导航，比如取消进入房间时后退。
+  // 先让页面跟上这条记录，再关最上层的弹窗，因为关弹窗时可能接着导航，比如取消进入房间时会后退。
   notify()
   modals.pop()?.close()
   if (modals.length && !current.modal && !awaitingBack)
     pushMarker()
 }
 
-// 返回当前记录是否第一次打开：刷新、前进和后退回到的记录都带着应用写入的状态。
+// 返回当前记录是不是第一次打开。判断的依据是刷新、前进和后退回到的记录都带着应用写入的状态。
 export function startHistory(onChange: () => void): boolean {
   notify = onChange
   const entry = readEntry(window.history.state)
@@ -134,7 +134,7 @@ export function currentEntry(): { position: Position, title: string | undefined,
   return { position, title: current.title, from: current.from }
 }
 
-// 后退一个页面。弹窗的标记记录压在当前页面上（或者正在退掉它）时只退到页面的记录：落到那里时导航会收到通知，由它决定要不要接着后退。
+// 后退一个页面。弹窗的标记记录压在当前页面上，或者正在退掉标记记录时，只退到页面的记录。落到页面的记录时导航会收到通知，由导航决定要不要接着后退。
 export function goBack(): void {
   if (awaitingBack)
     return
@@ -150,7 +150,7 @@ export function writeEntry(url: string, replace: boolean, title?: string): void 
     return
   }
   if (replace && current.modal) {
-    // 弹窗的标记记录压在页面的记录上：先退回页面的记录，再替换它。
+    // 弹窗的标记记录压在页面的记录上，所以先退回页面的记录，再替换它。
     queued.push({ url, replace, title })
     back()
     return

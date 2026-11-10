@@ -35,8 +35,8 @@ func WithJob(ctx context.Context, id int64) context.Context {
 	return with(ctx, func(f *fields) { f.job = id })
 }
 
-// 返回的 handler 自己记下 logger 打开的 group，写日志时才把它们交给 next，使关联字段写在日志的顶层而不落进
-// group 中（River 的 logger 带有 river group）。往日志中添加字段的其他 handler 要放在它的内层。
+// 返回的 handler 自己记下 logger 打开的 group，写日志时才把这些 group 交给 next。这样关联字段写在日志的顶层，不会落进
+// group 中（River 的 logger 带有 river group）。往日志中添加字段的其他 handler 要放在这个 handler 的内层。
 func NewHandler(next slog.Handler) slog.Handler {
 	return handler{next: next}
 }

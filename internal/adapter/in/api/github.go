@@ -10,12 +10,12 @@ import (
 	"github.com/dihemoe/alisten/protocol"
 )
 
-// 用户在 GitHub 上授权之后，浏览器跳到这里：网页的 origin 加上它，就是 OAuth App 中登记的回调地址。
+// 用户在 GitHub 上授权之后，浏览器跳到这个路径。网页的 origin 加上 GitHubCallbackPath，就是 OAuth App 里登记的回调地址。
 const GitHubCallbackPath = "/api/auth/github/callback"
 
-// 回调处理完之后的落地页，结果放在片段里。App 用系统浏览器授权，跳到 App 的自定义 scheme 才能回到 App。
-// 自定义 scheme 可能被别的 App 抢注，截获的兑换码却换不到身份：它 1 分钟内有效、只能用一次，兑换时要带上发起授权的客户端本机保存的
-// nonce，并且必须由发起授权的同一个成员调用。
+// 回调处理完之后的落地页，结果放在片段里。App 用系统浏览器授权，要跳到 App 的自定义 scheme 才能回到 App。
+// 自定义 scheme 可能被别的 App 抢注，但截获的兑换码换不到身份。兑换码 1 分钟内有效，只能用一次。兑换时要带上发起授权的客户端在本机保存的
+// nonce，而且必须由发起授权的同一个成员调用。
 const (
 	githubWebLanding = "/auth/github"
 	githubAppLanding = "moe.dihe.alisten:/auth/github"
@@ -88,8 +88,8 @@ func (s *server) adminDeleteGithubCredential(ctx context.Context, _ call) (any, 
 	return nil, s.GitHub.DeleteOAuthApp(ctx)
 }
 
-// 浏览器从 GitHub 跳回来，换到兑换码之后跳到发起授权的客户端的落地页。结果放在片段里，不会出现在之后的请求和 Referer 中；
-// 这个地址的查询串里有授权码，所以响应也不让浏览器把它作为 Referer 发出去。跳转目标只看 state 对应的记录，不看回调地址中的参数，
+// 浏览器从 GitHub 跳回来，换到兑换码之后跳到发起授权的客户端的落地页。结果放在片段里，不会出现在之后的请求和 Referer 里。
+// 回调地址的查询串里有授权码，所以响应也不让浏览器把回调地址当作 Referer 发出去。跳转目标只看 state 对应的记录，不看回调地址里的参数，
 // 否则就成了开放重定向。
 func (s *server) githubCallback(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), requestDeadline)
@@ -134,7 +134,7 @@ func (s *server) githubCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "no-referrer")
-	// 不用 http.Redirect：它会把片段当作路径的一部分清理。
+	// 不用 http.Redirect，因为 http.Redirect 会把片段当作路径的一部分清理掉。
 	w.Header().Set("Location", landing+"#"+fragment)
 	w.WriteHeader(http.StatusFound)
 }

@@ -22,7 +22,7 @@
 .admin-hint { padding: 4px; color: var(--color-foreground-subtle); }
 .admin-row-error { color: var(--color-destructive); font-size: var(--text-ui-caption); }
 
-/* 中性底色不用 surface：浅色主题里它和 card 同色，放在卡片上会看不见。 */
+/* 中性底色不用 surface，因为浅色主题里 surface 和 card 同色，放在卡片上会看不见。 */
 .admin-status { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; background: var(--color-card-hover); color: var(--color-foreground-subtle); font-size: var(--text-ui-sm); font-weight: 500; white-space: nowrap; }
 .admin-status[data-tone='success'] { background: var(--color-accent); color: var(--color-success); }
 .admin-status[data-tone='danger'] { background: color-mix(in srgb, var(--color-destructive) 14%, transparent); color: var(--color-destructive); }
@@ -74,13 +74,13 @@
 .media-sort { flex-shrink: 0; }
 .media-sort > .select-trigger { min-height: 36px; padding: 6px 12px; border-color: transparent; border-radius: 10px; background: var(--color-card-hover); font-size: var(--text-ui-caption); }
 .media-total { margin-left: auto; color: var(--color-foreground-subtle); font-size: var(--text-ui-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
-/* 操作条不占位置，盖在筛选上面：勾选之后表格不会移动，Shift 连选时不会点错行。滚动时停在顶部，删除和取消一直够得着。 */
+/* 操作条不占位置，盖在筛选上面。这样勾选之后表格不会移动，Shift 连选时不会点错行。滚动时操作条停在顶部，删除和取消一直够得着。 */
 .media-selection-anchor { position: sticky; top: 0; z-index: 3; height: 0; }
 .media-selection { position: absolute; top: 0; left: 50%; display: flex; align-items: center; gap: 6px; width: max-content; max-width: 100%; padding: 2px 2px 2px 16px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-toast); box-shadow: 0 10px 30px var(--color-shadow); transform: translateX(-50%); animation: fade-in 120ms ease both; }
 .media-selection-count { margin-right: 8px; font-size: var(--text-ui-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .media-selection > button { min-height: 30px; padding: 4px 14px; border-radius: 999px; font-size: var(--text-ui-caption); }
 
-/* 选中的行有底色，圆角要裁掉它。菜单在顶层显示，不会被裁。 */
+/* 选中的行有底色，超出圆角的部分要裁掉。菜单在顶层显示，不会被裁。 */
 .media-table { overflow: clip; transition: opacity 150ms; }
 .media-table[aria-busy='true'] { opacity: .6; }
 .media-table > ul { margin: 0; padding: 0; list-style: none; }
@@ -88,7 +88,7 @@
 .media-head { padding-block: 10px 8px; color: var(--color-foreground-subtlest); font-size: var(--text-ui-sm); }
 .media-row { min-height: 60px; border-top: 1px solid var(--color-card-hover); }
 .media-row[data-selected] { background: var(--color-accent); }
-/* 整格都能点：复选框本身只有 16px。 */
+/* 整格都能点，因为复选框本身只有 16px。 */
 .media-check { display: flex; align-items: center; align-self: stretch; margin: -8px -12px -8px -16px; padding: 0 12px 0 16px; cursor: pointer; }
 .media-song { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .media-song > .artwork { width: 36px; border-radius: 6px; }
@@ -111,11 +111,11 @@
   .admin-room-access { grid-area: access; }
   .admin-room > .admin-menu-button { grid-area: menu; }
   .media-toolbar > .admin-search { flex: 1 1 100%; width: auto; }
-  /* 搜索框独占一行，操作条只盖住这一行：排序和总数照常显示，操作条下面不会空出一行。 */
+  /* 搜索框独占一行，操作条只盖住这一行。这样排序和总数照常显示，操作条下面也不会空出一行。 */
   .media-toolbar[data-hidden] > :not(.admin-search) { visibility: visible; }
   .media-head, .media-row { grid-template-columns: 16px minmax(0, 1fr) 36px; }
   .media-cell { display: none; }
-  /* 窄的时候封面让出位置：标题下面两行要放下大小、存储时间和最近播放。 */
+  /* 窄的时候封面让出位置，因为标题下面的两行要放下大小、存储时间和最近播放。 */
   .media-song > .artwork { display: none; }
   .media-song-copy .media-narrow { display: inline; }
   .media-song-copy > .media-narrow { display: block; }

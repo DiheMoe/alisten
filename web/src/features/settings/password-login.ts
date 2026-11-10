@@ -1,9 +1,9 @@
 import { api } from '@/core/api'
 
-// 按用户名保存服务端发给本机的登录设备凭证：一台设备可能登录过多个账号。退出登录时保留，下次登录这个账号时带上，
-// 别人反复猜这个账号的密码时本机仍然能登录。
+// 按用户名保存服务端发给本机的登录设备凭证，因为一台设备可能登录过多个账号。退出登录时保留凭证，下次登录这个账号时带上，
+// 这样别人反复猜这个账号的密码时，本机仍然能登录。
 const devicesKey = 'alisten.login-devices'
-// 与协议中的 LoginDevice 一致：本机保存的内容被改坏时不能带上，否则服务端会拒绝整个登录请求。
+// 与协议中的 LoginDevice 一致。本机保存的内容被改坏时不能带上，否则服务端会拒绝整个登录请求。
 const devicePattern = /^[\w-]{43}$/
 
 function loadDevices(): Record<string, unknown> {

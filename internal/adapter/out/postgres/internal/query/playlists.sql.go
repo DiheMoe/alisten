@@ -38,7 +38,7 @@ type CopyPlaylistItemsParams struct {
 	FromID   string
 }
 
-// 按请求的先后复制：第一首的排序值最大。请求里重复的歌只取第一次出现的位置。
+// 按请求的先后顺序复制，第一首的排序值最大。请求里重复的歌只取第一次出现的位置。
 func (q *Queries) CopyPlaylistItems(ctx context.Context, arg CopyPlaylistItemsParams) (int64, error) {
 	result, err := q.db.Exec(ctx, copyPlaylistItems,
 		arg.ToID,
@@ -77,7 +77,7 @@ type CopySharedPlaylistItemsRow struct {
 	Copied int64
 }
 
-// 确认分享还在和复制曲目在同一条语句里，看到的是同一个快照：要么完整复制，要么读不到分享。不锁来源歌单：两个人同时复制
+// 确认分享还在和复制曲目放在同一条语句里，两者看到的是同一个快照，所以要么完整复制，要么读不到分享。不锁来源歌单，因为两个人同时复制
 // 对方分享的“我喜欢”时，各自已经锁住了自己的“我喜欢”，再去锁对方的就会互相等待。
 func (q *Queries) CopySharedPlaylistItems(ctx context.Context, arg CopySharedPlaylistItemsParams) (CopySharedPlaylistItemsRow, error) {
 	row := q.db.QueryRow(ctx, copySharedPlaylistItems, arg.ShareID, arg.ToID)
@@ -233,7 +233,7 @@ const lockFavorites = `-- name: LockFavorites :exec
 SELECT id FROM playlists WHERE owner_id = $1 AND kind = 'favorites' FOR UPDATE
 `
 
-// 新建歌单前锁住这个账号的“我喜欢”：同一个账号并发新建时依次计数，不会越过上限。
+// 新建歌单前锁住这个账号的“我喜欢”，这样同一个账号并发新建时会依次计数，不会越过上限。
 func (q *Queries) LockFavorites(ctx context.Context, ownerID string) error {
 	_, err := q.db.Exec(ctx, lockFavorites, ownerID)
 	return err
@@ -248,7 +248,7 @@ type LockPlaylistParams struct {
 	OwnerID string
 }
 
-// 改动曲目前锁住歌单：并发加入时依次检查上限、分配排序值。删除歌单先锁歌单行再级联删除曲目，其他操作也要先锁歌单再动曲目，否则会互相死锁。
+// 改动曲目前锁住歌单，这样并发加入时会依次检查上限、分配排序值。删除歌单时先锁歌单行再级联删除曲目，所以其他操作也要先锁歌单再动曲目，否则会互相死锁。
 func (q *Queries) LockPlaylist(ctx context.Context, arg LockPlaylistParams) (int64, error) {
 	row := q.db.QueryRow(ctx, lockPlaylist, arg.ID, arg.OwnerID)
 	var item_seq int64

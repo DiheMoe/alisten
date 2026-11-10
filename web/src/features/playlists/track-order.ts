@@ -1,5 +1,5 @@
-// 与后端的 playlist.Move 一致：order 是显示顺序，把 moved 按给出的先后放到 before 之前，没有 before 时放到最后。
-// moved 里不在 order 中的忽略，重复的只算一次；都不在 order 中时原样返回，此时不检查 before 是否还在。
+// 与后端的 playlist.Move 一致。order 是显示顺序，把 moved 按给出的先后放到 before 之前，没有 before 时放到最后。
+// moved 里不在 order 中的忽略，重复的只算一次。moved 都不在 order 中时原样返回，这时不检查 before 是否还在。
 export function moveTracks<T>(order: readonly T[], moved: readonly T[], before?: T): T[] {
   if (before !== undefined && moved.includes(before))
     throw new Error('before 不能是要移动的歌')
@@ -22,7 +22,7 @@ export interface MovePlan<T> {
   before: T | undefined
 }
 
-// 把 moved 收拢成一段，放在其余的歌中第 at 首之前；顺序不变时返回 null，不必发请求。
+// 把 moved 收拢成一段，放在其余的歌中第 at 首之前。顺序不变时返回 null，不必发请求。
 function place<T>(order: readonly T[], moved: ReadonlySet<T>, at: number): MovePlan<T> | null {
   const block = order.filter(item => moved.has(item))
   const before = order.filter(item => !moved.has(item))[at]

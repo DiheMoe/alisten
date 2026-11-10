@@ -116,7 +116,7 @@ export function GithubApp() {
           <button type="submit" className="button-primary" disabled={busy || draft === null}>{busy ? '正在保存…' : app.clientId === null ? '开启' : '保存'}</button>
         </div>
       </form>
-      {/* 关闭之后重新读取配置，整个表单换成骨架屏：焦点落到分类标题。 */}
+      {/* 关闭之后重新读取配置，整个表单换成骨架屏，所以焦点落到分类标题。 */}
       {closing && (
         <ConfirmDialog
           title="关闭 GitHub 登录"

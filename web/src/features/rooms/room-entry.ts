@@ -88,7 +88,7 @@ class RoomEntryStore extends Store<EntryState> {
       return
     switch (session.stopCode) {
       case CloseCode.unauthorized:
-        // 票据无效，或房间启用、更改了密码：重新查询房间，再让用户输入密码。
+        // 票据无效，或者房间启用、更改了密码。这时重新查询房间，再让用户输入密码。
         deleteTicket(room.id)
         this.retry()
         return

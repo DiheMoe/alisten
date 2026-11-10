@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { pageItems } from '@/shared/lib/page-items'
 
-// 到头时用 aria-disabled 而不是 disabled：被禁用的按钮会丢掉焦点，连按“下一页”翻到最后一页的键盘用户就找不到自己在哪了。
+// 到头时用 aria-disabled 而不是 disabled，因为被禁用的按钮会丢掉焦点，连按“下一页”翻到最后一页的键盘用户就找不到自己在哪了。
 function StepButton({ label, enabled, onClick, children }: { label: string, enabled: boolean, onClick: () => void, children: ReactNode }) {
   return (
     <button

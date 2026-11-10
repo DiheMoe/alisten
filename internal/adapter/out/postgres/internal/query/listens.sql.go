@@ -49,8 +49,8 @@ const lockListeners = `-- name: LockListeners :many
 SELECT id FROM members WHERE id = ANY($1::uuid[]) AND record_listens ORDER BY id FOR NO KEY UPDATE
 `
 
-// 按 ID 的顺序锁住开启了记录的成员：同一个成员的历史依次写入，删掉超出上限的部分时不会多删或少删；
-// 加锁的顺序固定，同时写几个成员的事务之间不会死锁。
+// 按 ID 的顺序锁住开启了记录的成员。这样同一个成员的历史依次写入，删掉超出上限的部分时不会多删或少删。
+// 加锁的顺序固定，所以同时写几个成员的事务之间不会死锁。
 func (q *Queries) LockListeners(ctx context.Context, ids []string) ([]string, error) {
 	rows, err := q.db.Query(ctx, lockListeners, ids)
 	if err != nil {
@@ -147,7 +147,7 @@ type MoveListensParams struct {
 	FromID string
 }
 
-// 并入的规则与 UpsertListens 相同，并入的那份算新写入的；to_id 关闭了记录时只删不并。
+// 并入的规则与 UpsertListens 相同，并入的那份算新写入的。to_id 关闭了记录时只删不并。
 func (q *Queries) MoveListens(ctx context.Context, arg MoveListensParams) error {
 	_, err := q.db.Exec(ctx, moveListens, arg.ToID, arg.FromID)
 	return err
@@ -185,7 +185,7 @@ type TrimListensParams struct {
 	Keep      int64
 }
 
-// 排序与 MemberListens 相同：留下的正是读取时返回的那些。
+// 排序与 MemberListens 相同，所以留下的正是读取时返回的那些。
 func (q *Queries) TrimListens(ctx context.Context, arg TrimListensParams) error {
 	_, err := q.db.Exec(ctx, trimListens, arg.MemberIds, arg.Keep)
 	return err

@@ -95,15 +95,15 @@ func mediaKeys(items []port.StoredMedia) []string {
 	return keys
 }
 
-// 120 首：存储时间和最近播放时间各不相同，其中 10 首没有播放过；每 3 首大小相同，要靠曲目 ID 分出先后。
-// 有 3 首的标题含 50%_off；另外两首只在 % 或 _ 被当作通配符时才会匹配它。
+// 共 120 首。存储时间和最近播放时间各不相同，其中 10 首没有播放过。每 3 首大小相同，要靠曲目 ID 分出先后。
+// 有 3 首的标题含 50%_off。另外两首只在 % 或 _ 被当作通配符时才会匹配 50%_off。
 func TestStoredMediaPages(t *testing.T) {
 	store, pool := newStore(t)
 	titles := map[int]string{5: "Summer 50%_off", 50: "50%_OFF 特价", 95: "全场50%_Off", 20: "50abc_off", 30: "50%Xoff", 40: `C:\music`}
 	all := make([]port.StoredMedia, 120)
 	var totalBytes int64
 	for i := range all {
-		// 曲目 ID 的顺序与存入的顺序不同，大小相同时是否按曲目 ID 排才看得出来。
+		// 曲目 ID 的顺序和存入的顺序不同，这样大小相同时有没有按曲目 ID 排才看得出来。
 		link := fmt.Sprintf("https://example.com/%03d.mp3", i*7%120)
 		m := port.StoredMedia{
 			Key: fmt.Sprintf("key%03d", i), Source: track.Link, Link: link, Title: cmp.Or(titles[i], fmt.Sprintf("第 %d 首", i)),
@@ -128,7 +128,7 @@ func TestStoredMediaPages(t *testing.T) {
 		}
 		return page
 	}
-	// 每一页都报告全部的数量和大小；翻过最后一页是空的。
+	// 每一页都报告全部的数量和大小。翻过最后一页得到的是空页。
 	pages := func(sort port.MediaSort) []port.StoredMedia {
 		t.Helper()
 		var items []port.StoredMedia

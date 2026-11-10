@@ -87,7 +87,7 @@ export function SearchBox({ className, recent, onSearch }: { className: string, 
             onClick={() => {
               searchStore.setText('')
               onSearch(searchStore.withKeyword(''))
-              // 清空按钮随文字一起卸载，需要把焦点移回输入框。
+              // 清空按钮随文字一起卸载，所以要把焦点移回输入框。
               inputRef.current?.focus()
             }}
           />
@@ -105,7 +105,7 @@ export function SearchBox({ className, recent, onSearch }: { className: string, 
                 setLinking(true)
                 const added = await enqueue({ source: 'link', id: link })
                 setLinking(false)
-                // 请求期间输入框仍可编辑：文字未变时才清空，期间输入的内容要保留。
+                // 请求期间输入框仍可编辑，所以文字没变时才清空，期间输入的内容要保留。
                 if (added && searchStore.state.text === text) {
                   searchStore.setText('')
                   setOpen(false)

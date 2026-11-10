@@ -85,7 +85,7 @@ type SavePreparedTrackParams struct {
 	MediaSize  *int64
 }
 
-// 准备任务只对未完成的任务去重，同一首歌可能先后准备两次，以后一次的结果为准。
+// 准备任务只对未完成的任务去重，所以同一首歌可能先后准备两次，以后一次的结果为准。
 func (q *Queries) SavePreparedTrack(ctx context.Context, arg SavePreparedTrackParams) error {
 	_, err := q.db.Exec(ctx, savePreparedTrack,
 		arg.Source,

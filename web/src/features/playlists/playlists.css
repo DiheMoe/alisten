@@ -21,7 +21,7 @@
 .playlist-cover-sm { width: 40px; }
 .playlist-cover-md { width: 100%; }
 .playlist-cover-lg { width: 232px; border-radius: 10px; }
-/* z-index 为负：光晕画在最近的层叠上下文的最底层，在文字之下。放大封面的容器要用 isolation 建立层叠上下文，否则光晕会落到页面背景下面。 */
+/* z-index 为负，所以光晕画在最近的层叠上下文的最底层，在文字之下。放大封面的容器要用 isolation 建立层叠上下文，否则光晕会落到页面背景下面。 */
 .playlist-cover-glow { position: absolute; inset: 0; z-index: -1; opacity: var(--glow-opacity); filter: blur(24px) saturate(1.8); transform: translateY(10%) scale(.95); transition: opacity 240ms ease, transform 240ms ease; pointer-events: none; }
 .playlist-cover-lg > .playlist-cover-glow { filter: blur(32px) saturate(1.8); }
 :root:is([data-performance='low'], [data-performance='off']) .playlist-cover-glow { display: none; }

@@ -12,7 +12,7 @@ export function CreatePlaylistForm({ onCreated, onCancel }: { onCreated: (playli
       onKeyDown={(event) => {
         if (event.key !== 'Escape' || isImeKey(event.nativeEvent))
           return
-        // 拦下对话框的 Esc：在“保存到歌单”里，Esc 只回到列表。
+        // 拦下对话框的 Esc，因为在“保存到歌单”里，Esc 只回到列表。
         event.preventDefault()
         onCancel()
       }}
@@ -30,7 +30,7 @@ export function CreatePlaylistForm({ onCreated, onCancel }: { onCreated: (playli
     >
       <label>
         歌单名
-        {/* 刚打开的 Modal 按 data-autofocus 聚焦；在已经打开的对话框里切换过来时，由 autoFocus 聚焦。 */}
+        {/* 刚打开的 Modal 按 data-autofocus 聚焦。在已经打开的对话框里切换过来时，由 autoFocus 聚焦。 */}
         <input data-autofocus autoFocus required maxLength={50} value={name} onChange={event => setName(event.target.value)} />
       </label>
       <div className="dialog-actions">

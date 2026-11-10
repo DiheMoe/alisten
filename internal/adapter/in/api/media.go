@@ -70,7 +70,7 @@ func (s *server) adminListMedia(ctx context.Context, c call) (any, error) {
 	items := make([]protocol.StoredMedia, len(page.Items))
 	for i, m := range page.Items {
 		link := m.Link
-		// 后台把 link 当作链接打开，B 站的歌给出视频页面。
+		// 后台把 link 当作链接打开，所以 B 站的歌给出视频页面。
 		if m.Source == track.Bilibili {
 			link = track.BilibiliPageURL(m.Link)
 		}

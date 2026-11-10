@@ -50,7 +50,7 @@ func (s *Store) TakeRoom(_ context.Context, id string) (uint32, room.Snapshot, e
 	return st.term, snap, nil
 }
 
-// postgres 适配器按曲目表判断条目是否就绪，这里没有曲目表，恢复出的条目都在准备中。
+// postgres 适配器按曲目表判断条目是否就绪。内存实现没有曲目表，所以恢复出的条目都在准备中。
 func restored(e room.Entry) room.Entry {
 	e.Ready = false
 	e.Prep = track.Prepared{}

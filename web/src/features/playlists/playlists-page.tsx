@@ -53,7 +53,7 @@ export function PlaylistsPage({ onOpen, onRegister }: { onOpen: (playlist: MyPla
   const profileFailed = useStore(profileStore, s => s.failed)
   const [preference, setPreference] = useState(loadViewPreference)
   const [creating, setCreating] = useState(false)
-  // 删除歌单之后要获得焦点的歌单（null 表示标题）；每次删除换一个新对象，让同一个目标也能再次触发。
+  // 删除歌单之后要获得焦点的歌单（null 表示标题）。每次删除都换一个新对象，这样同一个目标也能再次触发。
   const [refocus, setRefocus] = useState<{ id: string | null } | null>(null)
   const titleRef = useRef<HTMLHeadingElement>(null)
   const now = useStore(playlistsStore, s => s.loadedAt)

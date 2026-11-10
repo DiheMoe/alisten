@@ -17,7 +17,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 )
 
-// serve 和 worker 自己的退出期限加上它，仍在 Kubernetes 30 秒的退出宽限期之内。
+// serve 和 worker 自己的退出期限加上 flushTimeout，仍在 Kubernetes 30 秒的退出宽限期之内。
 const flushTimeout = 2 * time.Second
 
 // export 为假时返回不记录 span 的 provider，日志中也就没有 trace_id 和 span_id。导出器按 OpenTelemetry 的规范
@@ -43,7 +43,7 @@ func newTracerProvider(ctx context.Context, export bool, service, instance strin
 	return provider, provider.Shutdown, nil
 }
 
-// 先导出剩下的 span，再写退出日志：导出失败的告警排在退出日志之前，退出日志才是进程真正退出之前的最后一条。
+// 先导出剩下的 span，再写退出日志。这样导出失败的告警排在退出日志之前，退出日志才是进程真正退出之前的最后一条。
 // 进程出错退出时（err 不为空）由调用方记录错误，不写退出日志。
 func exitAfterFlush(err error, flush func(context.Context) error, logger *slog.Logger, exited string) {
 	ctx, cancel := context.WithTimeout(context.Background(), flushTimeout)
@@ -57,8 +57,8 @@ func exitAfterFlush(err error, flush func(context.Context) error, logger *slog.L
 }
 
 // OpenTelemetry 自己的日志默认以纯文本写到 stderr，导出失败之类的错误也只交给标准库 log 包。
-// 它的字段放进 otel 分组：创建 tracer 的日志带有 version 字段，不能与日志的固定字段 version 重名。
-// 它还会把写错的环境变量的原值记成字段（比如 OTEL_EXPORTER_OTLP_HEADERS 中的凭证），所以只保留 err 字段的值。
+// OpenTelemetry 日志的字段放进 otel 分组，因为创建 tracer 的日志带有 version 字段，不能与日志的固定字段 version 重名。
+// OpenTelemetry 还会把写错的环境变量的原值记成字段（比如 OTEL_EXPORTER_OTLP_HEADERS 中的凭证），所以只保留 err 字段的值。
 func routeOpenTelemetryLogs(logger *slog.Logger) {
 	otel.SetLogger(logr.FromSlogHandler(errorsOnly{logger.WithGroup("otel").Handler()}))
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {

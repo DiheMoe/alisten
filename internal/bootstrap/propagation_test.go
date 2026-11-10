@@ -14,7 +14,7 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
-// 模拟房间已由另一个实例接管：本实例下一次落盘会因任期过期而失败。
+// 模拟房间已由另一个实例接管，这样本实例下一次落盘会因任期过期而失败。
 func bumpTerm(t *testing.T, databaseURL, roomID string) {
 	t.Helper()
 	conn, err := pgx.Connect(t.Context(), databaseURL)

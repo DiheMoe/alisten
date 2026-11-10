@@ -41,7 +41,7 @@ import (
 )
 
 const (
-	// 停止 River client 和关闭运维端口共用这段期限，加上导出剩余追踪的 flushTimeout，不能超过 Kubernetes 30 秒的退出宽限期。
+	// 停止 River client 和关闭运维端口共用这段期限。这段期限加上导出剩余追踪的 flushTimeout，不能超过 Kubernetes 30 秒的退出宽限期。
 	workerStopTimeout = 25 * time.Second
 	publishTimeout    = 5 * time.Second
 	waitingInterval   = 15 * time.Second
@@ -143,9 +143,9 @@ func runWorker(base *slog.Logger) (err error) {
 	return w.run(signals, listener)
 }
 
-// 任务的临时目录都建在 TMPDIR 下以主机名命名的目录中。进程崩溃时来不及清理的任务目录会留在那里；
-// 同一个容器（Kubernetes 中的同一个 Pod）重启后主机名不变，启动时在这里清除。其他容器的目录不动：
-// 它们可能共用同一个 TMPDIR，任务仍在运行。每个容器只能运行一个 worker。
+// 任务的临时目录都建在 TMPDIR 下以主机名命名的目录中。进程崩溃时来不及清理的任务目录会留在那里。
+// 同一个容器（Kubernetes 中的同一个 Pod）重启后主机名不变，所以启动时在这里清除。其他容器的目录不动，
+// 因为其他容器可能共用同一个 TMPDIR，任务仍在运行。每个容器只能运行一个 worker。
 func prepareWorkDir() (string, error) {
 	host, err := os.Hostname()
 	if err != nil {
@@ -186,12 +186,12 @@ func newMediaWorker(cfg workerConfig, pool *pgxpool.Pool, rdb *goredis.Client, s
 	if err != nil {
 		return mediaWorker{}, fmt.Errorf("创建 River client：%w", err)
 	}
-	// worker 只发布准备结果、不订阅，不会丢弃实例间消息，所以不暴露丢弃的计数；也不会收到房间输入，所以不记录收到输入的 span。
+	// worker 只发布准备结果、不订阅，不会丢弃实例间消息，所以不暴露丢弃的计数。worker 也不会收到房间输入，所以不记录收到输入的 span。
 	bus := redis.NewBus(rdb, instance, version, prometheus.NewRegistry(), noop.NewTracerProvider(), base.With("component", "bus"))
 	publish := func(o port.PrepareOutcome) {
 		ctx, cancel := context.WithTimeout(logctx.WithJob(context.Background(), o.JobID), publishTimeout)
 		defer cancel()
-		// 广播失败时只记录日志：等待的一方会定期按任务 ID 核对。
+		// 广播失败时只记录日志，因为等待的一方会定期按任务 ID 核对。
 		if err := bus.PublishPrepared(ctx, o); err != nil {
 			logger.WarnContext(ctx, "广播准备结果失败", "source", o.Track.Source, "track_id", o.Track.ID, "error", err)
 		}
@@ -209,7 +209,7 @@ func newMediaWorker(cfg workerConfig, pool *pgxpool.Pool, rdb *goredis.Client, s
 	}, nil
 }
 
-// 一直运行到 ctx 结束，或者运维端口、River client 意外停止；后者以错误返回，交给容器编排重启。
+// 一直运行到 ctx 结束，或者运维端口、River client 意外停止。意外停止时返回错误，交给容器编排重启。
 // 数据库迁移完成之前保持未就绪，迁移完成之后才启动 River client。
 func (w mediaWorker) run(ctx context.Context, listener net.Listener) error {
 	var dependenciesReady, stopping atomic.Bool
@@ -235,7 +235,7 @@ func (w mediaWorker) run(ctx context.Context, listener net.Listener) error {
 		case <-background.Done():
 			return
 		}
-		// 开始退出之后不再启动 River client：此后才启动的 client 不会被停止，运行中的任务要等 20 分钟才由 River 重新调度。
+		// 开始退出之后不再启动 River client，因为这时才启动的 client 不会被停止，运行中的任务要等 20 分钟才由 River 重新调度。
 		starting.Lock()
 		if stopping.Load() {
 			starting.Unlock()
@@ -306,7 +306,7 @@ func (w mediaWorker) run(ctx context.Context, listener net.Listener) error {
 	return errors.Join(errs...)
 }
 
-// 统计失败时保留上一次的值：连不上数据库已经反映在就绪检查中。
+// 统计失败时保留上一次的值，因为连不上数据库已经反映在就绪检查中。
 func watchWaitingJobs(ctx context.Context, count func(context.Context) (int64, error), waiting prometheus.Gauge) {
 	ticker := time.NewTicker(waitingInterval)
 	defer ticker.Stop()

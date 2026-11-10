@@ -37,7 +37,7 @@ export function notificationHint(permission: NotificationPermission): { descript
   }
 }
 
-// 申请没有拿到授权时的说明。被拒绝之后 notificationHint 已经写了去哪里允许；提示被关掉或者被浏览器收起时，权限仍是 default，
+// 申请没有拿到授权时的说明。被拒绝之后，notificationHint 已经写了去哪里允许。提示被关掉或者被浏览器收起时，权限仍是 default，
 // 再申请可能不会弹出提示，所以也指向网站设置。
 export function notificationRefusal(permission: NotificationPermission): string {
   return permission === 'denied' ? '浏览器拒绝了显示通知。' : '浏览器没有授权，可以在浏览器的网站设置里允许通知。'

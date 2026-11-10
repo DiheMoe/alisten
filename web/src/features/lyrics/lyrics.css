@@ -6,7 +6,7 @@
 .lyrics-scroll:not(:has(.empty-state))::before, .lyrics-scroll:not(:has(.empty-state))::after { content: ''; display: block; height: 50%; }
 /* 用 transform 而不是 font-size 区分层级，切换时不触发重排。 */
 .lyric-line { max-width: 880px; margin: 0 auto; padding: 8px 32px; line-height: 1.5; text-align: center; color: var(--color-foreground-subtle); opacity: .78; font-weight: 600; overflow-wrap: anywhere; transform: translateY(4px) scale(.7); transform-origin: center; transition: transform 420ms cubic-bezier(.2, .8, .2, 1), opacity 300ms ease, color 300ms ease; }
-/* 分数缩放下，相邻行进出合成层时文字会抖动。当前行不能这样固定：Chrome 不会按放大后的比例重新栅格化，文字会变糊。 */
+/* 分数缩放下，相邻行进出合成层时文字会抖动。当前行不能这样固定，因为 Chrome 不会按放大后的比例重新栅格化，文字会变糊。 */
 .lyric-line.near-lyric { opacity: .9; transform: translateY(2px) scale(.8); will-change: transform; }
 .lyric-line.active-lyric { color: var(--color-foreground); opacity: 1; transform: translateY(0) scale(1.18); }
 /* inline-block 才能位移和缩放，只有放大的字需要滤镜。 */

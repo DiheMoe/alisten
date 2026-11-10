@@ -35,7 +35,7 @@ import (
 
 const allowedOrigin = "https://allowed.example"
 
-// 没有调用 realtime.Start：这些测试不运行房间。
+// 没有调用 realtime.Start，因为这些测试不运行房间。
 func services(store *porttest.Store, rooms port.RoomDirectory, adminToken string) Services {
 	music := newCatalog(rooms, 10)
 	node := porttest.NewRedis().Node("a")

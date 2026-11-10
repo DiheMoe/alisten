@@ -58,7 +58,7 @@ export function PairingDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
-// 兑换配对码就是登录：成功时把新会话的成员 token 交给调用方，由它换身份。
+// 兑换配对码就是登录。成功时把新会话的成员 token 交给调用方，由调用方换身份。
 export function PairingCodeForm({ initialCode = '', onSignedIn }: { initialCode?: string, onSignedIn: (memberToken: string) => void }) {
   const [input, setInput] = useState(() => normalizePairingCode(initialCode))
   const [busy, setBusy] = useState(false)

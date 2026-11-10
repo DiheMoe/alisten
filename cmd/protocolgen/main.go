@@ -75,8 +75,9 @@ func generateFrom(path string) ([]output, error) {
 	return generate(d)
 }
 
-// 生成函数只处理 check 接受过的 IDL，直接依赖它保证的结构，不再检查：引用都指向存在的类型（标量类型已经展开），数组都有 items，
-// anyOf 是 [类型, {"type": "null"}]，allOf 的每个条件只按必填的枚举字段判断，需要解码函数的类型都已标记在 inbound 中。
+// 生成函数只处理 check 接受过的 IDL，所以直接依赖 check 保证的结构，不再重复检查。check 保证了以下几点：
+// 引用都指向存在的类型（标量类型已经展开），数组都有 items，anyOf 是 [类型, {"type": "null"}]，
+// allOf 的每个条件只按必填的枚举字段判断，需要解码函数的类型都已标记在 inbound 中。
 func generate(d *idl) ([]output, error) {
 	types, err := goTypes(d)
 	if err != nil {

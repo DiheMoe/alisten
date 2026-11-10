@@ -15,7 +15,7 @@ func Key(link string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// 链接和 B 站的歌的对象都在 link/ 下：对象存储的匿名读取策略、nginx 和 Traefik 都只放行这里的对象。
+// 链接和 B 站的歌的对象都在 link/ 下，因为对象存储的匿名读取策略、nginx 和 Traefik 都只放行 link/ 下的对象。
 func AudioObject(key string) string { return "link/" + key + "/audio.mp3" }
 
 func CoverObject(key, ext string) string { return "link/" + key + "/cover." + ext }

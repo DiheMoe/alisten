@@ -1,4 +1,4 @@
-带 Origin 的请求只接受显式允许列表中的来源；不带 Origin 的请求不检查。
+带 Origin 的请求只接受显式允许列表中的来源。不带 Origin 的请求不检查。
 
 -- request --
 POST /api/rooms

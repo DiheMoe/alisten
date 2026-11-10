@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { CloudOff } from 'lucide-react'
 
-// 分类的标题要和内容一起立即渲染，加载中也不例外：从分类栏切换过来之后，焦点要落在它上面。
+// 分类的标题要和内容一起立即渲染，加载中也不例外，因为从分类栏切换过来之后，焦点要落在标题上。
 export function SectionHead({ id, title, description, children }: { id: string, title: string, description?: string, children?: ReactNode }) {
   return (
     <header className="admin-head">

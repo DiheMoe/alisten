@@ -4,7 +4,7 @@ import { performanceStore } from '@/features/settings'
 
 type ViewDirection = 'forward' | 'backward' | 'rise' | 'sink'
 
-// 播放列表和播放历史是左右并排的 tab；聊天从播放栏升起，盖在它们上面。
+// 播放列表和播放历史是左右并排的 tab。聊天从播放栏升起，盖在这两个 tab 上面。
 export function panelDirection(from: Panel, to: Panel): ViewDirection {
   if (to === 'chat')
     return 'rise'

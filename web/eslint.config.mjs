@@ -1,6 +1,6 @@
 import antfu from '@antfu/eslint-config'
 
-// 一个文件匹配到多个设置 no-restricted-imports 的配置对象时，只有最后一个生效：features 因此要带上这一条；core 和 shared 禁止引用 features 的任何路径，已经包含它。
+// 一个文件匹配到多个设置了 no-restricted-imports 的配置对象时，只有最后一个生效。所以 features 的配置要再带上 featureInternals。core 和 shared 的配置禁止引用 features 下的任何路径，已经包含了 featureInternals。
 const featureInternals = {
   pattern: /^(?:@\/|\.\.?\/(?:.*\/)?)features\/[^/]+\/[^/]/i,
   message: '功能之间只能通过对方的 index.ts 引用。',
@@ -12,7 +12,7 @@ const appImports = {
 }
 
 // no-restricted-imports 不检查 import()，动态导入由 no-restricted-syntax 用同一个正则检查。
-// no-restricted-syntax 同样只有最后一个配置对象生效，所以要带上 @antfu/eslint-config 设置的两项，升级 antfu 时要与它保持一致。
+// no-restricted-syntax 同样只有最后一个配置对象生效，所以要带上 @antfu/eslint-config 设置的两项。升级 antfu 时，这两项要和它保持一致。
 function restrictImports(...restrictions) {
   return {
     'no-restricted-imports': ['error', { patterns: restrictions.map(({ pattern, message }) => ({ regex: pattern.source, message })) }],

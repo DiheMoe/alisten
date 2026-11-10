@@ -220,7 +220,7 @@ func TestGitHubBind(t *testing.T) {
 	}
 }
 
-// 兑换码只能由发起授权的那台设备、带着它保存的 nonce 兑换：别人把自己发起的授权发给你，你授权之后得到的兑换码对他也没用。
+// 兑换码只能由发起授权的那台设备带着自己保存的 nonce 兑换。所以别人把自己发起的授权发给你，你授权之后得到的兑换码对他也没用。
 func TestGitHubExchangeChecksNonceAndMember(t *testing.T) {
 	f := newGitHub(t)
 	alice := registerAccount(t, f.a, f.s, "alice", "correct horse")
@@ -289,7 +289,7 @@ func TestGitHubCallback(t *testing.T) {
 	}
 }
 
-// 发起授权的客户端记在 state 对应的记录里：回调成功、换取失败和 GitHub 没有授权时，都按记录跳回发起授权的客户端。
+// 发起授权的客户端记在 state 对应的记录里。回调成功、换取失败和 GitHub 没有授权时，都按记录跳回发起授权的客户端。
 func TestGitHubCallbackReturnsClient(t *testing.T) {
 	f := newGitHub(t)
 	guest := createMember(t, f.s)
@@ -359,7 +359,7 @@ func TestGitHubCodesExpire(t *testing.T) {
 	})
 }
 
-// 只凭会话不能更换登录凭证：绑定 GitHub 要输入当前密码，额度与修改密码共用。
+// 只凭会话不能更换登录凭证，所以绑定 GitHub 要输入当前密码，额度与修改密码共用。
 func TestGitHubBindRequiresCurrentPassword(t *testing.T) {
 	f := newGitHub(t)
 	alice := registerAccount(t, f.a, f.s, "alice", "correct horse")
@@ -420,7 +420,7 @@ func TestGitHubUnbind(t *testing.T) {
 	}
 }
 
-// 拿到账号一个会话的人（比如借用过的设备）不知道密码，就不能把账号的 GitHub 换成自己的：本人修改密码或后台重置之后，他无法再用 GitHub 登录回来。
+// 拿到账号一个会话的人（比如借用过的设备）不知道密码，就不能把账号的 GitHub 换成自己的。这样本人修改密码或后台重置之后，他无法再用 GitHub 登录回来。
 func TestGitHubCannotBeSwappedWithSessionAlone(t *testing.T) {
 	f := newGitHub(t)
 	alice := registerAccount(t, f.a, f.s, "alice", "correct horse")
@@ -512,7 +512,7 @@ func TestGitHubVerificationExpires(t *testing.T) {
 	})
 }
 
-// 读到账号之后、签发会话之前，密码被修改或重置：修改时删除了其他会话，这次登录不能留下新会话。
+// 读到账号之后、签发会话之前，密码被修改或重置。修改时删除了其他会话，所以这次登录也不能留下新会话。
 func TestGitHubLoginRejectedWhenPasswordChangesMeanwhile(t *testing.T) {
 	f := newGitHub(t)
 	alice := registerAccount(t, f.a, f.s, "alice", "correct horse")
@@ -566,8 +566,8 @@ func TestGitHubOAuthApp(t *testing.T) {
 	}
 }
 
-// 没有配置 OAuth App 时，发起授权、兑换和解绑都返回 ErrGitHubDisabled。授权进行中关闭了 GitHub 登录，回调也失败，
-// 照样跳回发起授权的客户端；重新开启之后恢复。
+// 没有配置 OAuth App 时，发起授权、兑换和解绑都返回 ErrGitHubDisabled。授权进行中关闭了 GitHub 登录时，回调也失败，
+// 但照样跳回发起授权的客户端。重新开启之后恢复。
 func TestGitHubDisabled(t *testing.T) {
 	f := newGitHub(t)
 	alice := registerAccount(t, f.a, f.s, "alice", "correct horse")

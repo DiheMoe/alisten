@@ -7,14 +7,14 @@ const mirrors = ['https://weavatar.com/avatar/', 'https://cravatar.cn/avatar/']
 const gravatarTimeoutMs = 3000
 const mirrorTimeoutMs = 5000
 
-// 有的网络访问不到 Gravatar，要改用镜像。头像加载失败分不清是没有头像（d=404）还是网络不通，所以另外探测：
-// no-cors 请求拿到任何响应都算能访问。探测的地址要返回图片，其他类型的不透明响应可能被浏览器当作网络错误。
-// 丢包的网络要等连接超时才会失败，所以限时。
+// 有的网络访问不到 Gravatar，要改用镜像。头像加载失败时分不清是没有头像（d=404）还是网络不通，所以另外探测。
+// no-cors 请求拿到任何响应都算能访问。探测的地址要返回图片，因为其他类型的不透明响应可能被浏览器当作网络错误。
+// 丢包的网络要等连接超时才会失败，所以探测要限时。
 function reachable(base: string, timeoutMs: number): Promise<string> {
   return fetch(`${base}?s=1&d=blank`, { mode: 'no-cors', signal: AbortSignal.timeout(timeoutMs) }).then(() => base)
 }
 
-// 镜像响应慢，逐个探测既慢又容易超时，所以同时探测、用先响应的那个；都不通时只显示首字。
+// 镜像响应慢，逐个探测既慢又容易超时，所以同时探测各个镜像，用先响应的那个。都不通时只显示首字。
 class AvatarBase extends Store<{ url: string | null }> {
   #probing = false
 

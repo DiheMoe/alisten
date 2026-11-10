@@ -239,7 +239,7 @@ func SilentWAV(d time.Duration) []byte {
 	return append(b, bytes.Repeat([]byte{128}, frames)...)
 }
 
-// 1 kHz 的正弦波，峰值是满幅的 amplitude 倍：响度分析得到的增益不是 1。
+// 1 kHz 的正弦波，峰值是满幅的 amplitude 倍，用来让响度分析得到不是 1 的增益。
 func ToneWAV(d time.Duration, amplitude float64) []byte {
 	const rate, channels = 44100, 2
 	frames := int(d * rate / time.Second)

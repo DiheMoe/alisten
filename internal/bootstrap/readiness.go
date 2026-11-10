@@ -30,10 +30,10 @@ func watchReadiness(ctx context.Context, interval time.Duration, check func(cont
 			return
 		}
 		ready.Store(err == nil)
-		// 不可用的原因变化时也要记录，否则日志中只有最初的原因；原因不变时不重复记录。
+		// 不可用的原因变化时也要记录，否则日志中只有最初的原因。原因不变时不重复记录。
 		switch {
 		case stopping.Load():
-			// 开始退出之后实例有意不就绪，依赖检查的结果不记日志。
+			// 开始退出之后，实例是有意不就绪的，所以依赖检查的结果不记日志。
 		case err != nil && (first || last == nil || reason(err) != reason(last)):
 			logger.WarnContext(ctx, "依赖检查未通过，实例未就绪", "error", err)
 		case err == nil && (first || last != nil):

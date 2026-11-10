@@ -60,7 +60,7 @@ func (s *Service) Authenticate(ctx context.Context, memberToken string) (member.
 
 type Profile struct {
 	Name *string
-	// 用来计算头像哈希；已注册的账号同时保存它。空字符串表示清除。
+	// 用来计算头像哈希。已注册的账号还会同时保存邮箱本身。空字符串表示清除。
 	Email *string
 }
 
@@ -84,7 +84,7 @@ func (s *Service) UpdateProfile(ctx context.Context, memberID string, p Profile)
 	return m, nil
 }
 
-// memberToken 是发出请求的会话，票据属于这个会话：会话删除时票据随之失效。
+// memberToken 是发出请求的会话，票据属于这个会话，所以会话删除时票据随之失效。
 func (s *Service) IssueTicket(ctx context.Context, memberID, memberToken, roomID, password string) (string, error) {
 	r, err := s.rooms.FindRoom(ctx, roomID)
 	if err != nil {
@@ -102,7 +102,7 @@ func (s *Service) IssueTicket(ctx context.Context, memberID, memberToken, roomID
 	ticket, hash := newSecret()
 	err = s.tickets.CreateTicket(ctx, port.NewTicket{TokenHash: hash, RoomID: r.Info.ID, MemberID: memberID, PasswordHash: r.PasswordHash, SessionTokenHash: hashSecret(memberToken)})
 	if errors.Is(err, port.ErrPasswordChanged) {
-		// 刚才是按旧密码校验的；客户端重新输入密码后，按新密码校验。
+		// 刚才是按旧密码校验的。客户端重新输入密码后，会按新密码校验。
 		return "", ErrWrongPassword
 	}
 	if errors.Is(err, port.ErrSessionNotFound) {
@@ -115,7 +115,7 @@ func (s *Service) IssueTicket(ctx context.Context, memberID, memberToken, roomID
 	return ticket, nil
 }
 
-// 连接在网关中登记的凭证，与票据在存储中的哈希相同：网关定期拿它到存储中核对，不同的话仍然有效的连接也会被当作已撤销而断开。
+// 连接在网关中登记的凭证，就是票据在存储中的哈希。网关定期拿凭证到存储中核对，两者不同的话，仍然有效的连接也会被当作已撤销而断开。
 func TicketCredential(ticket string) []byte {
 	return hashSecret(ticket)
 }
@@ -143,7 +143,7 @@ func (s *Service) EnterRoom(ctx context.Context, roomID, ticket string) (*realti
 	if holder.RoomID != r.Info.ID {
 		return nil, ErrInvalidTicket
 	}
-	// bot 只用 HTTP 接口：它不出现在在线列表中，重置 Key 之后也不会留下用旧 Key 建立的会话。
+	// bot 只用 HTTP 接口，这样 bot 不会出现在在线列表中，重置 Key 之后也不会留下用旧 Key 建立的会话。
 	if holder.Bot {
 		return nil, ErrBotSession
 	}
@@ -151,7 +151,7 @@ func (s *Service) EnterRoom(ctx context.Context, roomID, ticket string) (*realti
 	if err != nil {
 		return nil, err
 	}
-	// 作废时先删除票据、再通知断开：会话加入网关之前发出的通知它收不到，所以加入之后再确认一次票据。
+	// 作废票据时先删除票据，再通知断开。通知如果在会话加入网关之前发出，会话就收不到，所以加入之后要再确认一次票据。
 	if _, err := s.VerifyTicket(ctx, ticket); err != nil {
 		s.gateway.Leave(session)
 		return nil, err

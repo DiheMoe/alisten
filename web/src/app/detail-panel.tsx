@@ -19,7 +19,7 @@ export function DetailPanel({ view, children }: { view: Panel | null, children: 
     if (open || !shown || !panelRef.current)
       return
     const duration = Number.parseFloat(getComputedStyle(panelRef.current).animationDuration) * 1000
-    // 动画被取消或面板被断点隐藏时不会触发 animationend，由定时器兜底卸载。
+    // 动画被取消，或者面板被断点隐藏时，不会触发 animationend，所以由定时器兜底卸载。
     const timer = setTimeout(setShown, duration ? duration + 50 : 0, null)
     return () => clearTimeout(timer)
   }, [open, shown])

@@ -331,7 +331,7 @@ func (b contextBus) PublishSessionsRevoked(ctx context.Context, sessionTokenHash
 	return b.Bus.PublishSessionsRevoked(ctx, sessionTokenHashes)
 }
 
-// 通知在凭证作废之后发出：发起请求的客户端已经断开时照样发出，发不出去时只记日志。
+// 通知在凭证作废之后发出。发起请求的客户端已经断开时照样发出，发不出去时只记日志。
 func TestRevocationNoticesAreBestEffort(t *testing.T) {
 	redis := porttest.NewRedis()
 	node, listener := redis.Node("a"), redis.Node("b")
@@ -395,7 +395,7 @@ func TestObserverGetsNewSnapshotWhenRunChanges(t *testing.T) {
 			t.Fatalf("落盘失败时的错误 = %v，期望 ErrUnavailable", err)
 		}
 		store.fail.Store(false)
-		// 放弃房间的那次运行在自己的 goroutine 里收尾，收尾完之前到达的请求会得到 ErrUnavailable；等它收尾完，Sync 才会重新接管房间。
+		// 放弃房间的那次运行在自己的 goroutine 里收尾，收尾完之前到达的请求会得到 ErrUnavailable。等这次运行收尾完，Sync 才会重新接管房间。
 		synctest.Wait()
 		if _, err := f.gateway.Do(t.Context(), id, alice, room.Sync{}); err != nil {
 			t.Fatal(err)
@@ -422,7 +422,7 @@ func (b *heldEmits) PublishRoom(ctx context.Context, roomID string, m port.RoomM
 	return b.Bus.PublishRoom(ctx, roomID, m)
 }
 
-// a 的租约已经丢失，但它还没有发现：排在它那里的快照请求在 b 接管、发出变更通知之后才得到回复，这份快照已经过时。
+// a 的租约已经丢失，但 a 还没有发现。排在 a 那里的快照请求，在 b 接管、发出变更通知之后才得到回复，所以这份快照已经过时。
 func TestObserverSkipsSnapshotOfEarlierRun(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()

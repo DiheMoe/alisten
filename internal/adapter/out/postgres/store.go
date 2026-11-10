@@ -19,7 +19,7 @@ func New(pool *pgxpool.Pool) *Store {
 
 var uuidPattern = regexp.MustCompile(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
-// 房间 ID 可能来自客户端：格式不正确的 uuid 参数会让 PostgreSQL 报错，而这样的房间一定不存在。
+// 房间 ID 可能来自客户端。格式不正确的 uuid 参数会让 PostgreSQL 报错，而这样的房间一定不存在。
 func isUUID(s string) bool {
 	return uuidPattern.MatchString(s)
 }

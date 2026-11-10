@@ -38,7 +38,7 @@ func (t *Transcoder) ToMP3(ctx context.Context, audio port.LinkFile) (port.LinkF
 		return nil, nil, fmt.Errorf("创建临时目录：%w", err)
 	}
 	release := func() { _ = os.RemoveAll(dir) }
-	// 用 defer 是为了 panic 时也删除目录：River 会恢复任务中的 panic，worker 继续运行。
+	// 用 defer 是为了 panic 时也删除目录，因为 River 会恢复任务里的 panic，worker 还会继续运行。
 	done := false
 	defer func() {
 		if !done {
@@ -54,7 +54,7 @@ func (t *Transcoder) ToMP3(ctx context.Context, audio port.LinkFile) (port.LinkF
 }
 
 func (t *Transcoder) transcode(ctx context.Context, audio port.LinkFile, dir string) (port.LinkFile, error) {
-	// 先复制成文件再交给 ffmpeg：MP4 的 moov 可能在文件末尾，从管道读不了。文件名不带扩展名，ffmpeg 只能按内容识别格式。
+	// 先复制成文件再交给 ffmpeg，因为 MP4 的 moov 可能在文件末尾，从管道读不了。文件名不带扩展名，这样 ffmpeg 只能按内容识别格式。
 	input := filepath.Join(dir, "input")
 	switch err := copyFile(input, audio); {
 	case errors.Is(err, port.ErrAudioTooLarge):
@@ -65,8 +65,8 @@ func (t *Transcoder) transcode(ctx context.Context, audio port.LinkFile, dir str
 	output := filepath.Join(dir, "audio.mp3")
 	stderr, err := run(ctx, args(input, output))
 	if err == nil {
-		// 转码成功后立即删除输入副本，不等 release：源音频和 MP3 在上传期间仍占用临时空间，
-		// 同一容器还可能并行准备其他链接。
+		// 转码成功后立即删除输入副本，不等 release，因为源音频和 MP3 在上传期间还占着临时空间，
+		// 同一容器还可能在并行准备其他链接。
 		_ = os.Remove(input)
 		return file(output), nil
 	}
@@ -119,7 +119,7 @@ func args(input, output string) []string {
 		"-map_metadata", "-1", "-map_chapters", "-1",
 		// 与 yt-dlp 的 --audio-format mp3 默认质量一致。
 		"-c:a", "libmp3lame", "-q:a", "5",
-		// ffmpeg 写到不少于 -fs 的字节数就停止并正常退出。多一个字节，截断的输出才一定超过上限，由准备流程拒绝。
+		// ffmpeg 写到不少于 -fs 的字节数就停止，并且正常退出。-fs 比上限多一个字节，截断的输出才一定超过上限，进而被准备流程拒绝。
 		"-fs", strconv.Itoa(port.MaxAudioSize + 1),
 		output,
 	}

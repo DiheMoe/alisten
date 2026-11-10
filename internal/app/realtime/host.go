@@ -25,7 +25,7 @@ const (
 	reconcileJitter   = time.Second
 	leaseTTL          = 15 * time.Second
 	renewInterval     = 5 * time.Second
-	// 距上次续约成功超过这个时长就停止处理房间的输入。它早于租约过期，时钟正常时同一时刻只有一个 owner 在处理房间的输入。
+	// 距上次续约成功超过这个时长就停止处理房间的输入。ownerDeadline 早于租约过期，所以时钟正常时，同一时刻只有一个 owner 在处理房间的输入。
 	ownerDeadline = 10 * time.Second
 	// 租约、存活键和实例间消息单次调用的期限，不能超过续约的间隔。
 	clusterTimeout    = 5 * time.Second
@@ -59,8 +59,8 @@ type Host struct {
 
 	owned      atomic.Int64
 	leasesLost atomic.Uint64
-	// 上一条接管房间失败的 WARN 的时刻，接管成功之后清空。存储不可用时，每次对账都会为每个没有 owner 的房间尝试接管，且每次都失败：
-	// takeoverLogRepeat 内只记一条 WARN，其余记 DEBUG，日志量不随房间数和对账次数增长。
+	// 上一条接管房间失败的 WARN 的时刻，接管成功之后清空。存储不可用时，每次对账都会为每个没有 owner 的房间尝试接管，且每次都失败。
+	// 所以 takeoverLogRepeat 内只记一条 WARN，其余记 DEBUG，这样日志量不随房间数和对账次数增长。
 	takeoverWarned atomic.Pointer[time.Time]
 
 	mu         sync.Mutex
@@ -103,7 +103,7 @@ type hostedRoom struct {
 	cancel context.CancelFunc
 	// 上次续约成功的时刻加上 ownerDeadline，Unix 纳秒。
 	deadline atomic.Int64
-	// 租约已经不属于本实例，或者无法确认还属于本实例：不再执行任何 effect，也不释放租约。
+	// 租约已经不属于本实例，或者无法确认还属于本实例。lost 为真时不再执行任何 effect，也不释放租约。
 	lost      atomic.Bool
 	releasing atomic.Bool
 
@@ -138,7 +138,7 @@ func newHost(snapshots port.RoomSnapshots, directory port.RoomDirectory, listens
 	}
 }
 
-// Start 之后才接管房间：数据库迁移到二进制要求的版本、并且订阅了本实例的频道之前，房间不能运行。
+// Start 之后才接管房间，因为数据库迁移到二进制要求的版本、并且订阅了本实例的频道之前，房间不能运行。
 func (h *Host) Start() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -147,7 +147,7 @@ func (h *Host) Start() {
 	}
 }
 
-// 释放全部房间，在下一次 Start 之前不再接管房间：订阅连接断开过，发给这些房间的输入可能已经丢失。
+// 释放全部房间，在下一次 Start 之前不再接管房间，因为订阅连接断开过，发给这些房间的输入可能已经丢失。
 func (h *Host) pause() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -187,7 +187,7 @@ func (h *Host) LeasesLost() uint64 {
 	return h.leasesLost.Load()
 }
 
-// 每个未关闭的房间都要有 owner：常驻房间没有会话时时间线照常推进，临时房间无人 5 分钟后关闭。
+// 每个未关闭的房间都要有 owner，因为常驻房间没有会话时时间线照常推进，临时房间无人 5 分钟后关闭。
 func (h *Host) Reconcile(ctx context.Context) {
 	for {
 		h.checkGateways(ctx)
@@ -270,7 +270,7 @@ func (h *Host) checkGateways(ctx context.Context) {
 	}
 	for _, g := range expired {
 		// 网关可能刚刚恢复了存活键，正在为会话重新 Join。Leave 排在重新加入之后时，会话会一直不在在线列表中，
-		// 所以发 Leave 之前再查一次，缩小这个窗口。窗口无法消除：复查返回之后网关仍可能恢复。
+		// 所以发 Leave 之前再查一次，缩小这个窗口。窗口无法消除，因为复查返回之后网关仍可能恢复。
 		recheckCtx, cancel := context.WithTimeout(ctx, clusterTimeout)
 		still, err := h.liveness.Expired(recheckCtx, []string{g})
 		cancel()
@@ -311,10 +311,10 @@ func (h *Host) ensure(id string) *hostedRoom {
 	return r
 }
 
-// takeover 为假时，房间不在本实例运行就丢弃输入：重新接管后的 Room
+// takeover 为假时，房间不在本实例运行就丢弃输入，因为重新接管后的 Room
 // 从落盘的快照恢复，在线列表由网关重新加入会话来重建。
 func (h *Host) send(ctx context.Context, roomID string, e envelope, takeover bool) error {
-	// 调用方已经放弃的输入不再交给房间：下面两个 select 的多个分支同时就绪时，Go 随机选择其一，仅靠过期的 ctx 无法阻止输入被交出。
+	// 调用方已经放弃的输入不再交给房间。下面两个 select 的多个分支同时就绪时，Go 随机选择其一，所以仅靠过期的 ctx 无法阻止输入被交出。
 	if ctx.Err() != nil {
 		return context.Cause(ctx)
 	}
@@ -352,7 +352,7 @@ func (h *Host) send(ctx context.Context, roomID string, e envelope, takeover boo
 	}
 }
 
-// 在接收消息的 goroutine 上调用，不能等房间收下输入：
+// 在接收消息的 goroutine 上调用，不能等房间收下输入。
 // 同一房间的输入按到达的顺序排队，由这个房间的转发 goroutine 依次交给房间。
 func (h *Host) deliver(ctx context.Context, in port.RoomInput) {
 	h.mu.Lock()
@@ -392,7 +392,7 @@ func (h *Host) forward(roomID string, queue *[]forwardedInput) {
 	}
 }
 
-// 网关最多等待回复 ownerReplyTimeout，超过这个时间的请求不必再交给房间。期限从请求到达本实例时算起：
+// 网关最多等待回复 ownerReplyTimeout，超过这个时间的请求不必再交给房间。期限从请求到达本实例时算起，
 // 排在忙碌房间后面的请求不能因为轮到得晚而多得一份期限。会话的输入不设期限，与本实例的网关一致。
 func forwardContext(received context.Context, id room.RequestID, arrived time.Time) (context.Context, context.CancelFunc) {
 	if id == "" {
@@ -416,7 +416,7 @@ func (h *Host) run(r *hostedRoom) {
 	if !h.acquire(r) {
 		return
 	}
-	// 续约从取得租约时开始，不等接管结束：接管最多耗时 storeTimeout，而期限从取得租约时算起，等接管结束再续约会超过期限。
+	// 续约从取得租约时开始，不等接管结束。接管最多耗时 storeTimeout，而期限从取得租约时算起，等接管结束再续约就会超过期限。
 	keepCtx, stopKeeping := context.WithCancel(context.Background())
 	r.stopKeeping = stopKeeping
 	h.work.Go(func() { h.keep(keepCtx, r) })
@@ -491,7 +491,7 @@ func (h *Host) acquire(r *hostedRoom) bool {
 	return true
 }
 
-// 续约不经过房间的 goroutine：房间正在落盘时也要按时续约。
+// 续约不经过房间的 goroutine，因为房间正在落盘时也要按时续约。
 func (h *Host) keep(ctx context.Context, r *hostedRoom) {
 	ticker := time.NewTicker(renewInterval)
 	defer ticker.Stop()
@@ -550,8 +550,8 @@ func (h *Host) finish(r *hostedRoom) {
 	if r.room != nil {
 		h.owned.Add(-1)
 	}
-	// 先删除租约，再发出释放通知：收到通知的网关接管房间时，租约已经空出来了。因出错而放弃房间时不发通知：
-	// 否则落盘一直失败时，网关收到通知就接管、接管之后又落盘失败，会反复接管同一个房间。
+	// 先删除租约，再发出释放通知，这样收到通知的网关接管房间时，租约已经空出来了。因出错而放弃房间时不发通知，
+	// 否则落盘一直失败时，网关收到通知就接管，接管之后又落盘失败，会反复接管同一个房间。
 	if r.acquired && !r.lost.Load() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.ctx), clusterTimeout)
 		if err := h.leases.Release(ctx, r.id); err != nil {
@@ -572,8 +572,8 @@ func (h *Host) finish(r *hostedRoom) {
 	close(r.done)
 }
 
-// 调用都带着 ctx 的值，但不随它取消。返回 false 表示这次运行结束：落盘失败、租约不再属于本实例或者消息发布失败时放弃房间，
-// 不再执行剩下的 effect，request 还没有回复时让它立即失败；输出 Close 之后丢弃 Room。
+// 调用都带着 ctx 的值，但不随 ctx 取消。返回 false 表示这次运行结束，分两种情况。落盘失败、租约不再属于本实例或者消息发布失败时放弃房间，
+// 不再执行剩下的 effect，request 还没有回复时让 request 立即失败。输出 Close 之后丢弃 Room。
 func (h *Host) execute(ctx context.Context, r *hostedRoom, effects []room.Effect, request room.RequestID) (ok bool) {
 	replied := false
 	defer func() {
@@ -629,8 +629,8 @@ func (h *Host) execute(ctx context.Context, r *hostedRoom, effects []room.Effect
 	return !r.closed
 }
 
-// 在线人数在广播在线列表之前写入：看到在线列表变化的客户端，在房间列表中看到的也是新的人数。
-// 写入失败只影响房间列表，不放弃房间：真的连不上时续约也会失败，房间随之停止。
+// 在线人数在广播在线列表之前写入，这样看到在线列表变化的客户端，在房间列表中看到的也是新的人数。
+// 写入失败只影响房间列表，所以不放弃房间。真的连不上时续约也会失败，房间随之停止。
 func (h *Host) setOnline(ctx context.Context, r *hostedRoom, n int) bool {
 	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), clusterTimeout)
 	ok, err := h.leases.SetOnline(writeCtx, r.id, n)
@@ -654,7 +654,7 @@ func (h *Host) abandon(ctx context.Context, r *hostedRoom, msg string, err error
 	h.logger.ErrorContext(ctx, msg, "error", err)
 }
 
-// 房间的消息发布失败时，订阅的网关可能漏掉了它，所以放弃房间：下一个 owner 从落盘的快照恢复房间，各网关重新加入会话。
+// 房间的消息发布失败时，订阅的网关可能漏掉了这条消息，所以放弃房间。下一个 owner 从落盘的快照恢复房间，各网关重新加入会话。
 func (h *Host) publish(ctx context.Context, r *hostedRoom, m port.RoomMessage) bool {
 	publishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), clusterTimeout)
 	defer cancel()
@@ -665,7 +665,7 @@ func (h *Host) publish(ctx context.Context, r *hostedRoom, m port.RoomMessage) b
 	return true
 }
 
-// 同一批中的 RecordPlay 都排在 Persist 之后，与它在同一个事务中写入。
+// 同一批中的 RecordPlay 都排在 Persist 之后，与 Persist 在同一个事务中写入。
 func plays(effects []room.Effect) []room.RecordPlay {
 	var out []room.RecordPlay
 	for _, e := range effects {
@@ -676,14 +676,14 @@ func plays(effects []room.Effect) []room.RecordPlay {
 	return out
 }
 
-// 落盘不随 ctx 取消：释放房间时，正在处理的输入要处理完。
+// 落盘不随 ctx 取消，因为释放房间时，正在处理的输入要处理完。
 func (h *Host) persist(ctx context.Context, r *hostedRoom, s room.Snapshot, plays []room.RecordPlay) error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storeTimeout)
 	defer cancel()
 	return h.snapshots.SaveRoom(ctx, r.term, s, plays)
 }
 
-// 播放历史不是房间的状态：写入失败不放弃房间。与落盘一样不随 ctx 取消。
+// 播放历史不是房间的状态，所以写入失败不放弃房间。写入和落盘一样，不随 ctx 取消。
 func (h *Host) recordListen(ctx context.Context, l room.RecordListen) {
 	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storeTimeout)
 	defer cancel()
@@ -775,7 +775,7 @@ func (r *hostedRoom) track(in room.Input, gateway, self string) {
 	}
 }
 
-// 请求和成员的 ID 取自输入本身：其他实例转发来的输入只带着追踪上下文。
+// 请求和成员的 ID 取自输入本身，因为其他实例转发来的输入只带着追踪上下文。
 func (r *hostedRoom) inputContext(e envelope) context.Context {
 	ctx := r.ctx
 	if e.ctx != nil {

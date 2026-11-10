@@ -34,12 +34,12 @@ const (
 var ErrAudioTooLarge = fmt.Errorf("音频文件超过 %d MB", MaxAudioSize>>20)
 
 type LinkDownloader interface {
-	// 读完文件之后调用 release 删除它们；返回错误时没有要删除的文件。链接不受支持、指向非公网地址，
+	// 调用方读完文件之后调用 release 删除它们。返回错误时没有要删除的文件。链接不受支持、指向非公网地址，
 	// 或者下载时发现音频超过 MaxAudioSize 时返回 *RejectedError。
 	Download(ctx context.Context, link string) (d LinkDownload, release func(), err error)
 }
 
-// 用 yt-dlp 下载链接之前调用。这个链接不需要 cookies 时 ok 为 false；否则下载结束后调用 release，由实现删除文件。
+// 用 yt-dlp 下载链接之前调用。这个链接不需要 cookies 时 ok 为 false。否则调用方在下载结束后调用 release，由实现删除文件。
 type LinkCookies interface {
 	CookieFile(ctx context.Context, link string) (path string, release func(), ok bool, err error)
 }

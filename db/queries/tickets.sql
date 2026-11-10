@@ -1,5 +1,5 @@
 -- name: LockRoomPassword :one
--- FOR SHARE 让修改密码和删除房间等到这次签发提交之后，它们随后删除票据时会删掉这一张。
+-- FOR SHARE 让修改密码和删除房间等到这次签发提交之后才进行。这样两者随后删除票据时，会把这一张也删掉。
 SELECT coalesce(password_hash, '')::text AS password_hash FROM rooms WHERE id = @id FOR SHARE;
 
 -- name: CreateTicket :exec

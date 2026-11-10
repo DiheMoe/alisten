@@ -15,8 +15,8 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
-// 任务载荷是跨版本契约：新版本必须能执行旧版本留下的任务。载荷包含曲目的 Source 和 ID。
-// 适配器之间不能互相 import，internal/adapter/in/worker 按相同的 kind 和字段解码。
+// 任务载荷是跨版本的契约，新版本必须能执行旧版本留下的任务。载荷包含曲目的 Source 和 ID。
+// 适配器之间不能互相 import，所以 internal/adapter/in/worker 要按相同的 kind 和字段解码。
 type prepareArgs struct {
 	Source string `json:"source"`
 	ID     string `json:"id"`
@@ -35,7 +35,7 @@ func (a prepareArgs) InsertOpts() river.InsertOpts {
 	return river.InsertOpts{
 		Queue:       queueOf(track.Source(a.Source)),
 		MaxAttempts: 2,
-		// 去重不包括已完成的任务：曲目表中的结果被清除之后，River 保留的已完成任务不能阻止重新准备。
+		// 去重不包括已完成的任务，因为曲目表里的结果被清除之后，River 保留的已完成任务不能阻止重新准备。
 		UniqueOpts: river.UniqueOpts{
 			ByArgs: true,
 			ByState: []rivertype.JobState{
@@ -46,7 +46,7 @@ func (a prepareArgs) InsertOpts() river.InsertOpts {
 	}
 }
 
-// 链接和 B 站的歌由 worker 准备：只有 worker 的镜像里有 yt-dlp 和 ffmpeg。
+// 链接和 B 站的歌由 worker 准备，因为只有 worker 的镜像里有 yt-dlp 和 ffmpeg。
 func queueOf(source track.Source) string {
 	switch source {
 	case track.Link:
@@ -75,7 +75,7 @@ func (q *Queue) Submit(ctx context.Context, t track.Track) (int64, error) {
 	return res.Job.ID, nil
 }
 
-// 已被 River 清理的任务当作已完成：成功的结果在曲目表中，失败的任务不会再执行。
+// 已被 River 清理的任务当作已完成，因为成功的结果在曲目表里，失败的任务也不会再执行。
 func (q *Queue) Status(ctx context.Context, jobID int64) (port.JobState, string, error) {
 	job, err := q.client.JobGet(ctx, jobID)
 	if errors.Is(err, river.ErrNotFound) {
@@ -95,7 +95,7 @@ func (q *Queue) Status(ctx context.Context, jobID int64) (port.JobState, string,
 	return port.JobPending, "", nil
 }
 
-// River 记录取消的原因时带有 "JobCancelError: " 前缀；internal/adapter/in/worker 以同样的方式提取任务失败的原因。
+// River 记录取消的原因时带有 "JobCancelError: " 前缀。internal/adapter/in/worker 用同样的方式提取任务失败的原因。
 func reason(job *rivertype.JobRow) string {
 	if len(job.Errors) == 0 {
 		return "准备任务失败"

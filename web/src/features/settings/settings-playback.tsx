@@ -18,7 +18,7 @@ function SystemNotificationsRow() {
   const hint = notificationHint(permission)
   const error = refused ? notificationRefusal(permission) : setting.state.error
   const id = 'settings-system-notifications'
-  // 浏览器答复之后“授权”按钮不再显示，焦点要是在它上面就掉到了 body：交给同一行的开关。
+  // 浏览器答复之后“授权”按钮不再显示，焦点如果在这个按钮上，就会掉到 body。这时把焦点交给同一行的开关。
   const authorizeShownRef = useRef(hint.authorize)
   useEffect(() => {
     const shown = authorizeShownRef.current

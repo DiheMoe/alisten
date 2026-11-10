@@ -80,7 +80,7 @@ func TestSavedSnapshotIsRestored(t *testing.T) {
 	addTrack(t, store, netease("1"), meta, playing)
 	addTrack(t, store, link, linkMeta, queued)
 
-	// 准备中的链接曲目也可能带有封面的对象键：例如音频已不在对象存储中、要重新准备的歌。
+	// 准备中的链接曲目也可能带有封面的对象键，比如音频已不在对象存储里、要重新准备的歌。
 	unprepared := track.Track{Source: track.Link, ID: "https://example.com/c.mp3"}
 	saved := room.Snapshot{
 		Info:     room.Info{ID: id, Name: "新名字", Description: "新描述", Kind: room.Persistent},

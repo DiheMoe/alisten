@@ -40,6 +40,6 @@ type RoomDirectory interface {
 	ListRooms(ctx context.Context) ([]RoomRecord, error)
 	// ref 是房间的 UUID 或别名。
 	FindRoom(ctx context.Context, ref string) (RoomRecord, error)
-	// 设置或修改密码时同时删除房间成员的票据，bot 成员的票据（API Key）保留；调用方随后还要让这个房间的在线会话断开。
+	// 设置或修改密码时同时删除房间成员的票据，bot 成员的票据（API Key）保留。调用方随后还要让这个房间的在线会话断开。
 	UpdateRoomAccess(ctx context.Context, id string, c AccessChange) error
 }

@@ -75,7 +75,7 @@ func TestRecordListenKeepsLatestHearingOfEachTrack(t *testing.T) {
 		t.Errorf("bob 的历史 = %#v，期望 %#v", got, want)
 	}
 
-	// 同一首歌再次记录：heard_at 取较晚的，元数据用新的。
+	// 同一首歌再次记录时，heard_at 取较晚的，元数据用新的。
 	renamed := sunnyAt(heard.Add(-time.Hour))
 	renamed.Meta.Title = "晴天（重制）"
 	record(t, store, []string{alice.ID}, renamed)
@@ -167,7 +167,7 @@ func TestRecordListenKeepsLatest500(t *testing.T) {
 	}
 }
 
-// 同时开播的几个房间里有同样的两个成员，各自按不同的顺序给出成员，并发写入都成功，每首歌只留一条。
+// 同时开播的几个房间里有同样的两个成员，各房间给出成员的顺序不同。并发写入都成功，每首歌只留一条。
 func TestConcurrentRecordsOfSameMembers(t *testing.T) {
 	store, _ := newStore(t)
 	alice := createMember(t, store, "alice", "游客-1a2b")
@@ -307,7 +307,7 @@ func TestReplaceSessionKeepsListensWhenRejected(t *testing.T) {
 	}
 }
 
-// 两台设备上的游客同时登录同一个账号，两边听过同一批歌、写入的先后相反：两次合并依次进行，都成功，账号里每首歌只留一条。
+// 两台设备上的游客同时登录同一个账号，两边听过同一批歌，写入的先后相反。两次合并依次进行，都成功，账号里每首歌只留一条。
 func TestConcurrentReplaceSessionsMergeIntoSameAccount(t *testing.T) {
 	store, pool := newStore(t)
 	const songs = 200

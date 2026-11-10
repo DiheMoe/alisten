@@ -29,7 +29,7 @@ export function CreateRoomDialog({ onCreated, onClose }: { onCreated: (id: strin
       saveTicket(id, (await api.createTicket(id, secret)).ticket)
     }
     catch (error) {
-      // 房间已经创建：进入后由加入弹窗重新换取票据，留在此处重试会再创建一个房间。
+      // 房间已经创建，进入后由加入弹窗重新换取票据。留在此处重试的话，会再创建一个房间。
       notificationStore.error(joinErrorMessage(error))
     }
     void roomEntryStore.enter(id)

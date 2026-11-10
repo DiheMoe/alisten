@@ -16,7 +16,7 @@ export class ApiError extends Error {
   }
 }
 
-// 被拒绝的请求不会重发，操作没有生效：调用方的提示应说明是哪项操作。
+// 被拒绝的请求不会重发，操作没有生效，所以调用方的提示要说明是哪项操作。
 export class IdentityRenewedError extends ApiError {
   constructor() {
     super('刚才的操作没有生效，再试一次。', 'UNAUTHORIZED', 401)
@@ -24,7 +24,7 @@ export class IdentityRenewedError extends ApiError {
   }
 }
 
-// rejected：被拒绝的 token 已删除，新身份尚未取回；renewalFailed：新身份没有取回，之后需要成员身份的请求在没有 token 时会先获取一个。
+// rejected 表示被拒绝的 token 已经删除，新身份还没取回。renewalFailed 表示新身份没有取回，之后需要成员身份的请求在没有 token 时会先获取一个。
 export type IdentityEvent
   = | { kind: 'rejected' }
     | { kind: 'renewed', member: Member }
@@ -86,9 +86,9 @@ function isUnauthorized(error: unknown): boolean {
   return error instanceof ApiError && error.code === 'UNAUTHORIZED'
 }
 
-// 被拒绝的请求不重发：它以原来的身份发出，是否以新身份重发应由用户决定。
+// 被拒绝的请求不重发，因为这个请求是以原来的身份发出的，要不要以新身份重发应由用户决定。
 async function send<T>(request: HttpRequest): Promise<T> {
-  // 没有保存的 token 时，请求使用的是刚获取的 token，它被拒绝并不说明原来的身份已经失效。
+  // 没有保存的 token 时，请求用的是刚获取的 token，这个 token 被拒绝并不说明原来的身份已经失效。
   const stored = request.auth === 'member' ? loadMemberToken() : null
   try {
     return await sendOnce<T>(request)
@@ -152,7 +152,7 @@ function memberToken(): Promise<string> {
   return creatingMember
 }
 
-// 同一个 token 只更换一次身份：同时被拒绝的请求共用这一次，更换完成后才到达的拒绝也不再更换。
+// 同一个 token 只更换一次身份。同时被拒绝的请求共用这一次更换，更换完成后才到达的拒绝也不再触发更换。
 let renewal: { rejected: string, done: Promise<void> } | null = null
 
 function renewIdentity(rejected: string): Promise<void> {
@@ -161,7 +161,7 @@ function renewIdentity(rejected: string): Promise<void> {
   return renewal.done
 }
 
-// 更换过程中用 unrenewed 读取成员：新 token 也被拒绝时不再更换，避免循环。
+// 更换过程中用 unrenewed 读取成员，这样新 token 也被拒绝时不会再次更换，避免循环。
 async function replaceIdentity(rejected: string): Promise<void> {
   // 其他标签页可能已经更换了身份，只删除被拒绝的那个 token。票据属于被拒绝的身份，一并删除。
   if (loadMemberToken() === rejected) {
@@ -181,7 +181,7 @@ async function replaceIdentity(rejected: string): Promise<void> {
 }
 
 // 只有本标签页已经用过 token、并且保存的 token 换成了另一个时才算身份变了。
-// 两个标签页同时创建游客时，对方先写入的 token 会被后写入的覆盖，此时本标签页还没有用过 token，或用的就是最终保存的 token，都不触发，避免互相刷新。
+// 两个标签页同时创建游客时，对方先写入的 token 会被后写入的覆盖。这时本标签页要么还没有用过 token，要么用的就是最终保存的 token，两种情况都不触发，避免互相刷新。
 export function followMemberTokenChanges(onChange: () => void): void {
   window.addEventListener('storage', (event) => {
     if (event.key !== memberTokenKey)

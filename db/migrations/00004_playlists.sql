@@ -2,7 +2,7 @@
 CREATE TABLE playlists (
     id uuid PRIMARY KEY DEFAULT uuidv7(),
     owner_id uuid NOT NULL REFERENCES members ON DELETE CASCADE,
-    -- 每个账号恰好一个“我喜欢”：注册时创建，不能改名或删除。
+    -- 每个账号恰好有一个“我喜欢”，在注册时创建，不能改名或删除。
     kind text NOT NULL CHECK (kind IN ('favorites', 'custom')),
     name text NOT NULL,
     -- 新加入的曲目取 item_seq + 1 作为排序值，排在最前。
@@ -15,7 +15,7 @@ CREATE TABLE playlists (
 CREATE INDEX ON playlists (owner_id);
 CREATE UNIQUE INDEX ON playlists (owner_id) WHERE kind = 'favorites';
 
--- 展示用的元数据存一份快照：歌单里的歌不一定准备过，tracks 表里可能没有。
+-- 展示用的元数据存一份快照，因为歌单里的歌不一定准备过，tracks 表里可能没有。
 CREATE TABLE playlist_items (
     playlist_id uuid NOT NULL REFERENCES playlists ON DELETE CASCADE,
     source text NOT NULL,

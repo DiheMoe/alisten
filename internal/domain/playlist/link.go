@@ -8,7 +8,7 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
-// URL 是从文本中取出的链接；短链接要靠它去解析。
+// URL 是从文本中取出的链接。短链接要靠 URL 去解析。
 type Link struct {
 	Source track.Source
 	ID     string

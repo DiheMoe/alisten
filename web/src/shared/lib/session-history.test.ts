@@ -33,7 +33,7 @@ interface HistoryEntry {
   url: string
 }
 
-// 和浏览器一样，后退要到之后的任务才完成：settle() 模拟那一刻的 popstate。
+// 和浏览器一样，back() 要到之后的任务才完成后退。settle() 模拟后退完成时派发的 popstate。
 class FakeHistory {
   entries: HistoryEntry[]
   at = 0

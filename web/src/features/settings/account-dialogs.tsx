@@ -13,7 +13,7 @@ function submitted(event: FormEvent, run: () => Promise<void>): void {
   void run()
 }
 
-// 绑定和解绑 GitHub 都会更换登录方式，先输入当前密码：只凭这台设备上的登录不能更换。onConfirm 返回 false 时，失败原因已经通过通知显示；
+// 绑定和解绑 GitHub 都会更换登录方式，要先输入当前密码，因为只凭这台设备上的登录不能更换。onConfirm 返回 false 时，失败原因已经通过通知显示。
 // 绑定成功时页面随即跳到 GitHub，对话框保持忙碌。
 export function CurrentPasswordDialog({ title, action, onConfirm, onClose }: { title: string, action: string, onConfirm: (currentPassword: string) => Promise<boolean>, onClose: () => void }) {
   const [currentPassword, setCurrentPassword] = useState('')
@@ -57,7 +57,7 @@ export function CredentialsDialog({ mode, onClose }: { mode: 'register' | 'login
       }
     }
     catch (error) {
-      // 用 GitHub 确认身份已经过期：在对话框里重试也没用，关掉它，从按钮重新确认。
+      // 用 GitHub 确认身份已经过期，在对话框里重试也没用，所以关掉对话框，从按钮重新确认。
       if (mode === 'credentials' && error instanceof ApiError && error.code === 'FORBIDDEN') {
         notificationStore.error('用 GitHub 确认身份已经超过 10 分钟，请在“用户名和密码”一行再点一次“设置”。')
         onClose()

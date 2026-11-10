@@ -49,7 +49,7 @@ export function ActionMenu({ actions, menuLabel, align = 'end', className, label
 
   const items = () => [...menuRef.current!.querySelectorAll<HTMLElement>('[role="menuitem"]')]
 
-  // 显示之前量不到菜单的尺寸：先贴着按钮下方对齐，显示之后超出视口再翻到按钮上方、收进视口。
+  // 显示之前量不到菜单的尺寸，所以先贴着按钮下方对齐。显示之后如果超出视口，再翻到按钮上方、收进视口。
   const place = (event: ToggleEvent<HTMLDivElement>) => {
     if (event.newState !== 'open')
       return

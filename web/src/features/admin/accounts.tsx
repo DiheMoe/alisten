@@ -49,7 +49,7 @@ export function Accounts() {
   const [username, setUsername] = useState('')
   const [lookup, setLookup] = useState<Lookup>({ phase: 'idle' })
   const [confirming, setConfirming] = useState(false)
-  // 查找进行中又按了回车时，以最后一次为准：先发出的查找晚回来也不覆盖，结果和输入框里的用户名一致。
+  // 查找进行中又按了回车时，以最后一次为准。先发出的查找晚回来也不会覆盖，这样显示的结果总对应最后一次查找的用户名。
   const generationRef = useRef(0)
   const find = async () => {
     if (username === '')

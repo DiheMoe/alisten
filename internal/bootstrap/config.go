@@ -47,7 +47,7 @@ func loadServeConfig() (serveConfig, error) {
 		return serveConfig{}, err
 	}
 	publicURL := os.Getenv("ALISTEN_PUBLIC_URL")
-	// 示例配置在 ALISTEN_DOMAIN 为空时生成 https://，它与空值一样使用本地默认地址。
+	// 示例配置在 ALISTEN_DOMAIN 为空时会生成 https://，这个值与空值一样使用本地默认地址。
 	if publicURL == "" || publicURL == "https://" {
 		publicURL = "http://localhost:9876"
 	}
@@ -95,13 +95,14 @@ func loadServeConfig() (serveConfig, error) {
 		storage:        objects,
 		storageURL:     storageURL,
 		tracing:        tracing,
-		// 与后台显示给管理员、要他填进 OAuth App 的回调地址相同。
+		// 与后台显示给管理员的回调地址相同，管理员要把这个地址填进 OAuth App。
 		github: github.Config{RedirectURL: origin + api.GitHubCallbackPath, Endpoint: github.GitHubCom},
 	}, nil
 }
 
 // 浏览器发送的 Origin 中，scheme 和主机名都是小写，默认端口省略不写，端口不带前导零，国际化域名写成 punycode，
-// IP 地址写成规范形式。浏览器不会发出的写法在启动时就报错：否则带 Origin 的请求全部被拒绝。
+// IP 地址写成规范形式。publicOrigin 只保留 scheme、主机名和端口，并把大小写和默认端口改成浏览器的写法。
+// 端口、国际化域名或 IP 地址的写法与浏览器不同时，启动时就报错，否则带 Origin 的请求全部被拒绝。
 func publicOrigin(value string) (string, error) {
 	if value == "" {
 		return "", errors.New("缺少 ALISTEN_PUBLIC_URL")
@@ -151,7 +152,7 @@ func canonicalPort(port string) bool {
 
 var numericLabel = regexp.MustCompile(`^(?:[0-9]+|0[xX][0-9a-fA-F]*)$`)
 
-// 方括号中的主机是 IPv6 地址：浏览器把它写成小写并压缩连续的零，不带 zone，IPv4 映射地址也写成十六进制。
+// 方括号中的主机是 IPv6 地址。浏览器把 IPv6 地址写成小写并压缩连续的零，不带 zone，IPv4 映射地址也写成十六进制。
 // 最后一个标签是数字的主机名，浏览器按 IPv4 解析（127.1、0x7f000001、010.0.0.1 都能解析）之后写成点分十进制，
 // 所以只有 netip 接受的写法（四段十进制，没有前导零）才与浏览器发送的一致。其他主机名不是 IP 地址，原样发送。
 func canonicalHost(host string, bracketed bool) bool {
@@ -217,9 +218,9 @@ func checkHTTPURL(name, value string) error {
 	return nil
 }
 
-// 导出器自己读取这两个变量，地址有误时它并不报错（无法解析时只记一条日志，改为发往本机），所以启动时在这里检查格式。
-// 设置了其中任何一个就导出。OTEL_EXPORTER_OTLP_ENDPOINT 是基地址，导出器在它的路径后加上 /v1/traces；
-// OTEL_EXPORTER_OTLP_TRACES_ENDPOINT 是完整的地址，优先于前者。
+// 导出器自己读取这两个变量，地址有误时导出器并不报错（无法解析时只记一条日志，改为发往本机），所以启动时在这里检查格式。
+// 设置了其中任何一个就导出。OTEL_EXPORTER_OTLP_ENDPOINT 是基地址，导出器在它的路径后加上 /v1/traces。
+// OTEL_EXPORTER_OTLP_TRACES_ENDPOINT 是完整的地址，优先于 OTEL_EXPORTER_OTLP_ENDPOINT。
 func loadTracing() (bool, error) {
 	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	tracesEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")

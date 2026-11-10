@@ -34,7 +34,7 @@ class FakeSocket extends EventTarget {
     this.sent.push(JSON.parse(message) as Sent)
   }
 
-  // 和浏览器一样，close 事件要到之后的任务才派发，这里不派发：测试用 lose() 模拟它。
+  // 浏览器要到之后的任务才派发 close 事件，所以 close() 不派发。测试用 lose() 模拟这个 close 事件。
   close(): void {
     this.readyState = FakeSocket.CLOSED
   }

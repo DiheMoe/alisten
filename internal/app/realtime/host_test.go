@@ -66,7 +66,7 @@ type songs struct {
 	preparer *porttest.Preparer
 }
 
-// 只有网关点歌（Resolve）要按房间预扣点歌额度，用到房间目录和额度；不点歌的测试用 newSongs。
+// 只有网关点歌（Resolve）要按房间预扣点歌额度，所以要用到房间目录和额度。不点歌的测试用 newSongs。
 func newSongs() *songs {
 	return newPickingSongs(nil, nil)
 }
@@ -225,7 +225,7 @@ func TestEffectsRunInOrder(t *testing.T) {
 
 		f.send(t, id, room.Join{Session: "s1", Member: alice})
 		f.send(t, id, command("r1", alice, room.Enqueue{Track: sunny, Meta: sunnyM}))
-		// 准备的结果在下一批处理：点歌的回复先到，开播在后。
+		// 准备的结果在下一批处理，所以点歌的回复先到，开播在后。
 		checkMessages(t, f.spy.take(),
 			"started 1",
 			"1/1 room.MembersChanged",
@@ -411,7 +411,7 @@ func TestListenFailureKeepsRoomRunning(t *testing.T) {
 	})
 }
 
-// 每次 Restore 的 token 都从 1 开始：放弃房间时如果不停下计时器，它会提前关闭重新接管后的房间。
+// 每次 Restore 的 token 都从 1 开始。放弃房间时如果不停下计时器，旧计时器会提前关闭重新接管后的房间。
 func TestTimersOfAbandonedRoomAreDiscarded(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := &failingStore{Store: porttest.New()}
@@ -439,7 +439,7 @@ func TestTimersOfAbandonedRoomAreDiscarded(t *testing.T) {
 	})
 }
 
-// Prepare 不理会 ctx：检验的是宿主自己丢弃旧运行的结果，而不是靠端口的实现按 ctx 提前返回。
+// Prepare 不理会 ctx，因为要检验的是宿主自己丢弃旧运行的结果，而不是靠端口的实现按 ctx 提前返回。
 type gatedPreparer struct {
 	calls        atomic.Int32
 	stale, fresh chan struct{}
@@ -739,7 +739,7 @@ func TestLostLeaseStopsRoomImmediately(t *testing.T) {
 		f.send(t, id, room.Join{Session: "s1", Member: alice})
 		f.spy.take()
 
-		// 落盘卡住时租约丢失：落盘返回之后，本批剩下的事件和回复都不再发出。
+		// 落盘卡住时租约丢失，所以落盘返回之后，本批剩下的事件和回复都不再发出。
 		hold := make(chan struct{})
 		store.setHold(hold)
 		go func() {
@@ -1048,7 +1048,7 @@ func TestForwardedRequestsExpireWhileQueued(t *testing.T) {
 			f.host.deliver(context.Background(), port.RoomInput{Room: id, Gateway: "b", Input: in, Takeover: true})
 		}
 
-		// r1 卡在落盘。r2 在期限到达时被拒绝，r3 也一样：它同样是 10 秒之前到达的，轮到它时期限已经过了。
+		// r1 卡在落盘。r2 在期限到达时被拒绝，r3 也一样，因为 r3 同样是 10 秒之前到达的，轮到它时期限已经过了。
 		time.Sleep(ownerReplyTimeout)
 		synctest.Wait()
 		checkMessages(t, f.spy.take(), "started 1", "rejected b/r2", "rejected b/r3")
@@ -1059,7 +1059,7 @@ func TestForwardedRequestsExpireWhileQueued(t *testing.T) {
 	})
 }
 
-// send 的两个 select 在多个分支同时就绪时随机选择一个，所以要多试几次：漏掉 ctx 检查时，几乎必然有一次会把输入交出去。
+// send 的两个 select 在多个分支同时就绪时随机选择一个，所以要多试几次。漏掉 ctx 检查时，几乎必然有一次会把输入交出去。
 func TestSendIgnoresInputOfFinishedCaller(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()

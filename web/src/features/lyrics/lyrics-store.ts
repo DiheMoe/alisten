@@ -23,7 +23,7 @@ class LyricsStore extends Store<{ lines: LyricLine[], index: number }> {
       return
     this.#track = track
     const lines = nowPlaying ? buildLines(nowPlaying.lyric, nowPlaying.lyricWords, nowPlaying.lyricTrans) : []
-    // 换歌时新歌尚未开始播放，播放器给出的仍是上一首的位置：先按歌曲开头计算，开始播放后再由每帧的位置更新。
+    // 换歌时新歌还没开始播放，播放器给出的仍是上一首的位置。所以先按歌曲开头计算，开始播放后再由每帧的位置更新。
     this.setState({ lines, index: lineIndexAt(lines, 0) })
   }
 

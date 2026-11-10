@@ -72,7 +72,7 @@ const keys = (store: MediaStore) => store.state.list?.items.map(item => item.key
 const selected = (store: MediaStore) => [...store.state.selected].sort()
 const messages = () => notificationStore.state.notifications.map(n => n.message)
 
-// 等作废的读取走完：它不改变任何状态，没有可以等待的信号。
+// 等作废的读取走完。作废的读取不改变任何状态，所以没有可以等待的信号。
 const drain = () => new Promise(resolve => setTimeout(resolve, 20))
 
 function releaseAll(): void {

@@ -4,7 +4,7 @@ import { EmptyState } from '@/shared/ui'
 
 interface ErrorBoundaryProps {
   children: ReactNode
-  // fallback 为函数时，须把 retryButton 挂到"重试"按钮上：出错时若焦点在区域内，边界通过它把焦点移到按钮上。
+  // fallback 为函数时，要把 retryButton 挂到"重试"按钮上。出错时如果焦点在区域内，边界要通过 retryButton 把焦点移到按钮上。
   fallback?: ReactNode | ((retry: () => void, retryButton: RefObject<HTMLButtonElement | null>) => ReactNode)
   resetOn?: EventTarget
   // 只在值变化时重试一次。resetOn 在 Store 每次变化时都会重试，Store 变化频繁时，持续出错的区域会反复失败。
@@ -14,7 +14,7 @@ interface ErrorBoundaryProps {
   announce?: string
 }
 
-// 出错状态保存在实例上。主内容和面板内容的边界位于以页面或视图为 key 的元素内，切换时随之重新挂载，出错状态即被清除。
+// 出错状态保存在实例上。主内容和面板内容的边界放在以页面或视图为 key 的元素里，切换页面或视图时边界会重新挂载，出错状态也就清除了。
 export class ErrorBoundary extends Component<ErrorBoundaryProps, { failed: boolean }, Element | null> {
   state = { failed: false }
   retryButton = createRef<HTMLButtonElement>()
@@ -28,7 +28,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, { failed: boole
     this.props.resetOn?.addEventListener('change', this.reset)
   }
 
-  // 出错的内容卸载时，其中的焦点会落到 body 上：卸载前先记下当前焦点。
+  // 出错的内容卸载时，其中的焦点会落到 body 上，所以卸载前先记下当前焦点。
   getSnapshotBeforeUpdate() {
     return document.activeElement
   }

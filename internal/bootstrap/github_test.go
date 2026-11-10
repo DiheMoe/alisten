@@ -18,9 +18,9 @@ import (
 	"github.com/dihemoe/alisten/internal/adapter/out/github"
 )
 
-// 假的 GitHub：有 client-1 和 client-2 两个 OAuth App，Client Secret 分别是 secret-1 和 secret-2。用户在授权页同意时签发的授权码
-// code-<n> 绑定授权地址中的 client_id 和 code_challenge，换取令牌时 client_id 和 code_verifier 必须与它们对上；授权码换到令牌
-// token-<n>，令牌 token-<n> 是用户 n。
+// 假的 GitHub 有 client-1 和 client-2 两个 OAuth App，Client Secret 分别是 secret-1 和 secret-2。用户在授权页同意时签发授权码
+// code-<n>，授权码绑定授权地址中的 client_id 和 code_challenge，换取令牌时的 client_id 和 code_verifier 必须和绑定的值对上。
+// 授权码 code-<n> 换到令牌 token-<n>，令牌 token-<n> 是用户 n。
 type fakeGitHub struct {
 	t        *testing.T
 	endpoint github.Endpoint
@@ -77,7 +77,7 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 	return f
 }
 
-// 模拟用户在授权页同意授权地址的参数为 authorize 的这次授权，GitHub 签发授权码 code。
+// 模拟用户在授权页同意一次授权，GitHub 签发授权码 code。authorize 是这次授权的授权地址的参数。
 func (f *fakeGitHub) approve(authorize url.Values, code string) {
 	f.t.Helper()
 	if authorize.Get("code_challenge_method") != "S256" || authorize.Get("code_challenge") == "" {
@@ -164,7 +164,7 @@ func (c githubClient) configure(clientID string) {
 	}
 }
 
-// 回调地址的查询串里有授权码和 state，Client Secret 在换取令牌的请求体和后台的请求体里：它们都不能出现在 span 和日志中。
+// 回调地址的查询串里有授权码和 state，换取令牌的请求体和后台的请求体里有 Client Secret。授权码、state 和 Client Secret 都不能出现在 span 和日志中。
 func checkNoGitHubSecrets(t *testing.T, svc service, values ...string) {
 	t.Helper()
 	values = append(values, "secret-1", "secret-2")
@@ -252,7 +252,7 @@ func TestGitHubLogin(t *testing.T) {
 		t.Errorf("配置了 GitHub 时站点 = %d %v，期望 githubLogin 为 true", status, body)
 	}
 
-	// 首次用 GitHub 登录就是注册：成员和成员 token 都不变。
+	// 首次用 GitHub 登录就是注册，成员和成员 token 都不变。
 	alice := c.guest()
 	status, body := c.finish(alice, c.exchangeCode(alice, "login", nonce, "", "code-42"), nonce)
 	if status != http.StatusOK || body["memberToken"] != nil || !equalJSON(body["account"], `{"github":true}`) {
@@ -263,7 +263,7 @@ func TestGitHubLogin(t *testing.T) {
 		t.Errorf("注册之后 /api/me = %d %v", status, body)
 	}
 
-	// 另一台设备用同一个 GitHub 登录：得到账号的新 token，游客的 token 随即失效。
+	// 另一台设备用同一个 GitHub 登录，得到账号的新 token，游客的 token 随即失效。
 	bob := c.guest()
 	status, body = c.finish(bob, c.exchangeCode(bob, "login", nonce, "", "code-42"), nonce)
 	if status != http.StatusOK || body["memberToken"] == nil || body["member"].(map[string]any)["id"] != aliceID {
@@ -292,7 +292,7 @@ func TestGitHubLogin(t *testing.T) {
 		t.Errorf("state 已经作废时用户在 GitHub 上取消 = %q", got)
 	}
 
-	// 授权码只能配合发起那次授权时的 verifier 换取令牌：把别人的授权码放进自己发起的回调里，换不到别人的身份。
+	// 授权码只能配合发起那次授权时的 verifier 换取令牌。所以把别人的授权码放进自己发起的回调里，换不到别人的身份。
 	c.github.approve(c.authorize(carol, "login", nonce, ""), "code-7")
 	mallory := c.guest()
 	attack := c.authorize(mallory, "login", nonce, "").Get("state")
@@ -304,7 +304,7 @@ func TestGitHubLogin(t *testing.T) {
 	}
 	checkNoGitHubSecrets(t, svc, attack, "code-7")
 
-	// 没有密码的账号不能解绑；用 GitHub 确认身份、设置用户名和密码之后可以。
+	// 没有密码的账号不能解绑。用 GitHub 确认身份、设置用户名和密码之后就可以解绑。
 	if status, body := c.call(http.MethodPost, "/api/account/github/removals", alice, `{"currentPassword":"correct horse"}`); status != http.StatusConflict {
 		t.Errorf("没有密码的账号解绑 = %d %v，期望 409", status, body)
 	}
@@ -318,7 +318,7 @@ func TestGitHubLogin(t *testing.T) {
 		t.Errorf("设置密码之后解绑 = %d，期望 204", status)
 	}
 
-	// 已注册的账号绑定 GitHub；关闭注册不影响绑定，但没有绑定过的 GitHub 不能再注册。
+	// 已注册的账号绑定 GitHub。关闭注册不影响绑定，但没有绑定过的 GitHub 不能再注册。
 	if status, _ := c.call(http.MethodDelete, "/api/admin/registration", "admin-secret", ""); status != http.StatusNoContent {
 		t.Fatalf("关闭注册 = %d", status)
 	}
@@ -333,7 +333,7 @@ func TestGitHubLogin(t *testing.T) {
 	}
 }
 
-// App 发起授权时带上 client app，回调跳回 App 的自定义 scheme。跳转目标只看发起授权时记下的 client，回调地址里的参数改变不了它。
+// App 发起授权时带上 client app，回调跳回 App 的自定义 scheme。跳转目标只看发起授权时记下的 client，回调地址里的参数改变不了跳转目标。
 func TestGitHubAppCallback(t *testing.T) {
 	newDatabase, newRedis := startPostgres(t), startValkey(t)
 	contractEnv(t, newDatabase(t), newRedis(t))
@@ -367,7 +367,7 @@ func TestGitHubAppCallback(t *testing.T) {
 		t.Errorf("App 兑换 = %d %v，期望注册成只绑定了 GitHub 的账号", status, body)
 	}
 
-	// 用户在 GitHub 上拒绝时也跳回 App，state 随即作废；作废之后再回调就跳到网页。
+	// 用户在 GitHub 上拒绝时也跳回 App，state 随即作废。作废之后再回调就跳到网页。
 	bob := c.guest()
 	state := c.start(bob, app).Get("state")
 	if got := c.callback(url.Values{"error": {"access_denied"}, "state": {state}}.Encode()); got != landing+"error=denied" {
@@ -413,7 +413,7 @@ func TestGitHubAppCallback(t *testing.T) {
 	}
 }
 
-// 只凭会话不能更换登录凭证：绑定和解绑 GitHub 要输入当前密码；只绑定了 GitHub 的账号补设用户名和密码之前，要用账号绑定的
+// 只凭会话不能更换登录凭证。绑定和解绑 GitHub 要输入当前密码。只绑定了 GitHub 的账号补设用户名和密码之前，要用账号绑定的
 // GitHub 确认身份，补设之后其他设备全部退出。
 func TestGitHubReauthentication(t *testing.T) {
 	newDatabase, newRedis := startPostgres(t), startValkey(t)
@@ -501,8 +501,8 @@ func TestGitHubReauthentication(t *testing.T) {
 	}
 }
 
-// 每次授权和兑换都读后台最新的配置，所有实例立即生效。授权进行中换了 OAuth App，GitHub 不认原来签发的授权码，回调失败；
-// 关闭之后，GitHub 相关的接口返回 NOT_FOUND，回调跳到发起授权的客户端，带上 error=failed。
+// 每次授权和兑换都读后台最新的配置，所有实例立即生效。授权进行中换了 OAuth App，GitHub 不认原来签发的授权码，回调失败。
+// 关闭 GitHub 登录之后，GitHub 相关的接口返回 NOT_FOUND，回调跳到发起授权的客户端，带上 error=failed。
 func TestGitHubOAuthAppChanges(t *testing.T) {
 	newDatabase, newRedis := startPostgres(t), startValkey(t)
 	contractEnv(t, newDatabase(t), newRedis(t))

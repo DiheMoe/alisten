@@ -110,7 +110,7 @@ export function ChatPanel({ compact = false, onClose }: { compact?: boolean, onC
     setSending(true)
     try {
       await chatStore.send(content)
-      // 请求期间输入框仍可编辑：只去掉已发出的部分，期间继续输入的内容要保留。
+      // 请求期间输入框仍可编辑，所以只去掉已发出的部分，期间继续输入的内容要保留。
       setDraft(current => current.startsWith(draft) ? current.slice(draft.length) : current)
       scrollToBottom()
     }

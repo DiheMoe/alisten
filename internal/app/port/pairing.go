@@ -6,13 +6,13 @@ import (
 	"time"
 )
 
-// 配对码、GitHub 登录的 state 和兑换码都只能用一次：取出即删除，到期自动失效。
+// 配对码、GitHub 登录的 state 和兑换码都只能用一次，取出即删除，到期自动失效。
 var ErrCodeNotFound = errors.New("不存在或已经过期")
 
-// 已注册成员生成的配对码：新设备兑换之后登录这个账号。
+// 已注册成员生成的配对码。新设备兑换配对码之后就登录了这个账号。
 type Pairing struct {
 	MemberID string
-	// 生成配对码的会话：它被删除之后（退出登录、修改或重置密码），配对码随之作废。
+	// 生成配对码的会话。这个会话被删除之后（退出登录、修改或重置密码），配对码随之作废。
 	SessionTokenHash []byte
 }
 

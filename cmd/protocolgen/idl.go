@@ -150,7 +150,7 @@ func parseIDL(data []byte) (*idl, error) {
 	return &d, nil
 }
 
-// encoding/json 对重复的键只保留最后一个值，并把显式的 null 解码为 nil，而之后的检查和生成都假定节点存在，所以解码之前先拒绝这两种写法。
+// encoding/json 对重复的键只保留最后一个值，还会把显式的 null 解码为 nil。之后的检查和生成都假定节点存在，所以解码之前先拒绝重复的键和显式的 null。
 // encoding/json 匹配结构体字段时不区分大小写，会把 "MAXLENGTH" 当作 maxLength，所以关键字只接受规范的写法。
 func checkJSON(dec *json.Decoder, where string, named bool) error {
 	tok, err := dec.Token()
@@ -193,7 +193,7 @@ func checkJSON(dec *json.Decoder, where string, named bool) error {
 	return nil
 }
 
-// 值为对象、键由 IDL 作者命名的字段（类型名、属性名、状态码）。新增这类字段时要加入这个列表，否则与关键字只有大小写不同的名字会被拒绝。
+// 列表中字段的值都是对象，对象的键由 IDL 作者命名（类型名、属性名、错误码）。新增这类字段时要加入这个列表，否则与关键字只有大小写不同的名字会被拒绝。
 var nameKeyed = []string{"$defs", "properties", "x-httpStatus"}
 
 var idlKeywords = jsonNames(idl{}, wsSection{}, message{}, event{}, endpoint{}, httpBinding{}, closeCode{}, schema{})
@@ -255,7 +255,7 @@ func pathParams(path string) []string {
 	return params
 }
 
-// 生成的 TypeScript client 中，路径参数与这些名字是同一个函数中的标识符，不能重名。
+// 在生成的 TypeScript client 中，路径参数和列表中的名字是同一个函数里的标识符，所以不能重名。
 var tsClientNames = []string{"body", "send", "encodeURIComponent"}
 
 var tsFixedNames = []string{
@@ -465,7 +465,7 @@ func (d *idl) checkField(where string, s *schema, required, inbound bool) error 
 	}
 }
 
-// 请求中的数组元素只能引用对象或枚举类型，解码函数按类型名生成。
+// 请求中的数组元素只能引用对象或枚举类型，因为解码函数按类型名生成。
 func (d *idl) checkInboundArray(where string, s *schema) error {
 	if s.Items.Ref == "" || d.Defs[refName(s.Items.Ref)] != nil && d.Defs[refName(s.Items.Ref)].scalar() {
 		return fmt.Errorf("%s：请求中的数组元素只能引用对象或枚举类型", where)
@@ -561,7 +561,7 @@ func (d *idl) resolve(where, ref string) (*schema, error) {
 	return d.Defs[name], nil
 }
 
-// 分支的 properties 中不在 required 里的字段是各分支共用的可选字段：每个分支都要列出同样的一组，解码时不参与匹配分支。
+// 分支的 properties 里不在 required 中的字段，是各分支共用的可选字段。每个分支都要列出同样的一组可选字段，解码时它们不参与匹配分支。
 func checkAlternatives(where string, s *schema) error {
 	if len(s.OneOf) < 2 {
 		return fmt.Errorf("%s：oneOf 至少要有两个分支", where)
@@ -723,7 +723,7 @@ type endpointNames struct {
 }
 
 func (n endpointNames) addRoute(where string, b httpBinding, owner string) error {
-	// 路径参数的名字不影响路由：ServeMux 登记两条这样的路由会 panic，OpenAPI 也把它们视为同一个 path。
+	// 路径参数的名字不影响路由。两条路由如果只有参数名不同，ServeMux 登记时会 panic，OpenAPI 也把它们视为同一个 path。
 	shape := pathParamPattern.ReplaceAllString(b.Path, "{}")
 	route := b.Method + " " + shape
 	if first, ok := n.routes[route]; ok {

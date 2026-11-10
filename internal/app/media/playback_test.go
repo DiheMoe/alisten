@@ -35,7 +35,7 @@ func (p *playURLs) PlayURL(ctx context.Context, id string) (string, error) {
 	if _, ok := ctx.Deadline(); !ok {
 		return "", errors.New("解析没有期限")
 	}
-	// 像真实的音源那样：请求的 ctx 结束了，解析就失败。
+	// 像真实的音源那样，请求的 ctx 结束了，解析就失败。
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}

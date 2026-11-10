@@ -25,8 +25,8 @@ const (
 	prepareQueue   = "prepare"
 	prepareWorkers = 4
 	prepareTimeout = 15 * time.Minute
-	// 进程崩溃后停留在 running 状态的任务，最多这么久之后由 River 重新调度；River 默认至少要等 1 小时，
-	// 期间这首歌一直处于准备中。
+	// 进程崩溃后停留在 running 状态的任务，最多过这么久就由 River 重新调度。River 默认至少要等 1 小时，
+	// 这期间这首歌一直处于准备中。
 	rescueStuckJobs = 20 * time.Minute
 )
 
@@ -37,7 +37,7 @@ const (
 	mediaWorkers  = 1
 )
 
-// 适配器之间不能互相 import，internal/adapter/out/queue 按同样的 kind 和字段提交任务。
+// 适配器之间不能互相 import，所以 internal/adapter/out/queue 要按同样的 kind 和字段提交任务。
 type prepareArgs struct {
 	Source string `json:"source"`
 	ID     string `json:"id"`
@@ -81,7 +81,7 @@ func newClient(pool *pgxpool.Pool, queues map[string]river.QueueConfig, run func
 		Workers:              workers,
 		JobTimeout:           prepareTimeout,
 		RescueStuckJobsAfter: rescueStuckJobs,
-		// 任务在单独的 trace 中执行，只链接到提交它的 span：任务可能很久之后才执行，失败后还会重试，同一首歌的任务也由所有等待它的房间共用。
+		// 任务在单独的 trace 里执行，只链接到提交任务的 span，因为任务可能很久之后才执行，失败后还会重试，同一首歌的任务也由所有等待这首歌的房间共用。
 		Plugins: []rivertype.Plugin{otelriver.NewMiddleware(&otelriver.MiddlewareConfig{TracerProvider: tracer, EnableTracePropagation: true})},
 		// River 在 info 级别记录每次启停和每个出错的任务，出错的任务由 Watch 记录。
 		// 放进 river 分组，River 自己的属性（如 job_id）才不会与日志的关联字段重名。
@@ -136,7 +136,7 @@ func Watch(client *river.Client[pgx.Tx], finished func(port.PrepareOutcome), obs
 	}
 }
 
-// River 记录取消的原因时带有 "JobCancelError: " 前缀；internal/adapter/out/queue 以同样的方式提取任务失败的原因。
+// River 记录取消的原因时带有 "JobCancelError: " 前缀。internal/adapter/out/queue 用同样的方式提取任务失败的原因。
 func reason(job *rivertype.JobRow) string {
 	if len(job.Errors) == 0 {
 		return "准备任务失败"

@@ -27,7 +27,7 @@ func (l *Library) List(ctx context.Context, q port.MediaQuery) (port.MediaPage, 
 	return l.media.ListStoredMedia(ctx, q)
 }
 
-// 逐个删除：正在房间里使用的放进 inUse，不存在的忽略，其他错误立即返回，已经删掉的不会恢复。
+// 逐个删除。正在房间里使用的放进 inUse，不存在的忽略。遇到其他错误立即返回，已经删掉的不会恢复。
 func (l *Library) DeleteMany(ctx context.Context, keys []string) (deleted, inUse []string, err error) {
 	for _, key := range keys {
 		switch err := l.Delete(ctx, key); {
@@ -42,7 +42,7 @@ func (l *Library) DeleteMany(ctx context.Context, keys []string) (deleted, inUse
 	return deleted, inUse, nil
 }
 
-// 先删除对象，再清除准备结果：中途失败时准备结果还在，后台仍能看到这首歌并重试；
+// 先删除对象，再清除准备结果。这样中途失败时准备结果还在，后台仍能看到这首歌并重试。
 // 音频已经不在的准备结果也不会被使用。
 func (l *Library) Delete(ctx context.Context, key string) error {
 	m, ok, err := l.media.StoredMedia(ctx, key)

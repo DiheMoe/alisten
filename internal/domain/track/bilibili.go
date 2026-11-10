@@ -5,7 +5,7 @@ import (
 	"strconv"
 )
 
-// 同一个视频只能有一种 ID，否则会重复下载：第 1 P 不带序号，序号不带前导零。
+// 同一个视频只能有一种 ID，否则会重复下载。所以第 1 P 不带序号，序号也不带前导零。
 var bilibiliID = regexp.MustCompile(`^(BV[1-9A-HJ-NP-Za-km-z]{10})(?:/([2-9]|[1-9][0-9]{1,3}))?$`)
 
 func BilibiliID(bvid string, page int) string {

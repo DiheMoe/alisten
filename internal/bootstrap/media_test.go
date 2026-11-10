@@ -107,7 +107,7 @@ func TestRestoredLinksNeedTheirAudio(t *testing.T) {
 	t.Cleanup(pool.Close)
 	rooms := postgres.New(pool)
 
-	// 上一个 owner 已经把房间落盘：等待队列中有两个已就绪的链接曲目，只有第二个的音频还在对象存储中。
+	// 上一个 owner 已经把房间落盘。等待队列中有两个已就绪的链接曲目，只有第二个的音频还在对象存储中。
 	hall, err := rooms.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅"})
 	if err != nil {
 		t.Fatal(err)
@@ -158,7 +158,7 @@ func TestRestoredLinksNeedTheirAudio(t *testing.T) {
 	}
 }
 
-// 准备好的链接曲目进了歌单之后，三处封面地址都由对象存储的公开地址和封面的对象键拼出；换一种大小写写法也能找到它。
+// 准备好的链接曲目进了歌单之后，三处封面地址都由对象存储的公开地址和封面的对象键拼出。换一种大小写写法也能找到这首曲目。
 func TestPlaylistLinkTracks(t *testing.T) {
 	contractEnv(t, startPostgres(t)(t), startValkey(t)(t))
 	svc := startService(t)
@@ -253,7 +253,7 @@ func TestPlaylistLinkTracks(t *testing.T) {
 	}
 }
 
-// 翻过最后一页时总数照常；批量删除时，正在房间里播放的歌不删，不存在的忽略，其余的连同音频一起删掉。
+// 翻过最后一页时总数照常。批量删除时，正在房间里播放的歌不删，不存在的忽略，其余的连同音频一起删掉。
 func TestAdminMediaPagesAndRemovals(t *testing.T) {
 	contractEnv(t, startPostgres(t)(t), startValkey(t)(t))
 	svc := startService(t)

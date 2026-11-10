@@ -5,7 +5,7 @@
         "additionalProperties": false,
         "properties": {
           "key": {
-            "description": "常驻房间的 API Key，只在生成或重置时返回这一次：bot 用 Authorization: Bearer <Key> 调用 /api/room 下的接口",
+            "description": "常驻房间的 API Key，只在生成或重置时返回这一次。bot 用 Authorization: Bearer <Key> 调用 /api/room 下的接口",
             "type": "string"
           }
         },
@@ -212,7 +212,7 @@
             "description": "没有配置时为 null"
           },
           "clientSecretSet": {
-            "description": "是否保存了 Client Secret；它与 Client ID 一起保存、一起清除",
+            "description": "是否保存了 Client Secret。Client Secret 与 Client ID 一起保存、一起清除",
             "type": "boolean"
           }
         },
@@ -275,7 +275,7 @@
         "additionalProperties": false,
         "properties": {
           "createdAtMs": {
-            "description": "Key 的生成时间；还没有 Key 时为 0",
+            "description": "Key 的生成时间，还没有 Key 时为 0",
             "type": "integer"
           },
           "set": {
@@ -297,7 +297,7 @@
             "type": "boolean"
           },
           "updatedAtMs": {
-            "description": "最近一次填写的时间；未设置时为 0",
+            "description": "最近一次填写的时间，未设置时为 0",
             "type": "integer"
           }
         },
@@ -316,7 +316,7 @@
             "type": "integer"
           },
           "q": {
-            "description": "按标题搜索：标题包含它就算匹配，不区分大小写，% 和 _ 按字面匹配；缺省或为空时不搜索",
+            "description": "按标题搜索：标题包含 q 就算匹配，不区分大小写，% 和 _ 按字面匹配。缺省或为空时不搜索",
             "maxLength": 100,
             "type": "string"
           },
@@ -928,7 +928,7 @@
             "type": "string"
           },
           "githubLogin": {
-            "description": "后台配置了 GitHub OAuth App；为 false 时 GitHub 相关的接口返回 NOT_FOUND",
+            "description": "后台是否配置了 GitHub OAuth App。为 false 时，GitHub 相关的接口返回 NOT_FOUND",
             "type": "boolean"
           },
           "registrationOpen": {
@@ -943,7 +943,7 @@
         "type": "object"
       },
       "GitHubClient": {
-        "description": "发起 GitHub 授权的客户端，决定授权结束之后跳到哪里。web：网页的 /auth/github；app：App 用系统浏览器授权，授权结束之后跳到 moe.dihe.alisten:/auth/github，回到 App",
+        "description": "发起 GitHub 授权的客户端，决定授权结束之后跳到哪里。web：跳到网页的 /auth/github。app：App 用系统浏览器授权，授权结束之后跳到 moe.dihe.alisten:/auth/github，回到 App",
         "enum": [
           "web",
           "app"
@@ -951,7 +951,7 @@
         "type": "string"
       },
       "GitHubIntent": {
-        "description": "login：游客用 GitHub 登录，GitHub 账号没有绑定过时就是注册；bind：已注册的账号绑定 GitHub；verify：只绑定了 GitHub 的账号补设用户名和密码之前，用绑定的 GitHub 确认身份",
+        "description": "login：游客用 GitHub 登录，GitHub 账号没有绑定过时就是注册。bind：已注册的账号绑定 GitHub。verify：只绑定了 GitHub 的账号补设用户名和密码之前，用绑定的 GitHub 确认身份",
         "enum": [
           "login",
           "bind",
@@ -1166,7 +1166,7 @@
         "additionalProperties": false,
         "properties": {
           "device": {
-            "description": "本机此前登录这个账号时拿到的凭证：有人反复猜这个账号的密码时，带上它本机仍然能登录",
+            "description": "本机此前登录这个账号时拿到的凭证。有人反复猜这个账号的密码时，本机带上这个凭证仍然能登录",
             "pattern": "^[A-Za-z0-9_-]{43}$",
             "type": "string"
           },
@@ -1195,7 +1195,7 @@
             "$ref": "#/components/schemas/Account"
           },
           "device": {
-            "description": "本机以后登录这个账号时要带上的凭证，退出登录之后也要保留：带来的凭证有效时原样返回，否则是新签发的",
+            "description": "本机以后登录这个账号时要带上的凭证，退出登录之后也要保留。带来的凭证有效时原样返回，否则返回新签发的凭证",
             "pattern": "^[A-Za-z0-9_-]{43}$",
             "type": "string"
           },
@@ -1215,7 +1215,7 @@
         "type": "object"
       },
       "MediaSort": {
-        "description": "stored：存储时间从新到旧；idle：最近播放从早到晚，从没播放过的排最前；size：占用从大到小。三种排序都以曲目 ID 作为最后的排序键，翻页时不重复也不遗漏",
+        "description": "stored：存储时间从新到旧。idle：最近播放从早到晚，从没播放过的排最前。size：占用从大到小。三种排序都以曲目 ID 作为最后的排序键，所以翻页时不重复也不遗漏",
         "enum": [
           "stored",
           "idle",
@@ -1318,7 +1318,7 @@
                 "type": "null"
               }
             ],
-            "description": "歌单里排在最前、有封面的那首歌的封面；没有时为 null"
+            "description": "歌单里排在最前、有封面的那首歌的封面。歌单里没有带封面的歌时为 null"
           },
           "createdAtMs": {
             "type": "integer"
@@ -1342,7 +1342,7 @@
                 "type": "null"
               }
             ],
-            "description": "分享链接 /s/<shareId> 中的 ID；没有分享时为 null"
+            "description": "分享链接 /s/<shareId> 中的 ID，没有分享时为 null"
           },
           "trackCount": {
             "type": "integer"
@@ -1527,7 +1527,7 @@
             "type": "integer"
           },
           "key": {
-            "description": "查询扫码结果时原样带上，只放在请求体中：有效期内它相当于这次登录的凭证",
+            "description": "查询扫码结果时原样带上。有效期内 key 相当于这次登录的凭证，所以只放在请求体中",
             "type": "string"
           },
           "qrImage": {
@@ -2016,7 +2016,7 @@
             "type": "boolean"
           },
           "items": {
-            "description": "新加入的在前",
+            "description": "顺序与所有者在 listMyPlaylistItems 里看到的相同",
             "items": {
               "$ref": "#/components/schemas/MyPlaylistItem"
             },
@@ -2071,7 +2071,7 @@
             "description": "账号昵称，未知时为 null"
           },
           "verified": {
-            "description": "是否由上游实时查询确认；仅从本地凭据识别时为 false",
+            "description": "是否由上游实时查询确认，仅从本地凭据识别时为 false",
             "type": "boolean"
           },
           "vip": {
@@ -2099,7 +2099,7 @@
         "properties": {
           "client": {
             "$ref": "#/components/schemas/GitHubClient",
-            "description": "App 发起授权时填 app，让授权结束之后跳回 App；省略时为 web"
+            "description": "App 发起授权时填 app，让授权结束之后跳回 App。省略时为 web"
           },
           "currentPassword": {
             "description": "当前密码，bind 时必须带上，其他意图忽略",
@@ -2146,7 +2146,7 @@
             "type": "string"
           },
           "key": {
-            "description": "曲目 ID 的 SHA-256（十六进制），用于删除；链接曲目的 ID 是规范化之后的链接",
+            "description": "曲目 ID 的 SHA-256（十六进制），用于删除。链接曲目的 ID 是规范化之后的链接",
             "type": "string"
           },
           "lastPlayedAtMs": {
@@ -2253,7 +2253,7 @@
         ],
         "properties": {
           "id": {
-            "description": "来源为 link 时是链接，响应和事件中是规范化之后的链接（scheme 和主机名转成小写）；来源为 bilibili 时是 BV 号，或从第 2 P 起的 BV 号/分P序号",
+            "description": "来源为 link 时是链接，响应和事件中是规范化之后的链接（scheme 和主机名转成小写）。来源为 bilibili 时，第 1 P 是 BV 号，从第 2 P 起是 BV 号/分P序号",
             "type": "string"
           },
           "source": {
@@ -2378,7 +2378,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "ce462456c63356c6"
+    "version": "d68525cd68ef691f"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2422,7 +2422,7 @@
             "memberToken": []
           }
         ],
-        "summary": "游客注册账号：设置用户名和密码，成员和成员 token 都不变；站点关闭注册时返回 FORBIDDEN。只绑定了 GitHub 的账号也用它补设用户名和密码，不受注册开关限制，但发出请求的成员 token 要在 10 分钟内用绑定的 GitHub 确认过身份（startGithubLogin 的 verify），没有确认时返回 FORBIDDEN：拿到成员 token 的人不能抢先设成自己的密码。补设成功之后这次确认作废，账号在其他设备上的成员 token 随即失效，与修改密码相同；失败时确认仍然有效"
+        "summary": "游客注册账号，设置用户名和密码，成员和成员 token 都不变。站点关闭注册时返回 FORBIDDEN。只绑定了 GitHub 的账号也用 register 补设用户名和密码，不受注册开关限制。但发出请求的成员 token 要在 10 分钟内用绑定的 GitHub 确认过身份（startGithubLogin 的 verify），没有确认时返回 FORBIDDEN。这样拿到成员 token 的人就不能抢先设成自己的密码。补设成功之后这次确认作废，账号在其他设备上的成员 token 随即失效，这与修改密码相同。补设失败时确认仍然有效"
       }
     },
     "/api/account/github/removals": {
@@ -2458,7 +2458,7 @@
             "memberToken": []
           }
         ],
-        "summary": "解绑 GitHub；账号还没有设置密码时返回 CONFLICT，解绑之后它就再也无法登录。要带上当前密码，不对时返回 INVALID_CREDENTIALS：只凭成员 token 不能更换登录凭证，理由同 startGithubLogin 的 bind。后台没有配置 GitHub OAuth App 时返回 NOT_FOUND"
+        "summary": "解绑 GitHub。账号还没有设置密码时返回 CONFLICT，因为解绑之后这个账号就再也无法登录。要带上当前密码，不对时返回 INVALID_CREDENTIALS。只凭成员 token 不能更换登录凭证，理由同 startGithubLogin 的 bind。后台没有配置 GitHub OAuth App 时返回 NOT_FOUND"
       }
     },
     "/api/account/pairing-codes": {
@@ -2501,7 +2501,7 @@
             "memberToken": []
           }
         ],
-        "summary": "已注册的账号生成配对码，新设备兑换之后登录这个账号：5 分钟内有效，只能兑换一次，发出请求的成员 token 失效时随之作废；游客调用时返回 FORBIDDEN"
+        "summary": "已注册的账号生成配对码，新设备兑换之后就登录了这个账号。配对码 5 分钟内有效，只能兑换一次，发出请求的成员 token 失效时随之作废。游客调用时返回 FORBIDDEN"
       }
     },
     "/api/account/password": {
@@ -2537,7 +2537,7 @@
             "memberToken": []
           }
         ],
-        "summary": "修改密码：账号在其他设备上的成员 token 随即失效，发出请求的这个不变；当前密码错误时返回 INVALID_CREDENTIALS，账号还没有设置密码时返回 CONFLICT"
+        "summary": "修改密码。账号在其他设备上的成员 token 随即失效，发出请求的成员 token 不变。当前密码错误时返回 INVALID_CREDENTIALS，账号还没有设置密码时返回 CONFLICT"
       }
     },
     "/api/admin/accounts/{username}": {
@@ -2633,7 +2633,7 @@
             "adminToken": []
           }
         ],
-        "summary": "重置账号的密码：生成随机的新密码，只在这次响应中返回；账号在所有设备上的成员 token 随即失效"
+        "summary": "重置账号的密码，生成随机的新密码，新密码只在这次响应中返回。账号在所有设备上的成员 token 随即失效"
       }
     },
     "/api/admin/credentials/bilibili": {
@@ -2778,7 +2778,7 @@
             "adminToken": []
           }
         ],
-        "summary": "清除 GitHub 登录使用的 OAuth App，关闭 GitHub 登录：GitHub 相关的接口返回 NOT_FOUND，已经绑定的 GitHub 保持绑定，已经登录的设备不受影响；只绑定了 GitHub 的账号没有密码，重新开启之前无法在其他设备上登录"
+        "summary": "清除 GitHub 登录使用的 OAuth App，关闭 GitHub 登录。之后 GitHub 相关的接口返回 NOT_FOUND，已经绑定的 GitHub 保持绑定，已经登录的设备不受影响。只绑定了 GitHub 的账号没有密码，所以重新开启之前，新设备只能用已经登录的设备生成的配对码登录这个账号"
       },
       "get": {
         "operationId": "adminGetGithubCredential",
@@ -2843,7 +2843,7 @@
             "adminToken": []
           }
         ],
-        "summary": "保存 GitHub 登录使用的 OAuth App，开启 GitHub 登录；Client ID 和 Client Secret 一起提交，覆盖已有的配置，立即对所有实例生效。授权进行中换了 OAuth App 时，GitHub 不认原来签发的授权码，这次登录失败"
+        "summary": "保存 GitHub 登录使用的 OAuth App，开启 GitHub 登录。Client ID 和 Client Secret 一起提交，覆盖已有的配置，立即对所有实例生效。授权进行中换了 OAuth App 时，GitHub 不认原来签发的授权码，这次登录失败"
       }
     },
     "/api/admin/credentials/netease": {
@@ -3215,7 +3215,7 @@
             "adminToken": []
           }
         ],
-        "summary": "已存储的链接曲目和 B 站的歌，每页 50 首；页码超出最后一页时 items 为空，其余字段照常"
+        "summary": "已存储的链接曲目和 B 站的歌，每页 50 首。页码超出最后一页时 items 为空，其余字段照常返回"
       }
     },
     "/api/admin/media/removals": {
@@ -3258,7 +3258,7 @@
             "adminToken": []
           }
         ],
-        "summary": "删除若干首已存储的歌的音频和封面，并清除它们的准备结果，一次 1 到 50 首：正在房间里使用的不会删除，放进 inUse；不存在的忽略。逐首删除，中途出错时返回错误，出错之前已经删掉的不会恢复，用同样的请求重试即可"
+        "summary": "删除若干首已存储的歌的音频和封面，并清除它们的准备结果，一次 1 到 50 首。正在房间里使用的歌不删除，放进 inUse。不存在的歌忽略。逐首删除，中途出错时返回错误，出错之前已经删掉的不会恢复，用同样的请求重试即可"
       }
     },
     "/api/admin/registration": {
@@ -3480,7 +3480,7 @@
             "adminToken": []
           }
         ],
-        "summary": "修改常驻房间；slug 或 password 为空字符串表示取消别名或密码"
+        "summary": "修改常驻房间。slug 为空字符串表示取消别名，password 为空字符串表示取消密码"
       }
     },
     "/api/admin/rooms/{id}/api-key": {
@@ -3625,7 +3625,7 @@
             "adminToken": []
           }
         ],
-        "summary": "修改品牌名，返回存下的名字：去掉首尾空白后保存，应有 1 到 20 个字符，其中至少一个看得见，不能包含控制字符；设成 Alisten 就恢复了默认"
+        "summary": "修改品牌名，返回存下的名字。品牌名去掉首尾空白后保存，应有 1 到 20 个字符，其中至少一个看得见，不能包含控制字符。设成 Alisten 就恢复了默认"
       }
     },
     "/api/auth/github": {
@@ -3668,7 +3668,7 @@
             "memberToken": []
           }
         ],
-        "summary": "发起 GitHub 授权，返回 GitHub 的授权地址。nonce 由客户端随机生成并保存，兑换时原样带上。GitHub 授权之后跳转到 /auth/github#code=<兑换码>，失败时跳转到 /auth/github#error=<denied|expired|failed>；client 为 app 时跳转到 moe.dihe.alisten:/auth/github，片段相同。只按发起授权时的 client 决定跳转目标，state 已经过期或用过时跳转到网页的 /auth/github；回调时后台已经关闭了 GitHub 登录，跳转到 failed。后台没有配置 GitHub OAuth App 时返回 NOT_FOUND。游客发起 bind 或 verify 时返回 FORBIDDEN，已注册的账号发起 login、已经绑定了 GitHub 的账号发起 bind、设置了密码的账号发起 verify 时返回 CONFLICT。bind 要带上当前密码，没带或不对时返回 INVALID_CREDENTIALS：只凭成员 token 不能更换登录凭证，否则拿到 token 的人换上自己的 GitHub 之后，本人修改密码、后台重置密码都赶不走他"
+        "summary": "发起 GitHub 授权，返回 GitHub 的授权地址。nonce 由客户端随机生成并保存，兑换时原样带上。GitHub 授权之后跳转到 /auth/github#code=<兑换码>，失败时跳转到 /auth/github#error=<denied|expired|failed>。client 为 app 时跳转到 moe.dihe.alisten:/auth/github，片段相同。跳转目标只按发起授权时的 client 决定，state 已经过期或用过时跳转到网页的 /auth/github。如果回调时后台已经关闭了 GitHub 登录，error 为 failed。后台没有配置 GitHub OAuth App 时返回 NOT_FOUND。游客发起 bind 或 verify 时返回 FORBIDDEN。已注册的账号发起 login、已经绑定了 GitHub 的账号发起 bind、设置了密码的账号发起 verify 时返回 CONFLICT。bind 要带上当前密码，没带或不对时返回 INVALID_CREDENTIALS。要求密码是因为只凭成员 token 不能更换登录凭证，否则拿到 token 的人换上自己的 GitHub 之后，本人修改密码、后台重置密码都赶不走他"
       }
     },
     "/api/auth/github/exchange": {
@@ -3711,7 +3711,7 @@
             "memberToken": []
           }
         ],
-        "summary": "用兑换码和发起授权时的 nonce 完成 GitHub 登录、注册或绑定，必须由发起授权的成员调用。GitHub 账号已经绑定了账号时登录它：返回账号的新成员 token，发出请求的游客 token 随即失效；没有绑定过时把它绑到发出请求的成员上（游客即注册），成员和成员 token 都不变。verify 不修改账号，GitHub 账号要是这个账号绑定的，否则返回 INVALID_CREDENTIALS；确认记在发出请求的成员 token 上，10 分钟内用它补设用户名和密码。兑换码过期、用过或 nonce 不对时返回 INVALID_CREDENTIALS，GitHub 账号已经绑定了其他账号时返回 CONFLICT，注册关闭时首次登录返回 FORBIDDEN，后台没有配置 GitHub OAuth App 时返回 NOT_FOUND"
+        "summary": "用兑换码和发起授权时的 nonce 完成 GitHub 登录、注册或绑定，必须由发起授权的成员调用。GitHub 账号已经绑定了账号时，登录那个账号，返回账号的新成员 token，发出请求的游客 token 随即失效。GitHub 账号没有绑定过时，把这个 GitHub 账号绑到发出请求的成员上（游客即注册），成员和成员 token 都不变。verify 不修改账号，GitHub 账号要是这个账号绑定的那个，否则返回 INVALID_CREDENTIALS。verify 的确认记在发出请求的成员 token 上，要在 10 分钟内用这个 token 补设用户名和密码。兑换码过期、用过或 nonce 不对时返回 INVALID_CREDENTIALS，GitHub 账号已经绑定了其他账号时返回 CONFLICT，注册关闭时首次登录返回 FORBIDDEN，后台没有配置 GitHub OAuth App 时返回 NOT_FOUND"
       }
     },
     "/api/me": {
@@ -3744,7 +3744,7 @@
             "memberToken": []
           }
         ],
-        "summary": "当前成员的资料；已注册的成员带上账号"
+        "summary": "当前成员的资料。已注册的成员还带上账号"
       },
       "patch": {
         "operationId": "updateMe",
@@ -3785,7 +3785,7 @@
             "memberToken": []
           }
         ],
-        "summary": "修改昵称和头像；email 用来计算头像哈希，已注册的账号同时保存它，去掉首尾空白后应形如 name@example.com，空字符串表示清除"
+        "summary": "修改昵称和头像。email 用来计算头像哈希，已注册的账号还会同时保存 email。email 去掉首尾空白后应形如 name@example.com，空字符串表示清除"
       }
     },
     "/api/me/listen-recording": {
@@ -3902,7 +3902,7 @@
             "memberToken": []
           }
         ],
-        "summary": "我的播放历史：在房间里听到过的歌，每首只留最近一次，最近听到的在前，最多 500 首；同一账号的所有设备看到同一份"
+        "summary": "我的播放历史：在房间里听到过的歌，每首只留最近一次，最近听到的在前，最多 500 首。同一账号的所有设备看到的是同一份"
       }
     },
     "/api/me/listens/removals": {
@@ -3938,7 +3938,7 @@
             "memberToken": []
           }
         ],
-        "summary": "从播放历史中删除一首歌；不在历史里的忽略"
+        "summary": "从播放历史中删除一首歌，不在历史里时忽略"
       }
     },
     "/api/me/playlist-links": {
@@ -3981,7 +3981,7 @@
             "memberToken": []
           }
         ],
-        "summary": "识别平台歌单的链接，短链接会跟随跳转；目前只支持网易云"
+        "summary": "识别平台歌单的链接，短链接会跟随跳转。目前只支持网易云"
       }
     },
     "/api/me/playlist-memberships": {
@@ -4057,7 +4057,7 @@
             "memberToken": []
           }
         ],
-        "summary": "我的歌单：“我喜欢”在最前，其余按创建的先后；只有已注册的账号能使用歌单"
+        "summary": "我的歌单：“我喜欢”在最前，其余按创建的先后排列。只有已注册的账号能使用歌单"
       },
       "post": {
         "operationId": "createMyPlaylist",
@@ -4141,7 +4141,7 @@
             "memberToken": []
           }
         ],
-        "summary": "把导出的歌单文件里的歌导入成一个新歌单，歌单名不合法时用“导入的歌单”；只收前 1000 首，重复的只留第一次出现的位置；曲目表里已有的歌用服务端的元数据，没有的用文件里的，标题为空的跳过；新歌单受“最多 50 个”的限制；返回实际导入的数量"
+        "summary": "把导出的歌单文件里的歌导入成一个新歌单，歌单名不合法时用“导入的歌单”。一次最多 1000 首，重复的歌只留第一次出现的位置。曲目表里已有的歌用服务端的元数据，没有的用文件里的元数据，其中标题为空的跳过。新歌单受“最多 50 个”的限制。返回实际导入的数量"
       }
     },
     "/api/me/playlists/platform-imports": {
@@ -4184,7 +4184,7 @@
             "memberToken": []
           }
         ],
-        "summary": "把平台歌单导入成一个新歌单，规则同 importMyPlaylist，元数据取自平台；目前只支持网易云"
+        "summary": "把平台歌单导入成一个新歌单，元数据取自平台。只收前 1000 首，重复的歌只留第一次出现的位置。歌单名不合法时返回 INVALID_ARGUMENT，不会像 importMyPlaylist 那样改用“导入的歌单”。新歌单受“最多 50 个”的限制。返回实际导入的数量。目前只支持网易云"
       }
     },
     "/api/me/playlists/{id}": {
@@ -4220,7 +4220,7 @@
             "memberToken": []
           }
         ],
-        "summary": "删除歌单；“我喜欢”不能删除"
+        "summary": "删除歌单。“我喜欢”不能删除"
       },
       "patch": {
         "operationId": "renameMyPlaylist",
@@ -4264,7 +4264,7 @@
             "memberToken": []
           }
         ],
-        "summary": "重命名歌单；“我喜欢”不能重命名"
+        "summary": "重命名歌单。“我喜欢”不能重命名"
       }
     },
     "/api/me/playlists/{id}/copies": {
@@ -4317,7 +4317,7 @@
             "memberToken": []
           }
         ],
-        "summary": "把另一个歌单里的若干首歌连同元数据复制到这个歌单，一次 1 到 1000 首；不在来源歌单里的和已在这个歌单里的跳过；新复制的排在最前，保持 tracks 的先后；装不下时整批拒绝；返回实际复制的数量"
+        "summary": "把另一个歌单里的若干首歌连同元数据复制到这个歌单，一次 1 到 1000 首。不在来源歌单里的歌和已经在这个歌单里的歌跳过。新复制的歌排在最前，彼此之间保持 tracks 里的先后。装不下时整批拒绝。返回实际复制的数量"
       }
     },
     "/api/me/playlists/{id}/items": {
@@ -4360,7 +4360,7 @@
             "memberToken": []
           }
         ],
-        "summary": "歌单里的歌，新加入的在前"
+        "summary": "歌单里的歌，按歌单里的顺序排列。新加入的歌排在最前，moveMyPlaylistItems 可以调整顺序"
       },
       "post": {
         "operationId": "addMyPlaylistItem",
@@ -4411,7 +4411,7 @@
             "memberToken": []
           }
         ],
-        "summary": "把一首歌加入歌单：元数据由服务端查询，链接曲目要先准备好；已经在歌单里时不变；一个歌单最多 1000 首"
+        "summary": "把一首歌加入歌单，元数据由服务端查询。链接曲目要先准备好。歌已经在歌单里时，歌单不变。一个歌单最多 1000 首"
       }
     },
     "/api/me/playlists/{id}/moves": {
@@ -4457,7 +4457,7 @@
             "memberToken": []
           }
         ],
-        "summary": "调整歌单里的顺序：把 tracks 里在歌单中的歌按给出的先后放到 before 之前，不给 before 就放到最后；一次 1 到 1000 首；before 不能在 tracks 里，也必须还在歌单里"
+        "summary": "调整歌单里的顺序：把 tracks 里在歌单中的歌按给出的先后放到 before 之前，不给 before 就放到最后。一次 1 到 1000 首。before 不能在 tracks 里，也必须还在歌单里"
       }
     },
     "/api/me/playlists/{id}/removals": {
@@ -4503,7 +4503,7 @@
             "memberToken": []
           }
         ],
-        "summary": "把若干首歌移出歌单，一次 1 到 1000 首；不在歌单里的忽略"
+        "summary": "把若干首歌移出歌单，一次 1 到 1000 首。不在歌单里的歌忽略"
       }
     },
     "/api/me/playlists/{id}/share": {
@@ -4539,7 +4539,7 @@
             "memberToken": []
           }
         ],
-        "summary": "停止分享：分享链接随即失效；没有分享时也算成功"
+        "summary": "停止分享，分享链接随即失效。没有分享时也算成功"
       },
       "post": {
         "operationId": "shareMyPlaylist",
@@ -4590,7 +4590,7 @@
             "memberToken": []
           }
         ],
-        "summary": "开启分享或重新生成分享链接：每次都生成新的 shareId，之前的链接随即失效；“我喜欢”也能分享"
+        "summary": "开启分享或重新生成分享链接。每次都生成新的 shareId，之前的链接随即失效。“我喜欢”也能分享"
       }
     },
     "/api/members": {
@@ -5279,7 +5279,7 @@
             "memberToken": []
           }
         ],
-        "summary": "换取进房票据；没有密码的房间可以不填 password"
+        "summary": "换取进房票据。没有密码的房间可以不填 password"
       }
     },
     "/api/rooms/{ref}": {
@@ -5361,7 +5361,7 @@
             "memberToken": []
           }
         ],
-        "summary": "游客登录账号：返回账号的新成员 token，发出请求的游客 token 随即失效；用户名或密码错误时返回 INVALID_CREDENTIALS，已经登录了账号时返回 CONFLICT"
+        "summary": "游客登录账号，返回账号的新成员 token，发出请求的游客 token 随即失效。用户名或密码错误时返回 INVALID_CREDENTIALS，已经登录了账号时返回 CONFLICT"
       }
     },
     "/api/sessions/current": {
@@ -5430,7 +5430,7 @@
             "memberToken": []
           }
         ],
-        "summary": "游客兑换配对码，登录生成它的账号：返回账号的新成员 token，发出请求的游客 token 随即失效；配对码不对或已过期时返回 INVALID_CREDENTIALS，已经登录了账号时返回 CONFLICT"
+        "summary": "游客兑换配对码，登录生成配对码的账号。返回账号的新成员 token，发出请求的游客 token 随即失效。配对码不对或已过期时返回 INVALID_CREDENTIALS，已经登录了账号时返回 CONFLICT"
       }
     },
     "/api/shared-playlists/{shareId}": {
@@ -5469,7 +5469,7 @@
           }
         },
         "security": [],
-        "summary": "读取分享的歌单，不需要身份；不返回所有者的成员 ID 和用户名；停止分享、重新生成链接或删除歌单之后返回 NOT_FOUND"
+        "summary": "读取分享的歌单，不需要身份。不返回所有者的成员 ID 和用户名。停止分享、重新生成链接或删除歌单之后，用原来的 shareId 读取返回 NOT_FOUND"
       }
     },
     "/api/shared-playlists/{shareId}/copies": {
@@ -5522,7 +5522,7 @@
             "memberToken": []
           }
         ],
-        "summary": "把分享的歌单复制成自己的新歌单，带上全部曲目和顺序；新歌单受“最多 50 个”的限制；分享已失效时返回 NOT_FOUND"
+        "summary": "把分享的歌单复制成自己的新歌单，带上全部曲目和顺序。新歌单受“最多 50 个”的限制。分享已失效时返回 NOT_FOUND"
       }
     },
     "/api/site": {
@@ -5551,7 +5551,7 @@
           }
         },
         "security": [],
-        "summary": "品牌名、是否开放注册和是否提供 GitHub 登录；没有设置过品牌名时是 Alisten"
+        "summary": "品牌名、是否开放注册和是否提供 GitHub 登录。没有设置过品牌名时，品牌名是 Alisten"
       }
     }
   }

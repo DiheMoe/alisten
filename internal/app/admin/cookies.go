@@ -26,8 +26,8 @@ func normalizeCookies(input string) (string, error) {
 	return "", ErrUnrecognizedCookies
 }
 
-// 空行和注释行原样保留但不校验；#HttpOnly_ 开头的是有效 cookie 行，不是注释。
-// 其余每行必须是制表符分隔的 7 列，且至少有一行。
+// 空行和注释行原样保留，但不校验。#HttpOnly_ 开头的是有效 cookie 行，不是注释。
+// 其余每行必须是制表符分隔的 7 列，而且这样的行至少要有一行。
 func normalizeNetscape(s string) (string, bool) {
 	lines := strings.Split(s, "\n")
 	valid := 0
@@ -49,7 +49,7 @@ func normalizeNetscape(s string) (string, bool) {
 	return strings.Join(lines, "\n"), true
 }
 
-// Cookie 请求头只有一行：可以带不区分大小写的 Cookie: 前缀，内容是用 ; 分隔的 名字=值。
+// Cookie 请求头只有一行。开头可以带 Cookie: 前缀，前缀不区分大小写。内容是用 ; 分隔的 名字=值。
 // 统一转换成 .youtube.com 的 Secure cookie，一年后过期。
 func convertCookieHeader(s string) (string, bool) {
 	if strings.ContainsAny(s, "\n\t") {

@@ -68,7 +68,7 @@ func TestContract(t *testing.T) {
 	}
 }
 
-// 整个包共用一个 PostgreSQL 和一个 Valkey 容器：如果每个测试各起一组容器，一次 go test 要在宿主机上创建、删除几十块虚拟网卡，
+// 整个包共用一个 PostgreSQL 和一个 Valkey 容器。如果每个测试各起一组容器，一次 go test 要在宿主机上创建、删除几十块虚拟网卡，
 // 宿主机上的浏览器每次都会当作网络变化而断开连接。
 var shared struct {
 	postgresOnce sync.Once
@@ -136,7 +136,7 @@ func startValkey(t *testing.T) func(*testing.T) string {
 	}
 }
 
-// B 站的视频：完整链接和 b23.tv 短链都识别成第 2 P；番剧的链接认得出但不能点。下载到的是平台的原始音频和一张封面。
+// B 站视频的完整链接和 b23.tv 短链都识别成第 2 P。番剧的链接认得出，但不能点。下载到的是平台的原始音频和一张封面。
 // 付费视频的下载在 worker 的测试中设为被拒绝。
 func contractBilibili() *porttest.Bilibili {
 	b := porttest.NewBilibili()
@@ -209,9 +209,9 @@ func (b *logBuffer) String() string {
 	return b.buf.String()
 }
 
-// 各场景共用一个 Valkey，而 Pub/Sub 不按逻辑库隔离：实例频道靠随机的实例 ID 区分；
+// 各场景共用一个 Valkey，而 Pub/Sub 不按逻辑库隔离。实例频道靠随机的实例 ID 区分。
 // members 和 tracks.prepared 两个频道靠场景依次运行、每个场景结束时停止服务来隔开。
-// configure 在读取配置之后修改它，用来换上环境变量配置不了的测试替身，比如假的 GitHub 的地址。
+// configure 在读取配置之后修改配置，用来换上环境变量配置不了的测试替身，比如假的 GitHub 的地址。
 func startService(t *testing.T, configure ...func(*serveConfig)) service {
 	t.Helper()
 	if err := runMigrate(newLogger(io.Discard, slog.LevelInfo)); err != nil {
@@ -270,12 +270,15 @@ func startService(t *testing.T, configure ...func(*serveConfig)) service {
 }
 
 // 场景依次由以下几节组成：
-//   - 可选的 env 放在最前面，每行写成 名称=值；
-//   - request 和 response 成对出现，是一次 HTTP 请求和完整的响应：response 依次是状态码、若干行 名称: 值 的响应头和响应体，204 没有响应体；
-//   - connect 名称：打开一个 WebSocket 连接，内容是请求头；紧跟 response 时，期望握手被拒绝；
-//   - send 名称：发送一帧；receive 名称：读下一条消息，与期望的报文比较；
-//   - closed 名称：连接应以给出的关闭码断开；disconnect 名称：客户端断开连接；
-//   - stream 名称：打开房间的事件流，内容是请求头；event 名称：读下一个事件，与期望的事件比较，close 之后事件流应结束。
+//   - 可选的 env 放在最前面，每行写成 名称=值。
+//   - request 和 response 成对出现，是一次 HTTP 请求和完整的响应。response 依次是状态码、若干行 名称: 值 的响应头和响应体，204 没有响应体。
+//   - connect 名称：打开一个 WebSocket 连接，内容是请求头。紧跟 response 时，期望握手被拒绝。
+//   - send 名称：发送一帧。
+//   - receive 名称：读下一条消息，与期望的报文比较。
+//   - closed 名称：连接应以给出的关闭码断开。
+//   - disconnect 名称：客户端断开连接。
+//   - stream 名称：打开房间的事件流，内容是请求头。
+//   - event 名称：读下一个事件，与期望的事件比较。close 之后事件流应结束。
 func runContract(t *testing.T, sections []txtar.File, databaseURL, redisURL string) {
 	contractEnv(t, databaseURL, redisURL)
 	if len(sections) > 0 && sections[0].Name == "env" {
@@ -445,7 +448,7 @@ func dialRejected(t *testing.T, server *httptest.Server, header string) (int, ht
 	return resp.StatusCode, resp.Header, body
 }
 
-// 消息总会到达，期限只是为了出错时不一直等下去：最长的一次要等《片头》放完，15 秒。
+// 消息总会到达，期限只是为了出错时不一直等下去。最长的一次要等《片头》放完，也就是 15 秒。
 const messageWait = 25 * time.Second
 
 func receive(t *testing.T, conn *websocket.Conn, name, want string, vars map[string]string) {
@@ -506,7 +509,7 @@ func openStream(t *testing.T, server *httptest.Server, header string) *eventStre
 	return &eventStream{body: resp.Body, reader: bufio.NewReader(resp.Body)}
 }
 
-// 返回下一个事件的各行，跳过心跳之类只有注释的事件；事件流结束时返回 nil。
+// 返回下一个事件的各行，跳过心跳之类只有注释的事件。事件流结束时返回 nil。
 func (s *eventStream) next(t *testing.T, name string) []string {
 	t.Helper()
 	timeout := time.AfterFunc(messageWait, func() { _ = s.body.Close() })
@@ -561,7 +564,7 @@ func checkEvent(t *testing.T, s *eventStream, name, want string, vars map[string
 	}
 }
 
-// 服务端生成的正数时间戳在期望中统一写为 1：字段名以 AtMs 结尾，或者是 serverTimeMs。
+// 服务端生成的正数时间戳在期望中统一写为 1。时间戳指字段名以 AtMs 结尾的字段，以及 serverTimeMs。
 func timestamps(v any) any {
 	switch v := v.(type) {
 	case map[string]any:
@@ -580,7 +583,7 @@ func timestamps(v any) any {
 	return v
 }
 
-// $ 加小写字母开头的名字是变量：在响应中第一次出现时记下实际的值，之后出现时必须相同；在请求中替换为记下的值。
+// $ 加小写字母开头的名字是变量。变量在响应中第一次出现时记下实际的值，之后再出现时必须相同。在请求中，变量替换为记下的值。
 var variable = regexp.MustCompile(`\$[a-z][A-Za-z0-9]*`)
 
 func expand(t *testing.T, text string, vars map[string]string) string {
@@ -627,7 +630,7 @@ func send(t *testing.T, server *httptest.Server, request string) (string, int, h
 
 var headerLine = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9-]*): (.*)$`)
 
-// 响应头在响应体之后比较，可以使用响应体中第一次出现的变量。没有列出 Location 时，响应也不能带 Location。
+// 响应头在响应体之后比较，所以可以使用响应体中第一次出现的变量。没有列出 Location 时，响应也不能带 Location。
 func checkResponse(t *testing.T, line string, status int, header http.Header, body []byte, want string, vars map[string]string) {
 	t.Helper()
 	lines := strings.Split(strings.TrimSpace(want), "\n")
@@ -729,7 +732,7 @@ func match(want, got any, vars map[string]string, path string) error {
 	return nil
 }
 
-// 不同的变量必须取不同的值：两次签发的 token 或两个房间的 ID 相同时，测试会失败。
+// 不同的变量必须取不同的值。这样两次签发的 token 或两个房间的 ID 相同时，测试会失败。
 func bind(name string, got any, vars map[string]string, path string) error {
 	value, ok := got.(string)
 	if !ok || value == "" {

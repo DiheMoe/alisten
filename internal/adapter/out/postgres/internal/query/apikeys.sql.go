@@ -40,8 +40,8 @@ const lockRoomBot = `-- name: LockRoomBot :one
 SELECT bot_member_id FROM rooms WHERE id = $1 FOR NO KEY UPDATE
 `
 
-// 用互斥的 FOR NO KEY UPDATE，不用 FOR SHARE：同一个房间的重置要依次进行，
-// 同时到达的首次生成才只会创建一个 bot 成员，最后只留下一把 Key。
+// 用互斥的 FOR NO KEY UPDATE，不用 FOR SHARE，因为同一个房间的重置要依次进行。
+// 这样同时到达的首次生成只会创建一个 bot 成员，最后只留下一把 Key。
 func (q *Queries) LockRoomBot(ctx context.Context, id string) (*string, error) {
 	row := q.db.QueryRow(ctx, lockRoomBot, id)
 	var bot_member_id *string

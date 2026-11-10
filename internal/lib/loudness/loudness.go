@@ -22,10 +22,10 @@ type Result struct {
 	Integrated float64 // 综合响度（LUFS），全静音时为 -Inf
 	Peak       float64 // 采样峰值（dBFS），全静音时为 -Inf
 	Duration   time.Duration
-	Damage     slog.LogValuer // 解码时跳过或容错的异常，音频完好时为 nil；此时其余字段只反映解出的部分
+	Damage     slog.LogValuer // 解码时跳过或容错的异常，音频完好时为 nil。不为 nil 时，其余字段只反映解出的部分
 }
 
-// target 的单位是 LUFS，返回的增益单位是 dB；静音时返回 0。
+// target 的单位是 LUFS，返回的增益单位是 dB。静音时返回 0。
 func (r *Result) GainTo(target float64) float64 {
 	if math.IsInf(r.Integrated, -1) {
 		return 0
@@ -87,12 +87,12 @@ func AnalyzeSamples(samples []float64, sampleRate, channels int) (*Result, error
 // blockSegs 是一个 400ms 响度块包含的 100ms 段数（BS.1770：400ms 块，75% 重叠）。
 const blockSegs = 4
 
-// Analyzer 是流式的 BS.1770 响度分析器：只保留滤波器状态与滚动的块能量，整段音频无需驻留内存。
+// Analyzer 是流式的 BS.1770 响度分析器。它不保存采样，只保留滤波器状态、最近 4 个 100ms 段的能量和每个 400ms 块的能量，所以整段音频无需驻留内存。
 type Analyzer struct {
 	sampleRate int
 	channels   int
-	// 浏览器把单声道同时放到左右两个声道，所以单声道按双单声道（libebur128 的 DUAL_MONO）计算：
-	// 能量是单声道的 2 倍（+3.01 LU），峰值不变。其余声道布局的权重为 1。
+	// 浏览器把单声道同时放到左右两个声道，所以单声道按双单声道（libebur128 的 DUAL_MONO）计算。
+	// 按双单声道算，能量是单声道的 2 倍（+3.01 LU），峰值不变。其余声道布局的权重为 1。
 	weight     float64
 	segSize    int // 100ms 段的帧数
 	filters    [][2]biquadState
@@ -148,7 +148,7 @@ func (a *Analyzer) Write(samples []float64) {
 	}
 }
 
-// writeStereoSIMD 逐段调用汇编内核：IIR 在时间维上必须串行，并行的是 L、R 两个声道。
+// writeStereoSIMD 逐段调用汇编内核。IIR 在时间维上必须串行，所以并行的是 L、R 两个声道。
 func (a *Analyzer) writeStereoSIMD(samples []float64) {
 	for len(samples) > 0 {
 		if a.nextCh == 1 || len(samples) < 2 {
@@ -258,7 +258,7 @@ func gateBlocks(energies []float64) (float64, bool) {
 	if n == 0 {
 		return 0, false
 	}
-	// 相对门限是均值响度以下 10 LU，即均值能量的 1/10；与绝对门限取大，保证两级门限同时生效。
+	// 相对门限是均值响度以下 10 LU，即均值能量的 1/10。再与绝对门限取大，保证两级门限同时生效。
 	sum, n = sumAbove(energies, max(absGate, sum/float64(n)/10))
 	if n == 0 {
 		return 0, false

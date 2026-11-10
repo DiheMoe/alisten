@@ -1,4 +1,4 @@
-成员 token 无效时返回 UNAUTHORIZED；请求体不合法时返回 INVALID_ARGUMENT。
+成员 token 无效时返回 UNAUTHORIZED。请求体不合法时返回 INVALID_ARGUMENT。
 
 -- request --
 POST /api/members

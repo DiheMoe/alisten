@@ -3,7 +3,7 @@ SELECT title, artist, album, cover_url, cover_key, page_url, duration_ms, gain, 
 WHERE source = @source AND track_id = @track_id;
 
 -- name: SavePreparedTrack :exec
--- 准备任务只对未完成的任务去重，同一首歌可能先后准备两次，以后一次的结果为准。
+-- 准备任务只对未完成的任务去重，所以同一首歌可能先后准备两次，以后一次的结果为准。
 INSERT INTO tracks (source, track_id, title, artist, album, cover_url, cover_key, page_url, duration_ms, gain, lyric, lyric_words, lyric_trans, media_key, media_size)
 VALUES (@source, @track_id, @title, @artist, @album, @cover_url, @cover_key, @page_url, @duration_ms, @gain, @lyric, @lyric_words, @lyric_trans, @media_key, @media_size)
 ON CONFLICT (source, track_id) DO UPDATE SET

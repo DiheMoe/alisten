@@ -1,4 +1,4 @@
-// 锚点是上一次点击的 id。按住 Shift 点击时选中锚点到这一项之间的全部，不取消范围外已经选中的项；
+// 锚点是上一次点击的 id。按住 Shift 点击时选中锚点到这一项之间的全部，不取消范围外已经选中的项。
 // 没有锚点，或者锚点已经不在列表里（比如翻了页）时，和普通点击一样只切换这一项。
 export function toggleSelection(selected: ReadonlySet<string>, ids: readonly string[], id: string, anchor: string | null, shift: boolean): { selected: Set<string>, anchor: string } {
   const next = new Set(selected)

@@ -31,7 +31,7 @@ func (s *Store) GitHubOAuthApp(ctx context.Context) (port.GitHubOAuthApp, error)
 		return port.GitHubOAuthApp{}, fmt.Errorf("读取 GitHub OAuth App：%w", err)
 	}
 	var app githubOAuthApp
-	// 不包装解码的错误：其中可能带有原值的片段，也就可能带有 Client Secret。
+	// 不包装解码的错误，因为解码的错误里可能带有原值的片段，也就可能带有 Client Secret。
 	if err := json.Unmarshal([]byte(value), &app); err != nil || app.ClientID == "" || app.ClientSecret == "" {
 		return port.GitHubOAuthApp{}, errors.New("凭据表中 GitHub OAuth App 的格式不正确")
 	}

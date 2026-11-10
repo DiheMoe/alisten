@@ -29,7 +29,7 @@ func loadDatabaseConfig() (*pgxpool.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("无法由 DATABASE_* 和 PG* 环境变量组成 PostgreSQL 的连接配置：%w", err)
 	}
-	// 密码不放进连接串：pgx 的 ConnString() 原样返回连接串，解析错误中的脱敏也只是尽力而为。
+	// 密码不放进连接串，因为 pgx 的 ConnString() 会原样返回连接串，解析错误中的脱敏也只是尽力而为。
 	cfg.ConnConfig.Password = os.Getenv("DATABASE_PASSWORD")
 	return cfg, nil
 }

@@ -9,7 +9,7 @@ import { LoadFailed, SectionHead } from './section-head'
 
 async function saveBrandName(name: string): Promise<void> {
   const saved = await adminStore.attempt(() => api.adminUpdateSite({ brandName: name }), { INVALID_ARGUMENT: '品牌名要有 1 到 20 个字，不能含换行、制表符等特殊字符。' })
-  // 显示服务端存下的名字：浏览器和服务端去掉首尾空白的规则不完全相同。
+  // 显示服务端存下的名字，因为浏览器和服务端去掉首尾空白的规则不完全相同。
   brandStore.setName(saved.brandName)
 }
 

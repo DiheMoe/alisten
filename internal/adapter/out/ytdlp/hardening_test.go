@@ -101,7 +101,7 @@ func verbose(t *testing.T, link string, extra ...string) (stderr []byte, err err
 	return stderr, err
 }
 
-// 不包括 ffprobe：yt-dlp 不给它传后处理器的参数。
+// 不包括 ffprobe，因为 yt-dlp 不给 ffprobe 传后处理器的参数。
 func ffmpegCommands(stderr []byte) [][]string {
 	const marker = "[debug] ffmpeg command line: "
 	var commands [][]string
@@ -119,7 +119,7 @@ func ffmpegCommands(stderr []byte) [][]string {
 	}
 }
 
-// 读到第一个不在引号内的换行为止，按空白拆成参数；单引号内的内容（可以跨行）属于同一个参数。返回参数和消耗的字节数。
+// 读到第一个不在引号内的换行为止，按空格拆成参数。单引号内的内容（可以跨行）属于同一个参数。返回参数和消耗的字节数。
 func shellWords(s string) ([]string, int) {
 	var words []string
 	var word strings.Builder
@@ -242,7 +242,7 @@ func TestFFmpegDownloaderReadsLocalFilesOnly(t *testing.T) {
 	}
 }
 
-// 在 WAV 的 fmt 块和 data 块之间插入 LIST/INFO 块，INAM 是标题：ffmpeg 转码时会把它复制成 mp3 的 ID3 标签。
+// 在 WAV 的 fmt 块和 data 块之间插入 LIST/INFO 块，INAM 是标题。ffmpeg 转码时会把这个标题复制成 mp3 的 ID3 标签。
 func taggedWAV(title string) []byte {
 	wav := porttest.SilentWAV(time.Second)
 	const dataChunk = 36
@@ -309,7 +309,7 @@ func TestConfigFilesAreIgnored(t *testing.T) {
 	_, _, link := startSite(t)
 	p := siteProxy(t)
 	dir := t.TempDir()
-	// media.test 只有测试的代理能解析：下载成功说明请求经过了命令行指定的代理。
+	// media.test 只有测试的代理能解析，所以下载成功说明请求经过了命令行指定的代理。
 	if _, stderr, err := run(t.Context(), dir, args(link("/page"), dir, p.url, "")); err != nil {
 		t.Fatalf("yt-dlp 失败：%v\n%s", err, stderr)
 	}

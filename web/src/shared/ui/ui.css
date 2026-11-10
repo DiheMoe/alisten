@@ -97,7 +97,7 @@
 .switch[aria-checked='true'] { background: var(--color-primary); }
 .switch[aria-checked='true']:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary), var(--color-foreground) 12%); }
 .switch:active:not(:disabled) { transform: none; }
-/* 关闭时的滑块在两种主题下都是白色，靠和轨道的对比度认出位置，不靠阴影：极简模式会去掉所有阴影。 */
+/* 关闭时的滑块在两种主题下都是白色，靠和轨道的对比度认出位置，而不靠阴影，因为极简模式会去掉所有阴影。 */
 .switch-thumb { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 999px; background: #fff; box-shadow: 0 1px 3px var(--color-shadow), 0 0 0 .5px var(--color-shadow); transition: transform 200ms cubic-bezier(.2, .8, .2, 1), width 200ms cubic-bezier(.2, .8, .2, 1), background-color 150ms; }
 .switch[aria-checked='true'] .switch-thumb { transform: translateX(16px); background: var(--color-primary-foreground); }
 /* 按下时滑块向前伸长，松开后再滑过去，和系统开关的手感一致。 */
@@ -123,7 +123,7 @@
 .pagination-gap { min-width: 20px; color: var(--color-foreground-subtlest); text-align: center; user-select: none; }
 .save-status { display: inline-flex; white-space: nowrap; }
 .save-status-saving { color: var(--color-foreground-subtle); }
-/* 显示 1.5 秒后用 0.4 秒淡出；减少动态效果时不淡出，到时直接消失。 */
+/* 显示 1.5 秒后用 0.4 秒淡出。减少动态效果时不淡出，到时直接消失。 */
 .save-status-saved { display: inline-flex; align-items: center; gap: 4px; color: var(--color-success); animation: save-status-saved 1900ms ease forwards; }
 @keyframes save-status-saved {
   0%, 79% { opacity: 1; }

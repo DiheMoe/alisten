@@ -7,7 +7,7 @@ const minute = 60 * 1000
 const hour = 60 * minute
 const day = 24 * hour
 
-// 地址里的搜索词变了之后输入框显示什么：它就是输入框自己提交的值（去掉了首尾空白）时保留原样的输入，比如末尾刚打的空格；被别处改掉时（清除搜索、后退）换成地址里的。
+// 地址里的搜索词变了之后，决定输入框显示什么。新的搜索词就是输入框自己提交的值（去掉了首尾空白）时，保留原样的输入，比如末尾刚打的空格。搜索词被别处改掉时（清除搜索、后退），换成地址里的搜索词。
 export function searchDraft(draft: string, q: string): string {
   return draft.trim() === q ? draft : q
 }
@@ -63,7 +63,7 @@ export function mediaByline(item: StoredMedia): string {
   return item.artist ? `${item.artist} · ${origin}` : origin
 }
 
-// 不存在的歌（比如在别的标签页里已经删掉了）也算删除：对管理员来说结果一样。
+// 不存在的歌（比如在别的标签页里已经删掉了）也算删除，因为对管理员来说结果一样。
 export function removalMessage(requested: number, inUse: number): string {
   const busy = `${inUse} 首正在房间里播放，没有删除`
   if (inUse === requested)

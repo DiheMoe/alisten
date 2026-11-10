@@ -14,7 +14,7 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// 采用 OWASP 密码存储建议中 argon2id 的最低配置：任何成员都能请求换取票据，而每次校验都要分配这么多内存。
+// 采用 OWASP 密码存储建议中 argon2id 的最低配置，因为任何成员都能请求换取票据，而每次校验都要分配这么多内存。
 const (
 	argonTime    = 2
 	argonMemory  = 19 * 1024 // KiB
@@ -27,7 +27,7 @@ var passwordPrefix = fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$", argon2.Versio
 
 var errMalformedPasswordHash = errors.New("密码哈希的格式不正确")
 
-// 每次计算都要分配 argonMemory 的内存，而创建临时房间、换取票据和登录任何人都能请求：不限制并发时，几十个请求就能耗尽内存。argon2 是纯计算，并发超过 GOMAXPROCS 也不会更快。
+// 每次计算都要分配 argonMemory 的内存，而创建临时房间、换取票据和登录任何人都能请求。不限制并发的话，几十个请求就能耗尽内存。argon2 是纯计算，并发超过 GOMAXPROCS 也不会更快。
 var argonSlots = make(chan struct{}, runtime.GOMAXPROCS(0))
 
 func idKey(ctx context.Context, password string, salt []byte) ([]byte, error) {
@@ -53,13 +53,13 @@ func HashPassword(ctx context.Context, password string) (string, error) {
 	return passwordPrefix + base64.RawStdEncoding.EncodeToString(salt) + "$" + base64.RawStdEncoding.EncodeToString(key), nil
 }
 
-// 用户名不存在时拿它做一次同样的计算，响应时间不暴露用户名是否存在。密码是随机值，不会与任何人输入的密码匹配。
+// 用户名不存在时拿 dummyPasswordHash 做一次同样的计算，这样响应时间不会暴露用户名是否存在。密码是随机值，不会与任何人输入的密码匹配。
 var dummyPasswordHash = sync.OnceValues(func() (string, error) {
 	password, _ := newSecret()
 	return HashPassword(context.Background(), password)
 })
 
-// 只接受按当前参数生成的哈希：存储中的密码哈希都由 HashPassword 生成。
+// 只接受按当前参数生成的哈希，因为存储中的密码哈希都由 HashPassword 生成。
 func checkPassword(ctx context.Context, hash, password string) (bool, error) {
 	encoded, ok := strings.CutPrefix(hash, passwordPrefix)
 	if !ok {

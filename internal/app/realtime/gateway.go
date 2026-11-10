@@ -50,14 +50,14 @@ type Gateway struct {
 	// 每个房间的事件流按打开的顺序排列。
 	observers map[string][]*Observer
 	links     map[string]*roomLink
-	// 订阅连接每断开一次就加 1：新连接是否已经订阅了这些频道，要等确认才知道，所以之前确认过的房间订阅要重新确认。
+	// 订阅连接每断开一次就加 1。roomLink.confirmed 记着这个房间在哪一代连接上确认过订阅。和当前代数不同，说明新连接上不一定有这个订阅，要重新订阅一次。
 	epoch   uint64
 	active  sync.WaitGroup
 	stopped chan struct{}
 }
 
-// RequestError 是网关为房间请求生成 RequestID 之后，该请求失败时返回的错误。owner 处理这个请求时的日志带有同一个 ID，
-// 调用方记录失败时带上它，网关和 owner 两侧的日志就能对应起来。
+// RequestError 是网关为房间请求生成 RequestID 之后，这个请求失败时返回的错误。owner 处理这个请求时的日志带有同一个 ID，
+// 调用方记录失败时带上这个 ID，网关和 owner 两侧的日志就能对应起来。
 type RequestError struct {
 	ID  room.RequestID
 	Err error
@@ -74,7 +74,7 @@ func failed(id room.RequestID, err error) error {
 }
 
 type pendingRequest struct {
-	// 由从 pending 中取走请求的一方调用一次，然后关闭 done；在接收消息的 goroutine 上调用时不能阻塞。
+	// 谁把请求从 pending 里取走，谁就调用一次 deliver，再关闭 done。deliver 可能在接收消息的 goroutine 上执行，所以不能阻塞。
 	deliver func(room.Result, error)
 	done    chan struct{}
 }
@@ -108,7 +108,7 @@ func New(snapshots port.RoomSnapshots, directory port.RoomDirectory, listens por
 	return h, g
 }
 
-// memberSession 是票据签发给的成员会话，credential 是票据在存储中的哈希。会话结束时必须调用 Leave。
+// memberSession 是票据所属的成员会话，credential 是票据在存储中的哈希。会话结束时必须调用 Leave。
 func (g *Gateway) Join(ctx context.Context, roomID string, m member.Member, memberSession, credential []byte) (*Session, error) {
 	link, err := g.hold(ctx, roomID)
 	if err != nil {
@@ -152,7 +152,7 @@ func (g *Gateway) Leave(s *Session) {
 	}
 	g.mu.Unlock()
 	s.left.Store(true)
-	// 第一次发送在调用方的 goroutine 上进行：Shutdown 会等会话 Leave，它返回时 Leave 已经交给 owner；发送失败的才交给后台重试。
+	// 第一次发送在调用方的 goroutine 上进行。这样 Shutdown 等到会话 Leave 返回时，Leave 已经交给了 owner。发送失败的才交给后台重试。
 	if leave := leaveOf(s); !g.sendPresence(s.room, false, leave) {
 		go g.retryPresence(s.room, false, leave)
 	}
@@ -182,7 +182,7 @@ func (g *Gateway) Do(ctx context.Context, roomID string, m member.Member, a room
 	return res, failed(id, err)
 }
 
-// 参数为 nil 表示保持不变；房间落盘之后才返回。
+// 参数为 nil 表示保持不变。房间落盘之后才返回。
 func (g *Gateway) UpdateInfo(ctx context.Context, roomID string, name, description *string) error {
 	id := g.newRequestID()
 	var err error
@@ -202,8 +202,8 @@ func (g *Gateway) Delete(ctx context.Context, roomID string) error {
 	return failed(id, err)
 }
 
-// 以下三个通知在凭证从存储中删除之后发出，只是让连接立即断开的快速路径：发起请求的客户端此时断开也照样发出，
-// 发不出去时只记日志。通知丢失时，各实例定期核对连接所用的凭证，最迟 credentialCheckInterval 之后断开。
+// 以下三个通知在凭证从存储中删除之后发出，只是让连接立即断开的快速路径。即使发起请求的客户端此时已经断开，通知也照样发出，
+// 发不出去时只记日志。通知丢失时，各实例定期核对连接所用的凭证，连接最迟在 credentialCheckInterval 之后断开。
 
 // Revoke 在房间成员的票据作废之后通知各实例，以 CloseRevoked 关闭这个房间的会话和成员打开的事件流。
 func (g *Gateway) Revoke(ctx context.Context, roomID string) {
@@ -244,7 +244,7 @@ func (g *Gateway) MemberUpdated(ctx context.Context, m member.Member) error {
 	return nil
 }
 
-// 广播失败时只记录日志：等待的一方会定期按任务 ID 核对。
+// 广播失败时只记录日志，因为等待的一方会定期按任务 ID 核对。
 func (g *Gateway) PublishPrepared(o port.PrepareOutcome) {
 	ctx, cancel := context.WithTimeout(logctx.WithJob(context.Background(), o.JobID), clusterTimeout)
 	defer cancel()
@@ -318,7 +318,8 @@ func (g *Gateway) Resolve(ctx context.Context, roomID string, by member.Member, 
 	}
 }
 
-// deliver 恰好被调用一次：收到回复时在接收消息的 goroutine 上调用，失败时在这里调用；返回时 deliver 已经调用过。
+// deliver 恰好被调用一次，request 返回时 deliver 已经调用过。收到 Replied 或 Rejected 时，deliver 在接收消息的 goroutine 上调用。
+// 订阅房间频道失败、输入发不出去、超时或者调用方放弃时，deliver 在 request 里调用。订阅连接断开过之后，restart 以 ErrUnavailable 调用 deliver。
 // 网关先确认订阅了房间频道再发出输入，因为回复和事件都经由房间频道到达。
 func (g *Gateway) request(ctx context.Context, roomID string, id room.RequestID, e envelope, http bool, deliver func(room.Result, error)) {
 	p := &pendingRequest{deliver: deliver, done: make(chan struct{})}
@@ -369,7 +370,7 @@ func (g *Gateway) route(ctx context.Context, roomID string, e envelope, takeover
 			if err != nil {
 				return unavailable(err)
 			}
-			// owner 所在的实例没有订阅自己的频道：它已经停止，但租约还没有过期。
+			// owner 所在的实例没有订阅自己的频道，说明 owner 已经停止，但租约还没有过期。
 			if !delivered {
 				return ErrUnavailable
 			}
@@ -382,7 +383,7 @@ func unavailable(err error) error {
 	return fmt.Errorf("%w：%w", ErrUnavailable, err)
 }
 
-// 回复、超时和房间不再处理请求可能同时发生，先从 pending 中取走请求的一方负责送达。
+// 回复、超时和房间不再处理请求可能同时发生，谁先从 pending 中取走请求，谁负责送达。
 func (g *Gateway) settle(id room.RequestID, res room.Result, err error) {
 	g.mu.Lock()
 	p, ok := g.pending[id]
@@ -405,7 +406,7 @@ func (g *Gateway) deliver(roomID string, m port.RoomMessage) {
 			}
 		}
 	case port.OwnerReleased:
-		// 房间暂时没有 owner，而这里还有它的会话，所以立即接管。
+		// 房间暂时没有 owner，而本实例还有这个房间的会话，所以立即接管。
 		g.rejoin(roomID, true)
 	case port.Emitted:
 		for _, q := range g.recipients(roomID) {
@@ -454,7 +455,7 @@ func (g *Gateway) rejoin(roomID string, takeover bool) {
 	go func() {
 		for _, s := range sessions {
 			g.deliverPresence(roomID, takeover, joinOf(s))
-			// 会话在重新加入的途中离开时，它的 Leave 可能排在这次 Join 之前，所以补发一次 Leave，以免它留在在线列表中。
+			// 会话在重新加入的途中离开时，会话的 Leave 可能排在这次 Join 之前，所以补发一次 Leave，以免会话留在在线列表中。
 			if s.left.Load() {
 				g.deliverPresence(roomID, false, leaveOf(s))
 			}
@@ -516,15 +517,15 @@ func (g *Gateway) sessionsRevoked(memberSessions [][]byte) {
 	}
 }
 
-// owner 靠 Join、Leave 和 MemberUpdated 知道谁在线，这几条消息丢失后没有别的办法补回：离开的会话会一直留在在线列表中，
-// 临时房间也因此无法关闭；仍然在线的会话则不在列表中。所以送不到 owner 时要一直重试，直到送达。
-// next 在每次尝试前调用，返回这一次要发的输入；返回 false 表示这条消息已经不必再发。
+// owner 靠 Join、Leave 和 MemberUpdated 知道谁在线，这几条消息丢失后没有别的办法补回。丢失的后果是离开的会话一直留在在线列表中，
+// 临时房间也因此无法关闭，或者仍然在线的会话不在列表中。所以送不到 owner 时要一直重试，直到送达。
+// next 在每次尝试前调用，返回这一次要发的输入。返回 false 表示这条消息已经不必再发。
 func (g *Gateway) sendPresence(roomID string, takeover bool, next func() (room.Input, bool)) (done bool) {
 	in, ok := next()
 	return !ok || g.route(context.Background(), roomID, envelope{input: in}, takeover) == nil
 }
 
-// 网关停止之后不再重试：进程即将退出，本实例的存活键过期之后，owner 会让这里的会话离开。
+// 网关停止之后不再重试，因为进程即将退出，等本实例的存活键过期，owner 会让本实例的会话离开。
 func (g *Gateway) retryPresence(roomID string, takeover bool, next func() (room.Input, bool)) {
 	for delay := presenceRetryMin; ; delay = min(2*delay, presenceRetryMax) {
 		select {
@@ -557,7 +558,7 @@ func leaveOf(s *Session) func() (room.Input, bool) {
 	return func() (room.Input, bool) { return room.Leave{Session: s.id}, true }
 }
 
-// 每次都发送这个成员在本地会话记录中的最新资料，而不是触发这次发送的那一份：否则资料再次修改之后，
+// 每次都发送这个成员在本地会话记录中的最新资料，而不是触发这次发送的那一份。否则资料再次修改之后，
 // 先前那次发送的重试如果晚到，会把旧资料写回房间。
 func (g *Gateway) memberUpdateOf(roomID, memberID string) func() (room.Input, bool) {
 	return func() (room.Input, bool) {
@@ -572,7 +573,7 @@ func (g *Gateway) memberUpdateOf(roomID, memberID string) func() (room.Input, bo
 	}
 }
 
-// 订阅连接断开过：会话和事件流可能漏掉了房间的事件，等待中的请求可能收不到回复。会话和事件流以 1012 断开，
+// 订阅连接断开过之后，会话和事件流可能漏掉了房间的事件，等待中的请求可能收不到回复。所以会话和事件流以 1012 断开，
 // 客户端重连之后以新快照为准。
 func (g *Gateway) restart() {
 	g.mu.Lock()
@@ -609,7 +610,7 @@ func (g *Gateway) closeAll(reason CloseReason) {
 	}
 }
 
-// 订阅本实例的频道并刷新存活键：此后其他实例的网关才能把输入转发到这里，owner 也不会认为本实例的网关已经退出。
+// 订阅本实例的频道并刷新存活键。这之后其他实例的网关才能把输入转发到本实例，owner 也不会认为本实例的网关已经退出。
 func (g *Gateway) open(ctx context.Context) error {
 	for {
 		attemptCtx, cancel := context.WithTimeout(ctx, clusterTimeout)
@@ -713,7 +714,7 @@ func (g *Gateway) joinedRooms() []string {
 	return slices.Collect(maps.Keys(g.sessions))
 }
 
-// 订阅连接断开时只通知 lost，不在这里处理：恢复订阅要等这里收到确认。
+// 订阅连接断开时只通知 lost，不在 receive 里处理，因为恢复订阅要等 receive 收到确认。
 func (g *Gateway) receive(ctx context.Context, lost chan<- struct{}) {
 	for {
 		d, err := g.bus.Receive(ctx)

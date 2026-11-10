@@ -12,7 +12,7 @@ export function EntryDialog({ onCancel }: { onCancel: () => void }) {
       room={room}
       onJoined={() => roomEntryStore.retry()}
       onClose={() => {
-        // onCancel 要在放弃进入之前：离开这个房间的地址时，要靠进房的信息认出它。
+        // onCancel 要在放弃进入之前调用，因为离开时要靠进房的信息认出这个房间的地址。
         onCancel()
         roomEntryStore.reset()
       }}

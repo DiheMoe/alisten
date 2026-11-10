@@ -101,7 +101,7 @@ func ticketValid(t *testing.T, s *Service, ticket string) bool {
 	return err == nil
 }
 
-// 返回 token 当前所属的成员；token 已经失效时 ok 为 false。
+// 返回 token 当前所属的成员。token 已经失效时 ok 为 false。
 func tokenOwner(t *testing.T, store *porttest.Store, token string) (m member.Member, ok bool) {
 	t.Helper()
 	m, err := store.MemberByToken(t.Context(), hashSecret(token))
@@ -314,7 +314,7 @@ type deviceSave struct {
 	ttl      time.Duration
 }
 
-// 记下每次保存的登录设备凭证；fail 不为 nil 时保存失败。
+// 记下每次保存的登录设备凭证。fail 不为 nil 时保存失败。
 type recordingDevices struct {
 	*porttest.Devices
 	saves []deviceSave
@@ -343,7 +343,7 @@ func deviceQuota(device string) string {
 	return "login:device:" + hex.EncodeToString(hashSecret(device))
 }
 
-// 账号当前密码哈希的指纹，即 SHA-256 的前 16 字节：凭证只存它，不存密码哈希本身。
+// 账号当前密码哈希的指纹，即 SHA-256 的前 16 字节。凭证只存指纹，不存密码哈希本身。
 func passwordStampOf(t *testing.T, store *porttest.Store, username string) string {
 	t.Helper()
 	account, err := store.AccountByUsername(t.Context(), username)
@@ -354,7 +354,7 @@ func passwordStampOf(t *testing.T, store *porttest.Store, username string) strin
 	return string(sum[:16])
 }
 
-// 登录成功时签发绑定账号的凭证；带着它再登录，扣的是凭证自己的额度，返回同一个凭证并重新计算 180 天的有效期。
+// 登录成功时签发绑定账号的凭证。带着凭证再登录，扣的是凭证自己的额度，返回同一个凭证并重新计算 180 天的有效期。
 func TestLoginIssuesDevice(t *testing.T) {
 	a, s, store, q, devices := newDeviceAccounts(t)
 	alice := registerAccount(t, a, s, "alice", "correct horse")
@@ -413,7 +413,7 @@ func TestLoginWithDeviceWhileUsernameQuotaExhausted(t *testing.T) {
 	}
 }
 
-// 未知的、别的账号的凭证都当作没带：扣用户名额度，成功时签发这个账号的新凭证。
+// 未知的、别的账号的凭证都当作没带，所以扣用户名额度，成功时签发这个账号的新凭证。
 func TestLoginWithForeignDeviceUsesUsernameQuota(t *testing.T) {
 	a, s, store, q, devices := newDeviceAccounts(t)
 	alice := registerAccount(t, a, s, "alice", "correct horse")
@@ -488,7 +488,7 @@ func TestLoginFailureIssuesNoDevice(t *testing.T) {
 	}
 }
 
-// 凭证要在签发会话之前存好：存不了时整个登录失败，游客的会话不变，可以重试。
+// 凭证要在签发会话之前存好。凭证存不了时整个登录失败，游客的会话不变，可以重试。
 func TestLoginFailsWhenDeviceCannotBeSaved(t *testing.T) {
 	a, s, store, _, devices := newDeviceAccounts(t)
 	registerAccount(t, a, s, "alice", "correct horse")
@@ -506,8 +506,8 @@ func TestLoginFailsWhenDeviceCannotBeSaved(t *testing.T) {
 	}
 }
 
-// 知道旧密码的人反复登录囤下的凭证，在修改、重置密码之后都当作没带：用户名额度用完时一律被限流。
-// 用新密码登录成功时签发新的凭证；没改过密码的账号，凭证照常有效。
+// 知道旧密码的人反复登录囤下的凭证，在修改、重置密码之后都当作没带，所以用户名额度用完时一律被限流。
+// 用新密码登录成功时签发新的凭证。没改过密码的账号，凭证照常有效。
 func TestLoginDeviceExpiresWhenPasswordChanges(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -731,7 +731,7 @@ func (noRevocation) PublishSessionsRevoked(context.Context, [][]byte) error {
 	return porttest.ErrRedisDown
 }
 
-// 会话已经删除，断开的通知发不出去时照常成功：用这些会话的票据建立的连接由网关定期核对凭证时断开。
+// 会话已经删除时，即使断开的通知发不出去，操作也照常成功。用这些会话的票据建立的连接，会在网关定期核对凭证时断开。
 func TestAccountOperationsSucceedWhenRevocationFails(t *testing.T) {
 	store := porttest.New()
 	node := porttest.NewRedis().Node("a")
@@ -911,7 +911,7 @@ func verifiedByGitHub(t *testing.T, a *Accounts, s Session) {
 	}
 }
 
-// 只绑定了 GitHub 的账号补设用户名和密码，不是注册新账号：注册关闭时也可以。
+// 只绑定了 GitHub 的账号补设用户名和密码不是注册新账号，所以注册关闭时也可以。
 func TestGitHubAccountSetsPasswordWhileRegistrationClosed(t *testing.T) {
 	a, s, store, q, _ := newAccounts(t)
 	gh := githubAccount(t, s, store, 42)
@@ -942,7 +942,7 @@ func TestGitHubAccountSetsPasswordWhileRegistrationClosed(t *testing.T) {
 	}
 }
 
-// 拿到只绑定了 GitHub 的账号的一个会话（这里是兑换了配对码），不能抢先设成自己的用户名和密码：要先用账号绑定的 GitHub 确认，
+// 有人拿到了只绑定 GitHub 的账号的一个会话（这里是兑换了配对码），也不能抢先设成自己的用户名和密码。补设之前要先用账号绑定的 GitHub 确认，
 // 确认只对确认时的那个会话有效。本人确认之后设置，其他设备全部退出，对方随之下线。
 func TestGitHubAccountCredentialsNeedGitHubVerification(t *testing.T) {
 	a, s, store, _, revoked := newAccounts(t)
@@ -994,7 +994,7 @@ func TestGitHubAccountCredentialsNeedGitHubVerification(t *testing.T) {
 	}
 }
 
-// 存储中的空密码哈希表示没有设置过密码，不是格式错误的哈希：按密码错误处理，不报内部错误。
+// 存储中的空密码哈希表示没有设置过密码，不是格式错误的哈希，所以按密码错误处理，不报内部错误。
 func TestEmptyPasswordHashIsWrongPassword(t *testing.T) {
 	a, s, store, _, _ := newAccounts(t)
 	alice := createMember(t, s)

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { useSettingSave } from '@/shared/lib/use-setting-save'
 import { SaveStatus, Switch } from '@/shared/ui'
 
-// id 是行内控件的 id：标题用 label 指向它，说明和错误的 id 由它派生。
+// id 是行内控件的 id。标题用 label 指向这个控件，说明和错误的 id 都由 id 派生。
 export function SettingRow({ id, title, description, error, status, labelled = true, children }: {
   id: string
   title: ReactNode

@@ -1,4 +1,4 @@
-后台没有配置 GitHub OAuth App 时，站点说明不提供 GitHub 登录，发起授权、兑换和解绑都返回 NOT_FOUND。这里的请求会跟随跳转，回调的跳转目标见 TestGitHubOAuthAppChanges。
+后台没有配置 GitHub OAuth App 时，站点说明不提供 GitHub 登录，发起授权、兑换和解绑都返回 NOT_FOUND。这个场景的请求会跟随跳转，所以回调的跳转目标见 TestGitHubOAuthAppChanges。
 
 -- request --
 GET /api/site

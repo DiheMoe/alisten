@@ -2,7 +2,7 @@ import type { ComponentType } from 'react'
 import { use, useEffect, useId, useReducer } from 'react'
 import { PageLoadFailed } from './page-load-failed'
 
-// Vite 的预加载包装在同一文档中对每个样式文件只请求一次，失败后也不再请求：重试时脚本能重新取到，样式文件却不会再请求。
+// Vite 的预加载包装在同一个文档里对每个样式文件只请求一次，失败后也不再请求。所以重试时脚本能重新取到，样式文件却不会再请求。
 // <link> 的 error 事件不冒泡，只能在捕获阶段记录失败的样式文件。
 const failedStyles = new WeakSet<HTMLLinkElement>()
 let watchingStyles = false
@@ -21,7 +21,7 @@ function stylesheets(): HTMLLinkElement[] {
   return [...document.querySelectorAll<HTMLLinkElement>('link[rel=stylesheet]')]
 }
 
-// 旧的 <link> 已被其他代码移出文档时，把新的加到 head 末尾：不在文档中的 <link> 永远不会触发 load 或 error。
+// 旧的 <link> 已经被其他代码移出文档时，把新的 <link> 加到 head 末尾，因为不在文档里的 <link> 永远不会触发 load 或 error。
 function requestAgain(link: HTMLLinkElement): Promise<HTMLLinkElement> {
   const next = link.cloneNode() as HTMLLinkElement
   const settled = new Promise<HTMLLinkElement>((resolve) => {
@@ -35,21 +35,21 @@ function requestAgain(link: HTMLLinkElement): Promise<HTMLLinkElement> {
   return settled
 }
 
-// load 只写成 import(...).then(module => ...)，失败由 lazyPage 处理。不要写成 .then(ok, fail)：Vite 会把 import
-// 和紧随其后的 .then 一起放进预加载包装，样式文件预加载失败时包装直接拒绝，这个 .then 不会被调用，fail 也就不会执行。
+// load 只写成 import(...).then(module => ...)，失败由 lazyPage 处理。不要写成 .then(ok, fail)，因为 Vite 会把 import
+// 和紧随其后的 .then 一起放进预加载包装。样式文件预加载失败时包装直接拒绝，这个 .then 不会被调用，fail 也就不会执行。
 export function lazyPage<P extends object>(load: () => Promise<ComponentType<P>>): ComponentType<P> {
   let Loaded: ComponentType<P> | null = null
   let loading: Promise<void> | undefined
   let failures = 0
   let failedLinks: HTMLLinkElement[] = []
-  // 失败提示显示过一次即失效：离开后再回来的新页面实例会重新加载，不会再看到旧的失败。
+  // 失败提示显示过一次就失效，这样离开后再回来的新页面实例会重新加载，不会再看到旧的失败。
   let shownTo: string | null = null
 
   async function fetchPage(): Promise<ComponentType<P>> {
     if (failedLinks.length > 0) {
       const requested = await Promise.all(failedLinks.map(requestAgain))
       failedLinks = requested.filter(link => failedStyles.has(link))
-      // 缺少样式的页面无法正常使用，样式文件仍取不到时本次重试按失败处理。
+      // 缺少样式的页面无法正常使用，所以样式文件仍然取不到时，这次重试按失败处理。
       if (failedLinks.length > 0)
         throw new Error('样式文件仍然取不到')
     }

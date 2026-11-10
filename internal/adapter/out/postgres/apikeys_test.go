@@ -120,7 +120,7 @@ func TestConcurrentFirstResetsCreateOneBot(t *testing.T) {
 	store, pool := newStore(t)
 	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
 
-	// 先锁住房间行，两个首次生成都在等它，放开之后同时进行。
+	// 先锁住房间行，让两次首次生成都等这把锁，放开之后再同时进行。
 	tx, err := pool.Begin(t.Context())
 	if err != nil {
 		t.Fatal(err)

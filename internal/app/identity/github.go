@@ -25,15 +25,16 @@ const (
 	githubGrantTTL   = time.Minute
 	// 用 GitHub 确认身份之后，要在这段时间内补设用户名和密码。
 	githubVerificationTTL = 10 * time.Minute
-	// 每次发起授权都在 Redis 中保存一个 10 分钟的 state，额度与登录相同。
+	// 每次发起授权都会在 Redis 中保存一个 10 分钟的 state，所以按 IP 限制发起的次数。额度的大小和登录按 IP 的额度相同，但分开计数。
 	githubAuthorizeBurst  = 10
 	githubAuthorizeRefill = time.Minute
 )
 
-// 后台配置了 GitHub OAuth App 才能使用，没有配置时 Authorize、Callback、Exchange 和 Unbind 都返回 ErrGitHubDisabled。它们每次都重新读取
-// 配置，不缓存：后台的修改在所有实例上立即生效，实例之间不必同步。流程：Authorize 记下意图、客户端、nonce 和 PKCE 的 verifier，返回
-// GitHub 的授权地址；GitHub 回调时 Callback 换取用户 ID，生成一次性的兑换码，GitHub 没有授权时 Cancel 作废 state，两者都返回记下的
-// 客户端，回调跳回它；发起授权的客户端用兑换码和它保存的 nonce 调用 Exchange，按意图登录、注册、绑定或确认身份。
+// 后台配置了 GitHub OAuth App 才能使用，没有配置时 Authorize、Callback、Exchange 和 Unbind 都返回 ErrGitHubDisabled。
+// 这几个方法每次都重新读取配置，不缓存，这样后台的修改在所有实例上立即生效，实例之间不必同步。
+// 流程：Authorize 记下意图、客户端、nonce 和 PKCE 的 verifier，返回 GitHub 的授权地址。GitHub 回调时，Callback 换取用户 ID，生成一次性的兑换码。
+// GitHub 没有授权时，Cancel 作废 state。Callback 和 Cancel 都返回记下的客户端，回调跳回这个客户端。
+// 发起授权的客户端用兑换码和自己保存的 nonce 调用 Exchange，按意图登录、注册、绑定或确认身份。
 type GitHub struct {
 	accounts *Accounts
 	apps     port.GitHubOAuthApps
@@ -45,7 +46,7 @@ func NewGitHub(accounts *Accounts, apps port.GitHubOAuthApps, oauth port.GitHubO
 	return &GitHub{accounts: accounts, apps: apps, oauth: oauth, logins: logins}
 }
 
-// 没有配置时返回空字符串。不提供读取 Client Secret 的方法：它只用来向 GitHub 换取令牌。
+// 没有配置时返回空字符串。不提供读取 Client Secret 的方法，因为 Client Secret 只用来向 GitHub 换取令牌。
 func (g *GitHub) ClientID(ctx context.Context) (string, error) {
 	app, err := g.apps.GitHubOAuthApp(ctx)
 	if err != nil {
@@ -115,10 +116,10 @@ func (g *GitHub) Authorize(ctx context.Context, memberID, clientIP string, inten
 	return g.oauth.AuthorizeURL(app, state, verifier), nil
 }
 
-// 只换取 GitHub 用户 ID，不修改账号，返回发起授权的客户端和一次性的兑换码。登录、注册和绑定都留给 Exchange：回调请求不带成员 token
-// 和 nonce，谁都可以把自己发起的授权地址发给别人，在回调时绑定，别人一授权，他的 GitHub 就绑到了发起者的账号上。
-// 取出 state 之后出错时也返回发起授权的客户端，失败的结果同样要跳回它。授权进行中后台换了 OAuth App 时，GitHub 不认原来签发的
-// 授权码，返回 ErrGitHubFailed。
+// 只换取 GitHub 用户 ID，不修改账号，返回发起授权的客户端和一次性的兑换码。登录、注册和绑定都留给 Exchange，因为回调请求不带成员 token
+// 和 nonce。如果在回调时就绑定，谁都可以把自己发起的授权地址发给别人，别人一授权，别人的 GitHub 就绑到了发起者的账号上。
+// 取出 state 之后出错时也返回发起授权的客户端，因为失败的结果同样要跳回这个客户端。授权进行中后台换了 OAuth App 时，GitHub 不认原来签发的
+// 授权码，Callback 返回 ErrGitHubFailed。
 func (g *GitHub) Callback(ctx context.Context, state, code string) (port.GitHubClient, string, error) {
 	request, err := g.logins.TakeRequest(ctx, hashSecret(state))
 	expired := errors.Is(err, port.ErrCodeNotFound)
@@ -157,13 +158,13 @@ func (g *GitHub) Cancel(ctx context.Context, state string) (port.GitHubClient, e
 }
 
 type GitHubResult struct {
-	// 登录了已经绑定这个 GitHub 账号的账号时才有：发出请求的游客会话已经换成这个账号的新会话。
+	// 登录了已经绑定这个 GitHub 账号的账号时才有 Session，这时发出请求的游客会话已经换成这个账号的新会话。
 	Session *Session
 	Member  member.Member
 	Account Account
 }
 
-// current 和 currentToken 是发出请求的成员和它的成员 token，必须是发起授权的那个成员。
+// current 是发出请求的成员，currentToken 是 current 的成员 token。current 必须是发起授权的那个成员。
 func (g *GitHub) Exchange(ctx context.Context, current member.Member, currentToken, code, nonce string) (GitHubResult, error) {
 	if _, err := g.app(ctx); err != nil {
 		return GitHubResult{}, err
@@ -195,7 +196,7 @@ func (g *GitHub) login(ctx context.Context, current member.Member, currentToken 
 	account, err := a.members.AccountByGitHub(ctx, githubID)
 	if err == nil {
 		session, err := a.signIn(ctx, currentToken, account)
-		// 账号的密码恰好在这时被修改或重置：修改删除了其他会话，这次登录也作废，重新登录即可。
+		// 账号的密码恰好在这时被修改或重置。修改删除了其他会话，这次登录也随之作废，重新登录即可。
 		if errors.Is(err, port.ErrAccountPasswordChanged) {
 			return GitHubResult{}, ErrGitHubLoginExpired
 		}
@@ -207,7 +208,7 @@ func (g *GitHub) login(ctx context.Context, current member.Member, currentToken 
 	if !errors.Is(err, port.ErrMemberNotFound) {
 		return GitHubResult{}, err
 	}
-	// 没有绑定过的 GitHub 账号登录就是注册：绑到发出请求的游客上，成员和它的会话都不变。
+	// 没有绑定过的 GitHub 账号登录就是注册。GitHub 账号绑到发出请求的游客上，成员和成员的会话都不变。
 	settings, err := a.site.Settings(ctx)
 	if err != nil {
 		return GitHubResult{}, err
@@ -235,7 +236,7 @@ func (g *GitHub) bind(ctx context.Context, current member.Member, githubID int64
 	return GitHubResult{Member: current, Account: Account{Username: profile.Username, Email: profile.Email, GitHub: true}}, nil
 }
 
-// 只确认身份，不修改账号：GitHub 账号要是这个账号绑定的。确认记在发出请求的会话上，Accounts.Register 补设用户名和密码时要用。
+// 只确认身份，不修改账号。GitHub 账号必须是这个账号绑定的那个。确认记在发出请求的会话上，Accounts.Register 补设用户名和密码时要用。
 func (g *GitHub) verify(ctx context.Context, current member.Member, currentToken string, githubID int64) (GitHubResult, error) {
 	account, err := g.accounts.members.AccountByID(ctx, current.ID)
 	if err != nil {

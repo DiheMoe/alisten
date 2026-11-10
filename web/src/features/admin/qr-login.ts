@@ -28,7 +28,7 @@ function pending(status: QRLoginStatus): boolean {
 
 export function nextQrLogin(state: QrLoginState, event: QrLoginEvent): QrLoginStep {
   if (!pending(state.status)) {
-    // 本机判定过期时可能还有一次查询尚未返回：它返回 success 时服务端已经保存了登录状态，仍按成功处理。
+    // 本机判定过期时，可能还有一次查询没有返回。这次查询返回 success 时，服务端已经保存了登录状态，所以仍按成功处理。
     if (state.status === 'expired' && event.kind === 'checked' && event.result?.status === 'success')
       return { state: { ...state, status: 'success', message: event.result.message }, polling: false }
     return { state, polling: false }

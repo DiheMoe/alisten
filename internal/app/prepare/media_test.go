@@ -123,7 +123,7 @@ func TestLinkRunnerSkipsCoverOfOtherFormats(t *testing.T) {
 	}
 }
 
-// 元数据里有时长：没有检查大小时，内容全是零的音频会按元数据的时长准备成功，而不是因为无法分析而失败。
+// 元数据里有时长。如果不检查大小，内容全是零的音频会按元数据的时长准备成功，而不是因为无法分析而失败。
 func TestLinkRunnerRejectsAudioOverLimit(t *testing.T) {
 	d := &downloader{meta: track.Meta{Title: "晴天", Duration: 3 * time.Second}, audio: make([]byte, port.MaxAudioSize+1), cover: []byte("jpeg"), coverExt: "jpg"}
 	store := porttest.NewMediaStore()

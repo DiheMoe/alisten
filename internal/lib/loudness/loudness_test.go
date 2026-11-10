@@ -44,8 +44,8 @@ func sine(sampleRate int, freq, amp, seconds float64) []float64 {
 
 func TestAnalyzeSamplesSine(t *testing.T) {
 	const fs = 48000
-	// 997 Hz、振幅 0.25：原始 RMS 对应约 -12.73 LUFS，
-	// K 加权在 1 kHz 附近约有 +0.6 dB 增益，预期约 -12.1 LUFS。
+	// 997 Hz、振幅 0.25 的正弦波，原始 RMS 对应约 -12.73 LUFS。
+	// K 加权在 1 kHz 附近约有 +0.6 dB 增益，所以预期约 -12.1 LUFS。
 	res, err := AnalyzeSamples(sine(fs, 997, 0.25, 3), fs, 2)
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +91,7 @@ func TestAnalyzeSamplesMonoIsDualMono(t *testing.T) {
 			if math.Abs(got.Integrated-want.Integrated) > 1e-9 || got.Peak != want.Peak || got.Duration != want.Duration {
 				t.Errorf("单声道 = %+v，期望与双声道相同：%+v", *got, *want)
 			}
-			// 振幅 0.25 的正弦波每个声道的均方是 0.03125，左右声道之和 0.0625 即 -12.04 dB；997 Hz 处 K 加权的增益与 -0.691 的修正基本抵消。
+			// 振幅 0.25 的正弦波每个声道的均方是 0.03125，左右声道之和 0.0625 即 -12.04 dB。997 Hz 处 K 加权的增益与 -0.691 的修正基本抵消。
 			if math.Abs(got.Integrated-(-12.04)) > 0.1 {
 				t.Errorf("Integrated = %.2f LUFS，期望约 -12.04", got.Integrated)
 			}
@@ -99,9 +99,9 @@ func TestAnalyzeSamplesMonoIsDualMono(t *testing.T) {
 	}
 }
 
-// 单声道的权重在门控之前计入，与 libebur128 的 DUAL_MONO 一致。997 Hz 的正弦波振幅为 a 时，按单声道算约 20·log10(a) - 3.01 LUFS，
-// 振幅 3.55e-4 的安静段是 -72 LUFS，低于 -70 LUFS 的绝对门限；按双单声道算是 -69 LUFS，要参与综合响度。
-// 权重放到门控之后，这一段会被绝对门限丢掉，结果与复制成左右声道的立体声不同。
+// 单声道的权重在门控之前计入，与 libebur128 的 DUAL_MONO 一致。997 Hz 的正弦波振幅为 a 时，按单声道算约 20·log10(a) - 3.01 LUFS。
+// 所以振幅 3.55e-4 的安静段按单声道算是 -72 LUFS，低于 -70 LUFS 的绝对门限。按双单声道算是 -69 LUFS，要参与综合响度。
+// 如果权重放到门控之后，这一段会被绝对门限丢掉，结果就与复制成左右声道的立体声不同。
 func TestAnalyzeSamplesMonoWeightsBeforeGating(t *testing.T) {
 	const fs, quiet = 48000, 3.55e-4
 	for _, tt := range []struct {
@@ -109,7 +109,7 @@ func TestAnalyzeSamplesMonoWeightsBeforeGating(t *testing.T) {
 		dual []float64
 		want float64 // LUFS
 	}{
-		// 安静段（-69 LUFS）之后是响 6 dB 的一段（-63 LUFS），两段等长：能量平均约 -65 LUFS，安静段在相对门限之上。
+		// 安静段（-69 LUFS）之后是响 6 dB 的一段（-63 LUFS），两段等长。能量平均约 -65 LUFS，安静段在相对门限之上。
 		{"安静段和较响的一段", append(sine(fs, 997, quiet, 2), sine(fs, 997, 2*quiet, 2)...), -65},
 		{"不足 400ms 的安静段", sine(fs, 997, quiet, 0.3), -69},
 	} {
@@ -199,7 +199,7 @@ func TestSpotifyGain(t *testing.T) {
 		want float64
 	}{
 		{"正常提升", Result{Integrated: -20, Peak: -10}, 6},
-		// 响度 -20 LUFS、峰值 -2 dBFS：增益 +6 dB 会使峰值达到 +4 dBFS，被限制到 -1 - (-2) = +1 dB。
+		// 响度 -20 LUFS、峰值 -2 dBFS 时，+6 dB 的增益会使峰值达到 +4 dBFS，所以增益被限制到 -1 - (-2) = +1 dB。
 		{"峰值限制", Result{Integrated: -20, Peak: -2}, 1},
 		{"需要降低", Result{Integrated: -10, Peak: -6}, -4},
 	}
@@ -216,7 +216,7 @@ func TestCoefficient(t *testing.T) {
 	if c := r.Coefficient(); math.Abs(c-1.9953) > 0.001 {
 		t.Errorf("Coefficient = %v, 预期约 1.995", c)
 	}
-	// 响度 -8 LUFS 高于目标：-14 - (-8) = -6 dB，系数约 0.501。
+	// 响度 -8 LUFS 高于目标，增益是 -14 - (-8) = -6 dB，系数约 0.501。
 	r = &Result{Integrated: -8, Peak: -3}
 	if c := r.Coefficient(); math.Abs(c-0.5012) > 0.001 {
 		t.Errorf("Coefficient = %v, 预期约 0.501", c)

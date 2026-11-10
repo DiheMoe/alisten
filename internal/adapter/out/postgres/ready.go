@@ -16,7 +16,7 @@ import (
 	"github.com/dihemoe/alisten/db/migrations"
 )
 
-// 只读取版本表：goose 的 HasPending 在缺少版本表时会建表，就绪检查不能修改数据库。
+// 只读取版本表，不用 goose 的 HasPending，因为 HasPending 在缺少版本表时会建表，而就绪检查不能修改数据库。
 func CheckMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 	db := stdlib.OpenDBFromPool(pool)
 	defer func() { _ = db.Close() }()

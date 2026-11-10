@@ -194,7 +194,7 @@ func TestToMP3(t *testing.T) {
 	}
 }
 
-// 第二条音轨是声道更多的默认音轨：不指定映射时 ffmpeg 会选它。
+// 第二条音轨是声道更多的默认音轨，不指定映射时 ffmpeg 会选这一条。
 func TestToMP3UsesFirstAudioTrack(t *testing.T) {
 	input := generate(t, "two.mp4", slices.Concat(sine, []string{
 		"-f", "lavfi", "-i", "sine=frequency=880:duration=2", "-map", "0:a", "-map", "1:a", "-c:a", "aac",
@@ -219,7 +219,7 @@ func TestToMP3DropsSourceChapters(t *testing.T) {
 	}
 }
 
-// 与 yt-dlp 的默认质量一样用 VBR：ffmpeg 给码率变化的 mp3 写 Xing 头，固定码率时写 Info 头。
+// 和 yt-dlp 的默认质量一样用 VBR。ffmpeg 给码率变化的 mp3 写 Xing 头，固定码率时写 Info 头。
 func TestToMP3EncodesVBR(t *testing.T) {
 	input := generate(t, "audio.m4a", slices.Concat(sine, []string{"-c:a", "aac"})...)
 	mp3, release, err := New(t.TempDir(), discard).ToMP3(t.Context(), source(t, input))
@@ -258,7 +258,7 @@ func TestToMP3RejectsInputOverLimit(t *testing.T) {
 		rejected bool
 		logged   int
 	}{
-		// 内容全是零，复制完之后 ffmpeg 认不出格式：转码失败，但不是因为超过上限。
+		// 内容全是零，复制完之后 ffmpeg 认不出格式，所以转码失败，但不是因为超过上限。
 		{port.MaxAudioSize, false, 1},
 		// 超过上限时不运行 ffmpeg，也就没有转码失败的日志。
 		{port.MaxAudioSize + 1, true, 0},
@@ -282,7 +282,7 @@ func TestToMP3RejectsInputOverLimit(t *testing.T) {
 	}
 }
 
-// 把 -fs 换成很小的值，看真实的 ffmpeg 怎样处理：截断时正常退出，输出不少于 -fs 的字节数。
+// 把 -fs 换成很小的值，看真实的 ffmpeg 怎样处理。期望截断时正常退出，输出不少于 -fs 的字节数。
 func TestOutputStopsAtFileSizeLimit(t *testing.T) {
 	input := generate(t, "long.m4a", "-f", "lavfi", "-i", "sine=frequency=440:duration=10", "-c:a", "aac")
 	output := filepath.Join(t.TempDir(), "audio.mp3")
@@ -326,8 +326,8 @@ func listenLocal(t *testing.T) (address string, connected func() bool) {
 	}
 }
 
-// 输入复制成了不带扩展名的文件，ffmpeg 不会把它当 HLS 播放列表，所以 HLS 一行走不到打开分片的一步；DASH 清单按内容识别，会走到那一步，被白名单拒绝。
-// ffmpeg 读本地文件时默认的白名单是 file,crypto,data：stderr 里写着 'file'，说明命令行上的 -protocol_whitelist file 起了作用。
+// 输入复制成了不带扩展名的文件，ffmpeg 不会把它当 HLS 播放列表，所以 HLS 一行走不到打开分片的一步。DASH 清单按内容识别，会走到那一步，然后被白名单拒绝。
+// ffmpeg 读本地文件时默认的白名单是 file,crypto,data。stderr 里写的是 'file'，说明命令行上的 -protocol_whitelist file 起了作用。
 func TestToMP3DoesNotUseNetwork(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -348,7 +348,7 @@ func TestToMP3DoesNotUseNetwork(t *testing.T) {
 			address, connected := listenLocal(t)
 			root := t.TempDir()
 			logger, records := recorder()
-			// 地址如果被访问，ffmpeg 会一直等响应：限定期限，免得挂住测试。
+			// 地址如果被访问，ffmpeg 会一直等响应，所以限定期限，免得挂住测试。
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			_, release, err := New(root, logger).ToMP3(ctx, porttest.LinkFile(fmt.Sprintf(tt.manifest, address)))

@@ -56,7 +56,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
       this.#onRoom()
     }
     catch (error) {
-      // 挂载中途失败时必须清理：否则房间的订阅仍会在已移除的 <audio> 上加载和播放，重新挂载的 <audio> 也不会再加载这首歌。
+      // 挂载中途失败时必须清理，否则房间的订阅仍会在已移除的 <audio> 上加载和播放，重新挂载的 <audio> 也不会再加载这首歌。
       this.detach()
       throw error
     }
@@ -67,7 +67,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
     if (!audio)
       return
     this.#stop()
-    // pause 事件要到下一个任务才派发，那时监听已经移除，定时器和 rAF 只能在这里取消。
+    // pause 事件要到下一个任务才派发，那时监听已经移除，所以定时器和 rAF 只能在这里取消。
     this.#onPause()
     audio.removeEventListener('playing', this.#onPlaying)
     audio.removeEventListener('pause', this.#onPause)
@@ -99,7 +99,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
       this.#reload(current)
     else
       this.#start()
-    // 恢复播放时重新获取快照；即使快照没有变化，也按应在位置重新定位一次。
+    // 恢复播放时重新获取快照。即使快照没有变化，也按应在位置重新定位一次。
     void roomStore.sync().then(() => {
       if (this.#current && sameTrack(this.#current, current))
         this.#start()
@@ -124,7 +124,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
       return
     }
     if (previous && sameTrack(previous, next)) {
-      // 同一首歌的新快照来自重连的握手或 room.sync：连接恢复了，不等下一次重试；重试用完之后也靠它恢复。
+      // 同一首歌的新快照来自重连的握手或 room.sync，说明连接恢复了，所以不等下一次重试。重试用完之后也靠这样的快照恢复。
       if (this.#audio?.error)
         this.#reload(next)
       return

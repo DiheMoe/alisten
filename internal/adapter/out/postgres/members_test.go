@@ -309,7 +309,7 @@ func TestChangePasswordChecksSessionAndPassword(t *testing.T) {
 	}
 }
 
-// 模拟 SetPassword 或另一次 ChangePassword 的事务，先不提交：改密码哈希，删除 keep 以外的会话，keep 为 nil 时全部删除。
+// 模拟 SetPassword 或另一次 ChangePassword 的事务，先不提交。事务里改密码哈希，删除 keep 以外的会话，keep 为 nil 时全部删除。
 func changePasswordMeanwhile(t *testing.T, store *Store, pool *pgxpool.Pool, memberID string, keep []byte, want error) {
 	t.Helper()
 	tx, err := pool.Begin(t.Context())
@@ -572,7 +572,7 @@ func TestOnlyAccountsHavePasswordOrEmail(t *testing.T) {
 	}
 }
 
-// 补设用户名和密码时，用 GitHub 登录的另一台设备恰好在签发会话：补设要等它提交，再把它签发的会话一并删除。
+// 补设用户名和密码时，用 GitHub 登录的另一台设备恰好在签发会话。补设要等那台设备的事务提交，再把它签发的会话一并删除。
 func TestAddCredentialsWaitsForGitHubLogin(t *testing.T) {
 	store, pool := newStore(t)
 	alice := createMember(t, store, "alice", "游客-1a2b")

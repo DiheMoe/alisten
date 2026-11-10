@@ -40,7 +40,7 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
-// 文件可以随意改写：元数据的类型不对时当作没有，由服务端决定用不用；音源和 ID 不对就认不出是哪首歌，整个文件不导入。
+// 文件可以随意改写。元数据的类型不对时当作没有，由服务端决定用不用。音源和 ID 不对就认不出是哪首歌，整个文件都不导入。
 function importedTrack(entry: unknown): ImportedTrack | null {
   if (!isRecord(entry) || typeof entry.source !== 'string' || !sources.has(entry.source) || typeof entry.id !== 'string' || entry.id === '')
     return null

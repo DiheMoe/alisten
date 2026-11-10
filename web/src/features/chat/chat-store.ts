@@ -9,7 +9,7 @@ type ChatItem
   = | { kind: 'message', key: string, member: Member, text: string, atMs: number }
     | { kind: 'activity', key: string, member: Member | null, text: string, atMs: number }
 
-// 不保留聊天记录：只显示这次进入房间之后收到的消息和房间动态，换房间时清空。
+// 不保留聊天记录。只显示这次进入房间之后收到的消息和房间动态，换房间时清空。
 class ChatStore extends Store<{ items: ChatItem[] }> {
   #roomId: string | null = null
 

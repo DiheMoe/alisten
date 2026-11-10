@@ -8,7 +8,7 @@ import (
 type GitHubIntent int
 
 const (
-	// 游客用 GitHub 登录：GitHub 账号没有绑定过时，就是注册。
+	// 游客用 GitHub 登录。GitHub 账号还没有绑定过时，登录就是注册。
 	GitHubLogin GitHubIntent = iota + 1
 	// 已注册的成员绑定 GitHub。
 	GitHubBind
@@ -33,7 +33,7 @@ type GitHubRequest struct {
 	MemberID string
 	// 发起授权的客户端保存的 nonce 的 SHA-256。
 	NonceHash []byte
-	// PKCE 的 code verifier：GitHub 签发的授权码只能配合它换取令牌，别人的授权码放进这次授权的回调里换不到令牌。
+	// PKCE 的 code verifier。GitHub 签发的授权码只能配合 verifier 换取令牌，所以别人的授权码放进这次授权的回调里也换不到令牌。
 	CodeVerifier string
 }
 
@@ -60,7 +60,7 @@ type GitHubOAuthApps interface {
 
 // GitHub 的 OAuth 授权，使用调用方传入的 OAuth App。
 type GitHubOAuth interface {
-	// 请用户授权的地址：用户同意之后，GitHub 带着 state 和授权码回调，授权码与 verifier 绑定。
+	// 请用户授权的地址。用户同意之后，GitHub 带着 state 和授权码回调，授权码与 verifier 绑定。
 	AuthorizeURL(app GitHubOAuthApp, state, verifier string) string
 	// 用回调带回的授权码和发起那次授权时的 verifier 换取 GitHub 用户的 ID。
 	UserID(ctx context.Context, app GitHubOAuthApp, code, verifier string) (int64, error)

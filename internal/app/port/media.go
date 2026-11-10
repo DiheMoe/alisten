@@ -9,7 +9,7 @@ import (
 )
 
 type MediaStore interface {
-	// body 要能 Seek：签名要先读一遍算出摘要，失败重试时也要从头再读。
+	// body 要能 Seek，因为签名要先读一遍算出摘要，失败重试时也要从头再读。
 	Put(ctx context.Context, key string, body io.ReadSeeker, contentType string) error
 	Exists(ctx context.Context, key string) (bool, error)
 	// 对象不存在时同样成功。
@@ -17,7 +17,7 @@ type MediaStore interface {
 }
 
 type StoredMedia struct {
-	// 曲目 ID 的 SHA-256（十六进制）。链接的曲目 ID 是 http(s) 地址，B 站的是 BV 号，两种 ID 不会相同，所以单凭它就能找到这首歌。
+	// 曲目 ID 的 SHA-256（十六进制）。链接的曲目 ID 是 http(s) 地址，B 站的是 BV 号，两种 ID 不会相同，所以单凭 Key 就能找到这首歌。
 	Key    string
 	Source track.Source
 	// 曲目 ID：链接曲目是链接本身，B 站的歌是 BV 号。
@@ -26,14 +26,14 @@ type StoredMedia struct {
 	Artist string
 	// 音频的字节数。
 	Size int64
-	// 两者的含义与 track.Meta 的同名字段相同。
+	// CoverURL 和 CoverKey 的含义与 track.Meta 的同名字段相同。
 	CoverURL     string
 	CoverKey     track.ObjectKey
 	StoredAt     time.Time
 	LastPlayedAt *time.Time
 }
 
-// 每种排序都以曲目 ID 作为最后的排序键，翻页时不重复也不遗漏。
+// 每种排序都以曲目 ID 作为最后的排序键，这样翻页时不重复也不遗漏。
 type MediaSort uint8
 
 const (
@@ -51,7 +51,7 @@ type MediaQuery struct {
 	// 从 1 开始，超出最后一页时返回空的一页。
 	Page int
 	Sort MediaSort
-	// 标题包含它就算匹配，不区分大小写，按字面匹配；为空表示不搜索。
+	// 标题包含 Title 就算匹配，不区分大小写，按字面匹配。为空表示不搜索。
 	Title string
 }
 

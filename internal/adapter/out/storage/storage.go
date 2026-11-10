@@ -47,14 +47,14 @@ func New(cfg Config) *Storage {
 		// 为兼容不支持虚拟主机寻址的 S3 服务，统一使用路径寻址。
 		UsePathStyle: true,
 		Credentials:  credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
-		// 仅在操作要求时计算或验证校验和：部分 S3 兼容服务不支持 SDK 默认添加的灵活校验和。
+		// 只在操作要求时计算或验证校验和，因为部分 S3 兼容服务不支持 SDK 默认添加的灵活校验和。
 		RequestChecksumCalculation: aws.RequestChecksumCalculationWhenRequired,
 		ResponseChecksumValidation: aws.ResponseChecksumValidationWhenRequired,
 	})
 	return &Storage{client: client, bucket: cfg.Bucket, region: cfg.Region}
 }
 
-// 只为新建的 bucket 设置访问策略：匿名请求只能读取 link/ 下的对象，不能列出对象。
+// 只为新建的 bucket 设置访问策略。策略让匿名请求只能读取 link/ 下的对象，不能列出对象。
 // 设置访问策略失败时删除刚创建的 bucket，否则下一次检查会把这个没有策略的 bucket 当作已经配置好的。
 func (s *Storage) EnsureBucket(ctx context.Context) (created bool, err error) {
 	_, err = s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(s.bucket)})

@@ -91,7 +91,7 @@ func (s *Store) AddCredentials(ctx context.Context, memberID, username, password
 	var deleted [][]byte
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		// UPDATE 锁住成员行，之后用新的语句删除会话：同时在用 GitHub 登录的设备提交之后才开始删，它签发的会话也会被删掉。
+		// UPDATE 先锁住成员行，再用新的语句删除会话。这样要等同时在用 GitHub 登录的设备提交之后才开始删，那台设备登录时签发的会话也会被删掉。
 		n, err := q.AddMemberCredentials(ctx, query.AddMemberCredentialsParams{ID: memberID, Username: &username, PasswordHash: &passwordHash})
 		if err != nil {
 			return usernameError(err)
@@ -246,7 +246,7 @@ func (s *Store) ChangePassword(ctx context.Context, memberID, currentPasswordHas
 	var deleted [][]byte
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		// 先锁住成员行，再用新的语句查会话：并发的修改或重置提交之后才开始查，才能看到它删掉的会话。
+		// 先锁住成员行，再用新的语句查会话。这样要等并发的修改或重置提交之后才开始查，才能看到那次修改或重置删掉的会话。
 		current, err := q.LockAccountPassword(ctx, memberID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return port.ErrMemberNotFound

@@ -45,7 +45,7 @@ func pingRedis(ctx context.Context, rdb *goredis.Client) error {
 	return nil
 }
 
-// Redis 不可用期间，订阅连接每秒重连一次，go-redis 每次都记一条同样的日志：同样的内容一分钟内只记一次。
+// Redis 不可用期间，订阅连接每秒重连一次，go-redis 每次都记一条同样的日志。所以同样的内容一分钟内只记一次。
 const redisLogRepeat = time.Minute
 
 // go-redis 自己的日志默认以纯文本写到 stderr，接入 slog 之后进程的全部输出才都是 JSON。

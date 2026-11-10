@@ -12,7 +12,7 @@ async function copyShareLink(shareId: string, copied: string): Promise<void> {
     notificationStore.success(copied)
   }
   catch {
-    // 非安全上下文没有剪贴板接口，用户也可能拒绝授权；有的浏览器在请求返回之后已不算用户操作，也会拒绝写入。
+    // 非安全上下文没有剪贴板接口，用户也可能拒绝授权。有的浏览器在请求返回之后已经不算用户操作，也会拒绝写入。
     notificationStore.info(`请手动复制分享链接：${url}`, 8000)
   }
 }

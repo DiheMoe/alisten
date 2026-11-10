@@ -15,7 +15,7 @@ export interface LyricLine {
 const timeTag = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/g
 const yrcLineTag = /^\[(\d+),(\d+)\]/
 const yrcWordTag = /\((\d+),(\d+),\d+\)/g
-// 逐字歌词没有空白行，要靠行尾和下一行的间隔判断间奏。间隔太短就算作换气：清除高亮再点亮会闪烁。
+// 逐字歌词没有空白行，要靠行尾和下一行的间隔判断间奏。间隔太短就算作换气，否则清除高亮再点亮会闪烁。
 const interludeGapMs = 3000
 const maxTranslationGapMs = 500
 const minInterludeMs = 7000
@@ -50,7 +50,7 @@ export function parseYrc(yrc: string): LyricLine[] {
       const text = row.slice(tag.index + tag[0].length, tags[i + 1]?.index)
       if (text.trim())
         words.push({ startMs: Number(tag[1]), durationMs: Number(tag[2]), text })
-      // 字独立绘制：只含空格的字单独成字时，它两侧的空格不会合并，词间距会变成两倍。
+      // 字是独立绘制的。只含空格的字如果单独成字，它两侧的空格不会合并，词间距会变成两倍。
       else if (words.length)
         words[words.length - 1].text += text
     }
@@ -70,13 +70,13 @@ export function wordProgress({ startMs, durationMs }: LyricWord, positionMs: num
   return Math.min(Math.max((positionMs - startMs) / Math.max(durationMs, 1), 0), 1)
 }
 
-// 唱得久的短词才强调：短音节一闪而过看不出来，长词放大会挤到相邻的字。
+// 唱得久的短词才强调，因为短音节一闪而过看不出来，长词放大会挤到相邻的字。
 export function wordEmphasis({ durationMs, text }: LyricWord): number {
   const { length } = text.trim()
   return durationMs > 1000 && length > 0 && length < 8 ? Math.min(durationMs, 2000) / 1000 - 1 : 0
 }
 
-// 由翻译找行，而不是由行找翻译：否则没有翻译的行会借用相邻行的翻译。
+// 由翻译找行，而不是由行找翻译，否则没有翻译的行会借用相邻行的翻译。
 export function withTranslations(lines: LyricLine[], translations: LyricLine[]): LyricLine[] {
   const sung = lines.filter(line => line.text)
   const gap = (a: LyricLine, b: LyricLine) => Math.abs(a.timeMs - b.timeMs)
@@ -96,7 +96,7 @@ export function withTranslations(lines: LyricLine[], translations: LyricLine[]):
   })
 }
 
-// 长间奏用点倒计时：每个点是一个不带文字的字，绘制时和逐字歌词走同一条路径。
+// 长间奏用点倒计时。每个点是一个不带文字的字，绘制时和逐字歌词走同一条路径。
 export function withInterludes(lines: LyricLine[]): LyricLine[] {
   const first = lines.find(line => line.text)
   const withIntro = first && lines[0].timeMs > 0 && first.timeMs >= minInterludeMs ? [{ timeMs: 0, text: '' }, ...lines] : lines

@@ -21,7 +21,7 @@ type proxy struct {
 	mu      sync.Mutex
 	closed  bool
 	refused bool
-	// 隧道两端的连接在 Hijack 之后不再由 server 管理，代理关闭时要由这里关闭。
+	// 隧道两端的连接在 Hijack 之后不再由 server 管理，代理关闭时要由 Close 逐个关闭。
 	tunnels map[*tunnel]struct{}
 	running sync.WaitGroup
 }

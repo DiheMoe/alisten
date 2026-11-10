@@ -14,7 +14,7 @@ const shareIDBytes = 16
 
 var shareIDLength = base64.RawURLEncoding.EncodedLen(shareIDBytes)
 
-// 开启分享和重新生成是同一个操作：每次都换一个新的分享 ID，旧链接随即失效。
+// 开启分享和重新生成是同一个操作。每次都换一个新的分享 ID，旧链接随即失效。
 func (s *Service) Share(ctx context.Context, memberID, id string) (string, error) {
 	if err := s.registered(ctx, memberID); err != nil {
 		return "", err
@@ -63,7 +63,7 @@ func (s *Service) CopyShared(ctx context.Context, memberID, shareID, name string
 	return p, err
 }
 
-// 分享 ID 取自地址，可能是任意文本：不像生成出来的就不必查存储，NUL 之类的字符也就不会到达数据库。
+// 分享 ID 取自地址，可能是任意文本。不像生成出来的分享 ID 就不必查存储，这样 NUL 之类的字符也不会到达数据库。
 func validShareID(id string) bool {
 	if len(id) != shareIDLength {
 		return false

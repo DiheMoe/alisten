@@ -44,10 +44,10 @@ export function IdentityEntry({ onOpen }: { onOpen: () => void }) {
   )
 }
 
-// 编辑时才挂载：每次开始编辑都从当前的昵称开始，保存中和失败的状态随编辑结束一起丢掉。
+// 编辑时才挂载，这样每次开始编辑都从当前的昵称开始，保存中和失败的状态也随编辑结束一起丢掉。
 function NameInput({ name, onDone }: { name: string, onDone: (saved: boolean, refocus: boolean) => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
-  // 结束编辑之后输入框随即卸载，有的浏览器会在卸载时触发失焦，不能再提交一次。
+  // 结束编辑之后输入框随即卸载。有的浏览器会在卸载时触发失焦，这时不能再提交一次。
   const doneRef = useRef(false)
   const errorId = useId()
   const { state, edit, submit } = useInlineSave(name, value => profileStore.save({ name: value.trim() }))
@@ -140,7 +140,7 @@ function NameEditor({ name }: { name: string }) {
   }
   return (
     <div className="settings-name">
-      {/* 点名字也能编辑；键盘用旁边的铅笔按钮。 */}
+      {/* 点名字也能编辑。键盘操作时用旁边的铅笔按钮。 */}
       <span className="settings-name-text" onClick={() => setEditing(true)}>{name}</span>
       <button ref={pencilRef} type="button" className="icon-button settings-name-edit" aria-label="编辑昵称" title="编辑昵称" onClick={() => setEditing(true)}>
         <Pencil size={15} strokeWidth={1.9} aria-hidden="true" />
@@ -153,7 +153,7 @@ function NameEditor({ name }: { name: string }) {
 function IdentityCard({ member, account }: { member: Member, account: Account | null }) {
   return (
     <div className="settings-identity">
-      {/* 有头像时用它模糊后的样子做光晕；没有头像时这一层只有首字，由 CSS 隐藏。 */}
+      {/* 有头像时，用头像模糊后的样子做光晕。没有头像时这一层只有首字，由 CSS 隐藏。 */}
       <Avatar hash={member.avatarHash} name={member.name} className="settings-identity-glow" />
       <Avatar hash={member.avatarHash} name={member.name} className="settings-identity-avatar" />
       <div className="settings-identity-copy">

@@ -27,7 +27,7 @@ type instance struct {
 	gateway *Gateway
 }
 
-// 测试中的会话和事件流大多没有真实的票据，核对凭证时把它们都当作仍然有效；核对本身的测试用 porttest.Store 中的票据。
+// 测试中的会话和事件流大多没有真实的票据，核对凭证时把它们都当作仍然有效。核对本身的测试用 porttest.Store 中的票据。
 type unrevoked struct{}
 
 func (unrevoked) ExistingTickets(_ context.Context, tokenHashes [][]byte) ([][]byte, error) {
@@ -108,7 +108,7 @@ func newGatewayFixture(t *testing.T, snapshots port.RoomSnapshots, store *portte
 	return &gatewayFixture{instance: startInstance(t, redis, "a", snapshots, store, songs), store: store, redis: redis, songs: songs, quota: q}
 }
 
-// quota 的点歌额度可以耗尽，耗尽之后要等一分钟；搜索额度总能取到。
+// quota 的点歌额度可以耗尽，耗尽之后要等一分钟。搜索额度总能取到。
 type quota struct {
 	exhausted atomic.Bool
 }
@@ -318,10 +318,10 @@ func TestSessionLeavingDuringRejoinIsNotKeptOnline(t *testing.T) {
 		_, _ = f.gateway.Do(t.Context(), id, alice, room.SetPlayMode{Mode: room.Random})
 		store.fail.Store(false)
 		synctest.Wait()
-		// porttest 恢复出的正在播放的歌没有时长：开播时间过去之后再接管，恢复时这首歌已经放完，第一个 effect 是 Persist。
+		// porttest 恢复出的正在播放的歌没有时长。开播时间过去之后再接管，恢复时这首歌已经放完，所以第一个 effect 是 Persist。
 		time.Sleep(time.Second)
 
-		// 恢复时的 Persist 卡住，网关重新加入的第一个 Join 等待房间收下；两个会话在此期间先后离开。
+		// 恢复时的 Persist 卡住，网关重新加入的第一个 Join 等待房间收下。两个会话在此期间先后离开。
 		hold := make(chan struct{})
 		store.setHold(hold)
 		go func() { _, _ = f.gateway.Do(context.Background(), id, alice, room.Sync{}) }()

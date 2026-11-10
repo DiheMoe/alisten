@@ -22,7 +22,7 @@ import { pwaStore } from './pwa'
 import { UpdatePrompt } from './update-prompt'
 import { panelDirection, withViewTransition } from './view-transition'
 
-// adminStore 不在 main.tsx 中启动：静态导入会把后台页打包进入口 chunk。
+// adminStore 不在 main.tsx 里启动，因为静态导入会把后台页打包进入口 chunk。
 const AdminPage = lazyPage(() => import('@/features/admin').then((module) => {
   module.adminStore.start()
   return module.AdminPage
@@ -181,7 +181,7 @@ function Header({ page }: { page: Page }) {
   )
 }
 
-// 页面自己订阅地址里的参数：筛选框每按一次键都改写地址，应用壳不必跟着重新渲染。
+// 页面自己订阅地址里的参数，这样筛选框每按一次键改写地址时，应用壳不必跟着重新渲染。
 function RoutedLobby({ onEntered }: { onEntered: (ref: string) => void }) {
   const route = useStore(navigationStore, s => s.route)
   if (route.name !== 'lobby')
@@ -287,7 +287,7 @@ export function App() {
   const songStartedAtMs = useStore(roomStore, s => s.room?.nowPlaying?.startedAtMs)
   const browse = () => navigationStore.open('lobby')
   const showRoom = (ref: string) => navigationStore.navigate({ name: 'listen', ref, panel: null })
-  // 加入房间前不显示面板：底部的切换按钮此时不可用，而聊天视图的关闭按钮在 RoomGate 内，打开的聊天面板会无法关闭。
+  // 加入房间前不显示面板，因为这时底部的切换按钮不可用，聊天视图的关闭按钮又在 RoomGate 里面，聊天面板一旦打开就关不掉。
   const shownPanel = joined && panel !== page ? panel : null
   const switchPanel = (next: Panel | null) => {
     if (shownPanel && next && next !== shownPanel && next !== page)
@@ -309,7 +309,7 @@ export function App() {
   }
   return (
     <>
-      {/* 播放引擎在房间为空时就已挂载，出错只可能源于运行环境，手动重试很可能同样失败，因此不提供重试按钮。 */}
+      {/* 不提供重试按钮，因为播放引擎在房间为空时就已经挂载，出错只可能源于运行环境，手动重试多半也会失败。 */}
       <ErrorBoundary fallback={null} resetKey={songStartedAtMs} onError={() => notificationStore.error('音乐无法播放。下一首歌开始时会自动再试，也可以刷新页面再试。', 8000)}>
         <AudioEngine onNextTrack={() => void voteSkip()} />
       </ErrorBoundary>
@@ -394,7 +394,7 @@ export function App() {
         fallback={null}
         resetOn={roomEntryStore}
         onError={() => {
-          // 弹窗已不再显示，进房流程却仍停在等待票据，页面会一直显示骨架屏：与关闭弹窗一样，放弃这次进入。
+          // 弹窗已经不显示了，进房流程却还停在等待票据，页面会一直显示骨架屏。所以和关闭弹窗一样，放弃这次进入。
           navigationStore.leaveRoom()
           roomEntryStore.reset()
           notificationStore.error('加入房间的窗口出错了，没有加入房间，再选一次房间。')

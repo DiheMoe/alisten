@@ -16,7 +16,7 @@ var _ port.LoginDevices = (*Devices)(nil)
 
 const devicePrefix = "device:"
 
-// 登录设备凭证，键中只有它的哈希，值是所属成员的 ID 和签发时的密码指纹。
+// 存放登录设备凭证。键里只有凭证的哈希，值是所属成员的 ID 和签发时的密码指纹。
 type Devices struct {
 	client *goredis.Client
 }

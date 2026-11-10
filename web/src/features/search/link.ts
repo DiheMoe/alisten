@@ -6,7 +6,7 @@ export function linkOf(input: string): string | null {
   return isLink(link) ? link : null
 }
 
-// 临时房间只能点 B 站的链接：服务端把它们识别成 B 站音源的歌，其他链接是只能在常驻房间点的链接曲目。kind 为 undefined 时不在房间里。
+// 临时房间只能点 B 站的链接，因为服务端把 B 站链接识别成 B 站音源的歌，其他链接则是只能在常驻房间点的链接曲目。kind 为 undefined 时不在房间里。
 export function pickableLink(input: string, kind: RoomKind | undefined): string | null {
   const link = linkOf(input)
   if (link === null || kind === undefined)

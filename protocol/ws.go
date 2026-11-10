@@ -10,7 +10,7 @@ type Message struct {
 	Kind string `json:"kind"`
 	Type string `json:"type"`
 	ID   string `json:"id,omitempty"`
-	// 房间事件的 term 和 seq 都从 1 开始；响应和 error 事件不带编号，取 0 时不编码。
+	// 房间事件的 term 和 seq 都从 1 开始。响应和 error 事件不带编号，取 0 时不编码。
 	Term  int64      `json:"term,omitempty"`
 	Seq   int64      `json:"seq,omitempty"`
 	Data  any        `json:"data"`
@@ -39,7 +39,7 @@ type Request struct {
 	Data any
 }
 
-// DecodeRequest 返回错误时，ID 为空表示这一帧无法对应到请求，应发送 error 事件；否则回复这个请求的失败响应。
+// DecodeRequest 返回错误时，ID 为空表示这一帧无法对应到请求，应发送 error 事件。ID 不为空时，回复这个请求的失败响应。
 func DecodeRequest(frame []byte) (Request, error) {
 	var env map[string]json.RawMessage
 	if json.Unmarshal(frame, &env) != nil || env == nil {

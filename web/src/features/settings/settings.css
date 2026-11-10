@@ -13,7 +13,7 @@
 
 .settings-identity { --color-input: var(--color-input-on-card); position: relative; isolation: isolate; display: flex; align-items: center; gap: 18px; overflow: hidden; padding: 22px; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-card); }
 .settings-identity-avatar { width: 64px; font-size: 24px; }
-/* 光晕的中心对准头像：内边距 22px 加头像半径 32px。只是几乎察觉不到的氛围，浅色主题的 --glow-opacity 更低，在浅底上同样淡。 */
+/* 光晕的中心对准头像：内边距 22px 加头像半径 32px。光晕只是几乎察觉不到的氛围，浅色主题的 --glow-opacity 更低，在浅底上同样淡。 */
 .settings-identity-glow { position: absolute; z-index: -1; top: 50%; left: 54px; width: 160px; background: transparent; box-shadow: none; color: transparent; opacity: calc(var(--glow-opacity) * .22); filter: blur(44px) saturate(1.3); transform: translate(-50%, -50%); pointer-events: none; }
 .settings-identity-glow:not(:has(img)) { display: none; }
 :root:is([data-performance='low'], [data-performance='off']) .settings-identity-glow { display: none; }
@@ -25,7 +25,7 @@
 .settings-name-edit { width: 28px; height: 28px; border-radius: 50%; color: var(--color-foreground-subtlest); }
 .settings-name-edit:hover:not(:disabled) { background: var(--color-surface-hover); color: var(--color-foreground); }
 .settings-name-edit:focus-visible { outline-offset: 0; }
-/* 输入框的文字和平时的名字对齐：负的外边距抵消边框和内边距。 */
+/* 输入框的文字要和平时的名字对齐，所以用负的外边距抵消边框和内边距。 */
 input.settings-name-input { width: min(100%, 280px); margin: -5px 0 -5px -9px; padding: 4px 8px; font-size: var(--text-ui-lg); font-weight: 700; line-height: 1.3; }
 input.settings-name-input[aria-invalid='true']:not(:focus) { border-color: var(--color-destructive); }
 .settings-identity-copy > .settings-row-error { margin-top: 4px; }
@@ -65,7 +65,7 @@ input.settings-name-input[aria-invalid='true']:not(:focus) { border-color: var(-
 [data-theme-preview='light'] .settings-theme-preview { background: #f3f3f6; }
 [data-theme-preview='light'] .settings-theme-preview > i:first-child { background: #e8e8ed; }
 [data-theme-preview='light'] .settings-theme-preview > i:last-child { background: #fff; }
-/* 浅的一半用浅色主题的内容底色：用 #f3f3f6 会和浅色主题下的卡片融成一片，整张看起来只剩深的一半。 */
+/* 浅的一半用浅色主题的内容底色，因为用 #f3f3f6 会和浅色主题下的卡片融成一片，整张看起来只剩深的一半。 */
 [data-theme-preview='system'] .settings-theme-preview { background: linear-gradient(90deg, #121212 50%, #fff 50%); }
 [data-theme-preview='system'] .settings-theme-preview > i:first-child { background: #232326; }
 .settings-theme-caption { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-height: 18px; font-size: var(--text-ui-caption); }
@@ -73,7 +73,7 @@ input.settings-name-input[aria-invalid='true']:not(:focus) { border-color: var(-
 
 .settings-volume-icon { color: var(--color-foreground-subtle); }
 .settings-volume-control { display: flex; align-items: center; gap: 10px; width: 220px; max-width: 100%; }
-/* 浅的 accent 会让浏览器把未填充的一段画成近黑色，在浅色主题的卡片里很扎眼；brand 在浅色主题里是深绿，未填充的一段就是浅色。 */
+/* 浅的 accent 会让浏览器把未填充的一段画成近黑色，在浅色主题的卡片里很扎眼。brand 在浅色主题里是深绿，未填充的一段就是浅色。 */
 .settings-volume-control .volume-slider { flex: 1; min-width: 0; accent-color: var(--color-brand); }
 .settings-volume-control .volume-input-control { display: flex; align-items: center; }
 /* 百分比平时像一段文字，悬停或聚焦时才显出输入框。 */

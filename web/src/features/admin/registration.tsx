@@ -6,7 +6,7 @@ import { adminStore } from './admin-store'
 import { GithubApp } from './github-app'
 import { LoadFailed, SectionHead } from './section-head'
 
-// 保存期间不禁用开关：禁用会让它失去焦点，键盘用户就找不到它了。
+// 保存期间不禁用开关，因为禁用会让开关失去焦点，键盘用户就找不到它了。
 function OpenRegistrationRow({ open, onSaved }: { open: boolean, onSaved: (open: boolean) => void }) {
   const switchId = useId()
   const descriptionId = useId()

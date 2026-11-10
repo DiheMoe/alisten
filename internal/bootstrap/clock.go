@@ -13,7 +13,7 @@ const (
 )
 
 // 估算本实例与 Redis 服务器的时钟偏差，两个实例之间的时钟差就是两者偏差之差。
-// 估算失败时保留上一次的值：连不上 Redis 已经反映在就绪检查中。
+// 估算失败时保留上一次的值，因为连不上 Redis 已经反映在就绪检查中。
 func watchClock(ctx context.Context, measure func(context.Context) (time.Duration, error), offset prometheus.Gauge) {
 	ticker := time.NewTicker(clockInterval)
 	defer ticker.Stop()

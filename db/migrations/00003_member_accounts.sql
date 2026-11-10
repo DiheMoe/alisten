@@ -16,7 +16,7 @@ WHERE NOT EXISTS (SELECT FROM rooms r WHERE r.bot_member_id = m.id);
 ALTER TABLE members DROP COLUMN token_hash;
 
 -- 设置了用户名的成员是已注册的账号，否则是游客。用户名只能由小写字母、数字、下划线和连字符组成，所以按原文唯一即可。
--- 邮箱属于账号，在所有设备上一致；游客没有账号，不替匿名身份保存个人信息，邮箱只存在游客自己的浏览器里。
+-- 邮箱属于账号，在所有设备上一致。游客没有账号，不替匿名身份保存个人信息，所以游客的邮箱只存在游客自己的浏览器里。
 ALTER TABLE members
     ADD COLUMN username text UNIQUE,
     ADD COLUMN password_hash text,
@@ -24,7 +24,7 @@ ALTER TABLE members
     ADD COLUMN email text,
     ADD CONSTRAINT members_email_check CHECK (email IS NULL OR username IS NOT NULL);
 
--- site 表没有行或者 brand_name 为 NULL 时，品牌名是默认的 Alisten；没有行时开放注册。
+-- site 表没有行或者 brand_name 为 NULL 时，品牌名是默认的 Alisten。site 表没有行时开放注册。
 ALTER TABLE site
     ALTER COLUMN brand_name DROP NOT NULL,
     ADD COLUMN registration_open boolean NOT NULL DEFAULT true;

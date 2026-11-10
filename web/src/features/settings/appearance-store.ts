@@ -41,7 +41,7 @@ class AppearanceStore extends Store<{ theme: Theme, fontSize: number }> {
   #apply(): void {
     const root = document.documentElement
     root.dataset.theme = this.state.theme
-    // 只改 --ui-font-size，不改根元素的字号：间距和布局尺寸不随字号缩放。
+    // 只改 --ui-font-size，不改根元素的字号，这样间距和布局尺寸不随字号缩放。
     root.style.setProperty('--ui-font-size', `${this.state.fontSize}px`)
     this.#syncThemeColor()
   }

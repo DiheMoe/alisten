@@ -66,7 +66,7 @@ func TestMigrateWaitsForMigrationLock(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := newDatabase(t, "template1")
-			// 先完成迁移：等到锁之后的迁移只剩检查，不会被 statement_timeout 打断。
+			// 先完成迁移，这样等到锁之后的迁移只剩检查，不会被 statement_timeout 打断。
 			if err := migrate(t.Context(), connect(t, cfg), discard); err != nil {
 				t.Fatal(err)
 			}

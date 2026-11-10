@@ -45,7 +45,7 @@ interface Results {
 
 interface SearchState extends Results {
   text: string
-  // 当前结果对应的关键词；为空时页面显示最近搜索。
+  // 当前结果对应的关键词，为空时页面显示最近搜索。
   keyword: string
   source: SearchSource
   view: SearchView
@@ -67,7 +67,7 @@ export function keywordSearch(keyword: string, source: SearchSource, category: S
   return { view: category === 'playlists' && !canOpenPlaylists(source) ? 'all' : category, keyword, source, page }
 }
 
-// 用户发起的搜索记入搜索历史：提交、点最近搜索、换来源和类别；翻页、推荐、打开歌单，以及前进、后退还原的搜索都不记。
+// 用户发起的搜索记入搜索历史，包括提交、点最近搜索、换来源和类别。翻页、推荐、打开歌单，以及前进、后退还原的搜索都不记。
 export function recordSearch(query: KeywordQuery): void {
   if (query.keyword)
     historyStore.recordSearch(query.keyword, query.source, query.view)
@@ -79,7 +79,7 @@ function sameQuery(a: SearchQuery, b: SearchQuery): boolean {
   return a.view === b.view && a.keyword === b.keyword && a.source === b.source && a.page === b.page
 }
 
-// shown 是当前结果对应的条件。缓存里有就直接用，不必连着房间；连上房间之前不发出请求：推迟时让当前结果作废，之后回到哪个条件都会重新取。
+// shown 是当前结果对应的条件。缓存里有就直接用，不必连着房间。连上房间之前不发出请求，推迟时让当前结果作废，这样之后回到哪个条件都会重新取。
 export function nextLoad(key: string | null, shown: string | null, cached: boolean, connected: boolean, force: boolean): { shown: string | null, loading: boolean, from: 'none' | 'cache' | 'request' } | null {
   if (key === null)
     return { shown: null, loading: false, from: 'none' }
@@ -104,13 +104,13 @@ export function rememberResult<T>(cache: ReadonlyMap<string, Cached<T>>, key: st
   return new Map([...kept, [key, entry] as [string, Cached<T>]].slice(-cacheLimit))
 }
 
-// 显示什么由地址决定：页面只把新的条件交给导航，地址变化之后再由 show() 和 showPlaylist() 取结果。
+// 显示什么由地址决定。页面只把新的条件交给导航，地址变化之后再由 show() 和 showPlaylist() 取结果。
 class SearchStore extends Store<SearchState> {
   #request = 0
   #roomId: string | null = null
   #shown: string | null = null
   #cache: ReadonlyMap<string, Cached<Partial<Results>>> = new Map()
-  // 只有显示着搜索页或歌单页时才请求，连上房间时也只为它们补发。
+  // 只有显示着搜索页或歌单页时才请求，连上房间时也只为这两种页面补发。
   #visible = false
 
   constructor() {
@@ -137,7 +137,7 @@ class SearchStore extends Store<SearchState> {
   }
 
   show(query: SearchQuery): void {
-    // 地址里的条件变了，搜索框的文字就跟着地址里的关键词，没有关键词时清空；只是开关侧栏、关掉弹窗时不动正在输入的文字。
+    // 地址里的条件变了，搜索框的文字就跟着地址里的关键词，没有关键词时清空。只是开关侧栏、关掉弹窗时，不动正在输入的文字。
     const changed = !this.#visible || this.state.playlist !== null || !sameQuery(this.query, query)
     this.#visible = true
     const keyword = query.view === 'recommend' ? '' : query.keyword
@@ -227,7 +227,7 @@ class SearchStore extends Store<SearchState> {
     return [view === 'tracks' ? tracks(page) : playlists(page)]
   }
 
-  // 结果和缓存只属于当前房间，换了房间都作废（推荐由房间的播放历史得出）；连上房间时补发还没有发出的请求。
+  // 结果和缓存只属于当前房间（推荐由房间的播放历史得出），换了房间都作废。连上房间时补发还没有发出的请求。
   #onRoom = (): void => {
     const { roomId, status } = roomStore.state
     if (roomId !== this.#roomId) {

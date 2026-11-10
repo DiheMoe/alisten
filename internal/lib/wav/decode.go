@@ -39,9 +39,9 @@ const (
 	formatExtensible = 0xFFFE
 )
 
-// Decoder 按块返回按声道交错的 PCM 采样，满刻度为 1；MP3 和浮点 WAV 的采样可以超出 [-1, 1]。
+// Decoder 按块返回按声道交错的 PCM 采样，满刻度为 1。MP3 和浮点 WAV 的采样可以超出 [-1, 1]。
 type Decoder interface {
-	// Read 解码并填充 p，返回采样个数；音频解码完毕时返回 io.EOF。p 至少要能容纳一个采样帧（Channels() 个采样）。
+	// Read 解码并填充 p，返回采样个数。音频解码完毕时返回 io.EOF。p 至少要能容纳一个采样帧（Channels() 个采样）。
 	Read(p []float64) (int, error)
 	SampleRate() int
 	Channels() int
@@ -254,7 +254,7 @@ func parseWAVHeader(r io.Reader) (wavHeader, error) {
 		if size < 16 {
 			return wavHeader{}, errors.New("wav: fmt 块过短")
 		}
-		// 块的长度来自文件，不能按它分配内存：只读用到的字节（最长是 WAVE_FORMAT_EXTENSIBLE 的 40 字节），其余的丢弃。
+		// 块的长度来自文件，不能按这个长度分配内存。所以只读用到的字节（最长是 WAVE_FORMAT_EXTENSIBLE 的 40 字节），其余的丢弃。
 		var buf [40]byte
 		used := min(size, int64(len(buf)))
 		if _, err := io.ReadFull(r, buf[:used]); err != nil {
@@ -321,7 +321,7 @@ func newFLACDecoder(r io.Reader) (Decoder, error) {
 	var decoded uint64
 	d.fill = func() error {
 		for {
-			// QQ 音乐的 FLAC 在音频之后还有数据：继续读会被当成音频帧报错，整首的分析结果都会作废。NSamples 为 0 表示文件没有声明总数。
+			// QQ 音乐的 FLAC 在音频之后还有数据。继续读的话，这些数据会被当成音频帧而报错，整首的分析结果都会作废。NSamples 为 0 表示文件没有声明总数。
 			if info.NSamples > 0 && decoded >= info.NSamples {
 				return io.EOF
 			}

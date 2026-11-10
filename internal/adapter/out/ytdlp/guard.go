@@ -14,21 +14,21 @@ const upstreamTimeout = 30 * time.Second
 // 除回环、私有（包括 IPv6 唯一本地地址）、链路本地（包括云元数据服务的 169.254.169.254）、组播和未指定地址之外，
 // 代理还拒绝连接这些地址段。
 var blocked = []netip.Prefix{
-	// 「本网络」地址段，不会出现在公网上；IsGlobalUnicast 只排除其中的 0.0.0.0。
+	// 「本网络」地址段，不会出现在公网上。IsGlobalUnicast 只排除其中的 0.0.0.0。
 	netip.MustParsePrefix("0.0.0.0/8"),
 	// 运营商级 NAT 使用的共享地址段。
 	netip.MustParsePrefix("100.64.0.0/10"),
-	// IETF 协议分配、基准测试和保留地址段：不会出现在公网上，部分内网和云的网络把它们用作内部地址。
+	// IETF 协议分配、基准测试和保留地址段。这些地址不会出现在公网上，部分内网和云的网络把它们用作内部地址。
 	netip.MustParsePrefix("192.0.0.0/24"),
 	netip.MustParsePrefix("198.18.0.0/15"),
 	netip.MustParsePrefix("240.0.0.0/4"),
-	// 文档专用地址段：只用于示例，不会出现在公网上，部分内网把它们用作内部地址。
+	// 文档专用地址段，只用于示例，不会出现在公网上，部分内网把它们用作内部地址。
 	netip.MustParsePrefix("192.0.2.0/24"),
 	netip.MustParsePrefix("198.51.100.0/24"),
 	netip.MustParsePrefix("203.0.113.0/24"),
 	netip.MustParsePrefix("2001:db8::/32"),
 	netip.MustParsePrefix("3fff::/20"),
-	// 内嵌 IPv4 地址的 IPv6 地址段：NAT64、SIIT 网关和隧道会把它们转换成任意 IPv4 地址，包括私有地址。
+	// 内嵌 IPv4 地址的 IPv6 地址段。NAT64、SIIT 网关和隧道会把这些地址转换成任意 IPv4 地址，包括私有地址。
 	netip.MustParsePrefix("64:ff9b::/96"),
 	netip.MustParsePrefix("64:ff9b:1::/48"),
 	netip.MustParsePrefix("::/96"),
@@ -58,7 +58,7 @@ type refusedError struct {
 
 func (e *refusedError) Error() string { return fmt.Sprintf("%s 不是公网地址", e.host) }
 
-// dialPublic 自己解析目标的域名，只连接解析出的公网地址：连接时不再解析域名，DNS 重绑定就无法绕过检查。
+// dialPublic 自己解析目标的域名，只连接解析出的公网地址。连接时不再解析域名，这样 DNS 重绑定就无法绕过检查。
 func dialPublic(resolver *net.Resolver) func(ctx context.Context, network, address string) (net.Conn, error) {
 	return func(ctx context.Context, _, address string) (net.Conn, error) {
 		host, port, err := net.SplitHostPort(address)

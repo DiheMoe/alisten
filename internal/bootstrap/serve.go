@@ -36,8 +36,8 @@ const (
 	drainDelay = 5 * time.Second
 	// 释放房间、关闭会话和关闭端口共用这段期限。
 	shutdownTimeout = 17 * time.Second
-	// River client 的停止有自己的期限：即使前面的步骤用完了共用的期限，运行中的任务也要交还给 River。
-	// 三者之和加上导出剩余追踪的 flushTimeout，不能超过 Kubernetes 30 秒的退出宽限期。
+	// 停止 River client 时用单独的期限，因为即使前面的步骤用完了共用的期限，运行中的任务也要交还给 River。
+	// drainDelay、shutdownTimeout 和 jobsStopTimeout 之和加上导出剩余追踪的 flushTimeout，不能超过 Kubernetes 30 秒的退出宽限期。
 	jobsStopTimeout = 3 * time.Second
 )
 
@@ -51,7 +51,7 @@ func runServe(base *slog.Logger) (err error) {
 	signals, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stopSignals()
 
-	// 每次启动都生成新的实例 ID：上一次运行留下的租约和会话不会被当作这一次的。
+	// 每次启动都生成新的实例 ID，这样上一次运行留下的租约和会话不会被当作这一次的。
 	instance := rand.Text()
 	tracer, flush, err := newTracerProvider(signals, cfg.tracing, "alisten-serve", instance)
 	if err != nil {
@@ -117,15 +117,15 @@ func runServe(base *slog.Logger) (err error) {
 			return pingRedis(ctx, rdb)
 		}, &dependenciesReady, &stopping, logger)
 	})
-	// 数据库迁移到二进制要求的版本之后，才开始执行准备任务、运行房间；realtime.Start 会一直重试，直到订阅了本实例的频道。
+	// 数据库迁移到二进制要求的版本之后，才开始执行准备任务、运行房间。realtime.Start 会一直重试，直到订阅了本实例的频道。
 	running.Go(func() {
 		select {
 		case <-migrated:
 		case <-background.Done():
 			return
 		}
-		// 开始退出之后不再启动 River client：shutdown 只停止已经启动的 client，
-		// 此后才启动的 client 会带着运行中的任务随进程退出，这些任务要等 20 分钟才由 River 重新调度。
+		// 开始退出之后不再启动 River client，因为 shutdown 只停止已经启动的 client。
+		// shutdown 之后才启动的 client 会带着运行中的任务随进程退出，这些任务要等 20 分钟才由 River 重新调度。
 		starting.Lock()
 		if stopping.Load() {
 			starting.Unlock()
@@ -197,7 +197,7 @@ func runServe(base *slog.Logger) (err error) {
 	starting.Lock()
 	stopping.Store(true)
 	starting.Unlock()
-	// 出错退出时本实例已经无法正常服务，不必等入口摘除它；照样释放房间，其他实例就不必等租约过期。
+	// 出错退出时本实例已经无法正常服务，所以不必等入口摘除本实例。房间照样要释放，这样其他实例就不必等租约过期。
 	if failure == nil {
 		logger.Info("收到退出信号，等待入口摘除本实例", "drain", drainDelay.String())
 		time.Sleep(drainDelay)
@@ -205,7 +205,7 @@ func runServe(base *slog.Logger) (err error) {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
-	// 释放房间和关闭会话时仍要收发实例间消息，房间运行时最后才停止。
+	// 释放房间和关闭会话时仍要收发实例间消息，所以房间运行时最后才停止。
 	if err := p.shutdown(shutdownCtx, publicServer, logger); err != nil {
 		return errors.Join(failure, err)
 	}

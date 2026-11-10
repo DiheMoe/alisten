@@ -11,10 +11,10 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
-// 接管房间的期限是 10 秒，检查链接和 B 站的歌的音频只占用其中一部分，对象存储变慢时接管仍能完成。
+// 接管房间的期限是 10 秒，检查链接和 B 站的歌的音频只占用其中一部分，这样对象存储变慢时接管仍能完成。
 const restoreCheckTimeout = 5 * time.Second
 
-// Tracks 读取准备结果时，链接和 B 站的歌还要求音频仍在对象存储中：音频被清理或丢失之后，这首歌要重新下载。
+// Tracks 读取准备结果时，链接和 B 站的歌还要求音频仍在对象存储中。音频被清理或丢失之后，这首歌要重新下载。
 type Tracks struct {
 	port.Tracks
 	store port.MediaStore
@@ -24,7 +24,7 @@ func NewTracks(tracks port.Tracks, store port.MediaStore) *Tracks {
 	return &Tracks{Tracks: tracks, store: store}
 }
 
-// 检查对象存储失败时返回错误，调用方稍后重试，不当作没有结果：否则对象存储短暂不可用时，已经存储的歌都会重新下载。
+// 检查对象存储失败时返回错误，由调用方稍后重试，不当作没有结果。否则对象存储短暂不可用时，已经存储的歌都会重新下载。
 func (t *Tracks) PreparedTrack(ctx context.Context, tr track.Track) (port.PreparedTrack, bool, error) {
 	p, ok, err := t.Tracks.PreparedTrack(ctx, tr)
 	if err != nil || !ok || !Stored(tr.Source) {
@@ -40,7 +40,7 @@ func (t *Tracks) PreparedTrack(ctx context.Context, tr track.Track) (port.Prepar
 	return p, true, nil
 }
 
-// 只检查待播和等待队列：正在播放的歌已经开播。
+// 只检查待播和等待队列，因为正在播放的歌已经开播了。
 type Snapshots struct {
 	port.RoomSnapshots
 	store  port.MediaStore
@@ -51,7 +51,7 @@ func NewSnapshots(snapshots port.RoomSnapshots, store port.MediaStore, logger *s
 	return &Snapshots{RoomSnapshots: snapshots, store: store, logger: logger}
 }
 
-// 检查出错的条目按曲目表恢复：对象存储不可用时房间仍要能被接管。任期已经加 1，所以这里不再返回错误。
+// 检查出错的条目按曲目表恢复，因为对象存储不可用时房间仍要能被接管。任期已经加 1，所以检查出错时不再返回错误。
 func (s *Snapshots) TakeRoom(ctx context.Context, id string) (uint32, room.Snapshot, error) {
 	term, snap, err := s.RoomSnapshots.TakeRoom(ctx, id)
 	if err != nil {

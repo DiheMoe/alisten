@@ -112,10 +112,10 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 	}, nil
 }
 
-// trace 在外层，恢复 panic 在内层：这样 panic 的请求才会以状态码 500 记成出错的 span，panic 的日志也带有 trace_id 和 span_id。
-// 每个 HTTP 请求开始一条新的 trace：公开端口上客户端带来的追踪上下文不可信，所以不提取。WebSocket 的升级请求和房间的事件流
-// 都一直持续到连接断开，不记 span；WebSocket 连接中的请求各自记 span。不导出追踪（tracing 为假）时不装 otelhttp：即使使用
-// noop 的 provider，它也会让每个请求付出几微秒和几十次分配。
+// trace 在外层，恢复 panic 在内层。这样 panic 的请求才会以状态码 500 记成出错的 span，panic 的日志也带有 trace_id 和 span_id。
+// 每个 HTTP 请求开始一条新的 trace。公开端口上客户端带来的追踪上下文不可信，所以不提取。WebSocket 的升级请求和房间的事件流
+// 都一直持续到连接断开，所以不记 span。WebSocket 连接中的请求各自记 span。不导出追踪（tracing 为假）时不装 otelhttp，因为即使使用
+// noop 的 provider，otelhttp 也会让每个请求付出几微秒和几十次分配。
 func publicHandler(next http.Handler, tracing bool, tracer trace.TracerProvider, logger *slog.Logger) http.Handler {
 	next = recoverPanics(next, logger)
 	if !tracing {
@@ -138,7 +138,7 @@ func (p public) start() (<-chan struct{}, error) {
 	return p.jobs.Stopped(), nil
 }
 
-// 房间先于会话停止：会话断开时房间不再处理它们的 Leave，也不再向其余会话广播。
+// 房间先于会话停止。这样会话断开时，房间不再处理这些会话的 Leave，也不再向其余会话广播。
 // 某一步失败时后面的步骤照样执行，返回的错误合并了各步的错误。
 func (p public) shutdown(ctx context.Context, server *http.Server, logger *slog.Logger) error {
 	var errs []error
@@ -159,7 +159,7 @@ func (p public) shutdown(ctx context.Context, server *http.Server, logger *slog.
 	return errors.Join(errs...)
 }
 
-// 前面的步骤可能已经用完共用的期限，所以 River client 的停止有自己的期限：
+// 前面的步骤可能已经用完共用的期限，所以停止 River client 时用单独的期限。
 // 运行中的任务如果不交还给 River，就会停在 running 状态，要等 20 分钟之后才由 River 重新调度。
 func (p public) stopJobs(ctx context.Context, logger *slog.Logger) error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), jobsStopTimeout)

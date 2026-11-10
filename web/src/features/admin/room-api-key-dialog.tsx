@@ -6,7 +6,7 @@ import { formatDateTime } from '@/shared/lib/time'
 import { ConfirmDialog, Modal, notificationStore } from '@/shared/ui'
 import { adminStore } from './admin-store'
 
-// 非安全上下文（比如局域网的明文 HTTP）没有剪贴板接口，用户也可能拒绝授权：这时返回 false，由调用方让用户手动复制。
+// 非安全上下文（比如局域网的明文 HTTP）没有剪贴板接口，用户也可能拒绝授权。这时返回 false，由调用方让用户手动复制。
 async function copyApiKey(key: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(key)
@@ -37,7 +37,7 @@ export function RoomApiKeyDialog({ room, onClose }: { room: RoomListing, onClose
       active = false
     }
   }, [room.id, attempt])
-  // 不用 autoFocus：确认弹窗卸载时会把焦点还给打开它之前聚焦的元素（比如这个弹窗的关闭按钮），晚于 autoFocus；这个 effect 在那之后运行。
+  // 不用 autoFocus，因为确认弹窗卸载时会把焦点还给打开它之前聚焦的元素（比如这个弹窗的关闭按钮），时间晚于 autoFocus。这个 effect 在还回焦点之后才运行。
   useEffect(() => {
     if (key !== null)
       inputRef.current?.focus()
@@ -69,7 +69,7 @@ export function RoomApiKeyDialog({ room, onClose }: { room: RoomListing, onClose
     inputRef.current?.select()
     notificationStore.info('没能写入剪贴板，请手动复制选中的 Key。', 8000)
   }
-  // 确认弹窗与这个弹窗并列，不放进 Modal 里：React 沿组件树传递 dialog 的 cancel 事件，在确认弹窗里按 Esc 会把两个弹窗一起关掉。
+  // 确认弹窗与这个弹窗并列，不放进 Modal 里。React 沿组件树传递 dialog 的 cancel 事件，放进去的话，在确认弹窗里按 Esc 会把两个弹窗一起关掉。
   return (
     <>
       <Modal title={`「${room.name}」的 API Key`} onClose={onClose}>

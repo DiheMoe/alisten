@@ -18,7 +18,7 @@ import './admin.css'
 
 export type AdminSection = 'site' | 'registration' | 'users' | 'rooms' | 'sources' | 'media'
 
-// section 为 null 表示窄屏回到分类列表；没有给出的 q、page、sort 取默认值。
+// section 为 null 表示窄屏回到分类列表。没有给出的 q、page、sort 取默认值。
 interface AdminView {
   section: AdminSection | null
   q?: string

@@ -54,16 +54,16 @@ func (APIKeyReset) roomMessage()    {}
 
 type RoomInput struct {
 	Room string
-	// 发出输入的网关的实例 ID：owner 据此记录会话所在的网关。
+	// 发出输入的网关的实例 ID，owner 据此记录会话在哪个网关上。
 	Gateway string
 	// Input 与 Patch 恰好有一项不为空。
 	Input room.Input
 	Patch *InfoPatch
-	// 为真时，如果接收输入的实例上没有运行这个房间，就由它接管。
+	// 为真时，如果接收输入的实例上没有运行这个房间，就由这个实例接管。
 	Takeover bool
 }
 
-// nil 表示保持不变：管理接口只修改给出的字段，由房间按当前的名称和描述补全为 UpdateInfo。
+// nil 表示保持不变。管理接口只修改给出的字段，房间用当前的名称和描述补上没给出的字段，组成 UpdateInfo。
 type InfoPatch struct {
 	RequestID   room.RequestID
 	Name        *string
@@ -79,7 +79,7 @@ type (
 	}
 
 	InputDelivery struct {
-		// 带有网关一侧的追踪上下文，owner 在同一条 trace 中处理这条输入；网关一侧没有追踪时为 context.Background()。
+		// 带有网关一侧的追踪上下文，owner 在同一条 trace 中处理这条输入。网关一侧没有追踪时为 context.Background()。
 		Context context.Context
 		Input   RoomInput
 	}
@@ -92,7 +92,7 @@ type (
 		Outcome PrepareOutcome
 	}
 
-	// 这些会话已经删除，用它们签发的票据建立的会话和事件流要以 4401 断开。
+	// SessionTokenHashes 对应的会话已经删除。用这些会话签发的票据建立的会话和事件流要以 4401 断开。
 	SessionsRevokedDelivery struct {
 		SessionTokenHashes [][]byte
 	}
@@ -112,17 +112,17 @@ func (SubscriptionLost) delivery()        {}
 type Bus interface {
 	// 订阅本实例的频道、成员的频道和准备结果的频道，返回时订阅已经生效。
 	SubscribeInstance(ctx context.Context) error
-	// 返回时订阅已经生效：此后发布到这个房间频道的消息都会收到。
+	// 返回时订阅已经生效，此后发布到这个房间频道的消息都会收到。
 	SubscribeRoom(ctx context.Context, roomID string) error
 	UnsubscribeRoom(ctx context.Context, roomID string) error
 	PublishRoom(ctx context.Context, roomID string, m RoomMessage) error
-	// 返回 false 表示目标实例没有订阅它的频道，例如已经停止运行。
+	// 返回 false 表示目标实例没有订阅自己的频道，例如已经停止运行。
 	SendInput(ctx context.Context, instanceID string, in RoomInput) (bool, error)
 	PublishMember(ctx context.Context, m member.Member) error
 	// 各实例都会收到，包括发布的实例。
 	PublishSessionsRevoked(ctx context.Context, sessionTokenHashes [][]byte) error
 	// 各实例都会收到，包括发布的实例。
 	PublishPrepared(ctx context.Context, o PrepareOutcome) error
-	// 按收到的顺序返回下一条消息，直到 ctx 结束；ctx 结束之后 Bus 不能再使用。只能由一个 goroutine 调用。
+	// 按收到的顺序返回下一条消息，直到 ctx 结束。ctx 结束之后 Bus 不能再使用。Receive 只能由一个 goroutine 调用。
 	Receive(ctx context.Context) (Delivery, error)
 }

@@ -46,7 +46,7 @@ func (r *Room) endCurrent(b *batch, at time.Time) {
 	c := *r.current
 	r.current = nil
 	r.endTimer = 0
-	// 推荐只对发出它的那首歌有效。recommended 也依赖这一点：token 有效时 current 一定非空。
+	// 推荐只对发出它的那首歌有效。所以 token 有效时 current 一定非空，recommended 也依赖这一点。
 	r.recommendation = 0
 	// 开播前的 startLead 之内被切掉时，结束时间不能早于开始时间。
 	if at.Before(c.StartedAt) {
@@ -55,7 +55,7 @@ func (r *Room) endCurrent(b *batch, at time.Time) {
 	b.plays = append(b.plays, RecordPlay{Entry: c.Entry, StartedAt: c.StartedAt, EndedAt: at})
 }
 
-// 房间关闭时还在播放的歌也算结束，要写播放记录；关闭可能晚于歌曲原定的结束时间送达，记录不能比歌曲本身还长。
+// 房间关闭时还在播放的歌也算结束，要写播放记录。关闭可能在歌曲原定的结束时间之后才送达，所以记录不能比歌曲本身还长。
 func (r *Room) stopPlayback(b *batch) {
 	if r.current == nil {
 		return

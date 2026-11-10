@@ -36,7 +36,7 @@ import (
 	"github.com/dihemoe/alisten/protocol"
 )
 
-// 内存中的监听器：synctest 的时钟只在 bubble 内的全部 goroutine 都持久阻塞时前进，阻塞在真实网络连接上不算持久阻塞。
+// 内存里的监听器。synctest 的时钟只在 bubble 内的全部 goroutine 都持久阻塞时才前进，而阻塞在真实网络连接上不算持久阻塞。
 type pipeListener struct {
 	conns  chan net.Conn
 	closed chan struct{}
@@ -118,7 +118,7 @@ type wsFixture struct {
 	listener *pipeListener
 	metrics  *prometheus.Registry
 	spans    *tracetest.SpanRecorder
-	// 这些场景都不应产生日志；需要日志的用例读取之后要清空它。
+	// 这些场景都不应该产生日志。需要日志的用例读取 logs 之后要清空 logs。
 	logs *bytes.Buffer
 }
 
@@ -316,7 +316,7 @@ func TestHandshakeTimeoutCancelsLookups(t *testing.T) {
 		store := porttest.New()
 		directory := &stallingDirectory{Store: store, returned: make(chan struct{})}
 		f := newWSFixture(t, store, store, directory)
-		// 关闭连接时同步检查查询是否已被取消，结果不取决于 goroutine 的调度。
+		// 关闭连接时同步检查查询有没有被取消，这样结果不取决于 goroutine 的调度。
 		var cancelledFirst atomic.Bool
 		f.listener.onServerClose = func() {
 			if ctx := directory.lookup.Load(); ctx != nil && (*ctx).Err() != nil {

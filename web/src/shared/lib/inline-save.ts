@@ -1,4 +1,4 @@
-// saved 是已经保存的值，draft 是输入框里的值；两者不同就是“编辑中”。
+// saved 是已经保存的值，draft 是输入框里的值。两者不同就是“编辑中”。
 export interface InlineSaveState {
   draft: string
   saved: string
@@ -6,7 +6,7 @@ export interface InlineSaveState {
   error: string | null
 }
 
-// succeeded 的 value 是提交的值；external 是外部传入的新值，比如其他设备改了资料。
+// succeeded 的 value 是提交的值。external 的 value 是外部传入的新值，比如其他设备改了资料。
 export type InlineSaveEvent
   = | { type: 'edit', value: string }
     | { type: 'submit' }

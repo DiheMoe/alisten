@@ -20,9 +20,9 @@ const (
 
 type QRLoginSession struct {
 	Key string
-	// 二维码编码的登录页链接；平台只给图片时为空。
+	// 二维码编码的登录页链接。平台只给图片时为空。
 	LoginURL string
-	// 浏览器可以直接显示的二维码图片：data: URI 或 https 地址；平台只给登录链接时为空。两者至少有一个。
+	// 浏览器可以直接显示的二维码图片，是 data: URI 或 https 地址。平台只给登录链接时为空。LoginURL 和 QRImage 至少有一个不为空。
 	QRImage   string
 	ExpiresAt time.Time
 }
@@ -58,8 +58,8 @@ type QQQRLoginSource interface {
 	CurrentAccount(context.Context) (*SourceAccount, error)
 }
 
-// RejectedError 表示音源明确拒绝了这首歌，比如歌曲下架或没有版权：准备不再重试。
-// 它的文本就是准备失败的原因。
+// RejectedError 表示音源明确拒绝了这首歌，比如歌曲下架或没有版权，所以准备不再重试。
+// RejectedError 的文本就是准备失败的原因。
 type RejectedError struct {
 	Err error
 }

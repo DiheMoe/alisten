@@ -71,7 +71,7 @@ export function PlayerBar({ onSkip, onLyrics, onQueue, onChat, queueOpen, chatOp
   const artist = meta?.artist || '未知艺术家'
   const source = nowPlaying ? sourceName(nowPlaying.entry.track) : undefined
   const note = nowPlaying?.entry.by ? `${nowPlaying.entry.by.name} 点的歌` : undefined
-  // 记下打开时的歌：对话框开着时换了歌，或者这首播完了，勾选仍然作用于打开时的那首。
+  // 记下打开时的歌。这样对话框开着时换了歌，或者这首播完了，勾选仍然作用于打开时的那首。
   const [saving, setSaving] = useState<{ track: Track, title: string } | null>(null)
   return (
     <section className="player-bar" aria-label="播放器">

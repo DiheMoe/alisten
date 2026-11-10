@@ -2,7 +2,7 @@ export interface ExternalStore<T> extends EventTarget {
   readonly state: T
 }
 
-// 状态整体替换：订阅方可以按引用比较字段，判断它是否变化。
+// 状态整体替换，所以订阅方可以按引用比较字段，判断字段是否变化。
 export class Store<T extends object> extends EventTarget implements ExternalStore<T> {
   #state: T
 

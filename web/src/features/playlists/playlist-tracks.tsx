@@ -20,7 +20,7 @@ function rowOf(list: HTMLElement | null, key: string): Element | null {
   return list?.querySelector(`[data-key="${CSS.escape(key)}"]`) ?? null
 }
 
-// 多选时焦点落在勾选框上，读屏软件才读得出这一行是否选中；平时落在行上。
+// 多选时焦点落在勾选框上，这样读屏软件才读得出这一行是否选中。平时焦点落在行上。
 function focusRow(row: Element | null | undefined, selecting: boolean): void {
   const target = selecting ? row?.querySelector('.playlist-track-check') : row
   if (target instanceof HTMLElement)
@@ -40,7 +40,7 @@ export function PlaylistTracks({ items, playing, selection, selecting, actions, 
   const lineRef = useRef<HTMLDivElement>(null)
   const labelRef = useRef<HTMLDivElement>(null)
   const focusAfterMoveRef = useRef<string | null>(null)
-  // 最后获得焦点的行。勾选框随多选出现和消失，焦点在它上面时会丢。
+  // 最后获得焦点的行。勾选框随多选出现和消失，焦点在勾选框上时会跟着丢掉。
   const focusedRef = useRef<string | null>(null)
   const keys = items.map(item => trackKey(item.track))
   const { dragging, onPointerDown } = useTrackDrag({

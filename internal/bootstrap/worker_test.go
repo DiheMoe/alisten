@@ -257,7 +257,7 @@ func TestWorkerPreparesBilibili(t *testing.T) {
 	storageURL := objects.Endpoint + "/" + objects.Bucket
 	t.Setenv("STORAGE_PUBLIC_URL", storageURL)
 	svc := startService(t)
-	// serve 和 worker 各自构造音源：serve 的那份照常给出付费视频的元数据，worker 的这份拒绝下载它，与真实的平台一样。
+	// serve 和 worker 各自构造音源。serve 的音源照常给出付费视频的元数据，worker 的音源拒绝下载付费视频，与真实的平台一样。
 	bilibili := contractBilibili()
 	bilibili.RejectVideo("BV1GJ411x7h7", "这个视频需要付费")
 	transcoder := porttest.NewTranscoder(porttest.SilentWAV(2 * time.Second))
@@ -464,7 +464,7 @@ func TestWorkerIsNotReadyWhileStopping(t *testing.T) {
 	}
 	blocked := &blockedLinks{entered: make(chan struct{}), release: make(chan struct{})}
 	w := startWorker(t, blocked)
-	// Cleanup 按注册的逆序执行：先放行任务，startWorker 注册的清理才能等到 worker 退出。
+	// Cleanup 按注册的逆序执行，所以先放行任务，startWorker 注册的清理才能等到 worker 退出。
 	release := sync.OnceFunc(func() { close(blocked.release) })
 	t.Cleanup(release)
 	w.waitReady(t)
@@ -534,7 +534,7 @@ func TestWorkerExitsAfterFlushingTraces(t *testing.T) {
 		runErr = runWorker(newLogger(&logs, slog.LevelInfo))
 	}()
 	eventually(t, "/readyz 返回 200", finished, func() bool { return readyStatus(opsListen) == http.StatusOK })
-	// 执行任务的 span 是 worker 记下的唯一一个 span。任务执行一次就失败，span 随之结束：回环地址会被 yt-dlp 的代理拒绝；
+	// 执行任务的 span 是 worker 记下的唯一一个 span。回环地址会被 yt-dlp 的代理拒绝，所以任务执行一次就失败，span 随之结束。
 	// 本机没有 yt-dlp 的话，任务在启动 yt-dlp 这一步就失败。
 	cfg, err := loadDatabaseConfig()
 	if err != nil {

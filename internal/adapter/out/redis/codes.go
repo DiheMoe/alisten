@@ -177,7 +177,7 @@ func (c *Codes) save(ctx context.Context, key string, record any, ttl time.Durat
 	return c.client.Set(ctx, key, value, ttl).Err()
 }
 
-// GETDEL 让取出和删除是一个原子操作：并发的两次兑换只有一次能拿到。
+// GETDEL 让取出和删除成为一个原子操作，所以并发的两次兑换只有一次能拿到。
 func (c *Codes) take(ctx context.Context, key string, record any) error {
 	value, err := c.client.GetDel(ctx, key).Bytes()
 	if errors.Is(err, goredis.Nil) {

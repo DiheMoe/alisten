@@ -33,7 +33,7 @@
   .player-tools .volume-slider { width: 60px; }
 }
 @media (max-width: 767px) {
-  /* 窄屏的播放器栏由内容撑开高度；内容比封面矮时（比如出错提示），仍保持封面加上下内边距的高度。 */
+  /* 窄屏的播放器栏由内容撑开高度。内容比封面矮时（比如出错提示），仍保持封面加上下内边距的高度。 */
   .player-bar { --player-artwork: 44px; --player-padding-y: 6px; display: flex; position: relative; gap: 10px; padding: var(--player-padding-y) 10px; min-height: calc(var(--player-artwork) + 2 * var(--player-padding-y)); border: 0; border-radius: 8px; background: var(--color-frame-surface); }
   .player-artwork, .player-artwork .artwork { border-radius: 6px; }
   .player-artwork .artwork { width: var(--player-artwork); }

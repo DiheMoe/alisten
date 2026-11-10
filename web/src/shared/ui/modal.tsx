@@ -9,7 +9,7 @@ export function Modal({ title, children, onClose, returnFocus }: {
   title: string
   children: ReactNode
   onClose: () => void
-  // 关闭时焦点回到打开前的元素；它已经不能获得焦点（比如触发对话框的那一行被删掉了、按钮被禁用了）时，落到 returnFocus 返回的元素上。
+  // 关闭时焦点回到打开前的元素。这个元素已经不能获得焦点时（比如触发对话框的那一行被删掉了、按钮被禁用了），焦点落到 returnFocus 返回的元素上。
   returnFocus?: () => HTMLElement | null
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null)

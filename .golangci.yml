@@ -7,7 +7,7 @@ linters:
     - forbidigo
   exclusions:
     rules:
-      # 这两个文件中未检查的错误不影响结果：decode.go 跳过 fmt 块的对齐填充失败时，读取下一个块头会报错；loudness_bench_test.go 的 binary.Write 写入 bytes.Buffer，不会失败。
+      # 这两个文件里未检查的错误不影响结果。decode.go 跳过 fmt 块的对齐填充失败时，读下一个块头会报错。loudness_bench_test.go 的 binary.Write 写入的是 bytes.Buffer，不会失败。
       - path: internal/lib/wav/decode\.go|internal/lib/loudness/loudness_bench_test\.go
         linters:
           - errcheck
@@ -17,8 +17,8 @@ linters:
           - forbidigo
   settings:
     depguard:
-      # 不以 $ 结尾的条目按前缀匹配。depguard 只拿排序后紧挨在导入路径之前的一项比较，已有前缀的子包不要再单列：
-      # deny 中同时有 os 和 os/exec 时，os/signal 就不再被禁止。
+      # 不以 $ 结尾的条目按前缀匹配。depguard 只拿排序后紧挨在导入路径之前的那一项比较，所以已经有前缀的子包不要再单列。
+      # 比如 deny 里同时有 os 和 os/exec 时，os/signal 就不再被禁止。
       rules:
         domain:
           list-mode: strict
@@ -77,9 +77,9 @@ linters:
             - github.com/dihemoe/alisten/internal/domain
             - github.com/dihemoe/alisten/internal/lib
             - github.com/dihemoe/alisten/internal/app
-            # 用于房间密码的 argon2id 哈希；纯计算，不做 I/O。
+            # 用于房间密码和账号密码的 argon2id 哈希。argon2 是纯计算，不做 I/O。
             - golang.org/x/crypto/argon2
-            # 用于合并同一首歌的并发播放地址解析；只协调 goroutine，不做 I/O。
+            # 用于合并同一首歌的并发播放地址解析。singleflight 只协调 goroutine，不做 I/O。
             - golang.org/x/sync/singleflight
           deny:
             - pkg: os
@@ -138,7 +138,7 @@ linters:
               desc: lib 与业务无关，不能依赖 bootstrap
             - pkg: github.com/dihemoe/alisten/protocol
               desc: protocol 只能被 internal/adapter/in 使用
-        # app 通过 logctx 记录日志的关联字段；logctx 只依赖标准库，app 才不会经由它依赖 OpenTelemetry。
+        # app 通过 logctx 记录日志的关联字段。logctx 只依赖标准库，这样 app 才不会经由 logctx 依赖 OpenTelemetry。
         logctx:
           list-mode: strict
           files:
@@ -157,7 +157,7 @@ linters:
           list-mode: lax
           files:
             - "**/internal/adapter/out/**"
-          # sqlc 把查询代码生成在 postgres 适配器的 internal 目录下；lax 模式让这个更长的 allow 前缀优先于 deny。
+          # sqlc 把查询代码生成在 postgres 适配器的 internal 目录下。用 lax 模式，是为了让这个更长的 allow 前缀优先于 deny。
           allow:
             - github.com/dihemoe/alisten/internal/adapter/out/postgres/internal/query
           deny:

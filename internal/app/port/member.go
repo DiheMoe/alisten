@@ -60,20 +60,20 @@ type Members interface {
 	AccountByID(ctx context.Context, memberID string) (Account, error)
 	AccountByGitHub(ctx context.Context, githubID int64) (Account, error)
 	// 这个 GitHub 账号已经绑定了其他成员时返回 ErrGitHubTaken，成员已经绑定了 GitHub 时返回 ErrGitHubAlreadyBound，两种情况都不做修改。
-	// 成员原来是游客时，绑定就是注册：同时为这个账号创建“我喜欢”。
+	// 成员原来是游客时，绑定就是注册，同时为这个账号创建“我喜欢”。
 	BindGitHub(ctx context.Context, memberID string, githubID int64) error
-	// 账号没有设置密码时返回 ErrNoPassword：解绑之后它就再也无法登录。没有绑定 GitHub 时什么也不做。
+	// 账号没有设置密码时返回 ErrNoPassword，因为解绑之后这个账号就再也无法登录。没有绑定 GitHub 时什么也不做。
 	UnbindGitHub(ctx context.Context, memberID string) error
 	// 在同一个事务中删除 oldTokenHash 的会话，给 memberID 创建 newTokenHash 的会话。oldTokenHash 的会话已经不存在时返回
-	// ErrSessionNotFound；memberID 的密码哈希已经不是 passwordHash 时返回 ErrAccountPasswordChanged：密码在校验之后被修改过，
-	// 修改时对会话的删除已经执行，此时创建的会话不会再被删除。两种情况都不做任何修改。
-	// 同一个事务中把 oldTokenHash 所属成员的播放历史移到 memberID，并入的规则与 ListenRecorder.RecordListen 相同，
-	// memberID 关闭了记录时不并入；两者是同一个成员时不动。
+	// ErrSessionNotFound。memberID 的密码哈希已经不是 passwordHash 时返回 ErrAccountPasswordChanged。这说明密码在校验之后被修改过。
+	// 修改密码时删除会话的那一步已经执行过，如果这时创建会话，这个会话就不会被删掉。两种情况都不做任何修改。
+	// 同一个事务中还把 oldTokenHash 所属成员的播放历史移到 memberID，并入的规则与 ListenRecorder.RecordListen 相同。
+	// memberID 关闭了记录时不并入，oldTokenHash 所属的成员就是 memberID 时不动。
 	ReplaceSession(ctx context.Context, oldTokenHash []byte, memberID string, newTokenHash []byte, passwordHash string) error
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	// 在同一个事务中修改已注册成员的密码哈希，并删除该成员的全部会话。返回被删除的会话的 token 哈希。成员是游客时返回 ErrMemberNotFound。
 	SetPassword(ctx context.Context, memberID, passwordHash string) ([][]byte, error)
-	// 与 SetPassword 相同，但保留发出请求的 keepTokenHash 的会话。这个会话已经不存在时返回 ErrSessionNotFound；密码哈希已经不是
-	// 校验当前密码时读到的 currentPasswordHash 时返回 ErrAccountPasswordChanged：密码在校验之后被修改或重置过。两种情况都不做任何修改。
+	// 与 SetPassword 相同，但保留发出请求的 keepTokenHash 的会话。这个会话已经不存在时返回 ErrSessionNotFound。密码哈希已经不是
+	// 校验当前密码时读到的 currentPasswordHash 时返回 ErrAccountPasswordChanged，说明密码在校验之后被修改或重置过。两种情况都不做任何修改。
 	ChangePassword(ctx context.Context, memberID, currentPasswordHash, passwordHash string, keepTokenHash []byte) ([][]byte, error)
 }

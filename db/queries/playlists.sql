@@ -17,7 +17,7 @@ WHERE p.owner_id = @owner_id AND (i.cover_url IS NOT NULL OR i.cover_key IS NOT 
 ORDER BY i.playlist_id, i.position DESC;
 
 -- name: LockFavorites :exec
--- 新建歌单前锁住这个账号的“我喜欢”：同一个账号并发新建时依次计数，不会越过上限。
+-- 新建歌单前锁住这个账号的“我喜欢”，这样同一个账号并发新建时会依次计数，不会越过上限。
 SELECT id FROM playlists WHERE owner_id = @owner_id AND kind = 'favorites' FOR UPDATE;
 
 -- name: CountPlaylists :one
@@ -37,7 +37,7 @@ UPDATE playlists SET name = @name, updated_at = now() WHERE id = @id AND owner_i
 DELETE FROM playlists WHERE id = @id AND owner_id = @owner_id AND kind = 'custom';
 
 -- name: LockPlaylist :one
--- 改动曲目前锁住歌单：并发加入时依次检查上限、分配排序值。删除歌单先锁歌单行再级联删除曲目，其他操作也要先锁歌单再动曲目，否则会互相死锁。
+-- 改动曲目前锁住歌单，这样并发加入时会依次检查上限、分配排序值。删除歌单时先锁歌单行再级联删除曲目，所以其他操作也要先锁歌单再动曲目，否则会互相死锁。
 SELECT item_seq FROM playlists WHERE id = @id AND owner_id = @owner_id FOR UPDATE;
 
 -- name: PlaylistHasItem :one
@@ -71,7 +71,7 @@ WITH deleted AS (
 UPDATE playlists SET updated_at = now() WHERE id IN (SELECT playlist_id FROM deleted);
 
 -- name: CopyPlaylistItems :execrows
--- 按请求的先后复制：第一首的排序值最大。请求里重复的歌只取第一次出现的位置。
+-- 按请求的先后顺序复制，第一首的排序值最大。请求里重复的歌只取第一次出现的位置。
 WITH wanted AS (
     SELECT s.source, k.track_id, min(s.ord) AS ord
     FROM unnest(@sources::text[]) WITH ORDINALITY AS s(source, ord)
@@ -119,7 +119,7 @@ JOIN members m ON m.id = p.owner_id
 WHERE p.share_id = sqlc.arg(share_id)::text;
 
 -- name: CopySharedPlaylistItems :one
--- 确认分享还在和复制曲目在同一条语句里，看到的是同一个快照：要么完整复制，要么读不到分享。不锁来源歌单：两个人同时复制
+-- 确认分享还在和复制曲目放在同一条语句里，两者看到的是同一个快照，所以要么完整复制，要么读不到分享。不锁来源歌单，因为两个人同时复制
 -- 对方分享的“我喜欢”时，各自已经锁住了自己的“我喜欢”，再去锁对方的就会互相等待。
 WITH shared AS (
     SELECT id FROM playlists WHERE share_id = sqlc.arg(share_id)::text

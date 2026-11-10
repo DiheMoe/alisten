@@ -24,7 +24,7 @@ var roomErrorCodes = map[room.ErrorKind]protocol.ErrorCode{
 	room.NothingPlaying: protocol.ErrorCodeNothingPlaying,
 }
 
-// bot 表示 by 是常驻房间的 bot 成员。返回的成员是房间命令的发起人，bot 代填了点歌人时换成那个名字。
+// bot 表示 by 是常驻房间的 bot 成员。返回的成员是房间命令的发起人。如果 bot 代填了点歌人，返回的成员 ID 不变，名字换成点歌人的名字加上“（bot）”。
 func (s *server) action(ctx context.Context, roomID string, by member.Member, bot bool, data any) (room.Action, member.Member, error) {
 	switch d := data.(type) {
 	case protocol.RoomSyncRequest:
@@ -141,7 +141,7 @@ func (s *server) mediaURL(t track.Track) string {
 	return "/media/" + string(t.Source) + "/" + url.PathEscape(t.ID)
 }
 
-// 链接按点歌时的写法规范化：曲目表和歌单里的链接曲目都用规范化之后的 ID。
+// 链接按点歌时的写法规范化，因为曲目表和歌单里的链接曲目用的都是规范化之后的 ID。
 func trackOf(d protocol.Track) track.Track {
 	t := track.Track{Source: track.Source(d.Source), ID: d.ID}
 	if t.Source == track.Link {
@@ -150,7 +150,7 @@ func trackOf(d protocol.Track) track.Track {
 	return t
 }
 
-// 封面在对象存储中的曲目，对外的封面地址由公开地址拼出。
+// 封面存在对象存储里的曲目，对外的封面地址用 StorageURL 拼出。
 func (s *server) trackMeta(m track.Meta) protocol.TrackMeta {
 	d := meta(m)
 	d.CoverURL = s.coverURL(m.CoverURL, m.CoverKey)
@@ -238,7 +238,7 @@ func (s *server) activity(a room.Activity) protocol.RoomActivityEvent {
 	return d
 }
 
-// 歌名里已经有书名号时不再加一层：B 站的标题常带《》。
+// 歌名里已经有书名号时不再加一层，因为 B 站的标题常带《》。
 func bookTitle(title string) string {
 	if strings.ContainsAny(title, "《》") {
 		return title

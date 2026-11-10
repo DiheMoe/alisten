@@ -71,8 +71,8 @@ func (s *server) websocket(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 超时时先以 4408 关闭连接，再取消 ctx：如果先取消，正在读取第一帧的 Read 会直接断开连接，
-	// 客户端收不到 4408。
+	// 超时时先以 4408 关闭连接，再取消 ctx。如果先取消 ctx，正在读取第一帧的 Read 会直接断开连接，
+	// 客户端就收不到 4408。
 	timeout := time.AfterFunc(helloTimeout, func() {
 		_ = conn.Close(protocol.CloseHandshakeTimeout, "")
 		cancel()
@@ -197,7 +197,7 @@ func (s *server) perform(ctx context.Context, sess *realtime.Session, tag reques
 		}
 		return err
 	}
-	// 握手拒绝了 API Key，会话的成员不是 bot，房间命令总以会话的成员发出。
+	// 握手时已经拒绝了 API Key，所以会话的成员不是 bot，房间命令总是以会话的成员发出。
 	a, _, err := s.action(ctx, sess.Room(), sess.Member(), false, data)
 	if err != nil {
 		sess.Fail(tag, err)
@@ -216,7 +216,7 @@ func (s *server) write(ctx context.Context, conn *websocket.Conn, sess *realtime
 			_ = conn.Close(sessionCloseCodes[reason], "")
 			return
 		}
-		// 写入以会话的 ctx 为期限：客户端不再读取、发送队列溢出时，阻塞的写入随会话关闭而中止。
+		// 写入以会话的 ctx 为期限。这样客户端不再读取、发送队列随之溢出时，阻塞的写入会随会话关闭而中止。
 		if !s.writeMessage(sess.Context(), conn, s.message(m, helloID)) {
 			return
 		}

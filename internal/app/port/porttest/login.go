@@ -19,7 +19,7 @@ const (
 	WeChatQRImage = "https://wx.example/qr.png"
 )
 
-// 查询时不检查会话的过期时间；登录成功时也不像真实的音源那样保存登录状态。
+// 查询时不检查会话的过期时间。登录成功时也不像真实的音源那样保存登录状态。
 type qrLogins struct {
 	mu             sync.Mutex
 	created        int

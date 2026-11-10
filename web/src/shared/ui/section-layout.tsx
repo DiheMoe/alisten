@@ -52,10 +52,10 @@ function moveFocus(event: KeyboardEvent<HTMLElement>): void {
   items[step(index, items.length)].focus()
 }
 
-// 宽屏：左侧分类栏加右侧内容，current 为 null 时按 defaultSection 高亮，children 也应当是它的内容。
-// 窄屏：current 为 null 时只显示分类列表，header 在列表上方；否则只显示 children，顶部的返回按钮调用 onSelect(null)。
-// header 里带 data-section 的元素是那个分类的入口，比如 hiddenInList 的那一项：从详情回到列表时，焦点落回它。
-// children 里第一个 h2 是分类的标题：从分类栏切换过去之后，焦点落在它上面。
+// 宽屏：左侧分类栏加右侧内容。current 为 null 时按 defaultSection 高亮，children 也应当是 defaultSection 的内容。
+// 窄屏：current 为 null 时只显示分类列表，header 在列表上方。current 不为 null 时只显示 children，顶部的返回按钮调用 onSelect(null)。
+// header 里带 data-section 的元素是对应分类的入口，比如 hiddenInList 的那一项。从详情回到列表时，焦点落回这个入口。
+// children 里第一个 h2 是分类的标题。从分类栏切换过去之后，焦点落在这个标题上。
 export function SectionLayout<T extends string>({ title, eyebrow, sections, current, defaultSection, onSelect, header, footer, children }: {
   title: string
   eyebrow?: string
@@ -83,8 +83,8 @@ export function SectionLayout<T extends string>({ title, eyebrow, sections, curr
     focusContentRef.current = false
     if (previous === current)
       return
-    // 窄屏上列表和详情互相替换，宽屏上内容区按分类重新挂载：原来有焦点的元素已经不在了，焦点落到了 body。
-    // 切换也可能来自 header 里的入口或者浏览器的后退、前进；焦点还在分类栏或顶栏上时留在原处。
+    // 窄屏上列表和详情互相替换，宽屏上内容区按分类重新挂载，所以原来有焦点的元素已经不在了，焦点落到了 body 上。
+    // 切换也可能来自 header 里的入口，或者浏览器的后退、前进。焦点还在分类栏或顶栏上时就留在原处。
     const narrow = !wide().matches
     if (narrow && current === null)
       [...listRef.current?.querySelectorAll<HTMLElement>('[data-section]') ?? []].find(item => item.dataset.section === previous)?.focus()
@@ -97,7 +97,7 @@ export function SectionLayout<T extends string>({ title, eyebrow, sections, curr
     navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }, [shown])
 
-  // 宽屏上 current 为 null 时显示的就是 defaultSection：点它不改地址，免得多出一条看不出区别的记录。
+  // 宽屏上 current 为 null 时显示的就是 defaultSection，所以这时点 defaultSection 不改地址，免得多出一条看不出区别的记录。
   const select = (id: T) => {
     if (id === (isWide ? shown : current)) {
       focusHeading(contentRef.current)

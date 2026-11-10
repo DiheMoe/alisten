@@ -22,7 +22,7 @@ const sortOptions: (SelectOption & { value: MediaSort })[] = [
   { value: 'size', label: '占用最大' },
 ]
 
-// 输入停顿之后才改写地址，输入法组字期间不算停顿：不拿拼音字母去搜索。
+// 输入停顿之后才改写地址。输入法组字期间不算停顿，这样不会拿拼音字母去搜索。
 function MediaSearch({ q, onSearch }: { q: string, onSearch: (q: string) => void }) {
   const [draft, setDraft] = useState(q)
   const [seenQ, setSeenQ] = useState(q)
@@ -64,7 +64,7 @@ export function MediaPage({ q, sort, page, onNavigate }: MediaQuery & { onNaviga
   const error = useStore(store, s => s.error)
   const selected = useStore(store, s => s.selected)
   const [deleting, setDeleting] = useState<StoredMedia[] | null>(null)
-  // 删掉的歌之后焦点落到哪一行：null 表示落到标题。
+  // 删掉歌之后焦点要落到的那一行，null 表示落到标题。
   const nextFocusRef = useRef<string | null>(null)
 
   useEffect(() => store.show({ q, sort, page }), [store, q, sort, page])
@@ -76,7 +76,7 @@ export function MediaPage({ q, sort, page, onNavigate }: MediaQuery & { onNaviga
       navigate({ q, sort, page: fallback })
   }, [fallback, q, sort])
 
-  // 页码在表格下面，换页之后回到顶部。用 nearest：start 会把外层不该滚动的页面框架也一起滚上去。
+  // 页码条在表格下方，换页后把标题滚回视野里。用 nearest 而不是 start，因为 start 会把外层本不该滚动的页面框架也一起滚上去。
   const goToPage = (next: number) => {
     onNavigate({ q, sort, page: next })
     document.getElementById('admin-media-title')?.scrollIntoView({ block: 'nearest' })

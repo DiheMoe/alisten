@@ -149,8 +149,8 @@ func entryOf(r query.RoomEntriesRow) room.Entry {
 		Round:   int(r.Round),
 		AddedAt: r.AddedAt.UTC(),
 	}
-	// 曲目表只保存准备成功的结果，有对应的行就是已就绪。元数据也取自曲目表：在房间没有 owner 时准备好的歌，
-	// 条目中仍是点歌时的元数据，比如链接曲目的标题仍是链接本身。
+	// 曲目表只保存准备成功的结果，有对应的行就是已就绪。元数据也取自曲目表，因为在房间没有 owner 时准备好的歌，
+	// 条目里还是点歌时的元数据，比如链接曲目的标题还是链接本身。
 	if r.DurationMs != nil {
 		e.Ready = true
 		e.Meta, e.Prep = prepared(*r.TrackTitle, orEmpty(r.TrackArtist), orEmpty(r.TrackAlbum), orEmpty(r.TrackCoverURL), orEmpty(r.TrackCoverKey), *r.TrackPageURL, *r.DurationMs, *r.Gain, orEmpty(r.Lyric), orEmpty(r.LyricWords), orEmpty(r.LyricTrans))

@@ -21,8 +21,8 @@ import (
 	"github.com/coder/websocket"
 )
 
-// alice 不回应关闭握手，网关要等她最多 5 秒；
-// 这段时间里 bob 已经收到 1012，如果会话先于房间关闭，房间此时还在处理命令。
+// alice 不回应关闭握手，网关要等她最多 5 秒。
+// 这段时间里 bob 已经收到 1012。如果会话先于房间关闭，房间这时还在处理命令。
 func TestShutdownReleasesRoomsBeforeClosingSessions(t *testing.T) {
 	contractEnv(t, startPostgres(t)(t), startValkey(t)(t))
 	svc := startService(t)
@@ -59,7 +59,7 @@ func TestShutdownReleasesRoomsBeforeClosingSessions(t *testing.T) {
 	}
 	_, _ = join()
 	bob, bobTicket := join()
-	// bob 加入时 alice 收到的在线列表留在她的连接中不读：她既不读取消息，也不回应关闭握手。
+	// bob 加入时 alice 收到的在线列表留在她的连接中不读。alice 既不读取消息，也不回应关闭握手。
 
 	var logs bytes.Buffer
 	done := make(chan error, 1)
@@ -157,12 +157,12 @@ func (b *lockedBuffer) messages(t *testing.T) []string {
 	return msgs
 }
 
-// 接受连接但从不应答，span 要到退出时才导出：这样导出剩下的 span 会超时，而不是很快失败。
+// 接受连接但从不应答，span 要到退出时才导出。这样导出剩下的 span 会超时，而不是很快失败。
 func unresponsiveCollector(t *testing.T) {
 	t.Helper()
 	release := make(chan struct{})
 	collector := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { <-release }))
-	// Cleanup 按注册的逆序执行：先放行，Close 才不会等待没有返回的请求。
+	// Cleanup 按注册的逆序执行，所以先放行请求，Close 才不会等待没有返回的请求。
 	t.Cleanup(collector.Close)
 	t.Cleanup(func() { close(release) })
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", collector.URL)
@@ -227,7 +227,7 @@ func TestServeExitsGracefullyOnSIGTERM(t *testing.T) {
 	}()
 
 	eventually(t, "/readyz 返回 200", finished, func() bool { return readyStatus(opsListen) == http.StatusOK })
-	// 这个 HTTP 请求记下一个 span，它到退出时才导出。
+	// 这个 HTTP 请求记下的 span 到退出时才导出。
 	if resp, err := (&http.Client{Timeout: 10 * time.Second}).Get("http://" + listen + "/api/rooms"); err != nil {
 		t.Fatal(err)
 	} else {
@@ -237,7 +237,7 @@ func TestServeExitsGracefullyOnSIGTERM(t *testing.T) {
 	if err := syscall.Kill(syscall.Getpid(), syscall.SIGTERM); err != nil {
 		t.Fatal(err)
 	}
-	// 退出开始的日志写出时，就绪标志已经清除；入口摘除之前（5 秒）运维端口仍然可以访问。
+	// 退出开始的日志写出时，就绪标志已经清除。在入口摘除之前（5 秒），运维端口仍然可以访问。
 	eventually(t, "退出开始的日志", finished, func() bool {
 		return slices.Contains(logs.messages(t), "收到退出信号，等待入口摘除本实例")
 	})
@@ -338,7 +338,7 @@ func (p *tcpProxy) disconnect() {
 	}
 }
 
-// 会话不回应关闭握手，关闭它要等最多 5 秒：PostgreSQL 断开之后、依赖检查停止之前，至少完成一次检查。
+// 会话不回应关闭握手，关闭会话最多要等 5 秒。所以 PostgreSQL 断开之后、依赖检查停止之前，至少会完成一次检查。
 func TestServeLogsNoReadinessDuringExit(t *testing.T) {
 	database := startPostgres(t)(t)
 	contractEnv(t, database, startValkey(t)(t))

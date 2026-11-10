@@ -50,7 +50,7 @@ func (s *Store) RecordListen(ctx context.Context, memberIDs []string, l port.Lis
 	return nil
 }
 
-// 在替换会话的事务中调用：账号行已经被互斥地锁住，与同时进行的记录、同时登录这个账号的其他游客依次写入账号的历史。
+// 要在替换会话的事务里调用。这时账号行已经被互斥地锁住，所以 moveListens 和同时进行的记录、同时登录这个账号的其他游客会依次写入账号的历史。
 func moveListens(ctx context.Context, q *query.Queries, fromID, toID string) error {
 	if err := q.MoveListens(ctx, query.MoveListensParams{FromID: fromID, ToID: toID}); err != nil {
 		return err

@@ -96,7 +96,7 @@ func (s *Store) ImportPlaylist(ctx context.Context, ownerID, name string, items 
 	return port.PlaylistRecord{ID: created.ID, Name: name, TrackCount: len(items), CreatedAt: created.CreatedAt, UpdatedAt: created.UpdatedAt, Cover: firstCover(items)}, nil
 }
 
-// 要在事务中调用：“我喜欢”的行锁持续到新建之后，同一个账号并发新建时才会依次计数。
+// 要在事务里调用，这样“我喜欢”的行锁会持续到新建之后，同一个账号并发新建时才会依次计数。
 func createPlaylist(ctx context.Context, q *query.Queries, ownerID, name string, limit int) (query.CreatePlaylistRow, error) {
 	if err := q.LockFavorites(ctx, ownerID); err != nil {
 		return query.CreatePlaylistRow{}, err
@@ -148,7 +148,7 @@ func (s *Store) DeletePlaylist(ctx context.Context, ownerID, id string) error {
 	return nil
 }
 
-// 改名或删除没有影响任何行：要么是“我喜欢”，要么歌单不属于这个成员。
+// 改名或删除没有影响任何行，说明要么是“我喜欢”，要么歌单不属于这个成员。
 func (s *Store) unchangeable(ctx context.Context, ownerID, id string) error {
 	kind, err := s.q.PlaylistKind(ctx, query.PlaylistKindParams{ID: id, OwnerID: ownerID})
 	switch {
@@ -343,7 +343,7 @@ func (s *Store) MovePlaylistItems(ctx context.Context, ownerID, id string, track
 		if err != nil || slices.Equal(moved, order) {
 			return err
 		}
-		// 显示顺序里最靠前的取最大的排序值；歌单的 item_seq 不小于曲目数，所以新加入的歌仍然排在最前。
+		// 显示顺序里最靠前的歌取最大的排序值。歌单的 item_seq 不小于曲目数，所以新加入的歌仍然排在最前。
 		positions := make([]int64, len(moved))
 		for i := range moved {
 			positions[i] = int64(len(moved) - i)
@@ -376,7 +376,7 @@ func (s *Store) SetPlaylistShare(ctx context.Context, ownerID, id, shareID strin
 
 func (s *Store) SharedPlaylist(ctx context.Context, shareID string) (port.SharedPlaylist, error) {
 	var shared port.SharedPlaylist
-	// 歌单和曲目在同一个快照里读：分开读时，删除歌单可能恰好发生在两次读取之间，读到歌单还在、曲目却已经没了。
+	// 歌单和曲目在同一个快照里读。如果分开读，删除歌单可能恰好发生在两次读取之间，就会读到歌单还在、曲目却已经没了。
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		p, err := q.SharedPlaylist(ctx, shareID)

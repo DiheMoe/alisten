@@ -16,7 +16,7 @@ type APIKeyStatus struct {
 	CreatedAt time.Time
 }
 
-// roomID 必须是常驻房间。每个房间至多一把 Key；bot 成员在第一次生成时创建，此后一直不变。
+// roomID 必须是常驻房间。每个房间最多一把 Key。bot 成员在第一次生成 Key 时创建，之后一直不变。
 type APIKeys interface {
 	RoomAPIKeyStatus(ctx context.Context, roomID string) (APIKeyStatus, error)
 	// 还没有 Key 时生成，已经有时旧 Key 立即失效。

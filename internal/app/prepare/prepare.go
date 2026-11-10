@@ -68,7 +68,7 @@ func (p *Preparer) Finished(o port.PrepareOutcome) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for ch := range p.waiting[o.Track] {
-		// 只保留最新的结果：较早的结果属于已经结束的任务。
+		// 只保留最新的结果，因为较早的结果属于已经结束的任务。
 		select {
 		case <-ch:
 		default:
@@ -87,7 +87,7 @@ func (p *Preparer) prepared(ctx context.Context, t track.Track) (port.PreparedTr
 	return result, ok, err
 }
 
-// 返回之后要跟进的任务，提交失败时为 0。任务已经完成时返回 again，由调用方重新读取曲目表：结果可能是任务在刚才读取曲目表之后才写入的，
+// 返回之后要跟进的任务，提交失败时为 0。任务已经完成时返回 again，由调用方重新读取曲目表。任务可能是在刚才读取曲目表之后才写入结果的，
 // 这时不用再提交任务。
 func (p *Preparer) follow(ctx context.Context, t track.Track, job int64) (int64, string, bool) {
 	if job != 0 {

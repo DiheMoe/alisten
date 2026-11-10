@@ -30,10 +30,10 @@ export function fallbackPage(list: AdminListMediaResponse): number | null {
   return Math.max(1, Math.ceil(list.total / list.pageSize))
 }
 
-// 每打开一次媒体页新建一个：离开再回来时重新读取。
+// 每打开一次媒体页就新建一个 MediaStore，这样离开再回来时会重新读取。
 export class MediaStore extends Store<MediaState> {
   #query: MediaQuery | null = null
-  // 只有最后发起的读取能写入：换了参数、重试或删除之后，此前的读取作废。
+  // 只有最后发起的读取能写入。换了参数、重试或删除之后，此前的读取作废。
   #generation = 0
   #anchor: string | null = null
 
@@ -41,7 +41,7 @@ export class MediaStore extends Store<MediaState> {
     super({ list: null, loadedAt: 0, loading: false, error: null, selected: new Set() })
   }
 
-  // 地址里的参数变化时调用；参数和上一次相同时不重新读取。换了参数就清空选择。
+  // 地址里的参数变化时调用。参数和上一次相同时不重新读取，换了参数就清空选择。
   show(query: MediaQuery): void {
     const current = this.#query
     if (current && current.q === query.q && current.sort === query.sort && current.page === query.page)
@@ -74,7 +74,7 @@ export class MediaStore extends Store<MediaState> {
     this.setState({ selected: new Set() })
   }
 
-  // 失败时原因已经通过通知显示，返回 null。无论成败都重新读取当前页，读完才返回：界面不会再显示已经删掉的歌，中途出错时出错之前删掉的也一样。
+  // 失败时原因已经通过通知显示，返回 null。无论成败都重新读取当前页，读完才返回。这样界面不会再显示已经删掉的歌，中途出错时，出错之前删掉的歌也不会再显示。
   async remove(keys: string[]): Promise<AdminRemoveMediaResponse | null> {
     const result = await adminStore.call(() => api.adminRemoveMedia({ media: keys.map(key => ({ key })) }))
     await this.#load()

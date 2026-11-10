@@ -58,7 +58,7 @@ func newService(t *testing.T, token string) fixture {
 func TestSetYouTubeCookies(t *testing.T) {
 	f := newService(t, "secret")
 
-	// Netscape 格式原样保存，换行统一成 \n；#HttpOnly_ 开头的是有效 cookie 行，不是注释。
+	// Netscape 格式原样保存，换行统一成 \n。#HttpOnly_ 开头的是有效 cookie 行，不是注释。
 	input := "# Netscape HTTP Cookie File\r\n#HttpOnly_.youtube.com\tTRUE\t/\tTRUE\t1798765432\tSID\tfictional\r\n.youtube.com\tTRUE\t/\tFALSE\t1798765432\tHSID\tother\r\n"
 	want := "# Netscape HTTP Cookie File\n#HttpOnly_.youtube.com\tTRUE\t/\tTRUE\t1798765432\tSID\tfictional\n.youtube.com\tTRUE\t/\tFALSE\t1798765432\tHSID\tother"
 	if err := f.admin.SetYouTubeCookies(t.Context(), input); err != nil {
@@ -68,7 +68,7 @@ func TestSetYouTubeCookies(t *testing.T) {
 		t.Errorf("保存的 cookies = %q，期望 %q", got, want)
 	}
 
-	// 请求头格式转成 Netscape：带和不带 Cookie: 前缀；cookie 名字保留原始大小写。
+	// 请求头格式转成 Netscape，带不带 Cookie: 前缀都可以。cookie 名字保留原始大小写。
 	for _, tc := range []struct{ header, want string }{
 		{"SID=fictional; HSID=other", "\tSID\tfictional"},
 		{"Cookie: SID=fictional; HSID=other", "\tSID\tfictional"},
@@ -467,7 +467,7 @@ func TestBilibiliQRLogin(t *testing.T) {
 	}
 }
 
-// 票据已经作废，断开的通知发不出去时照常成功：用旧票据建立的连接由网关定期核对凭证时断开。
+// 票据已经作废之后，断开的通知发不出去也照常成功，因为用旧票据建立的连接会在网关定期核对凭证时断开。
 func TestUpdateRoomSucceedsWhenRevokeFails(t *testing.T) {
 	f := newService(t, "secret")
 	id, err := f.admin.CreateRoom(t.Context(), NewRoom{Name: "大厅"})

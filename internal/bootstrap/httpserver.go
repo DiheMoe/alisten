@@ -14,7 +14,7 @@ func newHTTPServer(handler http.Handler, logger *slog.Logger) *http.Server {
 	return &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
-		// 与请求体的上限相同：房间内的 GET 和 DELETE 请求把参数放在 URL 里。
+		// 与请求体的上限相同，因为房间内的 GET 和 DELETE 请求把参数放在 URL 里。
 		MaxHeaderBytes: 64 << 10,
 		ErrorLog:       slog.NewLogLogger(logger.Handler(), slog.LevelError),
 	}

@@ -21,7 +21,7 @@ const (
 	CloseRevoked
 	CloseRoomGone
 	CloseOverflow
-	// 只用于事件流：名额用完时让给同一凭证新打开的事件流。
+	// 只用于事件流，名额用完时让给同一凭证新打开的事件流。
 	CloseReplaced
 )
 
@@ -34,7 +34,7 @@ type (
 		View   room.View
 	}
 
-	// 事件流收到的房间快照：总是第一条消息，房间开始新的一次运行之后再收到一份。
+	// 事件流收到的房间快照。Snapshot 总是第一条消息，房间开始新的一次运行之后再收到一份。
 	Snapshot struct {
 		View room.View
 	}
@@ -83,7 +83,7 @@ type Session struct {
 	id   room.SessionID
 	room string
 	link *roomLink
-	// 连接所用的票据签发给的成员会话的 token 哈希。
+	// 连接所用的票据属于一个成员会话，memberSession 是这个会话的 token 哈希。
 	memberSession string
 	credential    string
 	// 在发出 Leave 之前设置。重新加入的 Join 可能排在 Leave 之后，网关据此补发 Leave。
@@ -112,7 +112,7 @@ func (s *Session) Room() string {
 	return s.room
 }
 
-// Context 在关闭时取消。会话向客户端写消息时以它为期限：客户端不再读取时，关闭会话也要能中止阻塞的写入。
+// Context 在关闭时取消。会话向客户端写消息时以 Context 为期限，因为客户端不再读取时，关闭会话也要能中止阻塞的写入。
 func (q *sendQueue) Context() context.Context {
 	return q.ctx
 }
@@ -170,7 +170,7 @@ func (s *Session) reply(tag any, res room.Result, err error) {
 	s.enqueue(Reply{Tag: tag, Result: res, Err: err})
 }
 
-// 在接收消息的 goroutine 上按房间频道的顺序调用：此后房间的事件才发给这个会话，快照之前的事件都已包含在快照中。
+// 在接收消息的 goroutine 上按房间频道的顺序调用。此后房间的事件才发给这个会话，快照之前的事件都已包含在快照中。
 func (s *Session) welcome(v room.View) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

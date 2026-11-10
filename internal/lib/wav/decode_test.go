@@ -168,9 +168,9 @@ func TestDecodeDoesNotAllocateByDeclaredChunkSize(t *testing.T) {
 //	ffmpeg -nostdin -loglevel error -f lavfi -i 'sine=frequency=1000:sample_rate=22050:duration=0.5' -c:a libmp3lame -q:a 5 -fflags +bitexact -map_metadata -1 sine-mpeg2.mp3
 //	ffmpeg -nostdin -loglevel error -f lavfi -i 'sine=frequency=1000:sample_rate=8000:duration=0.5' -c:a libmp3lame -q:a 5 -fflags +bitexact -map_metadata -1 sine-mpeg25.mp3
 //
-// ffmpeg n9.0.2 生成的文件与仓库中的逐字节相同；其他版本生成的字节可能不同，测试只检查解码出的采样率、声道数、时长、
-// 峰值和半周期数。MP3 编码器在两端加了静音：Info 帧里的 LAME 标签有效，gl3d 把它们裁掉，
-// 所以时长正好是 0.5 秒，这条断言也固定了裁剪。
+// ffmpeg n9.0.2 生成的文件与仓库中的逐字节相同。其他版本生成的字节可能不同，所以测试只检查解码出的采样率、声道数、时长、
+// 峰值和半周期数。MP3 编码器在两端加了静音。Info 帧里的 LAME 标签有效，gl3d 会把这些静音裁掉，
+// 所以时长正好是 0.5 秒，时长的断言也把这一裁剪固定了下来。
 func TestDecodeCompressed(t *testing.T) {
 	tests := []struct {
 		file           string
@@ -220,7 +220,7 @@ func TestDecodeCompressed(t *testing.T) {
 	}
 }
 
-// 417 字节是 128 kbps、44.1 kHz 的帧长。帧头之后全是零：Layer III 的这样一帧解码出 1152 个采样帧的静音。
+// 417 字节是 128 kbps、44.1 kHz 的帧长。帧头之后全是零，这样的 Layer III 帧会解码出 1152 个采样帧的静音。
 func mp3Frame(header ...byte) []byte {
 	return append(header, make([]byte, 417-len(header))...)
 }

@@ -26,7 +26,7 @@ export function deleteTicket(roomId: string): void {
   localStorage.removeItem(ticketKeyPrefix + roomId)
 }
 
-// 票据属于签发时的成员，换了身份之后都不能再用。倒序遍历：删除会让后面的键前移。
+// 票据属于签发时的成员，换了身份之后都不能再用。倒序遍历，因为删除会让后面的键前移。
 export function deleteAllTickets(): void {
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const key = localStorage.key(i)

@@ -1,5 +1,5 @@
 @import 'tailwindcss';
-/* @theme 和 @utility 只在 Tailwind 入口样式的导入链中生效：改从 JS 导入，text-ui-*、muted 和 accent 就不会生成，构建也不报错。 */
+/* @theme 和 @utility 只在 Tailwind 入口样式的导入链里生效。改从 JS 导入 theme.css 的话，text-ui-*、muted 和 accent 就不会生成，构建也不会报错。 */
 @import '@/shared/ui/theme.css';
 
 @layer base {
@@ -82,7 +82,7 @@
 :root[data-view-direction='sink'] { --view-in: translateY(-8%); --view-out: translateY(100%); --view-swap: translateY(-10px); }
 .detail-panel { width: var(--detail-panel-width); flex-shrink: 0; position: relative; min-height: 0; display: flex; flex-direction: column; border: 0; border-radius: 12px; background: var(--color-panel); overflow: hidden; animation: detail-panel-open 240ms cubic-bezier(.2, .8, .2, 1) both; }
 .detail-panel-content { view-transition-name: detail-panel-content; width: var(--detail-panel-width); flex: 1; min-height: 0; display: flex; flex-direction: column; }
-/* 只换关键帧里的位移：换 animation-name 会让面板在切换内容时重播打开动画。 */
+/* 只换关键帧里的位移，因为换 animation-name 会让面板在切换内容时重播打开动画。 */
 .detail-panel { --detail-panel-offset: translateX(16px); }
 .detail-panel-sheet { --detail-panel-offset: translateY(100%); }
 .detail-panel-closing { pointer-events: none; animation-name: detail-panel-close; }
@@ -94,7 +94,7 @@
   from { width: var(--detail-panel-width); margin-left: 0; opacity: 1; transform: translateX(0); }
   to { width: 0; margin-left: -8px; opacity: 0; transform: var(--detail-panel-offset); }
 }
-/* 视图过渡只移动面板内容：它的过渡分组裁剪在面板内，根快照不做动画，顶栏、主内容和播放器保持不动。 */
+/* 视图过渡只移动面板内容。面板内容的过渡分组裁剪在面板内，根快照不做动画，所以顶栏、主内容和播放器保持不动。 */
 ::view-transition-group(root) { animation: none; overflow: clip; }
 ::view-transition-image-pair(root) { isolation: auto; }
 ::view-transition-old(root), ::view-transition-new(root) { mix-blend-mode: normal; animation: none; }
@@ -103,7 +103,7 @@
 ::view-transition-old(detail-panel-content), ::view-transition-new(detail-panel-content) { background: var(--color-panel); mix-blend-mode: normal; }
 ::view-transition-old(detail-panel-content) { animation: view-recede 300ms cubic-bezier(.2, .8, .2, 1) both; }
 ::view-transition-new(detail-panel-content) { animation: view-push-in 300ms cubic-bezier(.2, .8, .2, 1) both; }
-/* 聊天在升起和沉下时都要压在列表上面，而新视图默认才在上层。 */
+/* 聊天在升起和沉下时都要压在列表上面，而默认只有新视图在上层。 */
 :root[data-view-direction='rise']::view-transition-new(detail-panel-content),
 :root[data-view-direction='sink']::view-transition-old(detail-panel-content) { z-index: 1; border-radius: 12px 12px 0 0; box-shadow: 0 -8px 24px var(--color-shadow); }
 @keyframes view-recede {

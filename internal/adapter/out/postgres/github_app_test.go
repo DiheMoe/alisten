@@ -27,7 +27,7 @@ func TestGitHubOAuthApp(t *testing.T) {
 		}
 	}
 
-	// 并发地保存和读取：读到的 Client ID 和 Secret 总是同一次保存的。
+	// 并发地保存和读取。读到的 Client ID 和 Secret 总是同一次保存的。
 	var wg sync.WaitGroup
 	for i := range 4 {
 		wg.Go(func() {
@@ -72,7 +72,7 @@ func TestGitHubOAuthApp(t *testing.T) {
 	}
 }
 
-// 存储中的值不是保存时的格式时报错，错误信息中不带原值：其中可能有 Client Secret。
+// 存储里的值不是保存时的格式时报错，错误信息里不带原值，因为原值里可能有 Client Secret。
 func TestGitHubOAuthAppRejectsCorruptValue(t *testing.T) {
 	store, pool := newStore(t)
 	for _, value := range []string{`not json secret-1`, `{"clientId":"client-1"}`, `{"clientSecret":"secret-1"}`} {

@@ -173,7 +173,7 @@ func newFlakyBusInstance(t *testing.T, store *porttest.Store, logger *slog.Logge
 	return h, g, node, bus
 }
 
-// 本实例的频道订阅生效之前不接管房间：此时收不到其他实例转发来的输入，接管之后房间的回复也可能漏掉。
+// 本实例的频道订阅生效之前不接管房间，因为这时收不到其他实例转发来的输入，接管之后房间的回复也可能漏掉。
 func TestNoTakeoverBeforeInstanceChannelIsSubscribed(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()
@@ -780,7 +780,7 @@ func TestRemoteNotFoundMeansRoomNotFound(t *testing.T) {
 		a := startInstance(t, redis, "a", store, store, songs)
 		b := startInstance(t, redis, "b", store, store, songs)
 		synctest.Wait()
-		// 房间的数据已经删除，租约却还属于 a：a 接管时找不到房间。
+		// 房间的数据已经删除，租约却还属于 a，所以 a 接管时找不到房间。
 		missing := "01a15778-1911-7a28-8b2e-e08c2a25f388"
 		if ok, err := a.node.Acquire(t.Context(), missing, leaseTTL); err != nil || !ok {
 			t.Fatalf("a 取得租约 = %v, %v", ok, err)

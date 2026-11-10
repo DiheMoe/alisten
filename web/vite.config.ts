@@ -11,8 +11,8 @@ const backend = 'http://localhost:8080'
 
 const licenseFile = '.vite/license.json'
 
-// 这些包被打包进前端，却不在 Vite 生成的许可证清单中：virtual:pwa-register 不归属任何包，workbox 的运行时由 workbox-build
-// 内联进 workbox-*.js。补入清单后，随前端分发的许可证才完整。
+// 这些包会打包进前端，却不在 Vite 生成的许可证清单里，因为 virtual:pwa-register 不属于任何包，
+// workbox 的运行时则由 workbox-build 内联进 workbox-*.js。把它们补进清单，随前端分发的许可证才完整。
 const unlisted = ['vite-plugin-pwa', 'workbox-core', 'workbox-precaching', 'workbox-routing', 'workbox-strategies']
 
 function listUnlistedLicenses(): Plugin {
@@ -60,7 +60,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // 与 nginx 一致：只有页面路径返回 index.html，/api、/ws 和 /media 照常走网络。
+        // 和 nginx 一样，只有页面路径返回 index.html，/api、/ws 和 /media 照常走网络。
         // Workbox 拿路径加查询参数来匹配，nginx 只看路径，所以这里的规则末尾允许查询参数。
         navigateFallbackAllowlist: [/^\/(?:settings(?:\/(?:account|appearance|playback|performance|privacy))?|admin(?:\/(?:site|registration|users|rooms|sources|media))?|history|playlists(?:\/[^/?]+)?)?(?:\?.*)?$/, /^\/r\/[^/?]+(?:\/(?:queue|chat|search|playlists\/[^/?]+\/[^/?]+))?(?:\?.*)?$/, /^\/s\/[^/?]+(?:\?.*)?$/, /^\/(?:pair|auth\/github)(?:\?.*)?$/],
         importScripts: ['notification-click.js'],

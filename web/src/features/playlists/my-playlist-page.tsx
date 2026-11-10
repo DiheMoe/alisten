@@ -29,7 +29,7 @@ function keysOf(items: readonly MyPlaylistItem[]): string[] {
   return items.map(item => trackKey(item.track))
 }
 
-// 导出服务端的曲目：页面上的曲目可能还没读到，或者带着没同步完的移动和移出。
+// 导出服务端的曲目，因为页面上的曲目可能还没读到，或者带着没同步完的移动和移出。
 async function exportToFile(playlist: MyPlaylist): Promise<void> {
   try {
     const { items } = await api.listMyPlaylistItems(playlist.id)
@@ -56,16 +56,16 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
   const [failed, setFailed] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [selection, setSelection] = useState(noSelection)
-  // 点了“选择”：没有选中项时也显示勾选框。有选中项时总是处于多选模式。
+  // 点了“选择”之后，没有选中项时也显示勾选框。有选中项时总是处于多选模式。
   const [picking, setPicking] = useState(false)
   const [saving, setSaving] = useState<{ track: Track, title: string } | null>(null)
   const [savingSelected, setSavingSelected] = useState(false)
   const [confirmingRemoval, setConfirmingRemoval] = useState(false)
-  // 移出之后焦点要去的那一首（null 表示歌单名）：移出的行、随选择清空而消失的选择栏和确认框都带走了焦点。每次换一个新对象，同一个目标也能再次触发。
+  // 移出之后焦点要去的那一首（null 表示歌单名）。移出的行、随选择清空而消失的选择栏和确认框都带走了焦点，所以要重新指定焦点。每次换一个新对象，这样同一个目标也能再次触发。
   const [refocus, setRefocus] = useState<{ key: string | null } | null>(null)
   const titleRef = useRef<HTMLHeadingElement>(null)
   const [edits] = useState(() => new TrackEdits(() => setAttempt(n => n + 1)))
-  // 歌单的更新时间变了就重新读取：加入、移出、移动和复制都会推进它，歌曲数不变时顺序也可能变了。
+  // 歌单的更新时间变了就重新读取。加入、移出、移动和复制都会推进更新时间，歌曲数不变时，顺序也可能变了。
   useEffect(() => {
     let active = true
     const usable = edits.read()
@@ -89,7 +89,7 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
     return () => window.removeEventListener('focus', refresh)
   }, [])
   const selecting = picking || selection.keys.size > 0
-  // 多选时落到勾选框上，平时落到行上，和列表里的方向键一样。
+  // 焦点在多选时落到勾选框上，平时落到行上，和列表里的方向键一样。
   useEffect(() => {
     if (!refocus)
       return
@@ -111,9 +111,9 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [selecting])
   const now = useStore(playlistsStore, s => s.loadedAt)
-  // 读到了自己的歌单，里面却没有它：在别处删掉了，或者换了账号。
+  // 读到了自己的歌单列表，里面却没有这个歌单，说明它在别处删掉了，或者现在登录的是另一个账号。
   const gone = listed && !playlist
-  // 读不到时不再显示之前的曲目：它们可能已经不在了，也可能属于之前的账号。
+  // 读不到时不再显示之前的曲目，因为这些曲目可能已经不在了，也可能属于之前的账号。
   const shown = gone || failed ? null : items
 
   const exitSelection = () => {
@@ -260,7 +260,7 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
         </div>
       </header>
       {body}
-      {/* 选中数的播报常驻在页面上：选择栏要等选中第一首才出现，跟着它出现的播报区域读屏软件不会播报。 */}
+      {/* 选中数的播报常驻在页面上，因为选择栏要等选中第一首才出现，而跟着选择栏一起出现的播报区域，读屏软件不会播报。 */}
       <p className="sr-only" role="status">{shown && selected.length > 0 ? `已选 ${selected.length} 首` : ''}</p>
       {!connected && shown?.length ? <p className="text-ui-caption muted my-playlist-hint">进入房间之后才能点歌。</p> : null}
       {playlist && shown && selected.length > 0 && (

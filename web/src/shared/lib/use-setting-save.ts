@@ -4,7 +4,7 @@ import { idleSave, settingSave, shownValue } from './setting-save'
 // “已保存”显示 1.5 秒，再用 0.4 秒淡出，和 ui.css 里 .save-status-saved 的动画一致。
 export const savedNoticeMs = 1900
 
-// 改完立即保存。save 同步时写的是这台设备上的 store，抛出的是浏览器的存储错误；异步时写服务端，失败时抛出 Error，message 是给用户看的原因。
+// 改完立即保存。save 是同步函数时，写的是这台设备上的 store，抛出的是浏览器的存储错误。save 返回 Promise 时写的是服务端，失败时抛出 Error，message 是给用户看的原因。
 export function useSettingSave<T>(saved: T, save: (value: T) => void | Promise<void>) {
   const [state, dispatch] = useReducer(settingSave<T>, idleSave)
   const [savedVersion, setSavedVersion] = useState(0)

@@ -32,7 +32,7 @@ function insertionIndex(rows: readonly HTMLElement[], y: number): number {
   return low
 }
 
-// 拖动结束时，按下和松开的位置不在同一行，浏览器仍会派发 click：吞掉它，免得切换选中。
+// 拖动结束时，按下和松开的位置不在同一行，浏览器仍会派发 click。所以要吞掉这个 click，免得切换选中。
 function swallowNextClick(): void {
   const swallow = (event: MouseEvent) => {
     event.stopPropagation()

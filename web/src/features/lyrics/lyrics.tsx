@@ -31,7 +31,7 @@ function neighborLine(node: Element, side: 'previousElementSibling' | 'nextEleme
   return neighbor?.classList.contains('lyric-interlude') ? neighbor[side] : neighbor
 }
 
-// 没有点的空白行不渲染节点：当前行为这种空白行时，滚动到前后两行的中间。
+// 没有点的空白行不渲染节点。当前行是这种空白行时，滚动到前后两行的中间。
 function centerLine(container: HTMLElement, nodes: Map<number, HTMLElement>, index: number, smooth: boolean): void {
   const scrolledFrom = container.scrollTop
   let before: HTMLElement | undefined
@@ -54,7 +54,7 @@ function centerLine(container: HTMLElement, nodes: Map<number, HTMLElement>, ind
     rippleLines(container, nodes, container.scrollTop - scrolledFrom)
 }
 
-// 容器已经滚到位，每行再从原来的位置依次移过来。动画是叠加的：上一次还没走完时换行，不会跳回起点。
+// 容器已经滚到位，每行再从原来的位置依次移过来。动画是叠加的，所以上一次还没走完时换行，也不会跳回起点。
 function rippleLines(container: HTMLElement, nodes: Map<number, HTMLElement>, distance: number): void {
   const reach = Math.abs(distance)
   // 一次跨过整屏时（比如刚进房间）没有“下一行”可言，直接到位。
@@ -80,7 +80,7 @@ export function Lyrics() {
   useEffect(() => {
     const container = scrollRef.current!
     const nodes = new Map(Array.from(container.querySelectorAll<HTMLElement>('[data-lyric-index]'), node => [Number(node.dataset.lyricIndex), node]))
-    // React 会复用 key 相同的节点，需要先清除上一首歌留下的高亮。
+    // React 会复用 key 相同的节点，所以要先清除上一首歌留下的高亮。
     for (const node of nodes.values()) {
       node.classList.remove('active-lyric', 'near-lyric')
       node.removeAttribute('aria-current')

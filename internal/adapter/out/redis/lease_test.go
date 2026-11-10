@@ -109,7 +109,7 @@ func TestLeaseExpires(t *testing.T) {
 	}
 }
 
-// 本实例重新取得自己的租约就是房间的一次新运行：它从空的在线列表开始，上一次运行写下的在线人数作废。
+// 本实例重新取得自己的租约，就是房间的一次新运行。新运行从空的在线列表开始，上一次运行写下的在线人数作废。
 func TestReacquiringOwnLeaseResetsOnlineCount(t *testing.T) {
 	a := NewLeases(newClient(t), "a")
 	if ok, err := a.Acquire(t.Context(), hall, time.Minute); err != nil || !ok {

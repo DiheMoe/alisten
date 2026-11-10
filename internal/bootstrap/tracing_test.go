@@ -148,7 +148,7 @@ func TestOpenTelemetryLogsAreJSON(t *testing.T) {
 	}
 }
 
-// 逐个读取 token：解码成 map 时，后一个值会静默覆盖前一个，看不出重复。
+// 逐个读取 token，因为解码成 map 时，后一个值会静默覆盖前一个，看不出重复。
 func duplicateKeys(t *testing.T, line string) []string {
 	t.Helper()
 	type object struct {

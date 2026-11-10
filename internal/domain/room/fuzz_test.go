@@ -13,11 +13,11 @@ import (
 )
 
 const (
-	// 房间换到其他实例运行：以下一个任期从存储中的状态恢复。
+	// 房间换到其他实例运行，以下一个任期从存储中的状态恢复。
 	fuzzRestore = 17
 	// 准备结果写进了曲目表，却没有送到房间（房间没有 owner，或者通知丢失）。
 	fuzzStored = 18
-	// 曲目表中的结果不能再用：比如链接曲目的音频已经不在对象存储中。
+	// 曲目表中的结果不能再用了，比如链接曲目的音频已经不在对象存储中。
 	fuzzDropped = 19
 	fuzzOps     = 20
 )
@@ -35,9 +35,9 @@ func FuzzInvariants(f *testing.F) {
 	// 恢复时待播和等待队列中准备中的歌重新准备。
 	f.Add(false, []byte{2, 0, 17, 0})
 	f.Add(true, []byte{2, 0, 7, 0, 2, 1, 17, 0})
-	// 待播准备好的结果在房间没有 owner 时写进了曲目表：恢复时待播已就绪，立即开播。
+	// 待播准备好的结果在房间没有 owner 时写进了曲目表，所以恢复时待播已就绪，立即开播。
 	f.Add(true, []byte{2, 0, 18, 0, 17, 0})
-	// 等待队列中已就绪歌曲的结果不能再用：恢复时重新准备。
+	// 等待队列中已就绪歌曲的结果不能再用了，恢复时要重新准备。
 	f.Add(true, []byte{2, 0, 7, 0, 2, 1, 7, 1, 19, 1, 17, 0})
 	f.Fuzz(func(t *testing.T, persistent bool, ops []byte) {
 		kind := Ephemeral
@@ -57,7 +57,7 @@ func FuzzInvariants(f *testing.F) {
 			var effects []Effect
 			switch op % fuzzOps {
 			case fuzzRestore:
-				// 每次状态变化都已落盘，所以落盘的状态就是 before；会话、投票和定时器不落盘，随旧的 Room 一起丢弃。
+				// 每次状态变化都已落盘，所以落盘的状态就是 before。会话、投票和定时器不落盘，随旧的 Room 一起丢弃。
 				term++
 				seq = 0
 				before = stored(before, table)
@@ -76,7 +76,7 @@ func FuzzInvariants(f *testing.F) {
 				}
 				effects = r.Handle(env, in)
 			}
-			// 房间关闭后就被丢弃，不会再收到输入；关闭时结束了正在播放的歌，但不再开播下一首。
+			// 房间关闭后就被丢弃，不会再收到输入。关闭时结束了正在播放的歌，但不再开播下一首。
 			closed := len(find[Close](effects)) != 0
 			checkInvariants(t, r, before, effects, term, &seq, closed)
 			if closed {
@@ -90,7 +90,7 @@ func fuzzTrack(arg byte) track.Track {
 	return netease(string(rune('a' + arg%6)))
 }
 
-// 存储接管房间时按曲目表重算待播和等待队列中的条目是否就绪；正在播放的歌已经开播，保持原样。
+// 存储接管房间时按曲目表重算待播和等待队列中的条目是否就绪。正在播放的歌已经开播，保持原样。
 func stored(s Snapshot, table map[track.Track]track.Prepared) Snapshot {
 	restore := func(e Entry) Entry {
 		e.Prep, e.Ready = table[e.Track]
@@ -127,7 +127,7 @@ func checkRestorePrepares(t *testing.T, r *Room, effects []Effect) {
 	}
 }
 
-// 不能用 sameSnapshot 判断持久状态是否变化：要检查的正是它。
+// 不能用 sameSnapshot 判断持久状态是否变化，因为要检查的正是 sameSnapshot。
 func persistentStateChanged(a, b Snapshot) bool {
 	if len(a.Waiting) == 0 && len(b.Waiting) == 0 {
 		a.Waiting, b.Waiting = nil, nil
@@ -178,7 +178,7 @@ func fuzzInput(r *Room, op, arg byte) Input {
 	}
 }
 
-// 多数时候选中等待队列中的条目，也会选中待播、正在播放和不存在的条目：删除和点赞只接受等待队列中的条目。
+// 多数时候选中等待队列中的条目，因为删除和点赞只接受这些条目。待播、正在播放和不存在的条目也会选到。
 func fuzzEntry(r *Room, arg byte) EntryID {
 	candidates := ids(r.waiting)
 	if r.pending != nil {

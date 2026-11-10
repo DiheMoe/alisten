@@ -275,7 +275,7 @@ func (s *Store) UnbindGitHub(_ context.Context, memberID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	m := s.member(memberID)
-	// 密码总是和用户名一起设置：没有用户名，就是 PostgreSQL 中 password_hash 为 NULL。
+	// 密码总是和用户名一起设置，所以没有用户名就相当于 PostgreSQL 中 password_hash 为 NULL。
 	if m == nil || m.username == "" {
 		return port.ErrNoPassword
 	}
@@ -363,7 +363,7 @@ func (s *Store) deleteSessions(memberID string, keepTokenHash []byte) [][]byte {
 	return deleted
 }
 
-// 与 postgres 的外键一致：会话的票据随会话一起删除。调用方持有 s.mu。
+// 与 postgres 的外键一致，会话的票据随会话一起删除。调用方持有 s.mu。
 func (s *Store) deleteSession(hash string) {
 	delete(s.sessions, hash)
 	maps.DeleteFunc(s.tickets, func(_ string, t storedTicket) bool { return t.session == hash })

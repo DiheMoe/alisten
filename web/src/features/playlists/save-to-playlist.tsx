@@ -16,7 +16,7 @@ import './playlists.css'
 const byUpdate: PlaylistSort = { key: 'updatedAt', order: 'desc' }
 const none: ReadonlySet<string> = new Set()
 
-// 保持打开时的先后：保存会更新歌单的更新时间，按实时的时间排，刚勾选的歌单会跳走。打开之后才出现的歌单排在最后。
+// 保持打开对话框时的先后。保存会更新歌单的更新时间，如果按实时的更新时间排，刚勾选的歌单会跳走。打开之后才出现的歌单排在最后。
 function arrange(playlists: readonly MyPlaylist[], order: readonly string[]): MyPlaylist[] {
   const rank = new Map(order.map((id, index) => [id, index]))
   const at = (playlist: MyPlaylist) => rank.get(playlist.id) ?? order.length
@@ -46,7 +46,7 @@ export function SaveToPlaylistDialog(props: SaveToPlaylistProps) {
   const [creating, setCreating] = useState(false)
   const [saving, setSaving] = useState(false)
   const listRef = useRef<HTMLUListElement>(null)
-  // 从新建页回到列表时要获得焦点的元素：取消时是“新建歌单”，建好之后是新歌单的勾选框，聚焦的同时把它滚进视野。
+  // 从新建页回到列表时要获得焦点的元素：取消时是“新建歌单”，建好之后是新歌单的勾选框。聚焦的同时会把这个元素滚进视野。
   const returnFocusRef = useRef<string | null>(null)
   // 打开时刷新歌单：歌曲数和其他设备上新建的歌单。
   useEffect(() => {
@@ -188,7 +188,7 @@ export function SaveToPlaylistDialog(props: SaveToPlaylistProps) {
 }
 
 export function SaveToPlaylistButton({ track, title, className = '' }: { track: Track, title: string, className?: string }) {
-  // 记下打开时的歌：对话框开着时换了歌，勾选仍然作用于打开时的那首。
+  // 记下打开时的歌。这样对话框开着时换了歌，勾选仍然作用于打开时的那首。
   const [target, setTarget] = useState<{ track: Track, title: string } | null>(null)
   return (
     <>

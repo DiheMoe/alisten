@@ -1,4 +1,4 @@
-// 可见的名字由 <label htmlFor={id}> 提供：按钮可以被 label 关联，点击 label 也会切换。
+// 可见的名字由 <label htmlFor={id}> 提供。按钮可以被 label 关联，点击 label 也会切换开关。
 export function Switch({ checked, onChange, disabled = false, id, 'aria-describedby': describedBy }: {
   'checked': boolean
   'onChange': (checked: boolean) => void

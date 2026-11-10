@@ -17,8 +17,8 @@ import (
 
 const cleanupTimeout = 10 * time.Second
 
-// 限定封面格式并不能阻止脚本：链接的封面来自用户提交的网页，而对象存储会按匿名请求中的 response-content-type 改写 Content-Type。
-// 对象存储与页面同源时，要靠入口为 /storage/ 的响应添加 Content-Security-Policy: sandbox 和 X-Content-Type-Options: nosniff 来防范脚本。
+// 限定封面格式并不能阻止脚本，因为链接的封面来自用户提交的网页，而对象存储会按匿名请求中的 response-content-type 改写 Content-Type。
+// 对象存储与页面同源时，要靠入口给 /storage/ 的响应加上 Content-Security-Policy: sandbox 和 X-Content-Type-Options: nosniff 来防范脚本。
 var coverTypes = map[string]string{"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
 
 // MediaRunner 准备音频和封面要存进对象存储的歌：链接由 yt-dlp 下载并转成 mp3，B 站的歌由音源下载原始文件，再转成 mp3。
@@ -36,7 +36,7 @@ func NewMediaRunner(links port.LinkDownloader, bilibili port.BilibiliSource, tra
 }
 
 func (r *MediaRunner) Run(ctx context.Context, t track.Track) (err error) {
-	// 任务可能在写入结果之后、River 记录完成之前中断，再次执行时结果仍然有效：往下走的话，clear 会删掉房间正在使用的音频。
+	// 任务可能在写入结果之后、River 记录完成之前中断，再次执行时结果仍然有效。这时不能往下走，否则 clear 会删掉房间正在使用的音频。
 	if done, err := r.prepared(ctx, t); done || err != nil {
 		return err
 	}
@@ -53,7 +53,7 @@ func (r *MediaRunner) Run(ctx context.Context, t track.Track) (err error) {
 	if err := r.clear(ctx, key); err != nil {
 		return err
 	}
-	// 上传开始之后任何一步失败，都要删除已经上传的对象：它们匿名可读，却没有准备结果，后台也看不到，不会再有人清理。
+	// 上传开始之后任何一步失败，都要删除已经上传的对象。这些对象匿名可读，却没有准备结果，后台也看不到，不会再有人清理。
 	defer func() {
 		if err != nil {
 			r.discard(ctx, t, key)
@@ -70,7 +70,7 @@ func (r *MediaRunner) Run(ctx context.Context, t track.Track) (err error) {
 	wg.Go(func() { result, analyzeErr = analyzeFile(ctx, r.logger, t, d.Audio, d.Meta.Duration) })
 	size, coverKey, uploadErr = r.upload(ctx, key, d)
 	wg.Wait()
-	// 音频无法分析时重试也没有用，先于上传的错误返回。
+	// 音频无法分析时重试也没有用，所以分析的错误先于上传的错误返回。
 	if analyzeErr != nil {
 		return analyzeErr
 	}
@@ -108,7 +108,7 @@ func (r *MediaRunner) downloadBilibili(ctx context.Context, id string) (port.Lin
 	if err != nil {
 		return port.LinkDownload{}, nil, err
 	}
-	// 用 defer 是为了 panic 时也删除文件：River 会恢复任务中的 panic，worker 继续运行。
+	// 用 defer 是为了 panic 时也删除文件，因为 River 会恢复任务中的 panic，worker 还会继续运行。
 	done := false
 	defer func() {
 		if !done {
@@ -163,7 +163,7 @@ func pageURL(t track.Track) string {
 	return t.ID
 }
 
-// 对象键由曲目 ID 决定，重新准备时要先清除上一次留下的对象：这一次封面的格式可能不同，也可能没有封面。
+// 对象键由曲目 ID 决定。重新准备时要先清除上一次留下的对象，因为这一次封面的格式可能不同，也可能没有封面。
 func (r *MediaRunner) clear(ctx context.Context, key string) error {
 	errs := []error{r.store.Delete(ctx, media.AudioObject(key))}
 	for ext := range coverTypes {
@@ -172,7 +172,7 @@ func (r *MediaRunner) clear(ctx context.Context, key string) error {
 	return errors.Join(errs...)
 }
 
-// 尽力删除已经上传的对象，失败只记 WARN：下一次准备同一首歌时还会再清理一遍。ctx 可能已经结束（任务被取消或超时），
+// 尽力删除已经上传的对象，失败只记 WARN，因为下一次准备同一首歌时还会再清理一遍。ctx 可能已经结束（任务被取消或超时），
 // 所以使用脱离 ctx 的短期限。
 func (r *MediaRunner) discard(ctx context.Context, t track.Track, key string) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
@@ -201,7 +201,7 @@ func analyzeFile(ctx context.Context, logger *slog.Logger, t track.Track, audio 
 	return analyze(ctx, logger, t, ctxReader{ctx: ctx, r: f}, fallback, "")
 }
 
-// 解码不接收 ctx，只能靠这层包装在 ctx 结束后让读取失败；否则任务取消或超时之后，长文件的分析仍会继续。
+// 解码不接收 ctx，只能靠 ctxReader 在 ctx 结束后让读取失败。否则任务取消或超时之后，长文件的分析仍会继续。
 type ctxReader struct {
 	ctx context.Context
 	r   io.Reader

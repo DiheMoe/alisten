@@ -15,7 +15,7 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/room"
 )
 
-// 返回指标的值，直方图返回样本数；labels 依次是标签名和值。没有这个指标时测试失败。
+// 返回指标的值，直方图返回样本数。labels 依次是标签名和值。没有这个指标时测试失败。
 func metricValue(t *testing.T, metrics prometheus.Gatherer, name string, labels ...string) float64 {
 	t.Helper()
 	families, err := metrics.Gather()

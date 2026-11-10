@@ -48,7 +48,7 @@ export class RoomReplica {
       this.#waiting = true
       return { changed: false, notice: isNotice(event) ? this.#notice(event) : null, sync: true }
     }
-    // 快照不包含聊天，等待期间通知照常显示；状态事件以快照为准。
+    // 快照不包含聊天，所以等待快照期间通知照常显示。状态事件则以快照为准。
     return { changed: false, notice: isNotice(event) ? this.#notice(event) : null, sync: false }
   }
 

@@ -35,7 +35,7 @@ function compareIds(a: MyPlaylist, b: MyPlaylist): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
 }
 
-// 方向作用于整个排序键，反向得到的正好是倒过来的列表；“我喜欢”不参与，始终在最前。
+// 方向作用于整个排序键，所以反向得到的正好是倒过来的列表。“我喜欢”不参与排序，始终在最前。
 export function sortPlaylists(list: readonly MyPlaylist[], { key, order }: PlaylistSort): MyPlaylist[] {
   const sign = order === 'asc' ? 1 : -1
   return [...list].sort((a, b) => Number(b.favorites) - Number(a.favorites)

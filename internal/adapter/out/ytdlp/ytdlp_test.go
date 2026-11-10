@@ -24,7 +24,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port/porttest"
 )
 
-// 网页中的地址都用 media.test，只有测试的代理能把它解析到本机：请求如果绕过代理，就无法连接。
+// 网页里的地址都用 media.test，只有测试的代理能把它解析到本机，所以请求如果绕过代理，就无法连接。
 func startSite(t *testing.T) (server *httptest.Server, requests *atomic.Int32, link func(path string) string) {
 	t.Helper()
 	requests = &atomic.Int32{}
@@ -138,7 +138,7 @@ func (zeros) ReadAt(p []byte, _ int64) (int, error) {
 	return len(p), nil
 }
 
-// 音频的内容全是零：yt-dlp 如果没有在看到长度时中止，就会下载完再转码失败。
+// 音频的内容全是零。yt-dlp 如果没有在看到长度时中止，就会下载完再转码失败。
 func TestYtdlpRejectsAudioOverLimit(t *testing.T) {
 	link, _ := startPaths(t, map[string]http.Handler{
 		"/page": http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -318,7 +318,7 @@ func TestArgsEndWithLink(t *testing.T) {
 	}
 }
 
-// 转出超限的 mp3 要几百 MB 的输入，测不起；ffmpeg 遇到 -fs 时怎样截断由 ffmpeg 适配器的测试确认。
+// 转出超限的 mp3 要几百 MB 的输入，测不起。ffmpeg 遇到 -fs 时怎样截断，由 ffmpeg 适配器的测试确认。
 func TestArgsCapExtractedAudio(t *testing.T) {
 	want := "ExtractAudio+ffmpeg_o:-map_metadata -1 -fs " + strconv.Itoa(port.MaxAudioSize+1)
 	if got := args("http://example.com/a", "/tmp/d", "http://127.0.0.1:1", ""); !slices.Contains(got, want) {
@@ -534,7 +534,7 @@ func TestDownloadFailsWhenCookiesUnavailable(t *testing.T) {
 }
 
 func TestDownloadRedactsCookiesEchoedByYtdlp(t *testing.T) {
-	// 第 2 到 4 行格式不对，yt-dlp 跳过并打印出来，第 3 行长到截断之后的输出从它的半行开始；
+	// 第 2 到 4 行格式不对，yt-dlp 跳过并打印出来。第 3 行很长，截断之后的输出从它的半行开始。
 	// 最后一行有两层 #HttpOnly_ 前缀，读取失败，报错和 traceback 里都带着它的内容。
 	path := filepath.Join(t.TempDir(), "cookies.txt")
 	content := "# Netscape HTTP Cookie File\n" +

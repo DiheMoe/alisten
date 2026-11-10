@@ -312,7 +312,7 @@ func TestResolveLink(t *testing.T) {
 func TestResolveLinkFailures(t *testing.T) {
 	f := newFixture(t, history{})
 	const link = "https://www.bilibili.com/video/BV1xx411c7mD"
-	// 音源里也登记这个 ID：不检查格式时，它会被当作 B 站的曲目点进队列。
+	// 音源里也登记这个 ID，这样不检查格式的话，这个 ID 就会被当作 B 站的曲目点进队列。
 	f.bilibili.AddVideo("BV1xx411c7mD/1", track.Meta{Title: "第 1 P"}, nil, nil, "")
 	f.bilibili.AddLink(link, "BV1xx411c7mD/1")
 	if _, _, err := f.svc.ResolveLink(t.Context(), link); !errors.Is(err, port.ErrProviderFailed) {

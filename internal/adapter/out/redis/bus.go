@@ -31,13 +31,13 @@ const (
 	membersChannel  = "members"
 	preparedChannel = "tracks.prepared"
 	roomPrefix      = "room:"
-	// 订阅连接空闲这么久发一次 PING，再过这么久仍无回复就换一个新连接：
+	// 订阅连接空闲这么久就发一次 PING，再过这么久还没有回复就换一个新连接。
 	// 半开的 TCP 连接读不到任何错误，只能这样发现。
 	pingInterval   = 5 * time.Second
 	reconnectDelay = time.Second
-	// 订阅连接上的写入不使用调用方的期限：go-redis 把写超时当作连接已坏而重建共用的订阅连接，本实例的全部订阅随之中断；
-	// 而调用方可能在 go-redis 内部的锁上一直等到自己的期限用完才开始写，例如 go-redis 正持锁重新连接时。
-	// go-redis 从真正开始写的时刻按 WriteTimeout 计算写入的期限，这个上限只是兜底，要长于持锁重新连接的时间：
+	// 订阅连接上的写入不使用调用方的期限。go-redis 会把写超时当作连接已坏，重建共用的订阅连接，本实例的全部订阅随之中断。
+	// 而调用方可能在 go-redis 内部的锁上一直等到自己的期限用完才开始写，比如 go-redis 正持锁重新连接的时候。
+	// go-redis 从真正开始写的时刻按 WriteTimeout 计算写入的期限，sharedWriteTimeout 只是兜底，要长于持锁重新连接的时间。
 	// 默认的连接、读、写超时各 5 秒，持锁重新连接一次最长约 20–30 秒。
 	sharedWriteTimeout = 30 * time.Second
 )
@@ -56,7 +56,7 @@ type Bus struct {
 	dropped  *prometheus.CounterVec
 	done     chan struct{}
 
-	// 持有 mu 时不调用可能等网络的 go-redis 方法：Receive 处理 PONG、报告中断都要 mu。
+	// 持有 mu 时不调用可能等网络的 go-redis 方法，因为 Receive 处理 PONG、报告中断都要拿 mu。
 	mu       sync.Mutex
 	closed   bool
 	ps       *goredis.PubSub
@@ -101,7 +101,7 @@ func (b *Bus) SubscribeRoom(ctx context.Context, roomID string) error {
 	return b.subscribe(ctx, roomChannel(roomID))
 }
 
-// Redis 按顺序处理一个连接上的命令：订阅之后在同一个连接上发一次 PING，收到它的回复时订阅已经生效。
+// Redis 按顺序处理一个连接上的命令，所以订阅之后在同一个连接上发一次 PING，收到 PING 的回复时订阅已经生效。
 func (b *Bus) subscribe(ctx context.Context, channels ...string) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("订阅 %s：%w", strings.Join(channels, "、"), err)
@@ -162,7 +162,7 @@ func writeShared(ctx context.Context, write func(context.Context) error) error {
 	}
 	w, cancel := context.WithTimeout(context.WithoutCancel(ctx), sharedWriteTimeout)
 	defer cancel()
-	// 调用方结束时取消 w：go-redis 只按 ctx 的期限设置读写超时而不理会取消，所以已有连接上的写入不受影响；取消只打断建立连接，
+	// 调用方结束时取消 w。go-redis 只按 ctx 的期限设置读写超时，不理会取消，所以已有连接上的写入不受影响。取消只打断建立连接，
 	// 以免调用方持着 go-redis 的锁等到连接超时，拖住排在后面的调用方。
 	stop := context.AfterFunc(ctx, cancel)
 	defer stop()
@@ -228,8 +228,8 @@ func (b *Bus) publish(ctx context.Context, channel, kind string, data json.RawMe
 	return receivers, nil
 }
 
-// 连接出错时 go-redis 会自行重新连接并重新订阅全部频道，但断开期间的消息已经丢失；连接只是停止响应时 go-redis 无法察觉，
-// 由这里换一个新连接。两种情况都在恢复订阅之前先报告 SubscriptionLost，让调用方尽早释放房间、断开会话。
+// 连接出错时，go-redis 会自行重新连接并重新订阅全部频道，但断开期间的消息已经丢失。连接只是停止响应时 go-redis 察觉不到，
+// 由 Receive 换一个新连接。两种情况都在恢复订阅之前先报告 SubscriptionLost，让调用方尽早释放房间、断开会话。
 func (b *Bus) Receive(ctx context.Context) (port.Delivery, error) {
 	stop := context.AfterFunc(ctx, b.close)
 	defer stop()
@@ -294,7 +294,7 @@ func timeout(err error) bool {
 	return errors.As(err, &ne) && ne.Timeout()
 }
 
-// 这里不做 I/O：先报告 SubscriptionLost，下一次接收时再连接并订阅原来的频道，停止响应的服务端不会拖延报告。
+// replace 不做 I/O。Receive 先报告 SubscriptionLost，下一次接收时再连接并订阅原来的频道，这样停止响应的服务端不会拖延报告。
 func (b *Bus) replace(old *goredis.PubSub) {
 	b.mu.Lock()
 	if b.closed || b.ps != old {
@@ -386,7 +386,7 @@ func (b *Bus) delivery(channel string, e envelope) (port.Delivery, error) {
 	return nil, fmt.Errorf("频道 %s 上不应有 %s 消息", channel, e.Kind)
 }
 
-// 带有追踪上下文的输入延续网关的 trace：记录一个 consumer span，owner 处理这条输入时的调用都在它之下。
+// 带有追踪上下文的输入延续网关的 trace。received 记录一个 consumer span，owner 处理这条输入时的调用都在这个 span 之下。
 // 这个 span 只标记收到输入的时刻，处理的耗时由它之下的调用体现。
 func (b *Bus) received(carrier map[string]string, roomID string) context.Context {
 	ctx := propagation.TraceContext{}.Extract(context.Background(), propagation.MapCarrier(carrier))

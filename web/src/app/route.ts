@@ -11,7 +11,7 @@ export type Panel = 'queue' | 'history' | 'chat'
 // panel 是宽屏右侧的侧栏，和当前页面相同时不显示。
 export type Route
   = | { name: 'lobby', filter: string, panel: Panel | null }
-    // section 为 null 时地址是 /admin 或 /settings：宽屏显示第一个分类，窄屏显示分类列表。
+    // section 为 null 时地址是 /admin 或 /settings，这时宽屏显示第一个分类，窄屏显示分类列表。
     // q 和 page 只用于后台的房间和媒体，sort 只用于媒体。
     | { name: 'admin', section: AdminSection | null, panel: Panel | null, q: string, page: number, sort: MediaSort }
     | { name: 'settings', section: SettingsSection | null, panel: Panel | null }
@@ -22,7 +22,7 @@ export type Route
     | { name: 'search', ref: string, panel: Panel | null, query: SearchQuery }
     | { name: 'playlist', ref: string, panel: Panel | null, source: Source, id: string, page: number }
     | { name: 'shared-playlist', shareId: string, panel: Panel | null }
-    // 配对码在片段里，不进入请求和 Referer；写回地址时去掉，不留在历史记录中。
+    // 配对码放在片段里，这样不会进入请求和 Referer。写回地址时去掉片段，配对码就不会留在历史记录里。
     | { name: 'pair', code: string, panel: Panel | null }
     // GitHub 授权之后的落地页，片段里是 code=<兑换码> 或 error=<错误码>，同样不留在地址中。
     | { name: 'github-login', fragment: string, panel: Panel | null }
@@ -32,7 +32,7 @@ export type Page = Route['name']
 const settingsSections: Record<SettingsSection, true> = { account: true, appearance: true, playback: true, performance: true, privacy: true }
 const adminSections: Record<AdminSection, true> = { site: true, registration: true, users: true, rooms: true, sources: true, media: true }
 const mediaSorts: Record<MediaSort, true> = { stored: true, idle: true, size: true }
-// 与接口对媒体搜索词的长度限制一致，按码点计：手改或截断的链接里更长的搜索词会让每次读取都失败。
+// 和接口对媒体搜索词的长度限制一致，按码点计。手改或截断的链接里如果搜索词更长，每次读取都会失败。
 const mediaQueryMaxLength = 100
 
 function isOneOf<T extends string>(values: Record<T, true>, value: string): value is T {
@@ -52,7 +52,7 @@ function parsePanel(params: URLSearchParams): Panel | null {
   return panel === 'queue' || panel === 'history' || panel === 'chat' ? panel : null
 }
 
-// 超出安全整数的页码写回地址时会变成另一个数，接口也不接受：当作第 1 页。
+// 超出安全整数的页码当作第 1 页，因为这样的页码写回地址时会变成另一个数，接口也不接受。
 function parsePage(params: URLSearchParams): number {
   const page = Number(params.get('page'))
   return Number.isSafeInteger(page) && page > 1 ? page : 1
@@ -79,7 +79,7 @@ function writeQuery(query: SearchQuery, params: URLSearchParams): void {
   }
   if (query.keyword)
     params.set('q', query.keyword)
-  // 有关键词时总是写出来源：以后默认来源再变，旧链接的含义也不变。
+  // 有关键词时总是写出来源，这样以后默认来源再变，旧链接的含义也不变。
   if (query.keyword || query.source !== defaultSearchSource)
     params.set('source', query.source)
   if (query.view !== 'all')
@@ -127,7 +127,7 @@ export function parseRoute({ pathname, search, hash }: Pick<Location, 'pathname'
   const shared = /^\/s\/([^/]+)$/.exec(pathname)
   if (shared)
     return { name: 'shared-playlist', shareId: shared[1], panel }
-  // 不做 decodeURIComponent：UUID、别名和歌单 ID 不含需要转义的字符，而它遇到不合法的转义序列会抛出异常。
+  // 不做 decodeURIComponent，因为 UUID、别名和歌单 ID 不含需要转义的字符，而 decodeURIComponent 遇到不合法的转义序列会抛出异常。
   const room = /^\/r\/([^/]+)(\/.*)?$/.exec(pathname)
   if (!room)
     return null
@@ -198,8 +198,8 @@ export function formatRoute(route: Route): string {
   return query ? `${pathOf(route)}?${query}` : pathOf(route)
 }
 
-// 换页面、进入另一个房间、换设置或后台的分类、提交新的关键词和打开另一个歌单写入新记录，后退一次回到上一个页面、分类或上一次搜索；
-// 同一个页面里换展示方式、开关侧栏、输入筛选词、排序和翻页只替换当前地址。
+// 换页面、进入另一个房间、换设置或后台的分类、提交新的关键词、打开另一个歌单时写入新记录，后退一次就回到上一个页面、分类或上一次搜索。
+// 同一个页面里换展示方式、开关侧栏、输入筛选词、排序和翻页，只替换当前地址。
 export function isNewEntry(from: Route, to: Route): boolean {
   if (from.name !== to.name || ('ref' in from && 'ref' in to && from.ref !== to.ref))
     return true
@@ -216,12 +216,12 @@ export function isNewEntry(from: Route, to: Route): boolean {
   return false
 }
 
-// 从设置或后台的分类回到分类列表：上一条记录就是列表时后退，否则把当前记录换成列表。两种都不新增记录，返回键不会再回到刚离开的分类。
+// 从设置或后台的分类回到分类列表。上一条记录就是列表时后退，否则把当前记录换成列表。两种做法都不新增记录，所以返回键不会再回到刚离开的分类。
 export function upStep(list: Route, from: string | undefined, canBack: boolean): 'back' | 'replace' {
   return canBack && from === formatRoute(list) ? 'back' : 'replace'
 }
 
-// 取消进入房间时离开这个房间的地址：在它的页面上就后退，一直退到进入房间之前的页面；没有可以后退的记录（直接打开的房间链接）时换成发现房间；不在它的页面上就留在原处。
+// 取消进入房间时，离开这个房间的地址。当前在这个房间的页面上就后退，一直退到进入房间之前的页面。没有可以后退的记录时（直接打开的房间链接）换成发现房间。当前不在这个房间的页面上就留在原处。
 export function leaveStep(route: Route, leaving: ReadonlySet<string>, canBack: boolean): 'back' | 'lobby' | 'stay' {
   if (!('ref' in route) || !leaving.has(route.ref))
     return 'stay'

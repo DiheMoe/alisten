@@ -28,7 +28,7 @@ func readTimeout(port int) error {
 func TestWatchReadinessFollowsChecks(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	var ready, stopping atomic.Bool
-	// 每次检查开始时，ready 是上一次检查的结果；检查返回之前它不会变。
+	// 每次检查开始时，ready 是上一次检查的结果。检查返回之前，ready 不会变。
 	previous := make(chan bool)
 	results := make(chan error)
 	check := func(checkCtx context.Context) error {

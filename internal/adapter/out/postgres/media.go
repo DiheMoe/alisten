@@ -18,7 +18,7 @@ var _ port.MediaLibrary = (*Store)(nil)
 
 var mediaSorts = map[port.MediaSort]string{port.MediaByStored: "stored", port.MediaByIdle: "idle", port.MediaBySize: "size"}
 
-// 搜索的文字按字面匹配：LIKE 的通配符和转义符都要转义。
+// 搜索的文字按字面匹配，所以 LIKE 的通配符和转义符都要转义。
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 func (s *Store) ListStoredMedia(ctx context.Context, q port.MediaQuery) (port.MediaPage, error) {
@@ -32,7 +32,7 @@ func (s *Store) ListStoredMedia(ctx context.Context, q port.MediaQuery) (port.Me
 			return err
 		}
 		page.Total, page.TotalBytes = int(count.Total), count.TotalBytes
-		// 页码来自客户端，可能大到算偏移量时溢出；超出最后一页时也不必再查。
+		// 页码来自客户端，可能大到算偏移量时溢出，所以偏移量超过总数时直接返回，不再查询。
 		if int64(q.Page-1) > count.Total/port.MediaPageSize {
 			return nil
 		}

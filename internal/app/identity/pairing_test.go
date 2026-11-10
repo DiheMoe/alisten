@@ -147,7 +147,7 @@ func TestPairingRejected(t *testing.T) {
 	}
 }
 
-// 让其他设备退出的办法是修改密码或者重置密码：此前生成的配对码要随生成它的会话一起作废，否则拿到配对码的人还能登录进来。
+// 让其他设备退出的办法是修改密码或者重置密码，所以此前生成的配对码要随生成它的会话一起作废，否则拿到配对码的人还能登录进来。
 func TestPairingCodeDiesWithItsSession(t *testing.T) {
 	a, s, store, _, _ := newAccounts(t)
 	alice := registerAccount(t, a, s, "alice", "correct horse")
@@ -216,7 +216,7 @@ func TestPairGitHubOnlyAccount(t *testing.T) {
 	}
 }
 
-// 读到账号的密码哈希之后、签发会话之前，密码被修改或重置：修改时删除了其他会话，这次兑换不能留下新会话。
+// 读到账号的密码哈希之后、签发会话之前，密码被修改或重置。修改时删除了其他会话，所以这次兑换也不能留下新会话。
 func TestRedeemRejectedWhenPasswordChangesMeanwhile(t *testing.T) {
 	a, s, store, _, _ := newAccounts(t)
 	alice := registerAccount(t, a, s, "alice", "correct horse")

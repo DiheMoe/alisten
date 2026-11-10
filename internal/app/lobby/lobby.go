@@ -44,7 +44,7 @@ func (s *Service) ListRooms(ctx context.Context) ([]Room, error) {
 	return s.listed(ctx, records)
 }
 
-// ref 必须是 UUID 或合法别名的形式：存储按形式区分两者，而且含有 U+0000 的文本会让 PostgreSQL 报错。
+// ref 必须是 UUID 或合法别名的形式，因为存储按形式区分 UUID 和别名，而且含有 U+0000 的文本会让 PostgreSQL 报错。
 func (s *Service) FindRoom(ctx context.Context, ref string) (Room, error) {
 	r, err := s.rooms.FindRoom(ctx, ref)
 	if err != nil {

@@ -16,7 +16,7 @@ import { saveToPlaylistLabel } from './save-label'
 import { SaveToPlaylistDialog } from './save-to-playlist'
 import './playlists.css'
 
-// 带上读取的分享 ID：换到另一个分享时，上一个的结果不再显示。
+// 结果带上读取时的分享 ID，这样换到另一个分享时，上一个分享的结果不再显示。
 type Result = { shareId: string } & ({ kind: 'loaded', playlist: SharedPlaylist } | { kind: 'gone' } | { kind: 'failed', message: string })
 
 function songItem({ track, meta }: MyPlaylistItem, playing: Track | undefined): SongItem {

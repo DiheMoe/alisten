@@ -28,7 +28,7 @@ class AdminStore extends Store<{ signedIn: boolean }> {
     this.setState({ signedIn: false })
   }
 
-  // 失败时显示错误并返回 null；管理 token 被拒绝时退出登录。
+  // 失败时显示错误并返回 null。管理 token 被拒绝时退出登录。
   // 204 的接口成功时得到 undefined，调用方要与 null 比较，不能只看真假。
   async call<T>(request: () => Promise<T>, texts?: ErrorTexts): Promise<T | null> {
     try {
@@ -41,7 +41,7 @@ class AdminStore extends Store<{ signedIn: boolean }> {
   }
 
   // 失败时抛出 Error，message 是给用户看的原因，由调用方就地显示，不弹通知。
-  // 管理 token 被拒绝时例外：退出登录后这一页就不显示了，所以照常提示。
+  // 管理 token 被拒绝时例外，照常提示，因为退出登录后这一页就不显示了。
   async attempt<T>(request: () => Promise<T>, texts?: ErrorTexts): Promise<T> {
     try {
       return await request()

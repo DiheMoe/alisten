@@ -120,7 +120,7 @@ func openAPIResponses(b httpBinding, s *schema) map[string]any {
 	}
 }
 
-// 路径参数不在查询串和请求体中；204 的请求没有响应体。
+// 路径参数不放进查询串和请求体。204 的请求没有响应体。
 func roomOperation(schemas map[string]any, m *message) (map[string]any, error) {
 	b := *m.HTTP
 	response := m.Response

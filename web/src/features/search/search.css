@@ -113,7 +113,7 @@
 }
 @media (max-width: 767px) {
   .search-page { padding-top: 8px; }
-  /* 窄屏的按钮宽 28px，搜索容器不超过 480px 时宽 32px：最后一列取按钮的宽度，按钮才能紧贴行的右侧。 */
+  /* 窄屏的按钮宽 28px，搜索容器不超过 480px 时宽 32px。最后一列取按钮的宽度，按钮才能紧贴行的右侧。 */
   .search-song-table { --search-song-columns: 42px minmax(0, 1fr) auto; }
   .search-song-table .song-album, .search-song-heading { display: none; }
   .search-preview .song-row { grid-template-columns: 42px minmax(0, 1fr) auto; }

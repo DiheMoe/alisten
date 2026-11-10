@@ -9,29 +9,29 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/room"
 )
 
-// 按本实例计数：限制的是每个实例为事件流占用的资源。
+// 按本实例计数，因为限制的是每个实例为事件流占用的资源。
 const observerLimit = 5
 
 var ErrTooManyObservers = errors.New("这个房间的事件流超过 5 条，请先关闭不用的事件流")
 
-// Observer 是房间的事件流：先收到房间的快照，之后是房间的事件；房间开始新的一次运行时事件重新编号，再收到一份新的快照。
+// Observer 是房间的事件流。事件流先收到房间的快照，之后是房间的事件。房间开始新的一次运行时，事件重新编号，事件流会再收到一份新的快照。
 type Observer struct {
 	*sendQueue
 	room   string
 	link   *roomLink
 	member member.Member
-	// 凭证签发给的成员会话的 token 哈希，API Key 没有会话，为空。
+	// 凭证属于一个成员会话，memberSession 是这个会话的 token 哈希。API Key 没有会话，这时为空。
 	memberSession string
 	bot           bool
 	credential    string
 
-	// 由 sendQueue 的 mu 保护：最近一次快照的任期，和收到过的 owner 变更通知中最大的任期。
+	// term 是最近一次快照的任期，latest 是收到过的 owner 变更通知中最大的任期。两者都由 sendQueue 的 mu 保护。
 	term, latest uint32
 }
 
-// Observe 订阅房间的事件但不加入房间：事件流不出现在在线列表中，不计入投票切歌所需的人数，也不让 AutoDJ 认为房间里有人。
-// m 是凭证的持有者，memberSession 是凭证签发给的成员会话，bot 表示凭证是常驻房间的 API Key，credential 是凭证在存储中的哈希。
-// 名额用完时，同一凭证打开的最早的事件流以 CloseReplaced 关闭，名额让给这一条；没有同一凭证的事件流时返回 ErrTooManyObservers。
+// Observe 订阅房间的事件但不加入房间，所以事件流不出现在在线列表中，不计入投票切歌所需的人数，也不让 AutoDJ 认为房间里有人。
+// m 是凭证的持有者，memberSession 是凭证所属的成员会话，bot 表示凭证是常驻房间的 API Key，credential 是凭证在存储中的哈希。
+// 名额用完时，同一凭证打开的最早的事件流以 CloseReplaced 关闭，名额让给这一条。没有同一凭证的事件流时返回 ErrTooManyObservers。
 // 返回时快照已经放进队列。结束时必须调用一次 Unobserve。
 func (g *Gateway) Observe(ctx context.Context, roomID string, m member.Member, memberSession []byte, bot bool, credential string) (*Observer, error) {
 	link, err := g.hold(ctx, roomID)
@@ -64,7 +64,7 @@ func (g *Gateway) Unobserve(o *Observer) {
 	g.unhold(o.room, o.link, false)
 }
 
-// 关闭被替换的事件流和占用它的名额在同一次加锁中完成：名额不会超出，同时到达的事件流也不会替换同一条。
+// 关闭被替换的事件流和占用它的名额在同一次加锁中完成，这样名额不会超出，同时到达的事件流也不会替换同一条。
 func (g *Gateway) watch(o *Observer) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -85,7 +85,7 @@ func (g *Gateway) watch(o *Observer) error {
 	return nil
 }
 
-// 拿到的快照早于收到过的最新一次运行时重新获取。
+// 拿到的快照早于收到过的最新一次运行时，重新获取。
 func (g *Gateway) sync(ctx context.Context, o *Observer) error {
 	for {
 		id := g.newRequestID()
@@ -109,8 +109,8 @@ func (g *Gateway) resync(o *Observer) {
 	}
 }
 
-// 在接收消息的 goroutine 上按房间频道的顺序调用：此后房间的事件才发给这个事件流，快照之前的事件都已包含在快照中。
-// 返回 false 表示这份快照已经过时：之后又收到了更新一次运行的 owner 变更通知，从它接着发事件，编号就对不上。
+// 在接收消息的 goroutine 上按房间频道的顺序调用。此后房间的事件才发给这个事件流，快照之前的事件都已包含在快照中。
+// 返回 false 表示这份快照已经过时，因为之后又收到了更新一次运行的 owner 变更通知，从这份快照接着发事件，编号就对不上。
 func (o *Observer) snapshot(v room.View) bool {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -122,7 +122,7 @@ func (o *Observer) snapshot(v room.View) bool {
 	return true
 }
 
-// 返回 true 表示要重新获取快照，在此之前不再发事件。正在获取快照时只记下任期，由获取快照的一方判断拿到的快照是否过时。
+// 返回 true 表示要重新获取快照，在此之前不再发事件。正在获取快照时只记下任期，拿到的快照是否过时由 snapshot 判断。
 func (o *Observer) ownerChanged(term uint32) bool {
 	o.mu.Lock()
 	defer o.mu.Unlock()

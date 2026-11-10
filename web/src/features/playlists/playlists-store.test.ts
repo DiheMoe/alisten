@@ -349,7 +349,7 @@ describe('playlistsStore', () => {
     await flush()
     void playlistsStore.containing(rain)
     await flush()
-    // 先放行加入，同步结束；再放行加入之前发出的读取。
+    // 先放行加入，让同步结束。再放行加入之前发出的读取。
     release.shift()!()
     await flush()
     release.shift()!()

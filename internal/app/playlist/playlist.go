@@ -17,7 +17,7 @@ const (
 	maxPlaylists  = 50
 	maxItems      = 1000
 	maxNameLength = 50
-	// 收藏可能要向音源查询元数据：额度防止批量请求让共用的音源账号被平台限流。
+	// 收藏可能要向音源查询元数据。这份额度防止批量请求让共用的音源账号被平台限流。
 	addBurst  = 30
 	addRefill = 2 * time.Second
 )

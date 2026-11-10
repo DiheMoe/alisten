@@ -76,7 +76,7 @@ type call struct {
 	member member.Member
 	roomID string
 	ticket string
-	// 票据签发给的成员会话的 token 哈希，API Key 没有会话。
+	// 持有这张票据的成员会话的 token 哈希。API Key 没有会话。
 	memberSession []byte
 	// 票据是常驻房间的 API Key。
 	bot bool
@@ -185,14 +185,14 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	mux.HandleFunc("GET /api/room/events", srv.roomEvents)
 	mux.HandleFunc("GET /media/{source}/{id}", srv.redirectMedia)
 	// HTTP 的错误响应体是 JSON，而 ServeMux 自带的 404、405 响应是纯文本。不带方法的兜底路由也会匹配方法不符的请求，
-	// 因此它们得到 404：错误码中没有与 405 对应的。
+	// 所以这些请求得到的也是 404，因为错误码里没有和 405 对应的。
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, protocol.ErrorInfo{Code: protocol.ErrorCodeNotFound, Message: "接口不存在"})
 	})
 	return mux
 }
 
-// 不带 Origin 的请求不检查：bot 从服务端发起的调用没有 Origin。
+// 不带 Origin 的请求不检查，因为 bot 从服务端发起的调用没有 Origin。
 func SameOrigin(allowedOrigins []string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if origin := r.Header.Get("Origin"); origin != "" && !slices.Contains(allowedOrigins, origin) {
@@ -232,8 +232,8 @@ func (s *server) handleLimit(mux *http.ServeMux, route protocol.Route, maxBody i
 	})
 }
 
-// 先鉴权再读请求体：后台没有启用时，无论请求是否合法都返回 FORBIDDEN。返回的 ctx 带有凭证所属的成员和房间，
-// 出错时的日志也要带上它们。
+// 先鉴权再读请求体，这样后台没有启用时，不管请求是否合法都返回 FORBIDDEN。返回的 ctx 带着凭证所属的成员和房间，
+// 因为出错时的日志也要带上它们。
 func (s *server) serve(ctx context.Context, w http.ResponseWriter, r *http.Request, auth protocol.Auth, maxBody int64, fn handlerFunc) (logCtx context.Context, _ any, err error) {
 	defer func() {
 		if value := recover(); value != nil {
@@ -297,8 +297,8 @@ var errUnreadableBody = errors.New("无法读取请求体")
 // 恢复 panic 的地方已经记录了日志，回复时不再重复记录。
 var errPanicked = errors.New("服务器出错了，请稍后再试。")
 
-// 无法读取请求体是客户端的问题，不是内部错误。连接读取失败时，net/http 在返回错误之前已经取消了
-// r.Context()，此时按客户端断开处理；连接仍在时，是请求体本身不合法，比如分块编码有误。
+// 无法读取请求体是客户端的问题，不是内部错误。如果是连接读取失败，net/http 在返回错误之前已经取消了
+// r.Context()，这时按客户端断开处理。如果连接还在，就是请求体本身不合法，比如分块编码有误。
 func bodyError(r *http.Request, err error) error {
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {

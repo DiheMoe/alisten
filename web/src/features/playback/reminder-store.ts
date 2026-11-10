@@ -59,8 +59,8 @@ class ReminderStore extends Store<ReminderSettings> {
         this.#remind(room.room.id, next.entry)
     }
     const own = new Set([...room.items, room.pending, next?.entry].flatMap(entry => entry?.by?.id === member.id ? [entry.id] : []))
-    // 开播时服务端先用 queue.updated 把条目移出队列，再用 playback.updated 开始播放，两条事件之间的状态里没有这个条目，
-    // 所以只在快照和正在播放的歌变化时删掉不在房间状态里的记录。
+    // 开播时服务端先用 queue.updated 把条目移出队列，再用 playback.updated 开始播放。两条事件之间的房间状态里没有这个条目，
+    // 所以只在收到快照，或者正在播放的歌变化时，才删掉不在房间状态里的记录。
     if (!live || next !== previous) {
       for (const id of this.#firstSeen.keys()) {
         if (!own.has(id))

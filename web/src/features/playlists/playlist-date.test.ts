@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { formatPlaylistDate } from './playlist-date'
 
-// 用本地时间构造时刻：断言与运行测试的时区无关。
+// 用本地时间构造时刻，这样断言与运行测试的时区无关。
 function at(year: number, month: number, day: number, hour = 0, minute = 0): number {
   return new Date(year, month - 1, day, hour, minute).getTime()
 }

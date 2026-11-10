@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/core/api'
 
-// 站点是否开放注册、是否开启 GitHub 登录。
 export type Site = { status: 'loading' } | { status: 'failed' } | { status: 'ready', registrationOpen: boolean, githubLogin: boolean }
 
 export function useSite(): { site: Site, reload: () => void } {

@@ -150,7 +150,7 @@ func TestRoomEvents(t *testing.T) {
 	})
 }
 
-// 网关定期到存储中核对连接所用的凭证：事件流登记的凭证要与存储中的票据哈希相同，否则仍然有效的事件流也会被断开。
+// 网关定期到存储里核对连接所用的凭证。事件流登记的凭证要和存储里的票据哈希相同，否则仍然有效的事件流也会被断开。
 func TestRoomEventsSurviveCredentialCheck(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()
@@ -167,7 +167,7 @@ func TestRoomEventsSurviveCredentialCheck(t *testing.T) {
 		bot, member := f.stream(t, key), f.stream(t, ticket)
 		readEvent(t, bot)
 		readEvent(t, member)
-		// 心跳每 25 秒一次，核对每 30 秒一次：第二次心跳之前已经核对过一次。
+		// 心跳每 25 秒一次，核对每 30 秒一次，所以第二次心跳之前已经核对过一次。
 		for range 2 {
 			checkEvent(t, bot, ": ping")
 			checkEvent(t, member, ": ping")
@@ -298,7 +298,7 @@ func TestRoomEventsOpeningTimesOut(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()
 		f := newWSFixtureWithTickets(t, store, stallingTickets{store}, store, store)
-		// 期限之后客户端也放弃：服务端没有期限时，这里不会一直等下去。
+		// 客户端到期限之后也放弃，这样服务端没有设期限时，测试不会一直等下去。
 		ctx, cancel := context.WithTimeout(t.Context(), 2*helloTimeout)
 		defer cancel()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://alisten.test/api/room/events", nil)
@@ -322,7 +322,7 @@ func TestRoomEventsOpeningTimesOut(t *testing.T) {
 	})
 }
 
-// 第二次查找票据，即事件流生效之后的确认，发生 panic。
+// 第二次查找票据时发生 panic，也就是事件流生效之后的那次确认。
 type panickingRecheck struct {
 	*porttest.Store
 	lookups atomic.Int32
@@ -369,7 +369,7 @@ func TestRoomEventsEndWhenClientStopsReading(t *testing.T) {
 		}
 		_, m, ticket := f.enter(t, hall)
 		f.stream(t, ticket)
-		// 内存连接上的写入要等对方读取：客户端不读，这个事件就一直写不出去。
+		// 内存连接上的写入要等对方读取，所以客户端不读，这个事件就一直写不出去。
 		if _, err := f.gateway.Do(t.Context(), hall, m, room.Chat{Text: "你好"}); err != nil {
 			t.Fatal(err)
 		}

@@ -13,7 +13,7 @@ export function toggle(selection: Selection, key: string): Selection {
   return { keys, anchor: key }
 }
 
-// 把锚点到 key 的一段加入选择；没有锚点，或者锚点已经不在列表里时，只切换 key。
+// 把锚点到 key 的一段加入选择。没有锚点，或者锚点已经不在列表里时，只切换 key。
 export function selectRange(selection: Selection, order: readonly string[], key: string): Selection {
   const from = selection.anchor === null ? -1 : order.indexOf(selection.anchor)
   const to = order.indexOf(key)
@@ -27,7 +27,7 @@ export function selectAll(order: readonly string[]): Selection {
   return { keys: new Set(order), anchor: null }
 }
 
-// 列表重新读取之后去掉已经不在里面的歌；没有变化时返回原对象。
+// 列表重新读取之后，从选择里去掉已经不在列表里的歌。没有变化时返回原对象。
 export function retain(selection: Selection, order: readonly string[]): Selection {
   const present = new Set(order)
   const keys = [...selection.keys].filter(key => present.has(key))

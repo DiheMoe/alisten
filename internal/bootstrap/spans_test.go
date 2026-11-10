@@ -239,7 +239,7 @@ func TestQueryName(t *testing.T) {
 	}
 }
 
-// 使用记录 span 的 provider：这样没有记录 span 是因为 ctx 中没有已采样的 span，而不是因为 provider 什么都不做。
+// 使用记录 span 的 provider。这样没有记录 span 就只能是因为 ctx 中没有已采样的 span，而不是因为 provider 什么都不做。
 func TestCallsOutsideSampledTracesAllocateNothing(t *testing.T) {
 	tracer, _ := recordingTracer(t)
 	ctx := t.Context()

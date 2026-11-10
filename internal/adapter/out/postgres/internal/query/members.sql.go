@@ -83,7 +83,7 @@ type AddMemberCredentialsParams struct {
 	ID           string
 }
 
-// 只给只绑定了 GitHub 的账号设置，它的“我喜欢”已经在绑定时创建了。
+// 只给只绑定了 GitHub 的账号设置。这种账号的“我喜欢”已经在绑定时创建了。
 func (q *Queries) AddMemberCredentials(ctx context.Context, arg AddMemberCredentialsParams) (int64, error) {
 	result, err := q.db.Exec(ctx, addMemberCredentials, arg.Username, arg.PasswordHash, arg.ID)
 	if err != nil {
@@ -103,7 +103,7 @@ type BindGitHubParams struct {
 	ID       string
 }
 
-// 只给还没有绑定 GitHub 的成员绑定，已经绑定过的成员不受影响，没有返回的行。was_guest 表示成员原来是游客：这次绑定就是注册。
+// 只给还没有绑定 GitHub 的成员绑定。已经绑定过的成员不受影响，查询没有返回的行。was_guest 表示成员原来是游客，这次绑定就是注册。
 func (q *Queries) BindGitHub(ctx context.Context, arg BindGitHubParams) (bool, error) {
 	row := q.db.QueryRow(ctx, bindGitHub, arg.GithubID, arg.ID)
 	var was_guest bool
@@ -194,7 +194,7 @@ const lockAccountPassword = `-- name: LockAccountPassword :one
 SELECT coalesce(password_hash, '')::text AS password_hash FROM members WHERE id = $1 AND username IS NOT NULL FOR NO KEY UPDATE
 `
 
-// 用互斥的 FOR NO KEY UPDATE，不用 FOR SHARE：同一个账号的修改和重置依次进行，后一个读到的是前一个写入的密码哈希。
+// 用互斥的 FOR NO KEY UPDATE，不用 FOR SHARE。这样同一个账号的修改和重置依次进行，后一个读到的是前一个写入的密码哈希。
 func (q *Queries) LockAccountPassword(ctx context.Context, id string) (string, error) {
 	row := q.db.QueryRow(ctx, lockAccountPassword, id)
 	var password_hash string
@@ -206,8 +206,8 @@ const lockMemberPassword = `-- name: LockMemberPassword :one
 SELECT coalesce(password_hash, '')::text AS password_hash FROM members WHERE id = $1 FOR NO KEY UPDATE
 `
 
-// 让修改密码等到这次登录提交之后，它随后删除会话时会删掉这次登录签发的会话。
-// 用互斥的 FOR NO KEY UPDATE，不用 FOR SHARE：同一个账号的几次登录依次并入游客的历史，否则两边会按相反的顺序抢同一批历史行而死锁。
+// 这把锁让修改密码等到这次登录提交之后才进行，所以修改密码随后删除会话时，会删掉这次登录签发的会话。
+// 用互斥的 FOR NO KEY UPDATE，不用 FOR SHARE，这样同一个账号的几次登录会依次并入游客的历史。否则两次登录会按相反的顺序抢同一批历史行而死锁。
 func (q *Queries) LockMemberPassword(ctx context.Context, id string) (string, error) {
 	row := q.db.QueryRow(ctx, lockMemberPassword, id)
 	var password_hash string
@@ -280,7 +280,7 @@ type RegisterMemberParams struct {
 	ID           string
 }
 
-// 只给游客设置。只绑定了 GitHub 的账号补设用户名和密码要删除其他会话，用 AddMemberCredentials。
+// 只给游客设置。只绑定了 GitHub 的账号补设用户名和密码时还要删除其他会话，所以用 AddMemberCredentials。
 func (q *Queries) RegisterMember(ctx context.Context, arg RegisterMemberParams) (int64, error) {
 	result, err := q.db.Exec(ctx, registerMember, arg.Username, arg.PasswordHash, arg.ID)
 	if err != nil {
@@ -346,7 +346,7 @@ type UpdateMemberParams struct {
 	ID         string
 }
 
-// 只覆盖传入的列，分别修改昵称和头像的两个并发请求因此不会互相还原；头像哈希和邮箱传入空串表示清除。游客的邮箱总是 NULL。
+// 只覆盖传入的列，所以分别修改昵称和头像的两个并发请求不会互相还原。头像哈希和邮箱传入空串表示清除。游客的邮箱总是 NULL。
 func (q *Queries) UpdateMember(ctx context.Context, arg UpdateMemberParams) (Member, error) {
 	row := q.db.QueryRow(ctx, updateMember,
 		arg.Name,

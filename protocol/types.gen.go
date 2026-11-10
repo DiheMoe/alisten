@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "ce462456c63356c6"
+const Version = "d68525cd68ef691f"
 
 type APIKey struct {
 	Key string `json:"key"`

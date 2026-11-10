@@ -8,8 +8,8 @@ interface NotificationPermissionState {
   refused: boolean
 }
 
-// 浏览器的授权提示可能一直不返回：用户没理会，或者浏览器把提示收进了地址栏。所以等待期间可以放弃；
-// 放弃之后提示才返回时只更新权限，不算这次申请的结果。
+// 浏览器的授权提示可能一直不返回，比如用户没理会，或者浏览器把提示收进了地址栏。所以等待期间可以放弃。
+// 放弃之后提示才返回时，只更新权限，不算这次申请的结果。
 export class NotificationPermissionRequest extends Store<NotificationPermissionState> {
   #latest = 0
 
@@ -17,8 +17,8 @@ export class NotificationPermissionRequest extends Store<NotificationPermissionS
     super({ permission: Notification.permission, waiting: false, refused: false })
   }
 
-  // 只能在用户操作的事件里调用：Safari 和 Firefox 不接受其他时候发起的权限申请。
-  // 返回这次申请是否拿到了授权；等待期间被放弃，或者又发起了新的申请时为 false。
+  // 只能在用户操作的事件里调用，因为 Safari 和 Firefox 不接受其他时候发起的权限申请。
+  // 返回这次申请是否拿到了授权。等待期间被放弃，或者又发起了新的申请时，返回 false。
   async request(): Promise<boolean> {
     const id = ++this.#latest
     this.setState({ waiting: true, refused: false })

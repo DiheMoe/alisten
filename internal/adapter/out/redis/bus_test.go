@@ -302,7 +302,7 @@ func TestDroppedInputRecordsNoSpan(t *testing.T) {
 	if err := client.Publish(t.Context(), instanceChannel(b.instance), payload).Err(); err != nil {
 		t.Fatal(err)
 	}
-	// 同一个频道上的消息按顺序处理：收到后面这条有效的输入时，前面那条已经丢弃了。
+	// 同一个频道上的消息按顺序处理，所以收到后面这条有效的输入时，前面那条已经被丢弃了。
 	valid := port.RoomInput{Room: randomRoom(), Gateway: a.instance, Input: room.Join{Session: "a/s1", Member: alice}, Takeover: true}
 	if ok, err := a.bus.SendInput(t.Context(), b.instance, valid); err != nil || !ok {
 		t.Fatalf("SendInput = %v, %v", ok, err)
@@ -373,7 +373,7 @@ func TestUnsubscribeRoom(t *testing.T) {
 	if err := b.bus.UnsubscribeRoom(t.Context(), gone); err != nil {
 		t.Fatal(err)
 	}
-	// 退订不等服务端确认。同一个连接上的命令按顺序处理，之后的订阅生效时，退订已经生效。
+	// 退订不等服务端确认。同一个连接上的命令按顺序处理，所以之后的订阅生效时，退订也已经生效。
 	if err := b.bus.SubscribeRoom(t.Context(), kept); err != nil {
 		t.Fatal(err)
 	}
@@ -519,7 +519,7 @@ func TestSubscriptionLostAfterDisconnect(t *testing.T) {
 func TestSubscriptionLostWhenConnectionStalls(t *testing.T) {
 	a, b := newBus(t, newClient(t), "v1"), newBus(t, newClient(t), "v1")
 	roomID := randomRoom()
-	// 接收循环的超时从它收到订阅确认时算起，早于 CLIENT PAUSE 返回，所以从订阅之前开始计时。
+	// 接收循环的超时从它收到订阅确认时算起，这个时刻早于 CLIENT PAUSE 返回，所以从订阅之前就开始计时。
 	start := time.Now()
 	if err := b.bus.SubscribeRoom(t.Context(), roomID); err != nil {
 		t.Fatal(err)
@@ -579,7 +579,7 @@ func TestLateCallerDoesNotBreakTheSharedConnection(t *testing.T) {
 	}
 }
 
-// Freeze 之后，已有的连接保持打开，但收到的字节全部丢弃，不再转发：
+// Freeze 之后，已有的连接保持打开，但收到的字节全部丢弃，不再转发。
 // 对客户端来说这是半开的 TCP 连接，写得出去，读不到错误，也等不到回复。Freeze 之后新建的连接照常转发。
 type freezeProxy struct {
 	listener net.Listener
@@ -646,7 +646,8 @@ func (p *freezeProxy) Freeze() {
 	}
 }
 
-// 此后新建的连接在建立后停住，客户端收不到任何回复，直到调用返回的 release；每停住一个连接，held 通知一次。
+// 此后新建的连接都收不到任何回复，直到调用返回的 release。接收循环停在第一个新连接上，held 只在这时通知一次。
+// 后面的连接留在 accept 队列里，不会再通知。
 func (p *freezeProxy) HoldNew() (held <-chan struct{}, release func()) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -839,7 +840,7 @@ func TestReplaceDoesNotWaitForWriterOnOldSubscription(t *testing.T) {
 		t.Fatal("订阅没有建立连接")
 	}
 
-	// ReceiveTimeout 也要 old 的锁，无法从外部安排写入恰好在接收循环最后一次接收之后取得锁，所以直接调用 replace。
+	// ReceiveTimeout 也要拿 old 的锁。从外部没法安排写入恰好在接收循环最后一次接收之后拿到锁，所以直接调用 replace。
 	replaced := make(chan struct{})
 	go func() {
 		bus.replace(old)

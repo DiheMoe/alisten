@@ -12,8 +12,8 @@ var (
 	ErrBeforeMissing = errors.New("歌单已经变了，刷新之后再试")
 )
 
-// order 是显示顺序；返回移动后的显示顺序。moved 里不在 order 中的歌忽略，重复的只算一次；
-// 都不在 order 中时原样返回，此时不检查 before 是否还在。
+// order 是显示顺序，返回移动后的显示顺序。moved 里不在 order 中的歌忽略，重复的只算一次。
+// moved 里的歌都不在 order 中时原样返回，这时不检查 before 是否还在。
 func Move(order []track.Track, moved []track.Track, before *track.Track) ([]track.Track, error) {
 	if before != nil && slices.Contains(moved, *before) {
 		return nil, ErrBeforeMoved

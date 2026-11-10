@@ -107,7 +107,7 @@ func TestFailedRequestsCarryTheRequestIDOfTheOwnerLogs(t *testing.T) {
 		a := f.join(t, id, alice)
 		store.fail.Store(true)
 
-		// 房间被放弃之后要等这次运行结束，下一个请求才会重新接管它并再次落盘；否则下一个请求可能遇到正在结束的运行，不经落盘就失败。
+		// 房间被放弃之后要等这次运行结束，下一个请求才会重新接管房间并再次落盘。否则下一个请求可能遇到正在结束的运行，不经落盘就失败。
 		_, doErr := f.gateway.Do(t.Context(), id, bob, room.SetPlayMode{Mode: room.Random})
 		synctest.Wait()
 		if !a.Begin() {

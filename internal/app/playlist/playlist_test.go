@@ -78,7 +78,7 @@ func (q *accountQuota) Take(_ context.Context, key string, burst int, refill tim
 	return 0, nil
 }
 
-// 短链接到解析结果；不在表里的短链接解析失败。
+// 从短链接到解析结果的映射。不在表里的短链接解析失败。
 type shortLinks map[string]string
 
 func (l shortLinks) Resolve(_ context.Context, link string) (string, error) {

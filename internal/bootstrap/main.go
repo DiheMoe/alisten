@@ -38,7 +38,7 @@ func Main(args []string) int {
 	}
 
 	logger := base.With("component", name)
-	// 把标准库 log 包和 OpenTelemetry 的日志接入 slog，第三方库的日志也输出为 JSON。
+	// 把标准库 log 包和 OpenTelemetry 的日志接入 slog，这样第三方库的日志也输出为 JSON。
 	slog.SetDefault(logger)
 	routeOpenTelemetryLogs(base.With("component", "otel"))
 	if err := run(base); err != nil {

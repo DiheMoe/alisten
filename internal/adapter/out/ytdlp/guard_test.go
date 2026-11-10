@@ -106,9 +106,9 @@ func (s *dnsServer) resolver() *net.Resolver {
 	}}
 }
 
-// 回应只有一个问题的查询：问题原样放回，答案是 A 或 AAAA 记录，没有答案时是空的成功回应。
+// 回应只有一个问题的查询。问题原样放回，答案是 A 或 AAAA 记录，没有答案时回一个空的成功回应。
 func (s *dnsServer) reply(query []byte) []byte {
-	// 问题从第 12 个字节开始：域名是「长度加标签」的序列，以 0 结尾，之后是 2 字节的类型和 2 字节的类。
+	// 问题从第 12 个字节开始。域名是「长度加标签」的序列，以 0 结尾，之后是 2 字节的类型和 2 字节的类。
 	end := 12
 	for end < len(query) && query[end] != 0 {
 		end += int(query[end]) + 1

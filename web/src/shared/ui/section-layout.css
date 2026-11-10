@@ -30,7 +30,7 @@
 /* 浅色主题里卡片和输入框的底色相同，卡片里的输入框要换一种底色才分得开。 */
 .section-group { --color-input: var(--color-input-on-card); border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-card); }
 .section-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; width: 100%; min-height: 56px; padding: 12px 16px; }
-/* 分隔线不用 surface：浅色主题里它和 card 同色，线会看不见。card-hover 在深色主题里与 surface 同色。 */
+/* 分隔线不用 surface，因为浅色主题里 surface 和 card 同色，线会看不见。card-hover 在深色主题里和 surface 同色。 */
 .section-row + .section-row { border-top: 1px solid var(--color-card-hover); }
 .section-group > .section-row:first-child { border-top-left-radius: 13px; border-top-right-radius: 13px; }
 .section-group > .section-row:last-child { border-bottom-left-radius: 13px; border-bottom-right-radius: 13px; }
@@ -45,7 +45,7 @@
   .section-layout-frame[data-layout='split'] { grid-template-columns: 208px minmax(0, 1fr); }
   .section-layout-content { padding: 28px 24px 40px; }
 }
-/* 宽屏上主区域也可能很窄，比如平板竖屏又开着右侧栏：分类栏改为内容上方的一行。 */
+/* 宽屏上主区域也可能很窄，比如平板竖屏又开着右侧栏。这时分类栏改成内容上方的一行。 */
 @container section-layout (max-width: 599px) {
   .section-layout-frame[data-layout='split'] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .section-layout-sidebar { flex-direction: row; align-items: center; gap: 8px; padding: 8px 12px; overflow-x: auto; scrollbar-width: thin; border-right: 0; border-bottom: 1px solid var(--color-card-hover); }

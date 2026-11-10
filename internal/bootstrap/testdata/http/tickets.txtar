@@ -1,4 +1,4 @@
-成员用成员 token 换取进房票据；有密码的房间先校验密码。
+成员用成员 token 换取进房票据。有密码的房间先校验密码。
 
 -- request --
 POST /api/members

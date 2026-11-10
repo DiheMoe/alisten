@@ -43,7 +43,7 @@ func (s *Service) Authorize(token string) error {
 	if s.token == "" {
 		return ErrDisabled
 	}
-	// 比较哈希而不是原文：长度不同时 ConstantTimeCompare 立即返回，会泄露管理 token 的长度。
+	// 比较哈希而不是原文，因为长度不同时 ConstantTimeCompare 会立即返回，泄露管理 token 的长度。
 	want, got := sha256.Sum256([]byte(s.token)), sha256.Sum256([]byte(token))
 	if subtle.ConstantTimeCompare(got[:], want[:]) != 1 {
 		return ErrInvalidToken
@@ -62,7 +62,7 @@ func (s *Service) ListRooms(ctx context.Context) ([]lobby.Room, error) {
 type NewRoom struct {
 	Name        string
 	Description string
-	// 空字符串表示没有别名。别名必须已经按格式校验：存储按格式区分 UUID 和别名，本身不做检查。
+	// 空字符串表示没有别名。别名必须已经按格式校验过，因为存储按格式区分 UUID 和别名，自己不做检查。
 	Slug     string
 	Password string
 }
@@ -85,13 +85,13 @@ func (s *Service) CreateRoom(ctx context.Context, r NewRoom) (string, error) {
 type RoomChange struct {
 	Name        *string
 	Description *string
-	// 别名必须已经按格式校验：存储按格式区分 UUID 和别名，本身不做检查。
+	// 别名必须已经按格式校验过，因为存储按格式区分 UUID 和别名，自己不做检查。
 	Slug     *string
 	Password *string
 }
 
-// id 必须是 UUID。名称和描述由房间修改，房间落盘之后才返回。设置或修改密码会作废房间成员的票据并断开会话和成员的事件流，
-// 这一步无法撤销，所以放在最后：前面任何一步失败时票据仍然有效，重试也不会再次作废重新签发的票据。
+// id 必须是 UUID。名称和描述由房间修改，房间落盘之后才返回。设置或修改密码会作废房间成员的票据，并断开会话和成员的事件流。
+// 这一步无法撤销，所以放在最后。这样前面任何一步失败时票据都还有效，重试时也不会把重新签发的票据再作废一次。
 // 别名在名称和描述之前修改，别名已被占用时不做任何修改。取消密码不影响已有的票据。
 func (s *Service) UpdateRoom(ctx context.Context, id string, c RoomChange) error {
 	r, err := s.persistentRoom(ctx, id)

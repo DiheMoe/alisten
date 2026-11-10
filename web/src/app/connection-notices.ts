@@ -23,7 +23,7 @@ export function watchConnection(): void {
       notificationStore.error('与房间的连接中断了，正在自动重连。', 5000)
     }
   })
-  // 握手时票据被拒绝会以 4401 断开，进房流程随后重新打开加入弹窗，不另外弹通知。
+  // 握手时票据被拒绝，连接会以 4401 断开，随后进房流程会重新打开加入弹窗，所以不另外弹通知。
   roomStore.errors.on((error) => {
     if (error.code === 'UNAUTHORIZED')
       return

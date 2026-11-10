@@ -20,7 +20,7 @@ interface PlaylistsState {
   playlists: MyPlaylist[] | null
   // 最近一次读取失败的原因，成功读取后为 null。
   error: string | null
-  // 歌单最近一次读取成功的时间，相对日期（今天、昨天）以它为准：窗口重新获得焦点会重新读取，跨过午夜后标签随之更新。
+  // 歌单最近一次读取成功的时间，相对日期（今天、昨天）以这个时间为准。窗口重新获得焦点时会重新读取，所以跨过午夜之后，标签也会随之更新。
   loadedAt: number
   // 曲目 → 包含它的歌单 id，只有读过的曲目才有。正在同步的歌单是最后一次勾选的结果，同步负责把服务端改成一致。
   memberships: ReadonlyMap<string, ReadonlySet<string>>
@@ -30,13 +30,13 @@ const empty: PlaylistsState = { playlists: null, error: null, loadedAt: 0, membe
 
 const nameTexts = { INVALID_ARGUMENT: '歌单名要 1 到 50 个字。' }
 const fileTexts = { INVALID_ARGUMENT: '文件里有不符合要求的内容，没有导入。' }
-// 接口只收 1 到 2048 字节的文本：太长的这里不发出，对话框不提交空的，INVALID_ARGUMENT 就只剩认不出链接，这时的 message 是写给用户的。
+// 接口只收 1 到 2048 字节的文本。太长的在这里就不发出，对话框也不提交空的，所以 INVALID_ARGUMENT 只剩认不出链接这一种原因，这时的 message 是写给用户的。
 const maxLinkBytes = 2048
 const linkTexts: ErrorTexts = { INVALID_ARGUMENT: message => message }
 
 class PlaylistsStore extends Store<PlaylistsState> {
   #account: string | null = null
-  // 只有最后发起的读取能写入：换了账号，或者之后又读过一次时，旧的结果作废。
+  // 只有最后发起的读取能写入。换了账号，或者之后又读过一次时，旧的结果作废。
   #generation = 0
   #membershipReads = new Map<string, object>()
   #syncing = new Map<string, Promise<void>>()
@@ -56,7 +56,7 @@ class PlaylistsStore extends Store<PlaylistsState> {
     return this.#load(++this.#generation)
   }
 
-  // 读取包含这首歌的歌单，写入 memberships；没读到时返回 false。读到了却已被之后的读取取代时也返回 true，由后来的读取写入。
+  // 读取包含这首歌的歌单，写入 memberships。没读到时返回 false。读到了却已被之后的读取取代时也返回 true，由后来的读取写入。
   async containing(track: Track): Promise<boolean> {
     const account = this.#account
     const key = trackKey(track)
@@ -89,7 +89,7 @@ class PlaylistsStore extends Store<PlaylistsState> {
         if (this.#syncing.get(key) !== sync)
           return
         this.#syncing.delete(key)
-        // 同步之前发出的读取可能带着旧的勾选返回，重新读一次让它们作废；请求超时但服务端已生效时，也以服务端为准。
+        // 同步之前发出的读取可能带着旧的勾选返回，所以重新读一次，让这些读取作废。请求超时但服务端已经生效时，也以服务端为准。
         void this.containing(track)
         void this.load()
       })
@@ -184,7 +184,7 @@ class PlaylistsStore extends Store<PlaylistsState> {
     }
   }
 
-  // 返回新加入的首数，to 里已经有的歌不算；失败时返回 null。
+  // 返回新加入的首数，to 里已经有的歌不算。失败时返回 null。
   async copyItems(from: MyPlaylist, to: MyPlaylist, tracks: Track[]): Promise<number | null> {
     try {
       const { added } = await api.copyMyPlaylistItems(to.id, { from: from.id, tracks })
@@ -210,7 +210,7 @@ class PlaylistsStore extends Store<PlaylistsState> {
     }
   }
 
-  // 开启分享和重新生成链接都用它，返回新的分享 ID；失败时返回 null。
+  // 开启分享和重新生成链接都用 share，返回新的分享 ID。失败时返回 null。
   async share(playlist: MyPlaylist): Promise<string | null> {
     try {
       const { shareId } = await api.shareMyPlaylist(playlist.id)
@@ -247,19 +247,19 @@ class PlaylistsStore extends Store<PlaylistsState> {
     }
   }
 
-  // 先改列表再重新读取：菜单要立刻显示新的分享状态，重新读取也让进行中的旧读取作废。
+  // 先改列表再重新读取，因为菜单要立刻显示新的分享状态。重新读取也会让进行中的旧读取作废。
   #changed(id: string, change: Partial<MyPlaylist>): void {
     this.setState({ playlists: this.state.playlists?.map(p => p.id === id ? { ...p, ...change } : p) ?? null })
     void this.load()
   }
 
-  // 先放进列表再重新读取：打开新歌单时，列表里要已经有它，否则详情页会以为它被删掉了。
+  // 先放进列表再重新读取，因为打开新歌单时，列表里要已经有这个歌单，否则详情页会以为它被删掉了。
   #added(playlist: MyPlaylist): void {
     this.setState({ playlists: [...(this.state.playlists ?? []), playlist] })
     void this.load()
   }
 
-  // 请求进行中又改了勾选时，等它完成之后按最新的勾选再发；失败时恢复成服务端的状态，不再发出。
+  // 请求进行中又改了勾选时，等这个请求完成之后，按最新的勾选再发。失败时恢复成服务端的状态，不再发出。
   async #sync(playlistId: string, track: Track, saved: boolean): Promise<void> {
     const account = this.#account
     while (this.#account === account && this.#includes(playlistId, track) !== saved) {
@@ -293,7 +293,7 @@ class PlaylistsStore extends Store<PlaylistsState> {
     }
   }
 
-  // 正在同步的歌单以本地为准：读到的可能是同步完成之前的状态。
+  // 正在同步的歌单以本地为准，因为读到的可能是同步完成之前的状态。
   #applyMemberships(track: Track, playlistIds: readonly string[]): void {
     const syncing = (id: string) => this.#syncing.has(membershipKey(id, track))
     const next = new Set(playlistIds.filter(id => !syncing(id)))

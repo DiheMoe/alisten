@@ -26,7 +26,7 @@ func newService(t *testing.T) (*Service, *porttest.Store) {
 	return New(store, store, store, newGateway(store, node, node)), store
 }
 
-// 没有调用 realtime.Start：这些测试不运行房间。
+// 没有调用 realtime.Start，因为这些测试不运行房间。
 func newGateway(store *porttest.Store, node *porttest.Node, bus port.Bus) *realtime.Gateway {
 	_, gateway := realtime.New(store, store, store, store, nil, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
 	return gateway
@@ -263,7 +263,7 @@ func TestEnterRoomJoinsTheStoredRoom(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 测试中的网关不运行房间，加入在订阅房间频道之后失败，这里只检查订阅时的日志。
+	// 测试中的网关不运行房间，加入会在订阅房间频道之后失败，所以只检查订阅时的日志。
 	_, _ = s.EnterRoom(t.Context(), "hall", ticket)
 	var entry map[string]any
 	if err := json.Unmarshal(logs.Bytes(), &entry); err != nil {

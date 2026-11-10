@@ -51,7 +51,7 @@ func occupyArgonSlots(t *testing.T) {
 	for range cap(argonSlots) {
 		argonSlots <- struct{}{}
 	}
-	// 归还名额时不阻塞：实现在 ctx 结束之后仍去计算时，会在结束时替这里归还一个名额；阻塞地归还会让测试一直挂到包超时，
+	// 归还名额时不阻塞。如果实现在 ctx 结束之后仍去计算，计算结束时会替测试归还一个名额，这时阻塞地归还会让测试一直挂到包超时，
 	// 而不是报出错误。
 	t.Cleanup(func() {
 		for range cap(argonSlots) {

@@ -1,5 +1,5 @@
-后台配置 GitHub OAuth App：读取只给出 Client ID、Client Secret 是否已设置和要填进 GitHub 的回调地址，任何响应都不返回 Client Secret；
-Client ID 和 Client Secret 一起保存，都必填；清除之后关闭 GitHub 登录。
+后台配置 GitHub OAuth App。读取时只给出 Client ID、Client Secret 是否已设置和要填进 GitHub 的回调地址，任何响应都不返回 Client Secret。
+Client ID 和 Client Secret 一起保存，两者都必填。清除之后关闭 GitHub 登录。
 
 -- request --
 GET /api/admin/credentials/github

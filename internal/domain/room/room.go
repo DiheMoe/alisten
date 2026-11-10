@@ -40,13 +40,13 @@ type Room struct {
 	endTimer       Token
 	closeTimer     Token
 	recommendation Token
-	// 各点歌人已开播的最高轮次，只在内存中：换 owner 之后刚放过歌的点歌人可能提前一轮，已在队列中的歌不受影响。
+	// 各点歌人已开播的最高轮次。served 只在内存中，所以换 owner 之后，刚放过歌的点歌人可能提前一轮。已在队列中的歌不受影响。
 	served map[requester]int
 }
 
-// token 每次 Restore 后都从 1 重新开始。放弃房间后再次恢复时，调用方必须作废旧 Room
-// 尚未触发的定时器和尚未返回的推荐，否则旧 token 会被新 Room 当成自己的。
-// 返回的 effect 与 Handle 的要求相同。
+// 每次 Restore 之后，token 都从 1 重新编号。所以放弃一个房间再恢复时，调用方必须先作废旧 Room
+// 还没触发的定时器和还没返回的推荐，否则它们的 token 会和新 Room 的撞号，被新 Room 当成自己的。
+// 返回的 effect 和 Handle 返回的一样，按同样的规则执行。
 func Restore(env Env, term uint32, s Snapshot) (*Room, []Effect) {
 	r := &Room{
 		term:     term,
@@ -84,10 +84,10 @@ func Restore(env Env, term uint32, s Snapshot) (*Room, []Effect) {
 	return r, r.commit(b)
 }
 
-// 返回的 effect 必须按顺序执行：Persist 失败时丢弃本批剩余的 effect 并放弃该房间，
+// 返回的 effect 必须按顺序执行。Persist 失败时要丢弃这一批剩下的 effect，并放弃这个房间，
 // 否则客户端会看到没有落盘的状态。
-// effect 只能读，不能修改：同一批 effect 共用切片和指针，Reply.Err 指向包级的错误值。
-// 输出 Close 之后必须丢弃这个 Room：关闭时只结束正在播放的歌，不再开播下一首，它的状态已不是运行中房间的状态。
+// effect 只能读，不能修改，因为同一批 effect 共用切片和指针，Reply.Err 也指向包级的错误值。
+// 输出 Close 之后必须丢弃这个 Room。关闭时只结束正在播放的歌，不再开播下一首，所以 Room 的状态已经不是运行中房间的状态。
 func (r *Room) Handle(env Env, in Input) []Effect {
 	b := r.begin(env)
 	switch in := in.(type) {
@@ -115,7 +115,7 @@ func (r *Room) Handle(env Env, in Input) []Effect {
 	case Timer:
 		r.timer(b, in)
 	}
-	// 入队、点赞和切换播放模式都会改变等待队列的顺序，各条规则不必各自排序。
+	// 入队、点赞和切换播放模式都会改变等待队列的顺序。处理完统一排序，各条规则就不必各自排序。
 	r.sortWaiting()
 	return r.commit(b)
 }
@@ -154,7 +154,7 @@ func (b *batch) respond(id RequestID, res Result, err *Error) {
 }
 
 // 状态事件由处理前后的差异得出，不由各条规则各自发出，这样任何状态变化都不会漏掉广播。
-// Persist 排在最前：运行时落盘成功后才执行其余的 effect，客户端看到的都是已落盘的状态。
+// Persist 排在最前，运行时落盘成功后才执行其余的 effect，这样客户端看到的都是已落盘的状态。
 func (r *Room) commit(b *batch) []Effect {
 	after := r.snapshot()
 	var out []Effect
@@ -164,7 +164,7 @@ func (r *Room) commit(b *batch) []Effect {
 	for _, p := range b.plays {
 		out = append(out, p)
 	}
-	// 排在广播之前：客户端看到开播时，听歌记录已经写好。
+	// RecordListen 排在广播之前，这样客户端看到开播时，听歌记录已经写好。
 	if l, ok := r.listened(b); ok {
 		out = append(out, l)
 	}
@@ -197,7 +197,7 @@ func (r *Room) commit(b *batch) []Effect {
 	return append(out, b.tasks...)
 }
 
-// 开播了一首新歌时记给所有在线成员；正在播放的歌没变时，只记给这一批之前没有会话的成员。
+// 开播了一首新歌时，听歌记录记给所有在线成员。正在播放的歌没变时，只记给这一批处理之前还没有会话的成员。
 func (r *Room) listened(b *batch) (RecordListen, bool) {
 	c := r.current
 	if c == nil {

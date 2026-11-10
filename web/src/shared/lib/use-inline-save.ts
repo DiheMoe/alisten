@@ -5,7 +5,7 @@ import { inlineSave } from './inline-save'
 const savedNoticeMs = 1500
 
 // 文本的保存流程：失焦或回车时 submit，Esc 时 revert。onSave 失败时抛出 Error，它的 message 是给用户看的原因。
-// submit 返回提交之后输入框里的值是否已经保存：没有改动也算已经保存；正在保存或者保存失败时返回 false。
+// submit 返回提交之后输入框里的值是否已经保存。没有改动也算已经保存，正在保存或者保存失败时返回 false。
 export function useInlineSave(value: string, onSave: (value: string) => Promise<void>) {
   const [state, setState] = useState<InlineSaveState>({ draft: value, saved: value, status: 'idle', error: null })
   const [seenValue, setSeenValue] = useState(value)
@@ -41,7 +41,7 @@ export function useInlineSave(value: string, onSave: (value: string) => Promise<
       await onSave(submitted)
       setState((current) => {
         const done = inlineSave(current, { type: 'succeeded', value: submitted })
-        // 保存期间外部传入了新值时以它为准：服务端可能改写了提交的值，比如去掉首尾空白。
+        // 保存期间外部传入了新值时，以新值为准，因为服务端可能改写了提交的值，比如去掉首尾空白。
         return current.saved === savedBefore ? done : inlineSave(done, { type: 'external', value: current.saved })
       })
       setSavedNotice(count => count + 1)
@@ -58,7 +58,7 @@ export function useInlineSave(value: string, onSave: (value: string) => Promise<
 
   return {
     state,
-    // “已保存”在保存成功后显示 1.5 秒；又改了输入框就不再显示。
+    // “已保存”在保存成功后显示 1.5 秒。又改了输入框就不再显示。
     savedNotice: state.status === 'saved' && savedNotice > 0 && state.draft === state.saved,
     edit: (draft: string) => apply({ type: 'edit', value: draft }),
     submit,

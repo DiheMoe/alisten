@@ -61,7 +61,7 @@ func (r *Redis) Flush() {
 	clear(r.alive)
 }
 
-// SetDown 模拟本实例连不上 Redis：之后的操作都返回 ErrRedisDown；订阅连接随之断开，下一条收到的消息是
+// SetDown 模拟本实例连不上 Redis。之后的操作都返回 ErrRedisDown，订阅连接也随之断开，下一条收到的消息是
 // SubscriptionLost。恢复之后仍然订阅着原来的频道，断开期间发布的消息不会补回。
 func (n *Node) SetDown(down bool) {
 	r := n.redis

@@ -20,8 +20,8 @@ const root = document.getElementById('root')
 if (!root)
   throw new Error('index.html 缺少 #root 节点')
 
-// 在首次渲染和进入房间之前启动：外观、性能等级、音量和品牌名要在第一帧生效，订阅房间的 Store 不能错过进入房间。
-// 聊天面板按需加载，歌词页也不常驻，但聊天、搜索和歌词的 Store 要从进入房间起跟随房间变化，不能等到页面挂载。
+// 这些 Store 要在首次渲染和进入房间之前启动，因为外观、性能等级、音量和品牌名要在第一帧生效，订阅房间的 Store 也不能错过进入房间。
+// 聊天面板按需加载，歌词页也不常驻，但聊天、搜索和歌词的 Store 要从进入房间起就跟着房间变化，不能等到页面挂载再启动。
 appearanceStore.start()
 performanceStore.start()
 volumeStore.start()

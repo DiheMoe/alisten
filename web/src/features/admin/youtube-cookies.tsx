@@ -17,7 +17,7 @@ function YouTubeCookiesDialog({ onSaved, onClose }: { onSaved: () => void, onClo
       return
     setBusy(true)
     try {
-      // 空白和超过 64 KiB 的内容不会提交，INVALID_ARGUMENT 只剩认不出格式，这时的 message 是写给用户的。
+      // 空白和超过 64 KiB 的内容不会提交，所以 INVALID_ARGUMENT 只剩认不出格式这一种原因，这时的 message 是写给用户的。
       const saved = await adminStore.call(() => api.adminSetYoutubeCredential({ cookies }), { INVALID_ARGUMENT: message => message })
       if (saved !== null)
         onSaved()
@@ -118,7 +118,7 @@ export function YouTubeCookies() {
           onClose={() => setEditing(false)}
         />
       )}
-      {/* 清除之后“清除”按钮不再显示，重新读取期间“填写 cookies”也不能点：焦点落到分类标题。 */}
+      {/* 清除之后“清除”按钮不再显示，重新读取期间“填写 cookies”也不能点，所以焦点落到分类标题。 */}
       {clearing && (
         <ConfirmDialog
           title="清除 YouTube cookies"

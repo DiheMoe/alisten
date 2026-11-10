@@ -103,9 +103,10 @@ func (r *Room) add(b *batch, t track.Track, m track.Meta, by member.Member, auto
 	return e
 }
 
-// 轮次在入队时定下，之后不再改变：新歌排进最早还没放完的一轮；点歌人还有歌在队列中，或者已经有歌开播，就至少排到这些歌中最高一轮的下一轮。
-// 最早的一轮不一定是正在播放的那一轮，点赞会让靠后轮次的歌先放。
-// 点歌人按成员 ID 和名字区分：bot 用同一个成员替不同的人点歌；AutoDJ 加入的歌没有点歌人，算作同一个点歌人。
+// 轮次在入队时定下，之后不再改变。新歌一般排进还没放完的轮次中最早的一轮。如果点歌人已经有歌在队列里，或者已经有歌开播，就至少排到这些歌里最高一轮的下一轮。
+// 最早的一轮不一定是正在播放的那一轮，因为点赞会让靠后轮次的歌先放。
+// 判断是不是同一个点歌人，要同时看成员 ID 和名字，因为 bot 会用同一个成员替不同的人点歌。
+// AutoDJ 加的歌没有点歌人，都算作同一个点歌人。
 func (r *Room) nextRound(by member.Member) int {
 	entries := slices.Clone(r.waiting)
 	if r.pending != nil {
@@ -120,7 +121,7 @@ func (r *Room) nextRound(by member.Member) int {
 		return 0
 	}
 	round := slices.MinFunc(entries, func(a, b Entry) int { return cmp.Compare(a.Round, b.Round) }).Round
-	// 早于最早一轮的记录不会再影响轮次；bot 代填的点歌人名字不受限制，不删就会一直增长。
+	// 早于最早一轮的记录不会再影响轮次。bot 代填的点歌人名字不受限制，不删的话 served 会一直增长。
 	maps.DeleteFunc(r.served, func(_ requester, served int) bool { return served < round })
 	key := requesterOf(by)
 	if served, ok := r.served[key]; ok {

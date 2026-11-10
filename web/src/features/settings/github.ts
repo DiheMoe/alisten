@@ -4,8 +4,8 @@ import { api, IdentityRenewedError } from '@/core/api'
 import { errorMessage } from '@/core/errors'
 import { notificationStore } from '@/shared/ui'
 
-// GitHub 跳回来时仍在发起授权的这个标签页，所以 nonce 存在 sessionStorage：别的标签页、别的浏览器拿到兑换码也没有它。
-// 意图也存在这里，回来之后据此决定接下来做什么。
+// GitHub 跳回来时仍在发起授权的这个标签页，所以 nonce 存在 sessionStorage。这样别的标签页、别的浏览器拿到兑换码，也拿不到 nonce。
+// 意图也存在 sessionStorage 里，回来之后据此决定接下来做什么。
 const nonceKey = 'alisten.github-nonce'
 const intentKey = 'alisten.github-intent'
 
@@ -28,7 +28,7 @@ export async function startGithubLogin(intent: GitHubIntent, currentPassword?: s
   return url
 }
 
-// 返回 false 时，失败原因已经通过通知显示；成功时页面随即跳到 GitHub。
+// 返回 false 时，失败原因已经通过通知显示。成功时页面随即跳到 GitHub。
 export async function goToGitHub(intent: GitHubIntent, currentPassword?: string): Promise<boolean> {
   try {
     window.location.assign(await startGithubLogin(intent, currentPassword))
@@ -46,7 +46,7 @@ export type GithubLanding
 
 let landed: { fragment: string, landing: GithubLanding } | null = null
 
-// fragment 是落地页地址中 # 之后的部分：code=<兑换码> 或 error=<错误码>。保存的 nonce 取出即删除，每次发起只能兑换一次；
+// fragment 是落地页地址中 # 之后的部分：code=<兑换码> 或 error=<错误码>。保存的 nonce 取出即删除，所以每次发起只能兑换一次。
 // 同一次落地重复读取时（开发模式下组件会挂载两次）返回同样的结果。
 export function takeGithubLanding(fragment: string): GithubLanding {
   if (landed?.fragment === fragment)
@@ -72,7 +72,7 @@ export function takeGithubLanding(fragment: string): GithubLanding {
 let finishing: { code: string, result: Promise<FinishGithubLoginResponse> } | null = null
 let credentialsPending = false
 
-// 兑换码只能用一次：同一个兑换码重复调用时返回同一次请求的结果。
+// 兑换码只能用一次，所以同一个兑换码重复调用时，返回同一次请求的结果。
 export function finishGithubLogin(code: string, nonce: string, intent: GitHubIntent): Promise<FinishGithubLoginResponse> {
   if (finishing?.code !== code) {
     let result = api.finishGithubLogin({ code, nonce })
@@ -87,7 +87,7 @@ export function finishGithubLogin(code: string, nonce: string, intent: GitHubInt
   return finishing.result
 }
 
-// 用 GitHub 确认了身份，接下来设置用户名和密码：落地页回到设置页，设置页打开对话框。用户名和密码不在跳转期间保存，回来之后才填写。
+// 用 GitHub 确认了身份之后，接下来设置用户名和密码。落地页回到设置页，由设置页打开对话框。用户名和密码不在跳转期间保存，回来之后才填写。
 // 只返回一次 true。
 export function takeCredentialsPrompt(): boolean {
   const pending = credentialsPending

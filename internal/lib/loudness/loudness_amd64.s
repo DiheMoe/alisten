@@ -2,9 +2,9 @@
 
 #include "textflag.h"
 
-// st（*[2][2]biquadState）的内存布局：每个 biquadState 占 72 字节，
-//   {b0=0 b1=8 b2=16 a1=24 a2=32 x1=40 x2=48 y1=56 y2=64}；
-// L 搁架=0，L 高通=72，R 搁架=144，R 高通=216。
+// st（*[2][2]biquadState）的内存布局：每个 biquadState 占 72 字节，各字段的偏移是
+//   {b0=0 b1=8 b2=16 a1=24 a2=32 x1=40 x2=48 y1=56 y2=64}。
+// 各 biquadState 的起始偏移是 L 搁架=0，L 高通=72，R 搁架=144，R 高通=216。
 // L、R 的同名字段相距 144 字节，用 VMOVSD 和 VMOVHPD 组合成 [L, R] 向量。
 //
 // 寄存器分配（128 位 VEX，lane0 为 L，lane1 为 R）：

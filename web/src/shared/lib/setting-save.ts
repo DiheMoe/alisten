@@ -1,4 +1,4 @@
-// 改完即生效的控件（开关、分段选择）的保存状态。pending 是正在保存的新值，控件先显示它；保存失败时丢掉它，控件回到已保存的值。
+// 改完即生效的控件（开关、分段选择）的保存状态。pending 是正在保存的新值，控件先显示这个值。保存失败时丢掉 pending，控件回到已保存的值。
 export interface SettingSave<T> {
   pending: { value: T } | null
   status: 'idle' | 'saving' | 'saved' | 'failed'
@@ -17,7 +17,7 @@ export const idleSave: SettingSave<never> = { pending: null, status: 'idle', err
 export function settingSave<T>(state: SettingSave<T>, event: SettingSaveEvent<T>): SettingSave<T> {
   switch (event.type) {
     case 'start':
-      // 一次只保存一个值：保存中再改，结果回来时分不清是哪一次的。
+      // 一次只保存一个值，因为保存中再改的话，结果回来时分不清是哪一次的。
       return state.status === 'saving' ? state : { pending: { value: event.value }, status: 'saving', error: null }
     case 'succeeded':
       return state.status === 'saving' ? { pending: null, status: 'saved', error: null } : state

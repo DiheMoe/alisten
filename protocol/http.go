@@ -24,7 +24,7 @@ type Route struct {
 	Location bool
 }
 
-// 房间内请求的 HTTP 绑定。路径参数是请求中同名的字段；GET 和 DELETE 的其余字段来自查询串，其他方法的来自 JSON 请求体。
+// 房间内请求的 HTTP 绑定。路径参数是请求中同名的字段。GET 和 DELETE 的其余字段来自查询串，其他方法的其余字段来自 JSON 请求体。
 // 组装出的请求交给与 WebSocket 相同的解码函数校验。
 type RoomRoute struct {
 	Route
@@ -42,7 +42,7 @@ const (
 	queryInteger
 )
 
-// 空的请求体按 {} 处理：没有字段的请求可以不带请求体。
+// 空的请求体按 {} 处理，所以没有字段的请求可以不带请求体。
 func (r RoomRoute) Decode(pathValue func(string) string, rawQuery string, body []byte) (any, error) {
 	query, err := url.ParseQuery(rawQuery)
 	if err != nil {

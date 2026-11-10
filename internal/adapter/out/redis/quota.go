@@ -1,4 +1,4 @@
-// Package redis 只存放可以丢失的协调数据：Redis 被清空后系统能自行恢复。
+// Package redis 只存放可以丢失的协调数据，Redis 被清空后系统能自行恢复。
 package redis
 
 import (

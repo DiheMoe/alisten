@@ -18,7 +18,7 @@ type Listen struct {
 }
 
 type ListenRecorder interface {
-	// 只记给开启了记录的成员。同一首歌已有记录时 HeardAt 取较晚的，元数据用新的；
+	// 只记给开启了记录的成员。同一首歌已有记录时，HeardAt 取较晚的那个，元数据用新的。
 	// 每个成员超过 ListenLimit 首的部分随即删掉。
 	RecordListen(ctx context.Context, memberIDs []string, l Listen) error
 }

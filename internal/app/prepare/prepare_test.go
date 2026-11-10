@@ -119,7 +119,7 @@ func start(p *Preparer, ctx context.Context, t track.Track) <-chan prepared {
 
 func discard() *slog.Logger { return slog.New(slog.DiscardHandler) }
 
-// synctest 的时钟随核对的定时器不断推进，Prepare 不返回也不会被判定为死锁：必须设期限，否则出错时要等到包超时才失败。
+// synctest 的时钟随核对的定时器不断推进，Prepare 一直不返回也不会被判定为死锁。所以必须设期限，否则出错时要等到包超时才失败。
 func await(t *testing.T, done <-chan prepared) prepared {
 	t.Helper()
 	select {

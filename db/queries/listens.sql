@@ -1,6 +1,6 @@
 -- name: LockListeners :many
--- 按 ID 的顺序锁住开启了记录的成员：同一个成员的历史依次写入，删掉超出上限的部分时不会多删或少删；
--- 加锁的顺序固定，同时写几个成员的事务之间不会死锁。
+-- 按 ID 的顺序锁住开启了记录的成员。这样同一个成员的历史依次写入，删掉超出上限的部分时不会多删或少删。
+-- 加锁的顺序固定，所以同时写几个成员的事务之间不会死锁。
 SELECT id FROM members WHERE id = ANY(@ids::uuid[]) AND record_listens ORDER BY id FOR NO KEY UPDATE;
 
 -- name: UpsertListens :exec
@@ -14,7 +14,7 @@ SET title = excluded.title, artist = excluded.artist, album = excluded.album, co
     heard_at = greatest(listens.heard_at, excluded.heard_at);
 
 -- name: MoveListens :exec
--- 并入的规则与 UpsertListens 相同，并入的那份算新写入的；to_id 关闭了记录时只删不并。
+-- 并入的规则与 UpsertListens 相同，并入的那份算新写入的。to_id 关闭了记录时只删不并。
 WITH moved AS (
     DELETE FROM listens WHERE member_id = sqlc.arg(from_id)::uuid
     RETURNING source, track_id, title, artist, album, cover_url, cover_key, duration_ms, page_url, heard_at
@@ -29,7 +29,7 @@ SET title = excluded.title, artist = excluded.artist, album = excluded.album, co
     heard_at = greatest(listens.heard_at, excluded.heard_at);
 
 -- name: TrimListens :exec
--- 排序与 MemberListens 相同：留下的正是读取时返回的那些。
+-- 排序与 MemberListens 相同，所以留下的正是读取时返回的那些。
 DELETE FROM listens l
 USING (
     SELECT member_id, source, track_id,

@@ -1,5 +1,5 @@
-// 页码条最多 7 项：首页、省略号、当前页和前后各一页、省略号、末页。不超过 7 页时全部列出；
-// 省略号只盖住一页时，直接显示那一页，占的位置一样。
+// 页码条最多 7 项：首页、省略号、当前页和前后各一页、省略号、末页。不超过 7 页时全部列出。
+// 省略号只盖住一页时，直接显示那一页，因为占的位置一样。
 export function pageItems(current: number, totalPages: number): (number | 'gap')[] {
   if (totalPages <= 7)
     return Array.from({ length: totalPages }, (_, index) => index + 1)

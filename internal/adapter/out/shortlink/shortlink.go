@@ -24,8 +24,8 @@ type Resolver struct {
 
 var _ port.ShortLinks = (*Resolver)(nil)
 
-// allowed 检查每一跳（包括起点）的主机。跳转到 done 认得的地址时就停下，不再请求它：
-// 网易云的短链接最后一跳是很慢的歌单页面，逐跳请求到底会超过总超时。
+// allowed 检查每一跳（包括起点）的主机。跳转到 done 认得的地址时就停下，不再请求这个地址，
+// 因为网易云的短链接最后一跳是很慢的歌单页面，逐跳请求到底会超过总超时。
 func New(allowed func(host string) bool, done func(link string) bool) *Resolver {
 	return &Resolver{
 		allowed: allowed,

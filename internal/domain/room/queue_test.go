@@ -24,7 +24,7 @@ func TestEphemeralRoomLimits(t *testing.T) {
 	r := newRoom(t, Ephemeral)
 	wantError(t, r.Handle(at(0), enqueue(alice, track.Track{Source: track.Link, ID: "https://example.com/a"})), Forbidden)
 
-	// 每分钟点一首，额度不会用完；第一首成为待播，之后 10 首进入等待队列。
+	// 每分钟点一首，额度不会用完。第一首成为待播，之后 10 首进入等待队列。
 	for i := range 11 {
 		res := reply(t, r.Handle(at(time.Duration(i+1)*time.Minute), enqueue(alice, netease(string(rune('a'+i))))))
 		if res.Err != nil {
@@ -36,7 +36,7 @@ func TestEphemeralRoomLimits(t *testing.T) {
 
 func TestPersistentRoomQueueLimit(t *testing.T) {
 	r := newRoom(t, Persistent)
-	// 每分钟点一首，额度不会用完；第一首成为待播，之后 200 首进入等待队列。
+	// 每分钟点一首，额度不会用完。第一首成为待播，之后 200 首进入等待队列。
 	for i := range 201 {
 		if res := reply(t, r.Handle(at(time.Duration(i+1)*time.Minute), enqueue(alice, netease(fmt.Sprint(i))))); res.Err != nil {
 			t.Fatalf("第 %d 首点歌失败：%#v", i+1, res)
@@ -116,7 +116,7 @@ func TestRotationRemembersSongsThatHavePlayed(t *testing.T) {
 	pickReady(r, 0, alice, "a1")
 	pickReady(r, 0, alice, "a2")
 	pickReady(r, 0, bob, "b1")
-	// 乙和丙轮流点歌，每次都等上一首放完才点：放过第 0 轮的人再点歌要排到第 1 轮，甲的第二首才不会一直被插队。
+	// 乙和丙轮流点歌，每次都等上一首放完才点。放过第 0 轮的人再点歌要排到第 1 轮，这样甲的第二首才不会一直被插队。
 	var played []string
 	for _, next := range []struct {
 		by member.Member

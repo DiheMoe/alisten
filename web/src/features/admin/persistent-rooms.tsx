@@ -20,7 +20,7 @@ function enterRoom(room: RoomListing, onEntered: (ref: string) => void): void {
   onEntered(ref)
 }
 
-// q 和 page 来自地址：改搜索词时回到第 1 页。
+// q 和 page 来自地址。改搜索词时回到第 1 页。
 export function PersistentRooms({ q, page, onFilter, onEntered }: {
   q: string
   page: number
@@ -33,7 +33,7 @@ export function PersistentRooms({ q, page, onFilter, onEntered }: {
   const [editing, setEditing] = useState<RoomListing | 'new' | null>(null)
   const [deleting, setDeleting] = useState<RoomListing | null>(null)
   const [keyOf, setKeyOf] = useState<RoomListing | null>(null)
-  // 删掉的房间之后焦点落到哪一行：null 表示落到标题。
+  // 删掉房间之后焦点要落到的那一行，null 表示落到标题。
   const nextFocusRef = useRef<string | null>(null)
   useEffect(() => {
     let active = true
@@ -166,7 +166,7 @@ export function PersistentRooms({ q, page, onFilter, onEntered }: {
           onConfirm={async () => {
             if (await adminStore.call(() => api.adminDeleteRoom(deleting.id)) === null)
               return
-            // 先在本地去掉这个房间，对话框关闭时那一行已经不在了，焦点才能落到下一行；之后再重新读取。
+            // 先在本地去掉这个房间，这样对话框关闭时那一行已经不在了，焦点才能落到下一行。之后再重新读取。
             const remaining = rooms?.filter(room => room.id !== deleting.id) ?? []
             const next = filterRooms(remaining, q, page)
             // 删空了这一页时显示的是上一页，那里没有“下一行”。

@@ -21,7 +21,7 @@ export interface SearchSettings {
 }
 
 interface HistoryState extends SearchSettings {
-  // 播放历史在服务端；还没有读到时为 null。
+  // 播放历史保存在服务端，还没有读到时为 null。
   listens: MyListen[] | null
   // 最近一次读取失败的原因，读取成功后为 null。
   error: string | null
@@ -49,7 +49,7 @@ function sameTrack(a: Track, b: Track): boolean {
 class HistoryStore extends Store<HistoryState> {
   #playing = ''
   #pages = 0
-  // 只有最后发起的读取能写入：之后又读过一次，或者删除、清空、换了身份之后，此前的读取作废。
+  // 只有最后发起的读取能写入。之后又读过一次，或者删除、清空、换了身份之后，此前的读取作废。
   #generation = 0
   #reading = 0
 
@@ -74,7 +74,7 @@ class HistoryStore extends Store<HistoryState> {
     identityEvents.on(this.#onIdentity)
   }
 
-  // 每打开一个历史页读取一次；页面开着时，服务端在开播时写入历史，所以正在播放的歌一变就重新读取。返回的函数在页面关闭时调用。
+  // 每打开一个历史页读取一次。服务端在开播时写入历史，所以页面开着时，正在播放的歌一变就重新读取。返回的函数在页面关闭时调用。
   open(): () => void {
     this.#pages++
     void this.load()
@@ -132,7 +132,7 @@ class HistoryStore extends Store<HistoryState> {
     setTimeout(() => URL.revokeObjectURL(url))
   }
 
-  // 只记录用户发起的搜索（提交、点最近搜索、换来源和类别）；翻页、推荐、打开歌单，以及前进、后退还原的搜索都不计入。
+  // 只记录用户发起的搜索（提交、点最近搜索、换来源和类别）。翻页、推荐、打开歌单，以及前进、后退还原的搜索都不计入。
   recordSearch(query: string, source: SearchSource, category: SearchCategory): void {
     if (this.state.searchesEnabled)
       this.#saveSearches(recordSearch(this.state.searches, { query, source, category, searchedAtMs: Date.now() }, this.state.searchLimit))
@@ -161,7 +161,7 @@ class HistoryStore extends Store<HistoryState> {
     }
   }
 
-  // 改动之前发起的读取可能带着改动前的历史返回，作废它们；有读取被作废时再读一次，免得错过其间开播的歌。
+  // 改动之前发起的读取可能带着改动前的历史返回，所以要作废这些读取。有读取被作废时再读一次，免得错过其间开播的歌。
   #changed(listens: MyListen[]): void {
     this.#generation++
     this.setState({ listens })
@@ -178,8 +178,8 @@ class HistoryStore extends Store<HistoryState> {
       void this.load()
   }
 
-  // 成员 token 被拒绝时页面不重新加载：旧身份的历史不能留在页面上，新的游客还没有播放历史。新身份也可能是其他标签页
-  // 换来的、已经有历史的游客，所以换好之后页面开着就重新读取。
+  // 成员 token 被拒绝时页面不会重新加载。旧身份的历史不能留在页面上，新的游客又还没有播放历史，所以直接清空。
+  // 新身份也可能是其他标签页换来的游客，这样的游客可能已经有播放历史，所以换好之后，页面开着就重新读取。
   #onIdentity = (event: IdentityEvent): void => {
     if (event.kind === 'rejected') {
       this.#generation++
@@ -190,7 +190,7 @@ class HistoryStore extends Store<HistoryState> {
     }
   }
 
-  // 其他标签页写入搜索记录时同步更新，本页之后的写入才不会覆盖它写入的记录。
+  // 其他标签页写入搜索记录时，本页跟着更新，这样本页之后的写入才不会覆盖那个标签页写入的记录。
   #onStorage = (event: StorageEvent): void => {
     if (event.key === searchesKey)
       this.setState({ searches: parseSearches(event.newValue, this.state.searchLimit) })

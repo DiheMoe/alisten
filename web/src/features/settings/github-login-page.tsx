@@ -28,7 +28,7 @@ export function GitHubLoginPage({ fragment, onDone }: { fragment: string, onDone
         done()
         return
       }
-      // 注册或绑定：成员和成员 token 都不变，不必重新加载。能绑定 GitHub 的只有设置了用户名的账号，注册得到的账号没有用户名。
+      // 注册或绑定时，成员和成员 token 都不变，不必重新加载。能绑定 GitHub 的只有设置了用户名的账号，注册得到的账号没有用户名。
       void profileStore.registered(result.account)
       notificationStore.success(result.account.username ? '已绑定 GitHub' : '已用 GitHub 注册')
       done()

@@ -65,7 +65,7 @@ const (
 	inputCommand = "Command"
 )
 
-// 接口实现必须登记后才能编码；实现字段中不能再有接口类型。
+// 接口的实现必须先登记才能编码。实现的字段里不能再有接口类型。
 type union[T any] map[string]reflect.Type
 
 func newUnion[T any](variants ...T) union[T] {

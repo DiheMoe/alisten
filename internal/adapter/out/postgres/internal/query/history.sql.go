@@ -93,7 +93,7 @@ type AutoDJSeedsParams struct {
 	IncludeQueue bool
 }
 
-// 只看最近 1000 次播放：按 plays (room_id, started_at) 的索引倒序读到 1000 行就停，耗时与历史的长度无关。
+// 只看最近 1000 次播放。查询按 plays (room_id, started_at) 的索引倒序读，读到 1000 行就停，所以耗时与历史的长度无关。
 func (q *Queries) AutoDJSeeds(ctx context.Context, arg AutoDJSeedsParams) ([]string, error) {
 	rows, err := q.db.Query(ctx, autoDJSeeds, arg.RoomID, arg.IncludeQueue)
 	if err != nil {

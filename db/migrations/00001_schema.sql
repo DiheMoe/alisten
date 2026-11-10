@@ -1,5 +1,5 @@
 -- +goose Up
--- 可选的文本值在没有或不适用时为 NULL；空串只表示值本身为空，例如被清空的房间描述。
+-- 可选的文本值没有或不适用时为 NULL。空串只表示值本身为空，例如被清空的房间描述。
 CREATE TABLE members (
     id uuid PRIMARY KEY DEFAULT uuidv7(),
     token_hash bytea NOT NULL UNIQUE,
@@ -15,12 +15,12 @@ CREATE TABLE rooms (
     name text NOT NULL,
     description text NOT NULL,
     password_hash text,
-    -- 接管房间时加 1；落盘以它为条件，因此过期的 owner 无法写入。
+    -- 每次接管房间时加 1。落盘以 term 为条件，所以过期的 owner 无法写入。
     term bigint NOT NULL DEFAULT 0,
     play_mode text NOT NULL DEFAULT 'sequential' CHECK (play_mode IN ('sequential', 'random', 'rotation')),
     entry_seq bigint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
-    -- 第一次生成 API Key 时创建，此后重置 Key、修改密码都不换。
+    -- bot 成员在第一次生成 API Key 时创建，之后重置 Key、修改密码都不会更换。
     bot_member_id uuid REFERENCES members,
     CHECK (bot_member_id IS NULL OR kind = 'persistent')
 );
@@ -46,7 +46,7 @@ CREATE TABLE room_entries (
     added_at timestamptz NOT NULL,
     started_at timestamptz CHECK ((slot = 'current') = (started_at IS NOT NULL)),
     page_url text NOT NULL,
-    -- 条目的轮次在入队时定下，轮流播放时点赞数相同的歌按它排列。
+    -- 条目的轮次在入队时定下。轮流播放时，点赞数相同的歌按轮次排列。
     round bigint NOT NULL DEFAULT 0,
     PRIMARY KEY (room_id, entry_id)
 );
@@ -105,7 +105,7 @@ CREATE TABLE credentials (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 至多一行；没有这一行时品牌名是默认的 Alisten。
+-- site 表至多一行。没有这一行时，品牌名是默认的 Alisten。
 CREATE TABLE site (
     id boolean PRIMARY KEY DEFAULT true CHECK (id),
     brand_name text NOT NULL

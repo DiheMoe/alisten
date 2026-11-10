@@ -10,7 +10,7 @@ import (
 type PreparedTrack struct {
 	Meta   track.Meta
 	Result track.Prepared
-	// 链接和 B 站的歌的 MediaKey 是曲目 ID 的 SHA-256（十六进制），对象存储中音频和封面的对象键由它得出；
+	// 链接和 B 站的歌的 MediaKey 是曲目 ID 的 SHA-256（十六进制），对象存储中音频和封面的对象键由 MediaKey 得出。
 	// MediaSize 是音频的字节数。其他来源为空。
 	MediaKey  string
 	MediaSize int64

@@ -88,7 +88,7 @@ func decodeInteger(raw json.RawMessage, path string) (int64, error) {
 	return n, nil
 }
 
-// 先数元素再逐个解码：过长的数组不必解码就能拒绝。
+// 先数元素再逐个解码，这样过长的数组不必解码就能拒绝。
 func decodeArray[T any](decode func(json.RawMessage, string) (T, error), maxItems int) func(json.RawMessage, string) ([]T, error) {
 	return func(raw json.RawMessage, path string) ([]T, error) {
 		var elems []json.RawMessage
@@ -171,14 +171,14 @@ var (
 	numericLabel  = regexp.MustCompile(`^(?i:[0-9]+|0x[0-9a-f]*)$`)
 )
 
-// x-url：scheme 为 http 或 https（不区分大小写）的绝对地址。浏览器的 new URL() 与 url.Parse 对一些写法的判断不同，
+// x-url：scheme 为 http 或 https（不区分大小写）的绝对地址。浏览器的 new URL() 与 url.Parse 对一些写法的判断不同。
 // 网页生成的校验函数按同样的规则检查，两边的结果才一致（protocol/testdata 中的用例由两边的测试共用）：
-//   - 不含控制字符、空格和反斜杠（浏览器把 \ 当作 /），不含用户信息；
-//   - 主机名只由字母、数字、-、.、_、~ 和非 ASCII 字符组成，或者是方括号中的 IPv6 地址（浏览器会解码主机名中的 % 编码）；
-//   - 最后一段是数字（或以 0x 开头）的主机名会被浏览器按 IPv4 地址解析，所以必须是规范的 IPv4 地址；
+//   - 不含控制字符、空格和反斜杠（浏览器把 \ 当作 /），不含用户信息。
+//   - 主机名只由字母、数字、-、.、_、~ 和非 ASCII 字符组成，或者是方括号中的 IPv6 地址（浏览器会解码主机名中的 % 编码）。
+//   - 最后一段是数字（或以 0x 开头）的主机名会被浏览器按 IPv4 地址解析，所以必须是规范的 IPv4 地址。
 //   - 端口不超过 65535，路径和片段中的 % 后面必须是两位十六进制数（url.Parse 不接受其他写法，浏览器却照样接受）。
 //
-// 国际化域名（主机名含非 ASCII 字符，或者有以 xn-- 开头的标签）只由浏览器检查：不合法时浏览器拒绝而这里接受，到准备时才会下载失败。
+// 国际化域名（主机名含非 ASCII 字符，或者有以 xn-- 开头的标签）只由浏览器检查。不合法时浏览器拒绝，这里却接受，到准备时才会下载失败。
 func validURL(s string) bool {
 	if strings.ContainsFunc(s, func(r rune) bool { return r <= ' ' || r == 0x7f || r == '\\' }) {
 		return false

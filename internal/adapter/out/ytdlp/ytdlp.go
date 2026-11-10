@@ -1,5 +1,5 @@
-// worker 会请求用户提交的任意地址，因此 yt-dlp 的网络请求必须经过只连接公网地址的进程内代理；
-// ffmpeg 无论作为下载器还是后处理器都只能读取本地文件。
+// worker 会请求用户提交的任意地址，因此 yt-dlp 的网络请求必须经过只连接公网地址的进程内代理。
+// ffmpeg 无论作为下载器还是后处理器，都只能读取本地文件。
 package ytdlp
 
 import (
@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	// yt-dlp 从 PATH 中查找，它再从 PATH 中查找 ffmpeg、ffprobe 和 Deno。
+	// yt-dlp 从 PATH 里查找，yt-dlp 再从 PATH 里查找 ffmpeg、ffprobe 和 Deno。
 	executable  = "yt-dlp"
 	waitDelay   = 5 * time.Second
 	outputLimit = 64 << 10
@@ -54,8 +54,8 @@ type Downloader struct {
 
 var _ port.LinkDownloader = (*Downloader)(nil)
 
-// observe 记下每次运行 yt-dlp 的耗时和失败的原因，成功时 failure 为空；任务被取消（worker 退出）的运行不记。
-// cookies 必须非 nil：没有 cookies 来源的调用方传恒返回 ok=false 的实现。
+// observe 记下每次运行 yt-dlp 的耗时和失败的原因，成功时 failure 为空。任务被取消（worker 退出）的运行不记。
+// cookies 不能为 nil。没有 cookies 来源的调用方，传一个总是返回 ok=false 的实现。
 func New(root string, resolver *net.Resolver, cookies port.LinkCookies, observe func(elapsed time.Duration, failure string), logger *slog.Logger) *Downloader {
 	return &Downloader{root: root, resolver: resolver, cookies: cookies, observe: observe, logger: logger}
 }
@@ -66,7 +66,7 @@ func (d *Downloader) Download(ctx context.Context, link string) (port.LinkDownlo
 		return port.LinkDownload{}, nil, fmt.Errorf("创建临时目录：%w", err)
 	}
 	release := func() { _ = os.RemoveAll(dir) }
-	// 用 defer 是为了 panic 时也删除目录：River 会恢复任务中的 panic，worker 继续运行。
+	// 用 defer 是为了 panic 时也删除目录，因为 River 会恢复任务里的 panic，worker 还会继续运行。
 	done := false
 	defer func() {
 		if !done {
@@ -121,9 +121,9 @@ func args(link, dir, proxy, cookies string) []string {
 		"--ignore-config",
 		"--proxy", proxy,
 		"--downloader", "native",
-		// ffmpeg 的请求不经过代理，所以只允许它读本地文件。原生下载器处理不了时（比如加密的 HLS、直播），yt-dlp 会改用 ffmpeg 下载；
+		// ffmpeg 的请求不经过代理，所以只允许它读本地文件。原生下载器处理不了时（比如加密的 HLS、直播），yt-dlp 会改用 ffmpeg 下载。
 		// 后处理器也用 ffmpeg 处理下载到的文件，而文件可能引用网络上的地址。给后处理器的参数要写成「后处理器名+ffmpeg_i」，
-		// 不带后处理器名的 ffmpeg_i 只对 ffmpeg 下载器生效。这里列出的后处理器会处理音频文件：转 mp3，以及 HLS 和 DASH 的封装修复。
+		// 不带后处理器名的 ffmpeg_i 只对 ffmpeg 下载器生效。下面列出的后处理器会处理音频文件：转 mp3，以及 HLS 和 DASH 的封装修复。
 		"--downloader-args", "ffmpeg_i:-protocol_whitelist file",
 		"--postprocessor-args", "ExtractAudio+ffmpeg_i:-protocol_whitelist file",
 		"--postprocessor-args", "FixupM3u8+ffmpeg_i:-protocol_whitelist file",
@@ -132,10 +132,10 @@ func args(link, dir, proxy, cookies string) []string {
 		// 来源已经是 mp3 时 yt-dlp 不转码，文件连同标签原样保留，存储的音频仍然不可信。
 		// 转出的 mp3 写到上限多一个字节就停止，截断的文件由准备流程拒绝。
 		"--postprocessor-args", "ExtractAudio+ffmpeg_o:-map_metadata -1 -fs " + strconv.Itoa(port.MaxAudioSize+1),
-		// --no-playlist 只对同时指向视频和播放列表的链接有效；对播放列表本身，--playlist-items 1 只下载第一项。
+		// --no-playlist 只对同时指向视频和播放列表的链接有效。对于播放列表本身，--playlist-items 1 只下载第一项。
 		"--no-playlist", "--playlist-items", "1",
 		"--format", "bestaudio/best",
-		// 只在服务端给出 Content-Length 时生效；准备流程上传之前还会检查大小。
+		// --max-filesize 只在服务端给出 Content-Length 时生效。准备流程上传之前还会检查大小。
 		"--max-filesize", strconv.Itoa(port.MaxAudioSize),
 		"--extract-audio", "--audio-format", "mp3",
 		"--write-thumbnail",
@@ -143,8 +143,8 @@ func args(link, dir, proxy, cookies string) []string {
 		"--output", "audio.%(ext)s",
 		"--output", "thumbnail:cover.%(ext)s",
 		"--no-progress",
-		// 屏幕输出里有页面可控的标题，元数据混在其中无法可靠地取出，所以写进单独的文件。不用 --print 也是因为它带上 --quiet，
-		// --max-filesize 中止下载时的提示就不会输出。
+		// 屏幕输出里有页面可控的标题，元数据混在里面无法可靠地取出，所以写进单独的文件。不用 --print 也是因为 --print 会带上 --quiet，
+		// 这样 --max-filesize 中止下载时的提示就不会输出。
 		"--print-to-file", "after_move:%(.{title,artist,uploader,album,duration})j", metaFile,
 		// 链接以 - 开头时会被当作选项。
 		"--", link,
@@ -169,7 +169,7 @@ func run(ctx context.Context, dir string, args []string) (stdout, stderr []byte,
 	return out.buf, redactCookies(errOut.lines()), err
 }
 
-// yt-dlp 读 cookies 文件出错时，会在这些说明后面打印出错的行或值，日志和任务错误里都不能出现。
+// yt-dlp 读 cookies 文件出错时，会在这些说明后面打印出错的行或值，而这些内容不能出现在日志和任务错误里。
 var cookieEcho = regexp.MustCompile(`(cookie file entry|Netscape format cookies file|could not convert string to float)[^\S\n]*\S[^\n]*`)
 
 func redactCookies(stderr []byte) []byte {
@@ -203,7 +203,7 @@ func (t *tail) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// 截断后开头的半行认不出是不是 cookies 的回显，丢掉。
+// 截断后开头的半行认不出是不是 cookies 的回显，所以丢掉。
 func (t *tail) lines() []byte {
 	if !t.cut {
 		return t.buf
