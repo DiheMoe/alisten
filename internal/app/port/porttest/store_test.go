@@ -1,6 +1,7 @@
 package porttest
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -17,6 +18,112 @@ func TestUpdateMemberRejectsTextPostgreSQLCannotStore(t *testing.T) {
 	bad := "a\x00@example.com"
 	if _, err := store.UpdateMember(t.Context(), m.ID, nil, nil, &bad); err == nil {
 		t.Error("含 NUL 的邮箱应报错")
+	}
+}
+
+func favoritesCount(t *testing.T, store *Store, memberID string) int {
+	t.Helper()
+	lists, err := store.MemberPlaylists(t.Context(), memberID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, l := range lists {
+		if l.Favorites {
+			n++
+		}
+	}
+	return n
+}
+
+// 与 postgres 适配器的 TestBindGitHub、TestAddCredentialsAfterGitHub 相同的场景。
+func TestBindGitHub(t *testing.T) {
+	store := New()
+	alice, err := store.CreateMember(t.Context(), []byte("alice"), "甲")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := store.CreateMember(t.Context(), []byte("bob"), "乙")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UnbindGitHub(t.Context(), alice.ID); !errors.Is(err, port.ErrNoPassword) {
+		t.Errorf("游客解绑 = %v，期望 ErrNoPassword", err)
+	}
+	if err := store.BindGitHub(t.Context(), alice.ID, 42); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := store.AccountProfile(t.Context(), alice.ID); err != nil || p != (port.AccountProfile{GitHub: true}) {
+		t.Errorf("绑定之后的 AccountProfile = %#v, %v", p, err)
+	}
+	want := port.Account{Member: alice, GitHubID: 42}
+	if got, err := store.AccountByGitHub(t.Context(), 42); err != nil || got != want {
+		t.Errorf("AccountByGitHub = %#v, %v，期望 %#v", got, err, want)
+	}
+	if got, err := store.AccountByID(t.Context(), alice.ID); err != nil || got != want {
+		t.Errorf("AccountByID = %#v, %v，期望 %#v", got, err, want)
+	}
+	if _, err := store.AccountByID(t.Context(), bob.ID); !errors.Is(err, port.ErrMemberNotFound) {
+		t.Errorf("游客的 AccountByID = %v，期望 ErrMemberNotFound", err)
+	}
+	if err := store.BindGitHub(t.Context(), bob.ID, 42); !errors.Is(err, port.ErrGitHubTaken) {
+		t.Errorf("GitHub 账号已经绑定了别人 = %v，期望 ErrGitHubTaken", err)
+	}
+	if err := store.BindGitHub(t.Context(), alice.ID, 43); !errors.Is(err, port.ErrGitHubAlreadyBound) {
+		t.Errorf("已经绑定过的成员再绑定 = %v，期望 ErrGitHubAlreadyBound", err)
+	}
+	email := "alice@example.com"
+	if _, err := store.UpdateMember(t.Context(), alice.ID, nil, nil, &email); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := store.AccountProfile(t.Context(), alice.ID); p.Email != email {
+		t.Errorf("只绑定了 GitHub 的账号保存邮箱之后 = %q", p.Email)
+	}
+	if err := store.UnbindGitHub(t.Context(), alice.ID); !errors.Is(err, port.ErrNoPassword) {
+		t.Errorf("没有密码的账号解绑 = %v，期望 ErrNoPassword", err)
+	}
+	if err := store.Register(t.Context(), alice.ID, "alice", "hash-a"); !errors.Is(err, port.ErrAlreadyRegistered) {
+		t.Errorf("只绑定了 GitHub 的账号用 Register 设置用户名 = %v，期望 ErrAlreadyRegistered", err)
+	}
+	if _, err := store.AddCredentials(t.Context(), bob.ID, "bob", "hash-b", []byte("bob")); !errors.Is(err, port.ErrAlreadyRegistered) {
+		t.Errorf("游客用 AddCredentials 设置用户名 = %v，期望 ErrAlreadyRegistered", err)
+	}
+	if _, err := store.CreateMember(t.Context(), []byte("guest"), "丙"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ReplaceSession(t.Context(), []byte("guest"), alice.ID, []byte("alice-2"), ""); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := store.AddCredentials(t.Context(), alice.ID, "alice", "hash-a", []byte("alice"))
+	if err != nil || len(deleted) != 1 || string(deleted[0]) != "alice-2" {
+		t.Fatalf("AddCredentials = %q, %v，期望删除 alice-2", deleted, err)
+	}
+	if m, err := store.MemberByToken(t.Context(), []byte("alice")); err != nil || m.ID != alice.ID {
+		t.Errorf("发出请求的会话 = %#v, %v，期望保留", m, err)
+	}
+	if _, err := store.MemberByToken(t.Context(), []byte("alice-2")); !errors.Is(err, port.ErrMemberNotFound) {
+		t.Errorf("其他会话 = %v，期望已删除", err)
+	}
+	if n := favoritesCount(t, store, alice.ID); n != 1 {
+		t.Errorf("绑定 GitHub 再补设用户名之后有 %d 个“我喜欢”，期望 1 个", n)
+	}
+	if _, err := store.AddCredentials(t.Context(), alice.ID, "alice2", "hash-c", []byte("alice")); !errors.Is(err, port.ErrAlreadyRegistered) {
+		t.Errorf("再补设一次 = %v，期望 ErrAlreadyRegistered", err)
+	}
+	if err := store.UnbindGitHub(t.Context(), alice.ID); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := store.AccountProfile(t.Context(), alice.ID); p != (port.AccountProfile{Username: "alice", Email: email}) {
+		t.Errorf("解绑之后的 AccountProfile = %#v", p)
+	}
+	if err := store.Register(t.Context(), bob.ID, "bob", "hash-b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BindGitHub(t.Context(), bob.ID, 42); err != nil {
+		t.Fatal(err)
+	}
+	if n := favoritesCount(t, store, bob.ID); n != 1 {
+		t.Errorf("已注册的账号绑定 GitHub 之后有 %d 个“我喜欢”，期望 1 个", n)
 	}
 }
 

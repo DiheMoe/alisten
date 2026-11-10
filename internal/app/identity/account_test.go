@@ -116,7 +116,7 @@ func tokenOwner(t *testing.T, store *porttest.Store, token string) (m member.Mem
 func registerAccount(t *testing.T, a *Accounts, s *Service, username, password string) Session {
 	t.Helper()
 	session := createMember(t, s)
-	if _, err := a.Register(t.Context(), session.Member.ID, clientIP, username, password); err != nil {
+	if _, err := a.Register(t.Context(), session.Member.ID, session.MemberToken, clientIP, username, password); err != nil {
 		t.Fatal(err)
 	}
 	return session
@@ -125,7 +125,7 @@ func registerAccount(t *testing.T, a *Accounts, s *Service, username, password s
 func TestRegister(t *testing.T) {
 	a, s, store, q, _ := newAccounts(t)
 	guest := createMember(t, s)
-	account, err := a.Register(t.Context(), guest.Member.ID, clientIP, "alice", "correct horse")
+	account, err := a.Register(t.Context(), guest.Member.ID, guest.MemberToken, clientIP, "alice", "correct horse")
 	if err != nil || account != (Account{Username: "alice"}) {
 		t.Fatalf("Register = %#v, %v", account, err)
 	}
@@ -188,16 +188,17 @@ func TestGuestHasNoAccount(t *testing.T) {
 func TestRegisterRejected(t *testing.T) {
 	a, s, store, q, _ := newAccounts(t)
 	alice := registerAccount(t, a, s, "alice", "correct horse")
-	if _, err := a.Register(t.Context(), createMember(t, s).Member.ID, clientIP, "alice", "another horse"); !errors.Is(err, port.ErrUsernameTaken) {
+	other := createMember(t, s)
+	if _, err := a.Register(t.Context(), other.Member.ID, other.MemberToken, clientIP, "alice", "another horse"); !errors.Is(err, port.ErrUsernameTaken) {
 		t.Errorf("用户名已被占用时 = %v，期望 ErrUsernameTaken", err)
 	}
-	if _, err := a.Register(t.Context(), alice.Member.ID, clientIP, "alice2", "another horse"); !errors.Is(err, port.ErrAlreadyRegistered) {
+	if _, err := a.Register(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, "alice2", "another horse"); !errors.Is(err, port.ErrAlreadyRegistered) {
 		t.Errorf("已经注册过时 = %v，期望 ErrAlreadyRegistered", err)
 	}
 
 	guest := createMember(t, s)
 	q.exhausted["register:ip:"+clientIP] = true
-	if _, err := a.Register(t.Context(), guest.Member.ID, clientIP, "bob", "correct horse"); !errors.Is(err, ErrTooManyAttempts) {
+	if _, err := a.Register(t.Context(), guest.Member.ID, guest.MemberToken, clientIP, "bob", "correct horse"); !errors.Is(err, ErrTooManyAttempts) {
 		t.Errorf("额度用完时 = %v，期望 ErrTooManyAttempts", err)
 	}
 	if _, ok, _ := a.Account(t.Context(), guest.Member.ID); ok {
@@ -208,7 +209,7 @@ func TestRegisterRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	q.taken = nil
-	if _, err := a.Register(t.Context(), guest.Member.ID, "198.51.100.1", "bob", "correct horse"); !errors.Is(err, ErrRegistrationClosed) {
+	if _, err := a.Register(t.Context(), guest.Member.ID, guest.MemberToken, "198.51.100.1", "bob", "correct horse"); !errors.Is(err, ErrRegistrationClosed) {
 		t.Errorf("关闭注册时 = %v，期望 ErrRegistrationClosed", err)
 	}
 	if len(q.taken) != 0 {
@@ -612,7 +613,7 @@ func TestAccountQuotaCountsIPv6ByNetwork(t *testing.T) {
 	}
 
 	q.taken = nil
-	if _, err := a.Register(t.Context(), guest.Member.ID, "2001:db8:1:2:aaaa:bbbb:cccc:dddd", "alice", "correct horse"); err != nil {
+	if _, err := a.Register(t.Context(), guest.Member.ID, guest.MemberToken, "2001:db8:1:2:aaaa:bbbb:cccc:dddd", "alice", "correct horse"); err != nil {
 		t.Fatal(err)
 	}
 	if want := []string{"register:ip:2001:db8:1:2::/64"}; !slices.Equal(q.taken, want) {
@@ -877,5 +878,74 @@ func TestLoginDoesPasswordWorkForUnknownUsername(t *testing.T) {
 		if _, _, _, err := a.Login(ctx, guest.Member, guest.MemberToken, clientIP, username, "wrong horse", ""); !errors.Is(err, context.Canceled) {
 			t.Errorf("用户名 %s：Login = %v，期望同样等待密码计算的名额", username, err)
 		}
+	}
+}
+
+// 绑定 GitHub 的游客成为没有用户名和密码的账号。
+func githubAccount(t *testing.T, s *Service, store *porttest.Store, githubID int64) Session {
+	t.Helper()
+	session := createMember(t, s)
+	if err := store.BindGitHub(t.Context(), session.Member.ID, githubID); err != nil {
+		t.Fatal(err)
+	}
+	return session
+}
+
+func TestGitHubOnlyAccount(t *testing.T) {
+	a, s, store, _, _ := newAccounts(t)
+	gh := githubAccount(t, s, store, 42)
+	if got, ok, err := a.Account(t.Context(), gh.Member.ID); err != nil || !ok || got != (Account{GitHub: true}) {
+		t.Errorf("只绑定了 GitHub 的账号 Account = %#v, %v, %v", got, ok, err)
+	}
+	if err := a.ChangePassword(t.Context(), gh.Member.ID, gh.MemberToken, "correct horse", "battery staple"); !errors.Is(err, port.ErrNoPassword) {
+		t.Errorf("没有密码的账号修改密码 = %v，期望 ErrNoPassword", err)
+	}
+}
+
+// 只绑定了 GitHub 的账号补设用户名和密码，不是注册新账号：注册关闭时也可以。
+func TestGitHubAccountSetsPasswordWhileRegistrationClosed(t *testing.T) {
+	a, s, store, q, _ := newAccounts(t)
+	gh := githubAccount(t, s, store, 42)
+	if _, err := s.UpdateProfile(t.Context(), gh.Member.ID, Profile{Email: ptr("gh@example.com")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetRegistrationOpen(t.Context(), false); err != nil {
+		t.Fatal(err)
+	}
+	guest := createMember(t, s)
+	if _, err := a.Register(t.Context(), guest.Member.ID, guest.MemberToken, clientIP, "bob", "correct horse"); !errors.Is(err, ErrRegistrationClosed) {
+		t.Fatalf("关闭注册时游客注册 = %v，期望 ErrRegistrationClosed", err)
+	}
+	q.taken = nil
+	account, err := a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "alice", "correct horse")
+	if want := (Account{Username: "alice", Email: "gh@example.com", GitHub: true}); err != nil || account != want {
+		t.Fatalf("Register = %#v, %v，期望 %#v", account, err, want)
+	}
+	if want := []string{"register:ip:" + clientIP}; !slices.Equal(q.taken, want) {
+		t.Errorf("取的额度 = %v，期望 %v", q.taken, want)
+	}
+	if _, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", ""); err != nil {
+		t.Errorf("设置密码之后用密码登录 = %v", err)
+	}
+	if _, err := a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "alice2", "correct horse"); !errors.Is(err, port.ErrAlreadyRegistered) {
+		t.Errorf("再设置一次用户名 = %v，期望 ErrAlreadyRegistered", err)
+	}
+}
+
+// 存储中的空密码哈希表示没有设置过密码，不是格式错误的哈希：按密码错误处理，不报内部错误。
+func TestEmptyPasswordHashIsWrongPassword(t *testing.T) {
+	a, s, store, _, _ := newAccounts(t)
+	alice := createMember(t, s)
+	if err := store.Register(t.Context(), alice.Member.ID, "alice", ""); err != nil {
+		t.Fatal(err)
+	}
+	guest := createMember(t, s)
+	for _, password := range []string{"", "correct horse"} {
+		if _, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", password, ""); !errors.Is(err, ErrInvalidCredentials) {
+			t.Errorf("密码哈希为空时用 %q 登录 = %v，期望 ErrInvalidCredentials", password, err)
+		}
+	}
+	if err := a.ChangePassword(t.Context(), alice.Member.ID, alice.MemberToken, "correct horse", "battery staple"); !errors.Is(err, ErrWrongCurrentPassword) {
+		t.Errorf("密码哈希为空时修改密码 = %v，期望 ErrWrongCurrentPassword", err)
 	}
 }

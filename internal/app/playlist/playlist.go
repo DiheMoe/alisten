@@ -151,7 +151,7 @@ func (s *Service) registered(ctx context.Context, memberID string) error {
 	if err != nil {
 		return err
 	}
-	if profile.Username == "" {
+	if !profile.Registered() {
 		return ErrNotRegistered
 	}
 	return nil

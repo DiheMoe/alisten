@@ -13,20 +13,41 @@ SELECT * FROM members WHERE id = (SELECT member_id FROM member_sessions WHERE to
 UPDATE members
 SET name = coalesce(sqlc.narg(name), name),
     avatar_hash = CASE WHEN sqlc.narg(avatar_hash)::text IS NULL THEN avatar_hash ELSE NULLIF(sqlc.narg(avatar_hash)::text, '') END,
-    email = CASE WHEN username IS NULL THEN NULL WHEN sqlc.narg(email)::text IS NULL THEN email ELSE NULLIF(sqlc.narg(email)::text, '') END
+    email = CASE WHEN username IS NULL AND github_id IS NULL THEN NULL WHEN sqlc.narg(email)::text IS NULL THEN email ELSE NULLIF(sqlc.narg(email)::text, '') END
 WHERE id = @id
 RETURNING *;
 
 -- name: MemberAccountProfile :one
-SELECT username, email FROM members WHERE id = @id;
+SELECT username, email, github_id FROM members WHERE id = @id;
 
 -- name: RegisterMember :execrows
--- 只给游客设置：已经注册过的成员不受影响，影响的行数为 0。
+-- 只给游客设置。只绑定了 GitHub 的账号补设用户名和密码要删除其他会话，用 AddMemberCredentials。
 UPDATE members SET username = @username, password_hash = @password_hash
-WHERE id = @id AND username IS NULL;
+WHERE id = @id AND username IS NULL AND github_id IS NULL;
+
+-- name: AddMemberCredentials :execrows
+-- 只给只绑定了 GitHub 的账号设置，它的“我喜欢”已经在绑定时创建了。
+UPDATE members SET username = @username, password_hash = @password_hash
+WHERE id = @id AND username IS NULL AND github_id IS NOT NULL;
 
 -- name: AccountByUsername :one
 SELECT * FROM members WHERE username = @username;
+
+-- name: AccountByID :one
+SELECT * FROM members WHERE id = @id AND (username IS NOT NULL OR github_id IS NOT NULL);
+
+-- name: AccountByGitHub :one
+SELECT * FROM members WHERE github_id = @github_id;
+
+-- name: BindGitHub :one
+-- 只给还没有绑定 GitHub 的成员绑定，已经绑定过的成员不受影响，没有返回的行。was_guest 表示成员原来是游客：这次绑定就是注册。
+UPDATE members SET github_id = @github_id
+WHERE id = @id AND github_id IS NULL
+RETURNING (username IS NULL)::boolean AS was_guest;
+
+-- name: UnbindGitHub :execrows
+-- 没有密码的账号解绑之后就再也无法登录，所以只给设置了密码的账号解绑。
+UPDATE members SET github_id = NULL WHERE id = @id AND password_hash IS NOT NULL;
 
 -- name: SetMemberPassword :execrows
 UPDATE members SET password_hash = @password_hash WHERE id = @id AND username IS NOT NULL;

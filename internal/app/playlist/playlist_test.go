@@ -172,6 +172,18 @@ func TestGuestCannotUsePlaylists(t *testing.T) {
 	}
 }
 
+func TestGitHubAccountUsesPlaylists(t *testing.T) {
+	f := newFixture(t)
+	gh := f.member(t, "")
+	if err := f.store.BindGitHub(t.Context(), gh.ID, 42); err != nil {
+		t.Fatal(err)
+	}
+	lists, err := f.svc.List(t.Context(), gh.ID)
+	if err != nil || len(lists) != 1 || !lists[0].Favorites {
+		t.Errorf("只绑定了 GitHub 的账号的歌单 = %#v, %v，期望注册时建好的“我喜欢”", lists, err)
+	}
+}
+
 func TestCreateValidatesName(t *testing.T) {
 	f := newFixture(t)
 	alice := f.member(t, "alice")

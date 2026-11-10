@@ -9,8 +9,50 @@ import (
 	"context"
 )
 
+const accountByGitHub = `-- name: AccountByGitHub :one
+SELECT id, name, avatar_hash, created_at, username, password_hash, email, record_listens, github_id FROM members WHERE github_id = $1
+`
+
+func (q *Queries) AccountByGitHub(ctx context.Context, githubID *int64) (Member, error) {
+	row := q.db.QueryRow(ctx, accountByGitHub, githubID)
+	var i Member
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.AvatarHash,
+		&i.CreatedAt,
+		&i.Username,
+		&i.PasswordHash,
+		&i.Email,
+		&i.RecordListens,
+		&i.GithubID,
+	)
+	return i, err
+}
+
+const accountByID = `-- name: AccountByID :one
+SELECT id, name, avatar_hash, created_at, username, password_hash, email, record_listens, github_id FROM members WHERE id = $1 AND (username IS NOT NULL OR github_id IS NOT NULL)
+`
+
+func (q *Queries) AccountByID(ctx context.Context, id string) (Member, error) {
+	row := q.db.QueryRow(ctx, accountByID, id)
+	var i Member
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.AvatarHash,
+		&i.CreatedAt,
+		&i.Username,
+		&i.PasswordHash,
+		&i.Email,
+		&i.RecordListens,
+		&i.GithubID,
+	)
+	return i, err
+}
+
 const accountByUsername = `-- name: AccountByUsername :one
-SELECT id, name, avatar_hash, created_at, username, password_hash, email, record_listens FROM members WHERE username = $1
+SELECT id, name, avatar_hash, created_at, username, password_hash, email, record_listens, github_id FROM members WHERE username = $1
 `
 
 func (q *Queries) AccountByUsername(ctx context.Context, username *string) (Member, error) {
@@ -25,13 +67,53 @@ func (q *Queries) AccountByUsername(ctx context.Context, username *string) (Memb
 		&i.PasswordHash,
 		&i.Email,
 		&i.RecordListens,
+		&i.GithubID,
 	)
 	return i, err
 }
 
+const addMemberCredentials = `-- name: AddMemberCredentials :execrows
+UPDATE members SET username = $1, password_hash = $2
+WHERE id = $3 AND username IS NULL AND github_id IS NOT NULL
+`
+
+type AddMemberCredentialsParams struct {
+	Username     *string
+	PasswordHash *string
+	ID           string
+}
+
+// 只给只绑定了 GitHub 的账号设置，它的“我喜欢”已经在绑定时创建了。
+func (q *Queries) AddMemberCredentials(ctx context.Context, arg AddMemberCredentialsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addMemberCredentials, arg.Username, arg.PasswordHash, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const bindGitHub = `-- name: BindGitHub :one
+UPDATE members SET github_id = $1
+WHERE id = $2 AND github_id IS NULL
+RETURNING (username IS NULL)::boolean AS was_guest
+`
+
+type BindGitHubParams struct {
+	GithubID *int64
+	ID       string
+}
+
+// 只给还没有绑定 GitHub 的成员绑定，已经绑定过的成员不受影响，没有返回的行。was_guest 表示成员原来是游客：这次绑定就是注册。
+func (q *Queries) BindGitHub(ctx context.Context, arg BindGitHubParams) (bool, error) {
+	row := q.db.QueryRow(ctx, bindGitHub, arg.GithubID, arg.ID)
+	var was_guest bool
+	err := row.Scan(&was_guest)
+	return was_guest, err
+}
+
 const createMember = `-- name: CreateMember :one
 INSERT INTO members (name) VALUES ($1)
-RETURNING id, name, avatar_hash, created_at, username, password_hash, email, record_listens
+RETURNING id, name, avatar_hash, created_at, username, password_hash, email, record_listens, github_id
 `
 
 func (q *Queries) CreateMember(ctx context.Context, name string) (Member, error) {
@@ -46,6 +128,7 @@ func (q *Queries) CreateMember(ctx context.Context, name string) (Member, error)
 		&i.PasswordHash,
 		&i.Email,
 		&i.RecordListens,
+		&i.GithubID,
 	)
 	return i, err
 }
@@ -133,23 +216,24 @@ func (q *Queries) LockMemberPassword(ctx context.Context, id string) (string, er
 }
 
 const memberAccountProfile = `-- name: MemberAccountProfile :one
-SELECT username, email FROM members WHERE id = $1
+SELECT username, email, github_id FROM members WHERE id = $1
 `
 
 type MemberAccountProfileRow struct {
 	Username *string
 	Email    *string
+	GithubID *int64
 }
 
 func (q *Queries) MemberAccountProfile(ctx context.Context, id string) (MemberAccountProfileRow, error) {
 	row := q.db.QueryRow(ctx, memberAccountProfile, id)
 	var i MemberAccountProfileRow
-	err := row.Scan(&i.Username, &i.Email)
+	err := row.Scan(&i.Username, &i.Email, &i.GithubID)
 	return i, err
 }
 
 const memberByToken = `-- name: MemberByToken :one
-SELECT id, name, avatar_hash, created_at, username, password_hash, email, record_listens FROM members WHERE id = (SELECT member_id FROM member_sessions WHERE token_hash = $1)
+SELECT id, name, avatar_hash, created_at, username, password_hash, email, record_listens, github_id FROM members WHERE id = (SELECT member_id FROM member_sessions WHERE token_hash = $1)
 `
 
 func (q *Queries) MemberByToken(ctx context.Context, tokenHash []byte) (Member, error) {
@@ -164,6 +248,7 @@ func (q *Queries) MemberByToken(ctx context.Context, tokenHash []byte) (Member, 
 		&i.PasswordHash,
 		&i.Email,
 		&i.RecordListens,
+		&i.GithubID,
 	)
 	return i, err
 }
@@ -186,7 +271,7 @@ func (q *Queries) MemberHasSession(ctx context.Context, arg MemberHasSessionPara
 
 const registerMember = `-- name: RegisterMember :execrows
 UPDATE members SET username = $1, password_hash = $2
-WHERE id = $3 AND username IS NULL
+WHERE id = $3 AND username IS NULL AND github_id IS NULL
 `
 
 type RegisterMemberParams struct {
@@ -195,7 +280,7 @@ type RegisterMemberParams struct {
 	ID           string
 }
 
-// 只给游客设置：已经注册过的成员不受影响，影响的行数为 0。
+// 只给游客设置。只绑定了 GitHub 的账号补设用户名和密码要删除其他会话，用 AddMemberCredentials。
 func (q *Queries) RegisterMember(ctx context.Context, arg RegisterMemberParams) (int64, error) {
 	result, err := q.db.Exec(ctx, registerMember, arg.Username, arg.PasswordHash, arg.ID)
 	if err != nil {
@@ -232,13 +317,26 @@ func (q *Queries) TakeSession(ctx context.Context, tokenHash []byte) (string, er
 	return member_id, err
 }
 
+const unbindGitHub = `-- name: UnbindGitHub :execrows
+UPDATE members SET github_id = NULL WHERE id = $1 AND password_hash IS NOT NULL
+`
+
+// 没有密码的账号解绑之后就再也无法登录，所以只给设置了密码的账号解绑。
+func (q *Queries) UnbindGitHub(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.Exec(ctx, unbindGitHub, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateMember = `-- name: UpdateMember :one
 UPDATE members
 SET name = coalesce($1, name),
     avatar_hash = CASE WHEN $2::text IS NULL THEN avatar_hash ELSE NULLIF($2::text, '') END,
-    email = CASE WHEN username IS NULL THEN NULL WHEN $3::text IS NULL THEN email ELSE NULLIF($3::text, '') END
+    email = CASE WHEN username IS NULL AND github_id IS NULL THEN NULL WHEN $3::text IS NULL THEN email ELSE NULLIF($3::text, '') END
 WHERE id = $4
-RETURNING id, name, avatar_hash, created_at, username, password_hash, email, record_listens
+RETURNING id, name, avatar_hash, created_at, username, password_hash, email, record_listens, github_id
 `
 
 type UpdateMemberParams struct {
@@ -266,6 +364,7 @@ func (q *Queries) UpdateMember(ctx context.Context, arg UpdateMemberParams) (Mem
 		&i.PasswordHash,
 		&i.Email,
 		&i.RecordListens,
+		&i.GithubID,
 	)
 	return i, err
 }

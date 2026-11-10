@@ -17,6 +17,7 @@ type Member struct {
 	PasswordHash  *string
 	Email         *string
 	RecordListens bool
+	GithubID      *int64
 }
 
 type PlaylistItem struct {

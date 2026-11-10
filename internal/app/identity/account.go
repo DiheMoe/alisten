@@ -38,9 +38,15 @@ const (
 
 const loginDeviceTTL = 180 * 24 * time.Hour
 
+// 只绑定了 GitHub 的账号没有用户名，也没有密码。
 type Account struct {
 	Username string
 	Email    string
+	GitHub   bool
+}
+
+func accountOf(a port.Account) Account {
+	return Account{Username: a.Username, Email: a.Email, GitHub: a.GitHubID != 0}
 }
 
 // 删除会话之后，用这些会话的票据建立的房间连接随之断开：网关立即通知各实例，通知丢失时最迟在网关的一个核对周期之后断开。
@@ -62,11 +68,22 @@ func (a *Accounts) Account(ctx context.Context, memberID string) (account Accoun
 	if err != nil {
 		return Account{}, false, err
 	}
-	return Account{Username: profile.Username, Email: profile.Email}, profile.Username != "", nil
+	return Account{Username: profile.Username, Email: profile.Email, GitHub: profile.GitHub}, profile.Registered(), nil
 }
 
-// 给游客设置用户名和密码，成员和它的会话都不变。username 和 password 已经按协议校验过格式。
-func (a *Accounts) Register(ctx context.Context, memberID, clientIP, username, password string) (Account, error) {
+// 给游客设置用户名和密码，成员和它的会话都不变；只绑定了 GitHub 的账号也用它补设用户名和密码，见 addCredentials。
+// token 是发出请求的成员 token，username 和 password 已经按协议校验过格式。
+func (a *Accounts) Register(ctx context.Context, memberID, token, clientIP, username, password string) (Account, error) {
+	profile, err := a.members.AccountProfile(ctx, memberID)
+	if err != nil {
+		return Account{}, err
+	}
+	switch {
+	case profile.Username != "":
+		return Account{}, port.ErrAlreadyRegistered
+	case profile.GitHub:
+		return a.addCredentials(ctx, memberID, token, clientIP, username, password, profile.Email)
+	}
 	settings, err := a.site.Settings(ctx)
 	if err != nil {
 		return Account{}, err
@@ -84,7 +101,25 @@ func (a *Accounts) Register(ctx context.Context, memberID, clientIP, username, p
 	if err := a.members.Register(ctx, memberID, username, hash); err != nil {
 		return Account{}, err
 	}
-	return Account{Username: username}, nil
+	return Account{Username: username, Email: profile.Email, GitHub: profile.GitHub}, nil
+}
+
+// 补设之后，账号除了发出请求的这个会话，其他会话都失效，与修改密码相同。补设不是注册新账号，注册关闭时照样可以。
+func (a *Accounts) addCredentials(ctx context.Context, memberID, token, clientIP, username, password, email string) (Account, error) {
+	if err := a.take(ctx, "register:ip:"+quotaAddr(clientIP), registerBurst, registerRefill); err != nil {
+		return Account{}, err
+	}
+	hash, err := HashPassword(ctx, password)
+	if err != nil {
+		return Account{}, err
+	}
+	// 同一个账号只能补设一次，由存储保证。
+	deleted, err := a.members.AddCredentials(ctx, memberID, username, hash, hashSecret(token))
+	if err != nil {
+		return Account{}, err
+	}
+	a.gateway.RevokeSessions(ctx, deleted)
+	return Account{Username: username, Email: email, GitHub: true}, nil
 }
 
 // current 是发出请求的成员，currentToken 是它的成员 token。只有游客能登录：成功后签发账号的新会话，游客的这个会话随即失效。
@@ -135,10 +170,10 @@ func (a *Accounts) Login(ctx context.Context, current member.Member, currentToke
 		return Session{}, Account{}, "", err
 	}
 	a.gateway.RevokeSessions(ctx, [][]byte{guest})
-	return Session{MemberToken: token, Member: account.Member}, Account{Username: account.Username, Email: account.Email}, device, nil
+	return Session{MemberToken: token, Member: account.Member}, accountOf(account), device, nil
 }
 
-// 未知、过期、属于别的账号，或者签发之后账号的密码变过（修改、重置）的凭证，都当作没带。
+// 未知、过期、属于别的账号，或者签发之后账号的密码变过（修改、重置、补设）的凭证，都当作没带。
 func (a *Accounts) knownDevice(ctx context.Context, device, username string) (bool, error) {
 	if device == "" {
 		return false, nil
@@ -169,7 +204,8 @@ func passwordStamp(passwordHash string) []byte {
 
 func (a *Accounts) verify(ctx context.Context, username, password string) (port.Account, error) {
 	account, err := a.members.AccountByUsername(ctx, username)
-	if errors.Is(err, port.ErrMemberNotFound) {
+	// 空的密码哈希表示没有设置过密码，任何密码都不对；和用户名不存在一样做一次同样的计算。
+	if errors.Is(err, port.ErrMemberNotFound) || (err == nil && account.PasswordHash == "") {
 		dummy, err := dummyPasswordHash()
 		if err != nil {
 			return port.Account{}, err
@@ -208,7 +244,10 @@ func (a *Accounts) ChangePassword(ctx context.Context, memberID, token, currentP
 		return err
 	}
 	username := profile.Username
-	if username == "" {
+	switch {
+	case profile.GitHub && username == "":
+		return port.ErrNoPassword
+	case username == "":
 		return ErrNotRegistered
 	}
 	if err := a.take(ctx, "password:member:"+memberID, passwordBurst, passwordRefill); err != nil {

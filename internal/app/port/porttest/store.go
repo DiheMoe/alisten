@@ -33,6 +33,7 @@ type Store struct {
 	// 房间 ID 到 bot 成员 ID。
 	bots               map[string]string
 	cookies            map[string]string
+	githubApp          port.GitHubOAuthApp
 	brandName          string
 	registrationClosed bool
 	playlists          []*storedPlaylist
@@ -45,8 +46,23 @@ type storedMember struct {
 	username     string
 	email        string
 	passwordHash string
+	githubID     int64
 	// 零值表示记录播放历史，与 members.record_listens 的默认值一致。
 	listensOff bool
+}
+
+func (m *storedMember) registered() bool {
+	return m.username != "" || m.githubID != 0
+}
+
+func (m *storedMember) account() port.Account {
+	return port.Account{Member: m.member, Username: m.username, Email: m.email, PasswordHash: m.passwordHash, GitHubID: m.githubID}
+}
+
+// 调用方持有 s.mu。
+func (s *Store) createFavorites(memberID string) {
+	now := time.Now()
+	s.playlists = append(s.playlists, &storedPlaylist{id: s.newID(), owner: memberID, name: "我喜欢", favorites: true, created: now, updated: now})
 }
 
 type storedTicket struct {
@@ -62,6 +78,7 @@ var (
 	_ port.ExistingTickets = (*Store)(nil)
 	_ port.RoomDirectory   = (*Store)(nil)
 	_ port.Credentials     = (*Store)(nil)
+	_ port.GitHubOAuthApps = (*Store)(nil)
 	_ port.APIKeys         = (*Store)(nil)
 	_ port.Site            = (*Store)(nil)
 	_ port.Playlists       = (*Store)(nil)
@@ -152,7 +169,7 @@ func (s *Store) UpdateMember(_ context.Context, id string, name, avatarHash, ema
 		if avatarHash != nil {
 			m.AvatarHash = *avatarHash
 		}
-		if email != nil && stored.username != "" {
+		if email != nil && stored.registered() {
 			stored.email = *email
 		}
 		return *m, nil
@@ -167,7 +184,7 @@ func (s *Store) AccountProfile(_ context.Context, memberID string) (port.Account
 	if m == nil {
 		return port.AccountProfile{}, port.ErrMemberNotFound
 	}
-	return port.AccountProfile{Username: m.username, Email: m.email}, nil
+	return port.AccountProfile{Username: m.username, Email: m.email, GitHub: m.githubID != 0}, nil
 }
 
 func (s *Store) Register(_ context.Context, memberID, username, passwordHash string) error {
@@ -177,16 +194,32 @@ func (s *Store) Register(_ context.Context, memberID, username, passwordHash str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	m := s.member(memberID)
-	if m == nil || m.username != "" {
+	if m == nil || m.registered() {
 		return port.ErrAlreadyRegistered
 	}
 	if slices.ContainsFunc(s.members, func(other storedMember) bool { return other.username == username }) {
 		return port.ErrUsernameTaken
 	}
+	s.createFavorites(memberID)
 	m.username, m.passwordHash = username, passwordHash
-	now := time.Now()
-	s.playlists = append(s.playlists, &storedPlaylist{id: s.newID(), owner: memberID, name: "我喜欢", favorites: true, created: now, updated: now})
 	return nil
+}
+
+func (s *Store) AddCredentials(_ context.Context, memberID, username, passwordHash string, keepTokenHash []byte) ([][]byte, error) {
+	if err := checkText(username, passwordHash); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.member(memberID)
+	if m == nil || m.username != "" || m.githubID == 0 {
+		return nil, port.ErrAlreadyRegistered
+	}
+	if slices.ContainsFunc(s.members, func(other storedMember) bool { return other.username == username }) {
+		return nil, port.ErrUsernameTaken
+	}
+	m.username, m.passwordHash = username, passwordHash
+	return s.deleteSessions(memberID, keepTokenHash), nil
 }
 
 func (s *Store) AccountByUsername(_ context.Context, username string) (port.Account, error) {
@@ -194,10 +227,60 @@ func (s *Store) AccountByUsername(_ context.Context, username string) (port.Acco
 	defer s.mu.Unlock()
 	for _, m := range s.members {
 		if username != "" && m.username == username {
-			return port.Account{Member: m.member, Username: m.username, Email: m.email, PasswordHash: m.passwordHash}, nil
+			return m.account(), nil
 		}
 	}
 	return port.Account{}, port.ErrMemberNotFound
+}
+
+func (s *Store) AccountByID(_ context.Context, memberID string) (port.Account, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.member(memberID)
+	if m == nil || !m.registered() {
+		return port.Account{}, port.ErrMemberNotFound
+	}
+	return m.account(), nil
+}
+
+func (s *Store) AccountByGitHub(_ context.Context, githubID int64) (port.Account, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range s.members {
+		if m.githubID == githubID {
+			return m.account(), nil
+		}
+	}
+	return port.Account{}, port.ErrMemberNotFound
+}
+
+func (s *Store) BindGitHub(_ context.Context, memberID string, githubID int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.member(memberID)
+	if m == nil || m.githubID != 0 {
+		return port.ErrGitHubAlreadyBound
+	}
+	if slices.ContainsFunc(s.members, func(other storedMember) bool { return other.githubID == githubID }) {
+		return port.ErrGitHubTaken
+	}
+	if !m.registered() {
+		s.createFavorites(memberID)
+	}
+	m.githubID = githubID
+	return nil
+}
+
+func (s *Store) UnbindGitHub(_ context.Context, memberID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.member(memberID)
+	// 密码总是和用户名一起设置：没有用户名，就是 PostgreSQL 中 password_hash 为 NULL。
+	if m == nil || m.username == "" {
+		return port.ErrNoPassword
+	}
+	m.githubID = 0
+	return nil
 }
 
 func (s *Store) ReplaceSession(_ context.Context, oldTokenHash []byte, memberID string, newTokenHash []byte, passwordHash string) error {
@@ -504,6 +587,26 @@ func (s *Store) SetBilibiliCredential(_ context.Context, credential string) erro
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cookies["bilibili"] = credential
+	return nil
+}
+
+func (s *Store) GitHubOAuthApp(context.Context) (port.GitHubOAuthApp, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.githubApp, nil
+}
+
+func (s *Store) SetGitHubOAuthApp(_ context.Context, app port.GitHubOAuthApp) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.githubApp = app
+	return nil
+}
+
+func (s *Store) DeleteGitHubOAuthApp(context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.githubApp = port.GitHubOAuthApp{}
 	return nil
 }
 

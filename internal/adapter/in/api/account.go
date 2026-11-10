@@ -12,7 +12,7 @@ func (s *server) register(ctx context.Context, c call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	account, err := s.Accounts.Register(ctx, c.member.ID, c.clientIP, req.Username, req.Password)
+	account, err := s.Accounts.Register(ctx, c.member.ID, bearer(c.r), c.clientIP, req.Username, req.Password)
 	if err != nil {
 		return nil, err
 	}

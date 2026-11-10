@@ -428,6 +428,135 @@ func TestReplaceSessionWaitsForPasswordChange(t *testing.T) {
 	}
 }
 
+func favoritesCount(t *testing.T, store *Store, memberID string) int {
+	t.Helper()
+	lists, err := store.MemberPlaylists(t.Context(), memberID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, l := range lists {
+		if l.Favorites {
+			n++
+		}
+	}
+	return n
+}
+
+func TestBindGitHub(t *testing.T) {
+	store, pool := newStore(t)
+	alice := createMember(t, store, "alice", "游客-1a2b")
+	bob := createMember(t, store, "bob", "游客-3c4d")
+	if err := store.BindGitHub(t.Context(), alice.ID, 42); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := store.AccountProfile(t.Context(), alice.ID); err != nil || p != (port.AccountProfile{GitHub: true}) || !p.Registered() {
+		t.Errorf("绑定之后的 AccountProfile = %#v, %v，期望只绑定了 GitHub 的已注册账号", p, err)
+	}
+	want := port.Account{Member: alice, GitHubID: 42}
+	if got, err := store.AccountByGitHub(t.Context(), 42); err != nil || got != want {
+		t.Errorf("AccountByGitHub = %#v, %v，期望 %#v", got, err, want)
+	}
+	if got, err := store.AccountByID(t.Context(), alice.ID); err != nil || got != want {
+		t.Errorf("AccountByID = %#v, %v，期望 %#v", got, err, want)
+	}
+	if n := favoritesCount(t, store, alice.ID); n != 1 {
+		t.Errorf("游客绑定 GitHub 就是注册，应创建一个“我喜欢”，实际 %d 个", n)
+	}
+
+	if err := store.BindGitHub(t.Context(), bob.ID, 42); !errors.Is(err, port.ErrGitHubTaken) {
+		t.Errorf("GitHub 账号已经绑定了别人 = %v，期望 ErrGitHubTaken", err)
+	}
+	if err := store.BindGitHub(t.Context(), alice.ID, 43); !errors.Is(err, port.ErrGitHubAlreadyBound) {
+		t.Errorf("已经绑定过的成员再绑定 = %v，期望 ErrGitHubAlreadyBound", err)
+	}
+	if p, err := store.AccountProfile(t.Context(), bob.ID); err != nil || p.Registered() || favoritesCount(t, store, bob.ID) != 0 {
+		t.Errorf("绑定失败之后 bob 的 AccountProfile = %#v, %v，应仍是游客", p, err)
+	}
+	if _, err := store.AccountByGitHub(t.Context(), 99); !errors.Is(err, port.ErrMemberNotFound) {
+		t.Errorf("没有绑定的 GitHub 账号 = %v，期望 ErrMemberNotFound", err)
+	}
+	if _, err := store.AccountByID(t.Context(), bob.ID); !errors.Is(err, port.ErrMemberNotFound) {
+		t.Errorf("游客的 AccountByID = %v，期望 ErrMemberNotFound", err)
+	}
+
+	if _, err := store.UpdateMember(t.Context(), alice.ID, nil, nil, ptr("alice@example.com")); err != nil {
+		t.Fatal(err)
+	}
+	var email string
+	if err := pool.QueryRow(t.Context(), "SELECT coalesce(email, 'NULL') FROM members WHERE id = $1", alice.ID).Scan(&email); err != nil || email != "alice@example.com" {
+		t.Errorf("只绑定了 GitHub 的账号保存邮箱之后 email 列 = %q, %v", email, err)
+	}
+}
+
+func TestAddCredentialsAfterGitHub(t *testing.T) {
+	store, _ := newStore(t)
+	alice := createMember(t, store, "alice", "游客-1a2b")
+	if err := store.BindGitHub(t.Context(), alice.ID, 42); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UnbindGitHub(t.Context(), alice.ID); !errors.Is(err, port.ErrNoPassword) {
+		t.Errorf("没有密码的账号解绑 = %v，期望 ErrNoPassword", err)
+	}
+	if err := store.Register(t.Context(), alice.ID, "alice", "hash-a"); !errors.Is(err, port.ErrAlreadyRegistered) {
+		t.Errorf("只绑定了 GitHub 的账号用 Register 设置用户名 = %v，期望 ErrAlreadyRegistered", err)
+	}
+	guest := createMember(t, store, "guest", "游客-5e6f")
+	if _, err := store.AddCredentials(t.Context(), guest.ID, "guest", "hash-g", tokenHash("guest")); !errors.Is(err, port.ErrAlreadyRegistered) {
+		t.Errorf("游客用 AddCredentials 设置用户名 = %v，期望 ErrAlreadyRegistered", err)
+	}
+	if err := store.Register(t.Context(), guest.ID, "taken", "hash-g"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddCredentials(t.Context(), alice.ID, "taken", "hash-a", tokenHash("alice")); !errors.Is(err, port.ErrUsernameTaken) {
+		t.Errorf("用户名已被占用时 = %v，期望 ErrUsernameTaken", err)
+	}
+	createMember(t, store, "other", "游客-7a8b")
+	if err := store.ReplaceSession(t.Context(), tokenHash("other"), alice.ID, tokenHash("alice-2"), ""); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := store.AddCredentials(t.Context(), alice.ID, "alice", "hash-a", tokenHash("alice"))
+	if err != nil || !sameHashes(deleted, [][]byte{tokenHash("alice-2")}) {
+		t.Fatalf("AddCredentials 返回 %x, %v，期望被删除的 alice-2", deleted, err)
+	}
+	if ownerOf(t, store, "alice") != alice.ID || ownerOf(t, store, "alice-2") != "" {
+		t.Error("AddCredentials 应只留下发出请求的会话")
+	}
+	if _, err := store.AddCredentials(t.Context(), alice.ID, "alice2", "hash-c", tokenHash("alice")); !errors.Is(err, port.ErrAlreadyRegistered) {
+		t.Errorf("再补设一次 = %v，期望 ErrAlreadyRegistered", err)
+	}
+	if n := favoritesCount(t, store, alice.ID); n != 1 {
+		t.Errorf("只绑定了 GitHub 的账号补设用户名之后有 %d 个“我喜欢”，期望仍是 1 个", n)
+	}
+	want := port.Account{Member: alice, Username: "alice", PasswordHash: "hash-a", GitHubID: 42}
+	if got, err := store.AccountByUsername(t.Context(), "alice"); err != nil || got != want {
+		t.Errorf("AccountByUsername = %#v, %v，期望 %#v", got, err, want)
+	}
+	if err := store.UnbindGitHub(t.Context(), alice.ID); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := store.AccountProfile(t.Context(), alice.ID); err != nil || p != (port.AccountProfile{Username: "alice"}) {
+		t.Errorf("解绑之后的 AccountProfile = %#v, %v", p, err)
+	}
+	if _, err := store.AccountByGitHub(t.Context(), 42); !errors.Is(err, port.ErrMemberNotFound) {
+		t.Errorf("解绑之后按 GitHub 查找 = %v，期望 ErrMemberNotFound", err)
+	}
+	if err := store.UnbindGitHub(t.Context(), alice.ID); err != nil {
+		t.Errorf("没有绑定时解绑 = %v，期望什么也不做", err)
+	}
+
+	bob := createMember(t, store, "bob", "游客-3c4d")
+	if err := store.Register(t.Context(), bob.ID, "bob", "hash-b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BindGitHub(t.Context(), bob.ID, 42); err != nil {
+		t.Fatal(err)
+	}
+	if n := favoritesCount(t, store, bob.ID); n != 1 {
+		t.Errorf("已注册的账号绑定 GitHub 之后有 %d 个“我喜欢”，期望仍是 1 个", n)
+	}
+}
+
 func TestOnlyAccountsHavePasswordOrEmail(t *testing.T) {
 	store, pool := newStore(t)
 	guest := createMember(t, store, "guest", "游客-1a2b")
@@ -440,5 +569,51 @@ func TestOnlyAccountsHavePasswordOrEmail(t *testing.T) {
 		if !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != c.constraint {
 			t.Errorf("给没有用户名的游客设置 %s，错误 = %v，期望违反 %s", c.set, err, c.constraint)
 		}
+	}
+}
+
+// 补设用户名和密码时，用 GitHub 登录的另一台设备恰好在签发会话：补设要等它提交，再把它签发的会话一并删除。
+func TestAddCredentialsWaitsForGitHubLogin(t *testing.T) {
+	store, pool := newStore(t)
+	alice := createMember(t, store, "alice", "游客-1a2b")
+	if err := store.BindGitHub(t.Context(), alice.ID, 42); err != nil {
+		t.Fatal(err)
+	}
+	createMember(t, store, "guest", "游客-3c4d")
+
+	// 模拟 ReplaceSession 的事务，先不提交。
+	tx, err := pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(t.Context()) }()
+	if _, err := tx.Exec(t.Context(), "SELECT 1 FROM members WHERE id = $1 FOR NO KEY UPDATE", alice.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(t.Context(), "DELETE FROM member_sessions WHERE token_hash = $1", tokenHash("guest")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(t.Context(), "INSERT INTO member_sessions (token_hash, member_id) VALUES ($1, $2)", tokenHash("alice-2"), alice.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	type result struct {
+		deleted [][]byte
+		err     error
+	}
+	done := make(chan result, 1)
+	go func() {
+		deleted, err := store.AddCredentials(t.Context(), alice.ID, "alice", "hash-a", tokenHash("alice"))
+		done <- result{deleted, err}
+	}()
+	waitForLockWait(t, pool, 1)
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if r := <-done; r.err != nil || !sameHashes(r.deleted, [][]byte{tokenHash("alice-2")}) {
+		t.Errorf("登录提交之后，AddCredentials 返回 %x, %v，期望删除登录签发的 alice-2", r.deleted, r.err)
+	}
+	if ownerOf(t, store, "alice-2") != "" || ownerOf(t, store, "alice") != alice.ID {
+		t.Error("补设之后应只留下发出请求的会话")
 	}
 }

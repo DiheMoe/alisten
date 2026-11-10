@@ -66,7 +66,7 @@ func (s *Store) AccountProfile(ctx context.Context, memberID string) (port.Accou
 	if err != nil {
 		return port.AccountProfile{}, fmt.Errorf("读取成员 %s 的账号资料：%w", memberID, err)
 	}
-	return port.AccountProfile{Username: orEmpty(row.Username), Email: orEmpty(row.Email)}, nil
+	return port.AccountProfile{Username: orEmpty(row.Username), Email: orEmpty(row.Email), GitHub: row.GithubID != nil}, nil
 }
 
 func (s *Store) Register(ctx context.Context, memberID, username, passwordHash string) error {
@@ -87,6 +87,27 @@ func (s *Store) Register(ctx context.Context, memberID, username, passwordHash s
 	return nil
 }
 
+func (s *Store) AddCredentials(ctx context.Context, memberID, username, passwordHash string, keepTokenHash []byte) ([][]byte, error) {
+	var deleted [][]byte
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		// UPDATE 锁住成员行，之后用新的语句删除会话：同时在用 GitHub 登录的设备提交之后才开始删，它签发的会话也会被删掉。
+		n, err := q.AddMemberCredentials(ctx, query.AddMemberCredentialsParams{ID: memberID, Username: &username, PasswordHash: &passwordHash})
+		if err != nil {
+			return usernameError(err)
+		}
+		if n == 0 {
+			return port.ErrAlreadyRegistered
+		}
+		deleted, err = q.DeleteMemberSessions(ctx, query.DeleteMemberSessionsParams{MemberID: memberID, Keep: keepTokenHash})
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("给成员 %s 补设用户名和密码：%w", memberID, err)
+	}
+	return deleted, nil
+}
+
 func usernameError(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation && pgErr.ConstraintName == "members_username_key" {
@@ -103,7 +124,71 @@ func (s *Store) AccountByUsername(ctx context.Context, username string) (port.Ac
 	if err != nil {
 		return port.Account{}, fmt.Errorf("按用户名查找成员：%w", err)
 	}
-	return port.Account{Member: memberOf(row), Username: orEmpty(row.Username), Email: orEmpty(row.Email), PasswordHash: orEmpty(row.PasswordHash)}, nil
+	return accountOf(row), nil
+}
+
+func (s *Store) AccountByID(ctx context.Context, memberID string) (port.Account, error) {
+	row, err := s.q.AccountByID(ctx, memberID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = port.ErrMemberNotFound
+	}
+	if err != nil {
+		return port.Account{}, fmt.Errorf("读取成员 %s 的账号：%w", memberID, err)
+	}
+	return accountOf(row), nil
+}
+
+func (s *Store) AccountByGitHub(ctx context.Context, githubID int64) (port.Account, error) {
+	row, err := s.q.AccountByGitHub(ctx, &githubID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = port.ErrMemberNotFound
+	}
+	if err != nil {
+		return port.Account{}, fmt.Errorf("按 GitHub 账号查找成员：%w", err)
+	}
+	return accountOf(row), nil
+}
+
+func accountOf(row query.Member) port.Account {
+	account := port.Account{Member: memberOf(row), Username: orEmpty(row.Username), Email: orEmpty(row.Email), PasswordHash: orEmpty(row.PasswordHash)}
+	if row.GithubID != nil {
+		account.GitHubID = *row.GithubID
+	}
+	return account
+}
+
+func (s *Store) BindGitHub(ctx context.Context, memberID string, githubID int64) error {
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		wasGuest, err := q.BindGitHub(ctx, query.BindGitHubParams{ID: memberID, GithubID: &githubID})
+		var pgErr *pgconn.PgError
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return port.ErrGitHubAlreadyBound
+		case errors.As(err, &pgErr) && pgErr.Code == uniqueViolation && pgErr.ConstraintName == "members_github_id_key":
+			return port.ErrGitHubTaken
+		case err != nil:
+			return err
+		case !wasGuest:
+			return nil
+		}
+		return q.CreateFavorites(ctx, memberID)
+	})
+	if err != nil {
+		return fmt.Errorf("给成员 %s 绑定 GitHub：%w", memberID, err)
+	}
+	return nil
+}
+
+func (s *Store) UnbindGitHub(ctx context.Context, memberID string) error {
+	n, err := s.q.UnbindGitHub(ctx, memberID)
+	if err == nil && n == 0 {
+		err = port.ErrNoPassword
+	}
+	if err != nil {
+		return fmt.Errorf("给成员 %s 解绑 GitHub：%w", memberID, err)
+	}
+	return nil
 }
 
 func (s *Store) ReplaceSession(ctx context.Context, oldTokenHash []byte, memberID string, newTokenHash []byte, passwordHash string) error {
