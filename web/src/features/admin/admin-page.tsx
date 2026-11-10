@@ -13,7 +13,7 @@ import { SiteSettings } from './site-settings'
 import { needsSignIn } from './source-account-view'
 import { SourceAccounts } from './source-accounts'
 import { useSourceCredentials } from './source-credentials'
-import { StoredMedia } from './stored-media'
+import { MediaPage } from './stored-media'
 import './admin.css'
 
 export type AdminSection = 'site' | 'registration' | 'users' | 'rooms' | 'sources' | 'media'
@@ -72,7 +72,7 @@ function SignIn() {
   )
 }
 
-function Sections({ section, q, page, onNavigate, onEntered }: AdminPageProps) {
+function Sections({ section, q, page, sort, onNavigate, onEntered }: AdminPageProps) {
   const brandName = useStore(brandStore, s => s.name)
   const credentials = useSourceCredentials()
   const flagged = Object.values(credentials).some(credential => needsSignIn(credential.state))
@@ -97,7 +97,7 @@ function Sections({ section, q, page, onNavigate, onEntered }: AdminPageProps) {
       {shown === 'users' && <Accounts />}
       {shown === 'rooms' && <PersistentRooms q={q} page={page} onFilter={filter => onNavigate({ section: 'rooms', ...filter })} onEntered={onEntered} />}
       {shown === 'sources' && <SourceAccounts credentials={credentials} />}
-      {shown === 'media' && <StoredMedia />}
+      {shown === 'media' && <MediaPage q={q} sort={sort} page={page} onNavigate={view => onNavigate({ section: 'media', ...view })} />}
     </SectionLayout>
   )
 }
