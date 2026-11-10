@@ -1,10 +1,11 @@
+import type { AdminListMediaResponse } from '@/core/api'
 import type { StoredMedia as Media } from '@/core/realtime'
 import { Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '@/core/api'
 import { bookTitle } from '@/shared/lib/book-title'
 import { formatDateTime } from '@/shared/lib/time'
-import { ConfirmDialog, IconButton, Skeleton } from '@/shared/ui'
+import { ConfirmDialog, IconButton, notificationStore, Skeleton } from '@/shared/ui'
 import { adminStore } from './admin-store'
 
 function formatSize(bytes: number): string {
@@ -12,17 +13,17 @@ function formatSize(bytes: number): string {
 }
 
 export function StoredMedia() {
-  const [media, setMedia] = useState<Media[] | null>(null)
+  const [media, setMedia] = useState<AdminListMediaResponse | null>(null)
   const [failed, setFailed] = useState(false)
   const [reload, setReload] = useState(0)
   const [deleting, setDeleting] = useState<Media | null>(null)
   useEffect(() => {
     let active = true
-    void adminStore.call(() => api.adminListMedia()).then((result) => {
+    void adminStore.call(() => api.adminListMedia({ page: 1 })).then((result) => {
       if (!active)
         return
       if (result)
-        setMedia(result.items)
+        setMedia(result)
       else
         setFailed(true)
     })
@@ -35,12 +36,11 @@ export function StoredMedia() {
     setMedia(null)
     setReload(n => n + 1)
   }
-  const totalSize = media?.reduce((sum, item) => sum + item.size, 0) ?? 0
   return (
     <section className="admin-section" aria-labelledby="admin-media-title">
       <div className="section-heading">
         <h2 id="admin-media-title" className="text-ui-lg">已存储的媒体</h2>
-        {media && <span className="text-ui-sm muted">{media.length ? `${media.length} 首 · ${formatSize(totalSize)}` : '0 首'}</span>}
+        {media && <span className="text-ui-sm muted">{media.total ? `${media.total} 首 · ${formatSize(media.totalBytes)}` : '0 首'}</span>}
       </div>
       {failed
         ? (
@@ -51,11 +51,11 @@ export function StoredMedia() {
           )
         : !media
             ? <Skeleton rows={3} />
-            : !media.length
+            : !media.items.length
                 ? <p className="admin-empty text-ui-caption muted">还没有存储任何歌曲。</p>
                 : (
                     <ul className="admin-list">
-                      {media.map(item => (
+                      {media.items.map(item => (
                         <li className="admin-row" key={item.key}>
                           <div className="admin-row-copy">
                             <strong className="text-ui-base truncate">{item.title}</strong>
@@ -75,11 +75,16 @@ export function StoredMedia() {
           confirmLabel="删除"
           danger
           onConfirm={async () => {
-            if (await adminStore.call(() => api.adminDeleteMedia(deleting.key)) !== null) {
-              setDeleting(null)
-              setFailed(false)
-              setReload(n => n + 1)
+            const result = await adminStore.call(() => api.adminRemoveMedia({ media: [{ key: deleting.key }] }))
+            if (result === null)
+              return
+            if (result.inUse.length) {
+              notificationStore.error('这首歌还在房间的播放列表中，不能删除')
+              return
             }
+            setDeleting(null)
+            setFailed(false)
+            setReload(n => n + 1)
           }}
           onClose={() => setDeleting(null)}
         >

@@ -10,6 +10,23 @@ import (
 	"time"
 )
 
+const countStoredMedia = `-- name: CountStoredMedia :one
+SELECT count(*) AS total, coalesce(sum(media_size), 0)::bigint AS total_bytes FROM tracks
+WHERE media_key IS NOT NULL AND title ILIKE '%' || $1::text || '%' ESCAPE '\'
+`
+
+type CountStoredMediaRow struct {
+	Total      int64
+	TotalBytes int64
+}
+
+func (q *Queries) CountStoredMedia(ctx context.Context, pattern string) (CountStoredMediaRow, error) {
+	row := q.db.QueryRow(ctx, countStoredMedia, pattern)
+	var i CountStoredMediaRow
+	err := row.Scan(&i.Total, &i.TotalBytes)
+	return i, err
+}
+
 const deleteStoredMedia = `-- name: DeleteStoredMedia :exec
 DELETE FROM tracks WHERE media_key = $1::text
 `
@@ -20,24 +37,43 @@ func (q *Queries) DeleteStoredMedia(ctx context.Context, mediaKey string) error 
 }
 
 const listStoredMedia = `-- name: ListStoredMedia :many
-SELECT media_key::text AS media_key, source, track_id, title, media_size::bigint AS media_size, cover_key, prepared_at, last_played_at FROM tracks
-WHERE media_key IS NOT NULL
-ORDER BY prepared_at DESC, track_id
+SELECT media_key::text AS media_key, source, track_id, title, artist, media_size::bigint AS media_size, cover_url, cover_key, prepared_at, last_played_at FROM tracks
+WHERE media_key IS NOT NULL AND title ILIKE '%' || $1::text || '%' ESCAPE '\'
+ORDER BY CASE WHEN $2::text = 'stored' THEN prepared_at END DESC,
+         CASE WHEN $2::text = 'idle' THEN last_played_at END ASC NULLS FIRST,
+         CASE WHEN $2::text = 'size' THEN media_size END DESC,
+         track_id COLLATE "C"
+LIMIT $4::bigint OFFSET $3::bigint
 `
+
+type ListStoredMediaParams struct {
+	Pattern  string
+	Sort     string
+	Skip     int64
+	PageSize int64
+}
 
 type ListStoredMediaRow struct {
 	MediaKey     string
 	Source       string
 	TrackID      string
 	Title        string
+	Artist       *string
 	MediaSize    int64
+	CoverURL     *string
 	CoverKey     *string
 	PreparedAt   time.Time
 	LastPlayedAt *time.Time
 }
 
-func (q *Queries) ListStoredMedia(ctx context.Context) ([]ListStoredMediaRow, error) {
-	rows, err := q.db.Query(ctx, listStoredMedia)
+// 曲目 ID 按字节比较，排序不随数据库的 locale 变化。
+func (q *Queries) ListStoredMedia(ctx context.Context, arg ListStoredMediaParams) ([]ListStoredMediaRow, error) {
+	rows, err := q.db.Query(ctx, listStoredMedia,
+		arg.Pattern,
+		arg.Sort,
+		arg.Skip,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +86,9 @@ func (q *Queries) ListStoredMedia(ctx context.Context) ([]ListStoredMediaRow, er
 			&i.Source,
 			&i.TrackID,
 			&i.Title,
+			&i.Artist,
 			&i.MediaSize,
+			&i.CoverURL,
 			&i.CoverKey,
 			&i.PreparedAt,
 			&i.LastPlayedAt,
@@ -66,7 +104,7 @@ func (q *Queries) ListStoredMedia(ctx context.Context) ([]ListStoredMediaRow, er
 }
 
 const storedMedia = `-- name: StoredMedia :one
-SELECT media_key::text AS media_key, source, track_id, title, media_size::bigint AS media_size, cover_key, prepared_at, last_played_at FROM tracks
+SELECT media_key::text AS media_key, source, track_id, title, artist, media_size::bigint AS media_size, cover_url, cover_key, prepared_at, last_played_at FROM tracks
 WHERE media_key = $1::text
 `
 
@@ -75,7 +113,9 @@ type StoredMediaRow struct {
 	Source       string
 	TrackID      string
 	Title        string
+	Artist       *string
 	MediaSize    int64
+	CoverURL     *string
 	CoverKey     *string
 	PreparedAt   time.Time
 	LastPlayedAt *time.Time
@@ -89,7 +129,9 @@ func (q *Queries) StoredMedia(ctx context.Context, mediaKey string) (StoredMedia
 		&i.Source,
 		&i.TrackID,
 		&i.Title,
+		&i.Artist,
 		&i.MediaSize,
+		&i.CoverURL,
 		&i.CoverKey,
 		&i.PreparedAt,
 		&i.LastPlayedAt,

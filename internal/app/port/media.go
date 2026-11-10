@@ -21,18 +21,49 @@ type StoredMedia struct {
 	Key    string
 	Source track.Source
 	// 曲目 ID：链接曲目是链接本身，B 站的歌是 BV 号。
-	Link  string
-	Title string
+	Link   string
+	Title  string
+	Artist string
 	// 音频的字节数。
-	Size         int64
+	Size int64
+	// 两者的含义与 track.Meta 的同名字段相同。
+	CoverURL     string
 	CoverKey     track.ObjectKey
 	StoredAt     time.Time
 	LastPlayedAt *time.Time
 }
 
+// 每种排序都以曲目 ID 作为最后的排序键，翻页时不重复也不遗漏。
+type MediaSort uint8
+
+const (
+	// 存储时间从新到旧。
+	MediaByStored MediaSort = iota + 1
+	// 最近播放从早到晚，从没播放过的排最前。
+	MediaByIdle
+	// 从大到小。
+	MediaBySize
+)
+
+const MediaPageSize = 50
+
+type MediaQuery struct {
+	// 从 1 开始，超出最后一页时返回空的一页。
+	Page int
+	Sort MediaSort
+	// 标题包含它就算匹配，不区分大小写，按字面匹配；为空表示不搜索。
+	Title string
+}
+
+type MediaPage struct {
+	Items []StoredMedia
+	// 匹配的全部歌曲的数量和音频的字节数，不只是这一页。
+	Total      int
+	TotalBytes int64
+}
+
 type MediaLibrary interface {
-	// 最近存入的在前。
-	ListStoredMedia(ctx context.Context) ([]StoredMedia, error)
+	ListStoredMedia(ctx context.Context, q MediaQuery) (MediaPage, error)
 	StoredMedia(ctx context.Context, key string) (m StoredMedia, ok bool, err error)
 	// 清除这首歌的准备结果。
 	DeleteStoredMedia(ctx context.Context, key string) error

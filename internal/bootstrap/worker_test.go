@@ -203,10 +203,11 @@ func TestWorkerPreparesLinks(t *testing.T) {
 	}
 
 	admin := "Authorization: Bearer admin-secret"
-	if line, status, _, body := send(t, svc.server, "GET /api/admin/media\n"+admin); status != http.StatusOK || !strings.Contains(string(body), `"key":"`+key+`"`) {
-		t.Errorf("%s = %d %s，期望列出这首链接", line, status, body)
+	if line, status, _, body := send(t, svc.server, "POST /api/admin/media/queries\n"+admin+"\n\n{}"); status != http.StatusOK || !strings.Contains(string(body), `"coverUrl":"`+entryMeta["coverUrl"].(string)+`","key":"`+key+`"`) {
+		t.Errorf("%s = %d %s，期望列出这首链接和它的封面", line, status, body)
 	}
-	if line, status, _, body := send(t, svc.server, "DELETE /api/admin/media/"+key+"\n"+admin); status != http.StatusConflict {
+	remove := "POST /api/admin/media/removals\n" + admin + "\n\n" + `{"media": [{"key": "` + key + `"}]}`
+	if line, status, _, body := send(t, svc.server, remove); status != http.StatusOK || strings.TrimSpace(string(body)) != `{"deleted":[],"inUse":["`+key+`"]}` {
 		t.Errorf("%s = %d %s，期望正在播放的链接不能删除", line, status, body)
 	}
 
@@ -214,18 +215,18 @@ func TestWorkerPreparesLinks(t *testing.T) {
 	client.readUntil(t, func(m map[string]any) bool { return m["type"] == "playback.voteSkip" })
 	// 切歌之后要等落盘完成，链接曲目才不再被房间引用。
 	for deadline := time.Now().Add(messageWait); ; time.Sleep(100 * time.Millisecond) {
-		_, status, _, _ := send(t, svc.server, "DELETE /api/admin/media/"+key+"\n"+admin)
-		if status == http.StatusNoContent {
+		_, status, _, body := send(t, svc.server, remove)
+		if status == http.StatusOK && strings.TrimSpace(string(body)) == `{"deleted":["`+key+`"],"inUse":[]}` {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("切歌之后删除媒体 = %d", status)
+			t.Fatalf("切歌之后删除媒体 = %d %s", status, body)
 		}
 	}
 	if status, _ := anonymousGet(t, now["mediaUrl"].(string)); status == http.StatusOK {
 		t.Error("删除之后仍能读到音频")
 	}
-	if _, status, _, body := send(t, svc.server, "GET /api/admin/media\n"+admin); status != http.StatusOK || strings.TrimSpace(string(body)) != `{"items":[]}` {
+	if _, status, _, body := send(t, svc.server, "POST /api/admin/media/queries\n"+admin+"\n\n{}"); status != http.StatusOK || strings.TrimSpace(string(body)) != `{"items":[],"page":1,"pageSize":50,"total":0,"totalBytes":0}` {
 		t.Errorf("删除之后的列表 = %d %s", status, body)
 	}
 
@@ -293,7 +294,7 @@ func TestWorkerPreparesBilibili(t *testing.T) {
 		t.Errorf("转码的输入 = %q，期望下载到的原始音频", inputs)
 	}
 	admin := "Authorization: Bearer admin-secret"
-	if line, status, _, body := send(t, svc.server, "GET /api/admin/media\n"+admin); status != http.StatusOK || !strings.Contains(string(body), `"key":"`+key+`"`) ||
+	if line, status, _, body := send(t, svc.server, "POST /api/admin/media/queries\n"+admin+"\n\n{}"); status != http.StatusOK || !strings.Contains(string(body), `"key":"`+key+`"`) ||
 		!strings.Contains(string(body), `"source":"bilibili"`) || !strings.Contains(string(body), `"link":"https://www.bilibili.com/video/BV1xx411c7mD?p=2"`) {
 		t.Errorf("%s = %d %s，期望列出这首 B 站的歌", line, status, body)
 	}
@@ -350,7 +351,7 @@ func TestLinkCaseVariantsAreOneTrack(t *testing.T) {
 	if n := downloads.downloads(); n != 1 {
 		t.Errorf("下载了 %d 次，期望两种写法共用一次下载", n)
 	}
-	if line, status, _, body := send(t, svc.server, "GET /api/admin/media\nAuthorization: Bearer admin-secret"); status != http.StatusOK || strings.Count(string(body), `"key"`) != 1 || !strings.Contains(string(body), `"key":"`+media.Key(link)+`"`) {
+	if line, status, _, body := send(t, svc.server, "POST /api/admin/media/queries\nAuthorization: Bearer admin-secret\n\n{}"); status != http.StatusOK || strings.Count(string(body), `"key"`) != 1 || !strings.Contains(string(body), `"key":"`+media.Key(link)+`"`) {
 		t.Errorf("%s = %d %s，期望只存了一份", line, status, body)
 	}
 }

@@ -24,63 +24,63 @@ import (
 	"github.com/dihemoe/alisten/protocol"
 )
 
-type storedMedia struct {
-	items []port.StoredMedia
-	used  bool
-}
-
-func (m *storedMedia) ListStoredMedia(context.Context) ([]port.StoredMedia, error) {
-	return m.items, nil
-}
-
-func (m *storedMedia) StoredMedia(_ context.Context, key string) (port.StoredMedia, bool, error) {
-	for _, item := range m.items {
-		if item.Key == key {
-			return item, true, nil
-		}
-	}
-	return port.StoredMedia{}, false, nil
-}
-
-func (m *storedMedia) DeleteStoredMedia(context.Context, string) error {
-	m.items = nil
-	return nil
-}
-
-func (m *storedMedia) TrackInUse(context.Context, track.Track) (bool, error) {
-	return m.used, nil
-}
-
 func TestAdminMedia(t *testing.T) {
 	key := media.Key("https://example.com/a.mp3")
+	other := media.Key("https://example.com/b.mp3")
 	video := media.Key("BV1xx411c7mD/2")
 	played := time.UnixMilli(1760000000456)
-	stored := &storedMedia{items: []port.StoredMedia{
-		{Key: key, Source: track.Link, Link: "https://example.com/a.mp3", Title: "晴天", Size: 12290, StoredAt: time.UnixMilli(1760000000123), LastPlayedAt: &played},
-		{Key: media.Key("https://example.com/b.mp3"), Source: track.Link, Link: "https://example.com/b.mp3", Title: "七里香", Size: 1, StoredAt: time.UnixMilli(1760000000789)},
-		{Key: video, Source: track.Bilibili, Link: "BV1xx411c7mD/2", Title: "晴天（钢琴版）", Size: 2, StoredAt: time.UnixMilli(1760000000999)},
-	}}
+	library := porttest.NewMediaLibrary(
+		port.StoredMedia{Key: key, Source: track.Link, Link: "https://example.com/a.mp3", Title: "晴天", Artist: "周杰伦", Size: 12290, CoverKey: track.ObjectKey("link/" + key + "/cover.jpg"), StoredAt: time.UnixMilli(1760000000123)},
+		port.StoredMedia{Key: other, Source: track.Link, Link: "https://example.com/b.mp3", Title: "七里香", Size: 1, CoverURL: "https://example.com/b.jpg", StoredAt: time.UnixMilli(1760000000789), LastPlayedAt: &played},
+		port.StoredMedia{Key: video, Source: track.Bilibili, Link: "BV1xx411c7mD/2", Title: "晴天（钢琴版）", Artist: "某个 UP 主", Size: 2, StoredAt: time.UnixMilli(1760000000999)},
+	)
 	store := porttest.New()
 	s := services(store, store, "admin-secret")
-	s.Media = media.NewLibrary(stored, stored, porttest.NewMediaStore())
+	s.StorageURL = "https://alisten.example/storage/alisten"
+	s.Media = media.NewLibrary(library, inRooms{{Source: track.Bilibili, ID: "BV1xx411c7mD/2"}}, porttest.NewMediaStore())
 	server, _ := start(t, s)
 	admin := []string{"Authorization", "Bearer admin-secret"}
 
 	want := response{status: http.StatusOK, body: `{"items":[` +
-		`{"key":"` + key + `","lastPlayedAtMs":1760000000456,"link":"https://example.com/a.mp3","size":12290,"source":"link","storedAtMs":1760000000123,"title":"晴天"},` +
-		`{"key":"` + media.Key("https://example.com/b.mp3") + `","lastPlayedAtMs":null,"link":"https://example.com/b.mp3","size":1,"source":"link","storedAtMs":1760000000789,"title":"七里香"},` +
-		`{"key":"` + video + `","lastPlayedAtMs":null,"link":"https://www.bilibili.com/video/BV1xx411c7mD?p=2","size":2,"source":"bilibili","storedAtMs":1760000000999,"title":"晴天（钢琴版）"}]}`}
-	if got := send(t, server, http.MethodGet, "/api/admin/media", "", admin...); got != want {
-		t.Errorf("列出已存储的媒体 = %#v\n期望 %#v", got, want)
+		`{"artist":"某个 UP 主","coverUrl":"","key":"` + video + `","lastPlayedAtMs":null,"link":"https://www.bilibili.com/video/BV1xx411c7mD?p=2","size":2,"source":"bilibili","storedAtMs":1760000000999,"title":"晴天（钢琴版）"},` +
+		`{"artist":"","coverUrl":"https://example.com/b.jpg","key":"` + other + `","lastPlayedAtMs":1760000000456,"link":"https://example.com/b.mp3","size":1,"source":"link","storedAtMs":1760000000789,"title":"七里香"},` +
+		`{"artist":"周杰伦","coverUrl":"https://alisten.example/storage/alisten/link/` + key + `/cover.jpg","key":"` + key + `","lastPlayedAtMs":null,"link":"https://example.com/a.mp3","size":12290,"source":"link","storedAtMs":1760000000123,"title":"晴天"}],` +
+		`"page":1,"pageSize":50,"total":3,"totalBytes":12293}`}
+	if got := send(t, server, http.MethodPost, "/api/admin/media/queries", "{}", admin...); got != want {
+		t.Errorf("按默认参数列出已存储的媒体 = %#v\n期望 %#v", got, want)
+	}
+	for _, tt := range []struct {
+		body        string
+		page        int64
+		want        []string
+		total, size int64
+	}{
+		{`{"sort": "stored"}`, 1, []string{video, other, key}, 3, 12293},
+		{`{"sort": "idle"}`, 1, []string{video, key, other}, 3, 12293},
+		{`{"sort": "size", "q": "晴天"}`, 1, []string{key, video}, 2, 12292},
+		{`{"page": 2}`, 2, []string{}, 3, 12293},
+	} {
+		got := send(t, server, http.MethodPost, "/api/admin/media/queries", tt.body, admin...)
+		var page protocol.AdminListMediaResponse
+		if err := json.Unmarshal([]byte(got.body), &page); err != nil {
+			t.Fatalf("%s = %#v", tt.body, got)
+		}
+		keys := make([]string, len(page.Items))
+		for i, m := range page.Items {
+			keys[i] = m.Key
+		}
+		if got.status != http.StatusOK || !slices.Equal(keys, tt.want) || page.Page != tt.page || page.Total != tt.total || page.TotalBytes != tt.size {
+			t.Errorf("%s = %#v，期望第 %d 页 %q，共 %d 首 %d 字节", tt.body, got, tt.page, tt.want, tt.total, tt.size)
+		}
 	}
 
-	stored.used = true
-	if got, want := send(t, server, http.MethodDelete, "/api/admin/media/"+key, "", admin...), failure(protocol.ErrorCodeConflict, "这首歌还在房间的播放列表中，不能删除"); got != want {
-		t.Errorf("删除仍被房间引用的媒体 = %#v，期望 %#v", got, want)
+	if got := send(t, server, http.MethodPost, "/api/admin/media/removals", `{"media": [{"key": "`+key+`"}, {"key": "not-a-key"}]}`, admin...); got.status != http.StatusBadRequest {
+		t.Errorf("批量删除里有格式不对的 key = %#v，期望 400、一首也不删", got)
 	}
-	stored.used = false
-	resp, header := exchange(t, server, http.MethodDelete, "/api/admin/media/"+key, "", admin...)
-	checkNoContent(t, "删除媒体", resp, header)
+	if got, want := send(t, server, http.MethodPost, "/api/admin/media/removals", `{"media": [{"key": "`+video+`"}, {"key": "`+key+`"}, {"key": "`+media.Key("https://example.com/missing.mp3")+`"}]}`, admin...),
+		(response{status: http.StatusOK, body: `{"deleted":["` + key + `"],"inUse":["` + video + `"]}`}); got != want {
+		t.Errorf("批量删除 = %#v，期望 %#v", got, want)
+	}
 }
 
 type playURL map[string]string

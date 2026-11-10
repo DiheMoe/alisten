@@ -3,10 +3,9 @@ package api
 import (
 	"context"
 	"net/http"
-	"regexp"
 	"time"
 
-	"github.com/dihemoe/alisten/internal/app/media"
+	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/domain/track"
 	"github.com/dihemoe/alisten/protocol"
 )
@@ -43,33 +42,68 @@ func (s *server) redirectTarget(ctx context.Context, r *http.Request, t track.Tr
 	return s.Playback.URL(ctx, t, time.Now())
 }
 
-var mediaKeyPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+var mediaSorts = map[protocol.MediaSort]port.MediaSort{
+	protocol.MediaSortStored: port.MediaByStored,
+	protocol.MediaSortIdle:   port.MediaByIdle,
+	protocol.MediaSortSize:   port.MediaBySize,
+}
 
-func (s *server) adminListMedia(ctx context.Context, _ call) (any, error) {
-	list, err := s.Media.List(ctx)
+func (s *server) adminListMedia(ctx context.Context, c call) (any, error) {
+	req, err := protocol.DecodeAdminListMediaRequest(c.body)
 	if err != nil {
 		return nil, err
 	}
-	items := make([]protocol.StoredMedia, len(list))
-	for i, m := range list {
+	q := port.MediaQuery{Page: 1, Sort: port.MediaByStored}
+	if req.Page != nil {
+		q.Page = int(*req.Page)
+	}
+	if req.Sort != nil {
+		q.Sort = mediaSorts[*req.Sort]
+	}
+	if req.Q != nil {
+		q.Title = *req.Q
+	}
+	page, err := s.Media.List(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]protocol.StoredMedia, len(page.Items))
+	for i, m := range page.Items {
 		link := m.Link
 		// 后台把 link 当作链接打开，B 站的歌给出视频页面。
 		if m.Source == track.Bilibili {
 			link = track.BilibiliPageURL(m.Link)
 		}
-		items[i] = protocol.StoredMedia{Key: m.Key, Source: protocol.Source(m.Source), Link: link, Title: m.Title, Size: m.Size, StoredAtMs: m.StoredAt.UnixMilli()}
+		items[i] = protocol.StoredMedia{
+			Key:        m.Key,
+			Source:     protocol.Source(m.Source),
+			Link:       link,
+			Title:      m.Title,
+			Artist:     m.Artist,
+			CoverURL:   s.coverURL(m.CoverURL, m.CoverKey),
+			Size:       m.Size,
+			StoredAtMs: m.StoredAt.UnixMilli(),
+		}
 		if m.LastPlayedAt != nil {
 			played := m.LastPlayedAt.UnixMilli()
 			items[i].LastPlayedAtMs = &played
 		}
 	}
-	return protocol.AdminListMediaResponse{Items: items}, nil
+	return protocol.AdminListMediaResponse{Items: items, Total: int64(page.Total), TotalBytes: page.TotalBytes, Page: int64(q.Page), PageSize: port.MediaPageSize}, nil
 }
 
-func (s *server) adminDeleteMedia(ctx context.Context, c call) (any, error) {
-	key := c.r.PathValue("key")
-	if !mediaKeyPattern.MatchString(key) {
-		return nil, media.ErrNotFound
+func (s *server) adminRemoveMedia(ctx context.Context, c call) (any, error) {
+	req, err := protocol.DecodeAdminRemoveMediaRequest(c.body)
+	if err != nil {
+		return nil, err
 	}
-	return nil, s.Media.Delete(ctx, key)
+	keys := make([]string, len(req.Media))
+	for i, m := range req.Media {
+		keys[i] = m.Key
+	}
+	deleted, inUse, err := s.Media.DeleteMany(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	return protocol.AdminRemoveMediaResponse{Deleted: deleted, InUse: inUse}, nil
 }

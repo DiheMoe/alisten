@@ -307,6 +307,26 @@
         ],
         "type": "object"
       },
+      "AdminListMediaRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "page": {
+            "description": "页码，从 1 开始，缺省为 1",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "q": {
+            "description": "按标题搜索：标题包含它就算匹配，不区分大小写，% 和 _ 按字面匹配；缺省或为空时不搜索",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/MediaSort",
+            "description": "缺省为 stored"
+          }
+        },
+        "type": "object"
+      },
       "AdminListMediaResponse": {
         "additionalProperties": false,
         "properties": {
@@ -315,10 +335,29 @@
               "$ref": "#/components/schemas/StoredMedia"
             },
             "type": "array"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "description": "每页的条数，固定为 50",
+            "type": "integer"
+          },
+          "total": {
+            "description": "匹配的歌曲数，不只是这一页",
+            "type": "integer"
+          },
+          "totalBytes": {
+            "description": "匹配的歌曲的音频字节数之和",
+            "type": "integer"
           }
         },
         "required": [
-          "items"
+          "items",
+          "total",
+          "totalBytes",
+          "page",
+          "pageSize"
         ],
         "type": "object"
       },
@@ -339,6 +378,47 @@
       },
       "AdminOpenRegistrationRequest": {
         "additionalProperties": false,
+        "type": "object"
+      },
+      "AdminRemoveMediaRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "media": {
+            "items": {
+              "$ref": "#/components/schemas/StoredMediaRef"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "media"
+        ],
+        "type": "object"
+      },
+      "AdminRemoveMediaResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted": {
+            "description": "删掉的歌的 key",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "inUse": {
+            "description": "正在房间里使用、没有删除的歌的 key",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "deleted",
+          "inUse"
+        ],
         "type": "object"
       },
       "AdminResetAccountPasswordRequest": {
@@ -1133,6 +1213,15 @@
           "device"
         ],
         "type": "object"
+      },
+      "MediaSort": {
+        "description": "stored：存储时间从新到旧；idle：最近播放从早到晚，从没播放过的排最前；size：占用从大到小。三种排序都以曲目 ID 作为最后的排序键，翻页时不重复也不遗漏",
+        "enum": [
+          "stored",
+          "idle",
+          "size"
+        ],
+        "type": "string"
       },
       "Member": {
         "additionalProperties": false,
@@ -2048,6 +2137,14 @@
       "StoredMedia": {
         "additionalProperties": false,
         "properties": {
+          "artist": {
+            "description": "不知道时为空字符串",
+            "type": "string"
+          },
+          "coverUrl": {
+            "description": "可以直接打开的封面地址，没有封面时为空字符串",
+            "type": "string"
+          },
           "key": {
             "description": "曲目 ID 的 SHA-256（十六进制），用于删除；链接曲目的 ID 是规范化之后的链接",
             "type": "string"
@@ -2086,9 +2183,25 @@
           "source",
           "link",
           "title",
+          "artist",
+          "coverUrl",
           "size",
           "storedAtMs",
           "lastPlayedAtMs"
+        ],
+        "type": "object"
+      },
+      "StoredMediaRef": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "description": "StoredMedia 的 key：64 个小写十六进制字符",
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
         ],
         "type": "object"
       },
@@ -2265,7 +2378,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "6bee23791ffa52ad"
+    "version": "ce462456c63356c6"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3062,9 +3175,19 @@
         "summary": "写入或覆盖 YouTube cookies，不返回 cookies"
       }
     },
-    "/api/admin/media": {
-      "get": {
+    "/api/admin/media/queries": {
+      "post": {
         "operationId": "adminListMedia",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminListMediaRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -3092,24 +3215,31 @@
             "adminToken": []
           }
         ],
-        "summary": "已存储的链接曲目和 B 站的歌"
+        "summary": "已存储的链接曲目和 B 站的歌，每页 50 首；页码超出最后一页时 items 为空，其余字段照常"
       }
     },
-    "/api/admin/media/{key}": {
-      "delete": {
-        "operationId": "adminDeleteMedia",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "type": "string"
+    "/api/admin/media/removals": {
+      "post": {
+        "operationId": "adminRemoveMedia",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminRemoveMediaRequest"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
-          "204": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminRemoveMediaResponse"
+                }
+              }
+            },
             "description": "成功"
           },
           "default": {
@@ -3128,7 +3258,7 @@
             "adminToken": []
           }
         ],
-        "summary": "删除一首已存储的歌的音频和封面，并清除它的准备结果"
+        "summary": "删除若干首已存储的歌的音频和封面，并清除它们的准备结果，一次 1 到 50 首：正在房间里使用的不会删除，放进 inUse；不存在的忽略。逐首删除，中途出错时返回错误，出错之前已经删掉的不会恢复，用同样的请求重试即可"
       }
     },
     "/api/admin/registration": {

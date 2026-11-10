@@ -1,10 +1,12 @@
 package porttest
 
 import (
+	"cmp"
 	"context"
 	"io"
 	"maps"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/dihemoe/alisten/internal/app/port"
@@ -78,4 +80,76 @@ func (s *MediaStore) Fail(err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.failure = err
+}
+
+var _ port.MediaLibrary = (*MediaLibrary)(nil)
+
+type MediaLibrary struct {
+	mu    sync.Mutex
+	media map[string]port.StoredMedia
+}
+
+func NewMediaLibrary(media ...port.StoredMedia) *MediaLibrary {
+	l := &MediaLibrary{media: map[string]port.StoredMedia{}}
+	for _, m := range media {
+		l.media[m.Key] = m
+	}
+	return l
+}
+
+func (l *MediaLibrary) ListStoredMedia(_ context.Context, q port.MediaQuery) (port.MediaPage, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var page port.MediaPage
+	var matched []port.StoredMedia
+	for _, m := range l.media {
+		if strings.Contains(strings.ToLower(m.Title), strings.ToLower(q.Title)) {
+			matched = append(matched, m)
+			page.TotalBytes += m.Size
+		}
+	}
+	slices.SortFunc(matched, func(a, b port.StoredMedia) int {
+		return cmp.Or(compareMedia(q.Sort, a, b), strings.Compare(a.Link, b.Link))
+	})
+	page.Total = len(matched)
+	if q.Page-1 > len(matched)/port.MediaPageSize {
+		return page, nil
+	}
+	start := (q.Page - 1) * port.MediaPageSize
+	page.Items = matched[start:min(start+port.MediaPageSize, len(matched))]
+	return page, nil
+}
+
+func compareMedia(sort port.MediaSort, a, b port.StoredMedia) int {
+	switch sort {
+	case port.MediaByStored:
+		return b.StoredAt.Compare(a.StoredAt)
+	case port.MediaByIdle:
+		switch {
+		case a.LastPlayedAt == nil && b.LastPlayedAt == nil:
+			return 0
+		case a.LastPlayedAt == nil:
+			return -1
+		case b.LastPlayedAt == nil:
+			return 1
+		}
+		return a.LastPlayedAt.Compare(*b.LastPlayedAt)
+	case port.MediaBySize:
+		return cmp.Compare(b.Size, a.Size)
+	}
+	return 0
+}
+
+func (l *MediaLibrary) StoredMedia(_ context.Context, key string) (port.StoredMedia, bool, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	m, ok := l.media[key]
+	return m, ok, nil
+}
+
+func (l *MediaLibrary) DeleteStoredMedia(_ context.Context, key string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.media, key)
+	return nil
 }

@@ -252,3 +252,60 @@ func TestPlaylistLinkTracks(t *testing.T) {
 		t.Errorf("换一种大小写移出之后还有 %+v，期望没有", items.Items)
 	}
 }
+
+// 翻过最后一页时总数照常；批量删除时，正在房间里播放的歌不删，不存在的忽略，其余的连同音频一起删掉。
+func TestAdminMediaPagesAndRemovals(t *testing.T) {
+	contractEnv(t, startPostgres(t)(t), startValkey(t)(t))
+	svc := startService(t)
+	dbConfig, err := loadDatabaseConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, err := pgxpool.NewWithConfig(t.Context(), dbConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	objectsConfig, err := loadStorageConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects := storage.New(objectsConfig)
+	const playing, idle = "https://example.com/playing.mp3", "https://example.com/idle.mp3"
+	for _, link := range []string{playing, idle} {
+		prepared := port.PreparedTrack{
+			Meta:      track.Meta{Title: link, PageURL: link},
+			Result:    track.Prepared{Duration: time.Hour, Gain: 1},
+			MediaKey:  media.Key(link),
+			MediaSize: 3,
+		}
+		if err := postgres.New(pool).SavePreparedTrack(t.Context(), track.Track{Source: track.Link, ID: link}, prepared); err != nil {
+			t.Fatal(err)
+		}
+		if err := objects.Put(t.Context(), media.AudioObject(media.Key(link)), strings.NewReader("mp3"), "audio/mpeg"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, ticket := enterRoom(t, svc, createPersistentRoom(t, svc, "大厅"))
+	roomRequest(t, svc, ticket, "POST /api/room/queue", `{"track": {"source": "link", "id": "`+playing+`"}}`)
+
+	admin := "\nAuthorization: Bearer admin-secret\n\n"
+	call := func(request, want string) {
+		t.Helper()
+		if line, status, _, body := send(t, svc.server, request); status != http.StatusOK || strings.TrimSpace(string(body)) != want {
+			t.Errorf("%s = %d %s，期望 %s", line, status, body, want)
+		}
+	}
+	call("POST /api/admin/media/queries"+admin+`{"page": 2}`, `{"items":[],"page":2,"pageSize":50,"total":2,"totalBytes":6}`)
+	call("POST /api/admin/media/removals"+admin+`{"media": [{"key": "`+media.Key(playing)+`"}, {"key": "`+media.Key(idle)+`"}, {"key": "`+media.Key("https://example.com/missing.mp3")+`"}]}`,
+		`{"deleted":["`+media.Key(idle)+`"],"inUse":["`+media.Key(playing)+`"]}`)
+	if line, status, _, body := send(t, svc.server, "POST /api/admin/media/queries"+admin+"{}"); status != http.StatusOK ||
+		!strings.Contains(string(body), `"key":"`+media.Key(playing)+`"`) || !strings.HasSuffix(strings.TrimSpace(string(body)), `"page":1,"pageSize":50,"total":1,"totalBytes":3}`) {
+		t.Errorf("%s = %d %s，期望只剩正在播放的歌", line, status, body)
+	}
+	for link, want := range map[string]bool{playing: true, idle: false} {
+		if exists, err := objects.Exists(t.Context(), media.AudioObject(media.Key(link))); err != nil || exists != want {
+			t.Errorf("%s 的音频还在 = %v, %v，期望 %v", link, exists, err, want)
+		}
+	}
+}

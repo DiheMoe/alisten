@@ -322,29 +322,116 @@ Authorization: Bearer admin-secret
 {"set": false, "updatedAtMs": 0}
 
 -- request --
-GET /api/admin/media
+POST /api/admin/media/queries
 Authorization: Bearer admin-secret
+
+{}
 -- response --
 200
-{"items": []}
+{"items": [], "total": 0, "totalBytes": 0, "page": 1, "pageSize": 50}
 
 -- request --
-DELETE /api/admin/media/66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391
+POST /api/admin/media/queries
 Authorization: Bearer admin-secret
+
+{"page": 3, "sort": "idle", "q": "50%_off"}
 -- response --
-404
-{"error": {"code": "NOT_FOUND", "message": "媒体不存在"}}
+200
+{"items": [], "total": 0, "totalBytes": 0, "page": 3, "pageSize": 50}
 
 -- request --
-DELETE /api/admin/media/not-a-key
+POST /api/admin/media/queries
 Authorization: Bearer admin-secret
+
+{"sort": "recent"}
 -- response --
-404
-{"error": {"code": "NOT_FOUND", "message": "媒体不存在"}}
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "sort：取值应为 stored、idle、size 之一"}}
 
 -- request --
-GET /api/admin/media
+POST /api/admin/media/queries
+Authorization: Bearer admin-secret
+
+{"q": "晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴晴"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "q：长度不能超过 100 个字符"}}
+
+-- request --
+POST /api/admin/media/queries
+Authorization: Bearer admin-secret
+
+{"page": 0}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "page：不能小于 1"}}
+
+-- request --
+POST /api/admin/media/removals
+Authorization: Bearer admin-secret
+
+{"media": [{"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}]}
+-- response --
+200
+{"deleted": [], "inUse": []}
+
+-- request --
+POST /api/admin/media/removals
+Authorization: Bearer admin-secret
+
+{"media": [{"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "not-a-key"}]}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "media[1].key：格式不正确"}}
+
+-- request --
+POST /api/admin/media/removals
+Authorization: Bearer admin-secret
+
+{"media": [{"key": "66CF7FBB71EA804452BE64DB6A2002116BA136DB17C97DBB7ED4A74C8D052391"}]}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "media[0].key：格式不正确"}}
+
+-- request --
+POST /api/admin/media/removals
+Authorization: Bearer admin-secret
+
+{"media": []}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "media：元素不能少于 1 个"}}
+
+-- request --
+POST /api/admin/media/removals
+Authorization: Bearer admin-secret
+
+{"media": [{"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}, {"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}]}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "media：元素不能超过 50 个"}}
+
+-- request --
+POST /api/admin/media/queries
+
+{}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
+
+-- request --
+POST /api/admin/media/removals
+
+{"media": [{"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}]}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
+
+-- request --
+POST /api/admin/media/queries
 Authorization: Bearer $alice
+
+{}
 -- response --
 401
 {"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}

@@ -23,8 +23,23 @@ func NewLibrary(media port.MediaLibrary, usage port.TrackUsage, store port.Media
 	return &Library{media: media, usage: usage, store: store}
 }
 
-func (l *Library) List(ctx context.Context) ([]port.StoredMedia, error) {
-	return l.media.ListStoredMedia(ctx)
+func (l *Library) List(ctx context.Context, q port.MediaQuery) (port.MediaPage, error) {
+	return l.media.ListStoredMedia(ctx, q)
+}
+
+// 逐个删除：正在房间里使用的放进 inUse，不存在的忽略，其他错误立即返回，已经删掉的不会恢复。
+func (l *Library) DeleteMany(ctx context.Context, keys []string) (deleted, inUse []string, err error) {
+	for _, key := range keys {
+		switch err := l.Delete(ctx, key); {
+		case err == nil:
+			deleted = append(deleted, key)
+		case errors.Is(err, ErrInUse):
+			inUse = append(inUse, key)
+		case !errors.Is(err, ErrNotFound):
+			return nil, nil, err
+		}
+	}
+	return deleted, inUse, nil
 }
 
 // 先删除对象，再清除准备结果：中途失败时准备结果还在，后台仍能看到这首歌并重试；

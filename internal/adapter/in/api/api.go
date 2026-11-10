@@ -160,7 +160,7 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	srv.handle(mux, protocol.RouteAdminSetGithubCredential, srv.adminSetGithubCredential)
 	srv.handle(mux, protocol.RouteAdminDeleteGithubCredential, srv.adminDeleteGithubCredential)
 	srv.handle(mux, protocol.RouteAdminListMedia, srv.adminListMedia)
-	srv.handle(mux, protocol.RouteAdminDeleteMedia, srv.adminDeleteMedia)
+	srv.handle(mux, protocol.RouteAdminRemoveMedia, srv.adminRemoveMedia)
 	srv.handle(mux, protocol.RouteAdminUpdateSite, srv.adminUpdateSite)
 	srv.handle(mux, protocol.RouteAdminOpenRegistration, srv.adminOpenRegistration)
 	srv.handle(mux, protocol.RouteAdminCloseRegistration, srv.adminCloseRegistration)
@@ -326,9 +326,7 @@ var knownErrors = []struct {
 	{errUnreadableBody, protocol.ErrorCodeInvalidArgument},
 	{port.ErrRoomNotFound, protocol.ErrorCodeNotFound},
 	{port.ErrSlugTaken, protocol.ErrorCodeConflict},
-	{media.ErrNotFound, protocol.ErrorCodeNotFound},
 	{media.ErrNotInRoom, protocol.ErrorCodeNotFound},
-	{media.ErrInUse, protocol.ErrorCodeConflict},
 	{identity.ErrInvalidMemberToken, protocol.ErrorCodeUnauthorized},
 	{identity.ErrWrongPassword, protocol.ErrorCodeUnauthorized},
 	{admin.ErrInvalidToken, protocol.ErrorCodeUnauthorized},

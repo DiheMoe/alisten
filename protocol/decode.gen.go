@@ -16,6 +16,7 @@ var (
 	patternLoginRequestUsername                        = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
 	patternRedeemPairingCodeRequestCode                = regexp.MustCompile(`^[2-9A-HJ-NP-Z]{8}$`)
 	patternRegisterRequestUsername                     = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
+	patternStoredMediaRefKey                           = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	patternTrackIDWhenBilibili                         = regexp.MustCompile(`^BV[1-9A-HJ-NP-Za-km-z]{10}(?:/([2-9]|[1-9][0-9]{1,3}))?$`)
 )
 
@@ -182,6 +183,14 @@ func DecodeAdminSetGithubCredentialRequest(body []byte) (AdminSetGithubCredentia
 	return decodeAdminSetGithubCredentialRequest(body, "")
 }
 
+func DecodeAdminListMediaRequest(body []byte) (AdminListMediaRequest, error) {
+	return decodeAdminListMediaRequest(body, "")
+}
+
+func DecodeAdminRemoveMediaRequest(body []byte) (AdminRemoveMediaRequest, error) {
+	return decodeAdminRemoveMediaRequest(body, "")
+}
+
 func DecodeAdminUpdateSiteRequest(body []byte) (AdminUpdateSiteRequest, error) {
 	return decodeAdminUpdateSiteRequest(body, "")
 }
@@ -346,10 +355,64 @@ func decodeAdminCreateRoomRequest(raw json.RawMessage, path string) (AdminCreate
 	return v, nil
 }
 
+func decodeAdminListMediaRequest(raw json.RawMessage, path string) (AdminListMediaRequest, error) {
+	var v AdminListMediaRequest
+	m, err := decodeObject(raw, path, "page", "q", "sort")
+	if err != nil {
+		return v, err
+	}
+	if r, ok := m["page"]; ok {
+		x, err := decodeInteger(r, field(path, "page"))
+		if err != nil {
+			return v, err
+		}
+		if err = checkMinimum(x, field(path, "page"), 1); err != nil {
+			return v, err
+		}
+		v.Page = &x
+	}
+	if r, ok := m["q"]; ok {
+		x, err := decodeString(r, field(path, "q"))
+		if err != nil {
+			return v, err
+		}
+		if err = checkMaxLength(x, field(path, "q"), 100); err != nil {
+			return v, err
+		}
+		v.Q = &x
+	}
+	if r, ok := m["sort"]; ok {
+		x, err := decodeMediaSort(r, field(path, "sort"))
+		if err != nil {
+			return v, err
+		}
+		v.Sort = &x
+	}
+	return v, nil
+}
+
 func decodeAdminOpenRegistrationRequest(raw json.RawMessage, path string) (AdminOpenRegistrationRequest, error) {
 	var v AdminOpenRegistrationRequest
 	_, err := decodeObject(raw, path)
 	return v, err
+}
+
+func decodeAdminRemoveMediaRequest(raw json.RawMessage, path string) (AdminRemoveMediaRequest, error) {
+	var v AdminRemoveMediaRequest
+	m, err := decodeObject(raw, path, "media")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "media"); err != nil {
+		return v, err
+	}
+	if v.Media, err = decodeArray(decodeStoredMediaRef, 50)(m["media"], field(path, "media")); err != nil {
+		return v, err
+	}
+	if err = checkMinItems(v.Media, field(path, "media"), 1); err != nil {
+		return v, err
+	}
+	return v, nil
 }
 
 func decodeAdminResetAccountPasswordRequest(raw json.RawMessage, path string) (AdminResetAccountPasswordRequest, error) {
@@ -912,6 +975,18 @@ func decodeLoginRequest(raw json.RawMessage, path string) (LoginRequest, error) 
 	return v, nil
 }
 
+func decodeMediaSort(raw json.RawMessage, path string) (MediaSort, error) {
+	s, err := decodeString(raw, path)
+	if err != nil {
+		return "", err
+	}
+	switch v := MediaSort(s); v {
+	case MediaSortStored, MediaSortIdle, MediaSortSize:
+		return v, nil
+	}
+	return "", invalid(path, "取值应为 stored、idle、size 之一")
+}
+
 func decodeMoveMyPlaylistItemsRequest(raw json.RawMessage, path string) (MoveMyPlaylistItemsRequest, error) {
 	var v MoveMyPlaylistItemsRequest
 	m, err := decodeObject(raw, path, "before", "tracks")
@@ -1361,6 +1436,24 @@ func decodeStartGithubLoginRequest(raw json.RawMessage, path string) (StartGithu
 		return v, err
 	}
 	if err = checkMaxLength(v.Nonce, field(path, "nonce"), 128); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+func decodeStoredMediaRef(raw json.RawMessage, path string) (StoredMediaRef, error) {
+	var v StoredMediaRef
+	m, err := decodeObject(raw, path, "key")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "key"); err != nil {
+		return v, err
+	}
+	if v.Key, err = decodeString(m["key"], field(path, "key")); err != nil {
+		return v, err
+	}
+	if err = checkPattern(v.Key, field(path, "key"), patternStoredMediaRefKey); err != nil {
 		return v, err
 	}
 	return v, nil

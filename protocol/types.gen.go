@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "6bee23791ffa52ad"
+const Version = "ce462456c63356c6"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -95,8 +95,18 @@ type AdminGetYoutubeCredentialResponse struct {
 	UpdatedAtMs int64 `json:"updatedAtMs"`
 }
 
+type AdminListMediaRequest struct {
+	Page *int64     `json:"page,omitempty"`
+	Q    *string    `json:"q,omitempty"`
+	Sort *MediaSort `json:"sort,omitempty"`
+}
+
 type AdminListMediaResponse struct {
-	Items []StoredMedia `json:"items"`
+	Items      []StoredMedia `json:"items"`
+	Page       int64         `json:"page"`
+	PageSize   int64         `json:"pageSize"`
+	Total      int64         `json:"total"`
+	TotalBytes int64         `json:"totalBytes"`
 }
 
 func (v AdminListMediaResponse) MarshalJSON() ([]byte, error) {
@@ -120,6 +130,34 @@ func (v AdminListRoomsResponse) MarshalJSON() ([]byte, error) {
 }
 
 type AdminOpenRegistrationRequest struct{}
+
+type AdminRemoveMediaRequest struct {
+	Media []StoredMediaRef `json:"media"`
+}
+
+func (v AdminRemoveMediaRequest) MarshalJSON() ([]byte, error) {
+	type plain AdminRemoveMediaRequest
+	if v.Media == nil {
+		v.Media = []StoredMediaRef{}
+	}
+	return json.Marshal(plain(v))
+}
+
+type AdminRemoveMediaResponse struct {
+	Deleted []string `json:"deleted"`
+	InUse   []string `json:"inUse"`
+}
+
+func (v AdminRemoveMediaResponse) MarshalJSON() ([]byte, error) {
+	type plain AdminRemoveMediaResponse
+	if v.Deleted == nil {
+		v.Deleted = []string{}
+	}
+	if v.InUse == nil {
+		v.InUse = []string{}
+	}
+	return json.Marshal(plain(v))
+}
 
 type AdminResetAccountPasswordRequest struct{}
 
@@ -443,6 +481,14 @@ type LoginResponse struct {
 	Member      Member  `json:"member"`
 	MemberToken string  `json:"memberToken"`
 }
+
+type MediaSort string
+
+const (
+	MediaSortStored MediaSort = "stored"
+	MediaSortIdle   MediaSort = "idle"
+	MediaSortSize   MediaSort = "size"
+)
 
 type Member struct {
 	AvatarHash string `json:"avatarHash"`
@@ -854,6 +900,8 @@ type StartGithubLoginResponse struct {
 }
 
 type StoredMedia struct {
+	Artist         string `json:"artist"`
+	CoverURL       string `json:"coverUrl"`
 	Key            string `json:"key"`
 	LastPlayedAtMs *int64 `json:"lastPlayedAtMs"`
 	Link           string `json:"link"`
@@ -861,6 +909,10 @@ type StoredMedia struct {
 	Source         Source `json:"source"`
 	StoredAtMs     int64  `json:"storedAtMs"`
 	Title          string `json:"title"`
+}
+
+type StoredMediaRef struct {
+	Key string `json:"key"`
 }
 
 type Track struct {
@@ -985,8 +1037,8 @@ var (
 	RouteAdminGetGithubCredential     = Route{Pattern: "GET /api/admin/credentials/github", Auth: AuthAdmin, Status: 200}
 	RouteAdminSetGithubCredential     = Route{Pattern: "PUT /api/admin/credentials/github", Auth: AuthAdmin, Status: 204}
 	RouteAdminDeleteGithubCredential  = Route{Pattern: "DELETE /api/admin/credentials/github", Auth: AuthAdmin, Status: 204}
-	RouteAdminListMedia               = Route{Pattern: "GET /api/admin/media", Auth: AuthAdmin, Status: 200}
-	RouteAdminDeleteMedia             = Route{Pattern: "DELETE /api/admin/media/{key}", Auth: AuthAdmin, Status: 204}
+	RouteAdminListMedia               = Route{Pattern: "POST /api/admin/media/queries", Auth: AuthAdmin, Status: 200}
+	RouteAdminRemoveMedia             = Route{Pattern: "POST /api/admin/media/removals", Auth: AuthAdmin, Status: 200}
 	RouteAdminUpdateSite              = Route{Pattern: "PATCH /api/admin/site", Auth: AuthAdmin, Status: 200}
 	RouteAdminOpenRegistration        = Route{Pattern: "PUT /api/admin/registration", Auth: AuthAdmin, Status: 204}
 	RouteAdminCloseRegistration       = Route{Pattern: "DELETE /api/admin/registration", Auth: AuthAdmin, Status: 204}

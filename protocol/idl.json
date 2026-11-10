@@ -309,11 +309,26 @@
         "source": {"$ref": "#/$defs/Source"},
         "link": {"type": "string", "description": "这首歌的页面：链接曲目是链接本身，B 站的歌是视频页面"},
         "title": {"type": "string"},
+        "artist": {"type": "string", "description": "不知道时为空字符串"},
+        "coverUrl": {"type": "string", "description": "可以直接打开的封面地址，没有封面时为空字符串"},
         "size": {"type": "integer", "description": "音频文件的字节数"},
         "storedAtMs": {"type": "integer"},
         "lastPlayedAtMs": {"anyOf": [{"type": "integer"}, {"type": "null"}], "description": "没有播放过时为 null"}
       },
-      "required": ["key", "source", "link", "title", "size", "storedAtMs", "lastPlayedAtMs"]
+      "required": ["key", "source", "link", "title", "artist", "coverUrl", "size", "storedAtMs", "lastPlayedAtMs"]
+    },
+    "MediaSort": {
+      "type": "string",
+      "description": "stored：存储时间从新到旧；idle：最近播放从早到晚，从没播放过的排最前；size：占用从大到小。三种排序都以曲目 ID 作为最后的排序键，翻页时不重复也不遗漏",
+      "enum": ["stored", "idle", "size"]
+    },
+    "StoredMediaRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {"type": "string", "description": "StoredMedia 的 key：64 个小写十六进制字符", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "required": ["key"]
     },
     "SourceAccount": {
       "type": "object",
@@ -1544,26 +1559,55 @@
     },
     {
       "name": "adminListMedia",
-      "description": "已存储的链接曲目和 B 站的歌",
-      "method": "GET",
-      "path": "/api/admin/media",
+      "description": "已存储的链接曲目和 B 站的歌，每页 50 首；页码超出最后一页时 items 为空，其余字段照常",
+      "method": "POST",
+      "path": "/api/admin/media/queries",
       "auth": "admin",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "page": {"$ref": "#/$defs/Page", "description": "页码，从 1 开始，缺省为 1"},
+          "sort": {"$ref": "#/$defs/MediaSort", "description": "缺省为 stored"},
+          "q": {"type": "string", "description": "按标题搜索：标题包含它就算匹配，不区分大小写，% 和 _ 按字面匹配；缺省或为空时不搜索", "maxLength": 100}
+        }
+      },
       "response": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "items": {"type": "array", "items": {"$ref": "#/$defs/StoredMedia"}}
+          "items": {"type": "array", "items": {"$ref": "#/$defs/StoredMedia"}},
+          "total": {"type": "integer", "description": "匹配的歌曲数，不只是这一页"},
+          "totalBytes": {"type": "integer", "description": "匹配的歌曲的音频字节数之和"},
+          "page": {"type": "integer"},
+          "pageSize": {"type": "integer", "description": "每页的条数，固定为 50"}
         },
-        "required": ["items"]
+        "required": ["items", "total", "totalBytes", "page", "pageSize"]
       }
     },
     {
-      "name": "adminDeleteMedia",
-      "description": "删除一首已存储的歌的音频和封面，并清除它的准备结果",
-      "method": "DELETE",
-      "path": "/api/admin/media/{key}",
+      "name": "adminRemoveMedia",
+      "description": "删除若干首已存储的歌的音频和封面，并清除它们的准备结果，一次 1 到 50 首：正在房间里使用的不会删除，放进 inUse；不存在的忽略。逐首删除，中途出错时返回错误，出错之前已经删掉的不会恢复，用同样的请求重试即可",
+      "method": "POST",
+      "path": "/api/admin/media/removals",
       "auth": "admin",
-      "status": 204
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "media": {"type": "array", "items": {"$ref": "#/$defs/StoredMediaRef"}, "minItems": 1, "maxItems": 50}
+        },
+        "required": ["media"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "deleted": {"type": "array", "items": {"type": "string"}, "description": "删掉的歌的 key"},
+          "inUse": {"type": "array", "items": {"type": "string"}, "description": "正在房间里使用、没有删除的歌的 key"}
+        },
+        "required": ["deleted", "inUse"]
+      }
     },
     {
       "name": "adminUpdateSite",

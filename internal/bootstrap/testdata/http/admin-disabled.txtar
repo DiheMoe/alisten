@@ -84,15 +84,19 @@ Authorization: Bearer admin-secret
 {"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
 
 -- request --
-GET /api/admin/media
+POST /api/admin/media/queries
 Authorization: Bearer admin-secret
+
+{}
 -- response --
 403
 {"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
 
 -- request --
-DELETE /api/admin/media/66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391
+POST /api/admin/media/removals
 Authorization: Bearer admin-secret
+
+{"media": [{"key": "66cf7fbb71ea804452be64db6a2002116ba136db17c97dbb7ed4a74c8d052391"}]}
 -- response --
 403
 {"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
