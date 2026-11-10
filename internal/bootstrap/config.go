@@ -17,6 +17,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	goredis "github.com/redis/go-redis/v9"
 
+	"github.com/dihemoe/alisten/internal/adapter/in/api"
+	"github.com/dihemoe/alisten/internal/adapter/out/github"
 	"github.com/dihemoe/alisten/internal/adapter/out/storage"
 )
 
@@ -32,6 +34,7 @@ type serveConfig struct {
 	// 浏览器访问对象存储时使用的地址前缀，结尾没有 /。
 	storageURL string
 	tracing    bool
+	github     github.Config
 }
 
 func loadServeConfig() (serveConfig, error) {
@@ -92,6 +95,8 @@ func loadServeConfig() (serveConfig, error) {
 		storage:        objects,
 		storageURL:     storageURL,
 		tracing:        tracing,
+		// 与后台显示给管理员、要他填进 OAuth App 的回调地址相同。
+		github: github.Config{RedirectURL: origin + api.GitHubCallbackPath, Endpoint: github.GitHubCom},
 	}, nil
 }
 

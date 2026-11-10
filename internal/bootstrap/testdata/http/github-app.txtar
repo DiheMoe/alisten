@@ -1,0 +1,135 @@
+后台配置 GitHub OAuth App：读取只给出 Client ID、Client Secret 是否已设置和要填进 GitHub 的回调地址，任何响应都不返回 Client Secret；
+Client ID 和 Client Secret 一起保存，都必填；清除之后关闭 GitHub 登录。
+
+-- request --
+GET /api/admin/credentials/github
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
+
+-- request --
+PUT /api/admin/credentials/github
+Authorization: Bearer wrong-token
+
+{"clientId": "Ov23liExample0000001", "clientSecret": "0123456789abcdef0123456789abcdef01234567"}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
+
+-- request --
+DELETE /api/admin/credentials/github
+Authorization: Bearer wrong-token
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
+
+-- request --
+GET /api/admin/credentials/github
+Authorization: Bearer admin-secret
+-- response --
+200
+{"clientId": null, "clientSecretSet": false, "callbackUrl": "https://alisten.example/api/auth/github/callback"}
+
+-- request --
+PUT /api/admin/credentials/github
+Authorization: Bearer admin-secret
+
+{"clientId": "Ov23liExample0000001"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "clientSecret：缺少必填字段"}}
+
+-- request --
+PUT /api/admin/credentials/github
+Authorization: Bearer admin-secret
+
+{"clientSecret": "0123456789abcdef0123456789abcdef01234567"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "clientId：缺少必填字段"}}
+
+-- request --
+PUT /api/admin/credentials/github
+Authorization: Bearer admin-secret
+
+{"clientId": "", "clientSecret": "0123456789abcdef0123456789abcdef01234567"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "clientId：格式不正确"}}
+
+-- request --
+PUT /api/admin/credentials/github
+Authorization: Bearer admin-secret
+
+{"clientId": "Ov23liExample0000001", "clientSecret": "0123456789abcdef 0123456789abcdef01234567"}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "clientSecret：格式不正确"}}
+
+-- request --
+GET /api/admin/credentials/github
+Authorization: Bearer admin-secret
+-- response --
+200
+{"clientId": null, "clientSecretSet": false, "callbackUrl": "https://alisten.example/api/auth/github/callback"}
+
+-- request --
+PUT /api/admin/credentials/github
+Authorization: Bearer admin-secret
+
+{"clientId": "Ov23liExample0000001", "clientSecret": "0123456789abcdef0123456789abcdef01234567"}
+-- response --
+204
+
+-- request --
+GET /api/admin/credentials/github
+Authorization: Bearer admin-secret
+-- response --
+200
+{"clientId": "Ov23liExample0000001", "clientSecretSet": true, "callbackUrl": "https://alisten.example/api/auth/github/callback"}
+
+-- request --
+GET /api/site
+-- response --
+200
+{"brandName": "Alisten", "registrationOpen": true, "githubLogin": true}
+
+-- request --
+PUT /api/admin/credentials/github
+Authorization: Bearer admin-secret
+
+{"clientId": "Iv1.0123456789abcdef", "clientSecret": "fedcba9876543210fedcba9876543210fedcba98"}
+-- response --
+204
+
+-- request --
+GET /api/admin/credentials/github
+Authorization: Bearer admin-secret
+-- response --
+200
+{"clientId": "Iv1.0123456789abcdef", "clientSecretSet": true, "callbackUrl": "https://alisten.example/api/auth/github/callback"}
+
+-- request --
+DELETE /api/admin/credentials/github
+Authorization: Bearer admin-secret
+-- response --
+204
+
+-- request --
+GET /api/admin/credentials/github
+Authorization: Bearer admin-secret
+-- response --
+200
+{"clientId": null, "clientSecretSet": false, "callbackUrl": "https://alisten.example/api/auth/github/callback"}
+
+-- request --
+GET /api/site
+-- response --
+200
+{"brandName": "Alisten", "registrationOpen": true, "githubLogin": false}
+
+-- request --
+DELETE /api/admin/credentials/github
+Authorization: Bearer admin-secret
+-- response --
+204

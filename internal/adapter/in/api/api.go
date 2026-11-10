@@ -54,6 +54,7 @@ type Services struct {
 	Playback  *media.Playback
 	Site      *site.Service
 	Listens   *listen.Service
+	GitHub    *identity.GitHub
 
 	// 浏览器访问对象存储时使用的地址前缀，结尾没有 /。
 	StorageURL string
@@ -155,6 +156,9 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	srv.handle(mux, protocol.RouteAdminGetYoutubeCredential, srv.adminGetYoutubeCredential)
 	srv.handle(mux, protocol.RouteAdminSetYoutubeCredential, srv.adminSetYoutubeCredential)
 	srv.handle(mux, protocol.RouteAdminDeleteYoutubeCredential, srv.adminDeleteYoutubeCredential)
+	srv.handle(mux, protocol.RouteAdminGetGithubCredential, srv.adminGetGithubCredential)
+	srv.handle(mux, protocol.RouteAdminSetGithubCredential, srv.adminSetGithubCredential)
+	srv.handle(mux, protocol.RouteAdminDeleteGithubCredential, srv.adminDeleteGithubCredential)
 	srv.handle(mux, protocol.RouteAdminListMedia, srv.adminListMedia)
 	srv.handle(mux, protocol.RouteAdminDeleteMedia, srv.adminDeleteMedia)
 	srv.handle(mux, protocol.RouteAdminUpdateSite, srv.adminUpdateSite)
@@ -173,6 +177,10 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	srv.handle(mux, protocol.RouteCopySharedPlaylist, srv.copySharedPlaylist)
 	srv.handle(mux, protocol.RouteCreatePairingCode, srv.createPairingCode)
 	srv.handle(mux, protocol.RouteRedeemPairingCode, srv.redeemPairingCode)
+	srv.handle(mux, protocol.RouteStartGithubLogin, srv.startGithubLogin)
+	srv.handle(mux, protocol.RouteFinishGithubLogin, srv.finishGithubLogin)
+	srv.handle(mux, protocol.RouteUnbindGithub, srv.unbindGithub)
+	mux.HandleFunc("GET "+GitHubCallbackPath, srv.githubCallback)
 	mux.HandleFunc("GET /ws", srv.websocket)
 	mux.HandleFunc("GET /api/room/events", srv.roomEvents)
 	mux.HandleFunc("GET /media/{source}/{id}", srv.redirectMedia)
@@ -363,6 +371,12 @@ var knownErrors = []struct {
 	{port.ErrShareNotFound, protocol.ErrorCodeNotFound},
 	{identity.ErrInvalidPairingCode, protocol.ErrorCodeInvalidCredentials},
 	{port.ErrNoPassword, protocol.ErrorCodeConflict},
+	{identity.ErrGitHubLoginExpired, protocol.ErrorCodeInvalidCredentials},
+	{identity.ErrGitHubMismatch, protocol.ErrorCodeInvalidCredentials},
+	{identity.ErrGitHubUnverified, protocol.ErrorCodeForbidden},
+	{identity.ErrGitHubDisabled, protocol.ErrorCodeNotFound},
+	{port.ErrGitHubTaken, protocol.ErrorCodeConflict},
+	{port.ErrGitHubAlreadyBound, protocol.ErrorCodeConflict},
 }
 
 func errorInfo(err error) (info protocol.ErrorInfo, expected bool) {

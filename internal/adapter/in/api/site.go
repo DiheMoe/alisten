@@ -11,7 +11,11 @@ func (s *server) getSite(ctx context.Context, _ call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return protocol.GetSiteResponse{BrandName: settings.BrandName, RegistrationOpen: settings.RegistrationOpen}, nil
+	githubClientID, err := s.GitHub.ClientID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return protocol.GetSiteResponse{BrandName: settings.BrandName, RegistrationOpen: settings.RegistrationOpen, GithubLogin: githubClientID != ""}, nil
 }
 
 func (s *server) adminUpdateSite(ctx context.Context, c call) (any, error) {

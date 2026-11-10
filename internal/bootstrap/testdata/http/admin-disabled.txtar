@@ -96,3 +96,32 @@ Authorization: Bearer admin-secret
 -- response --
 403
 {"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+GET /api/admin/credentials/github
+Authorization: Bearer admin-secret
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+PUT /api/admin/credentials/github
+Authorization: Bearer admin-secret
+
+{"clientId": "Ov23liExample0000001", "clientSecret": "0123456789abcdef0123456789abcdef01234567"}
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+DELETE /api/admin/credentials/github
+Authorization: Bearer admin-secret
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "后台没有启用：服务端没有配置管理 token。"}}
+
+-- request --
+GET /api/site
+-- response --
+200
+{"brandName": "Alisten", "registrationOpen": true, "githubLogin": false}

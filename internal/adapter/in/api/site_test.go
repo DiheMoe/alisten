@@ -16,7 +16,7 @@ func TestSite(t *testing.T) {
 		return response{status: http.StatusOK, body: `{"brandName":"` + name + `"}`}
 	}
 	site := func(name string) response {
-		return response{status: http.StatusOK, body: `{"brandName":"` + name + `","registrationOpen":true}`}
+		return response{status: http.StatusOK, body: `{"brandName":"` + name + `","githubLogin":false,"registrationOpen":true}`}
 	}
 
 	if got := send(t, server, http.MethodGet, "/api/site", ""); got != site("Alisten") {

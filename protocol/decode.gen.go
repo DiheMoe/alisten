@@ -8,13 +8,15 @@ import (
 )
 
 var (
-	patternAdminCreateRoomRequestSlug   = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
-	patternAdminUpdateRoomRequestSlug   = regexp.MustCompile(`^[a-z0-9-]{0,32}$`)
-	patternLoginRequestDevice           = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
-	patternLoginRequestUsername         = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
-	patternRedeemPairingCodeRequestCode = regexp.MustCompile(`^[2-9A-HJ-NP-Z]{8}$`)
-	patternRegisterRequestUsername      = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
-	patternTrackIDWhenBilibili          = regexp.MustCompile(`^BV[1-9A-HJ-NP-Za-km-z]{10}(?:/([2-9]|[1-9][0-9]{1,3}))?$`)
+	patternAdminCreateRoomRequestSlug                  = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
+	patternAdminSetGithubCredentialRequestClientID     = regexp.MustCompile(`^[A-Za-z0-9._-]{1,100}$`)
+	patternAdminSetGithubCredentialRequestClientSecret = regexp.MustCompile(`^[A-Za-z0-9._-]{1,200}$`)
+	patternAdminUpdateRoomRequestSlug                  = regexp.MustCompile(`^[a-z0-9-]{0,32}$`)
+	patternLoginRequestDevice                          = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
+	patternLoginRequestUsername                        = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
+	patternRedeemPairingCodeRequestCode                = regexp.MustCompile(`^[2-9A-HJ-NP-Z]{8}$`)
+	patternRegisterRequestUsername                     = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
+	patternTrackIDWhenBilibili                         = regexp.MustCompile(`^BV[1-9A-HJ-NP-Za-km-z]{10}(?:/([2-9]|[1-9][0-9]{1,3}))?$`)
 )
 
 func decodeConnectionRequest(typ string, raw json.RawMessage, path string) (any, bool, error) {
@@ -176,6 +178,10 @@ func DecodeAdminSetYoutubeCredentialRequest(body []byte) (AdminSetYoutubeCredent
 	return decodeAdminSetYoutubeCredentialRequest(body, "")
 }
 
+func DecodeAdminSetGithubCredentialRequest(body []byte) (AdminSetGithubCredentialRequest, error) {
+	return decodeAdminSetGithubCredentialRequest(body, "")
+}
+
 func DecodeAdminUpdateSiteRequest(body []byte) (AdminUpdateSiteRequest, error) {
 	return decodeAdminUpdateSiteRequest(body, "")
 }
@@ -210,6 +216,18 @@ func DecodeCreatePairingCodeRequest(body []byte) (CreatePairingCodeRequest, erro
 
 func DecodeRedeemPairingCodeRequest(body []byte) (RedeemPairingCodeRequest, error) {
 	return decodeRedeemPairingCodeRequest(body, "")
+}
+
+func DecodeStartGithubLoginRequest(body []byte) (StartGithubLoginRequest, error) {
+	return decodeStartGithubLoginRequest(body, "")
+}
+
+func DecodeFinishGithubLoginRequest(body []byte) (FinishGithubLoginRequest, error) {
+	return decodeFinishGithubLoginRequest(body, "")
+}
+
+func DecodeUnbindGithubRequest(body []byte) (UnbindGithubRequest, error) {
+	return decodeUnbindGithubRequest(body, "")
 }
 
 func decodeAddMyPlaylistItemRequest(raw json.RawMessage, path string) (AddMyPlaylistItemRequest, error) {
@@ -344,6 +362,30 @@ func decodeAdminResetRoomApiKeyRequest(raw json.RawMessage, path string) (AdminR
 	var v AdminResetRoomApiKeyRequest
 	_, err := decodeObject(raw, path)
 	return v, err
+}
+
+func decodeAdminSetGithubCredentialRequest(raw json.RawMessage, path string) (AdminSetGithubCredentialRequest, error) {
+	var v AdminSetGithubCredentialRequest
+	m, err := decodeObject(raw, path, "clientId", "clientSecret")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "clientId", "clientSecret"); err != nil {
+		return v, err
+	}
+	if v.ClientID, err = decodeString(m["clientId"], field(path, "clientId")); err != nil {
+		return v, err
+	}
+	if err = checkPattern(v.ClientID, field(path, "clientId"), patternAdminSetGithubCredentialRequestClientID); err != nil {
+		return v, err
+	}
+	if v.ClientSecret, err = decodeString(m["clientSecret"], field(path, "clientSecret")); err != nil {
+		return v, err
+	}
+	if err = checkPattern(v.ClientSecret, field(path, "clientSecret"), patternAdminSetGithubCredentialRequestClientSecret); err != nil {
+		return v, err
+	}
+	return v, nil
 }
 
 func decodeAdminSetYoutubeCredentialRequest(raw json.RawMessage, path string) (AdminSetYoutubeCredentialRequest, error) {
@@ -623,6 +665,57 @@ func decodeEnableListenRecordingRequest(raw json.RawMessage, path string) (Enabl
 	var v EnableListenRecordingRequest
 	_, err := decodeObject(raw, path)
 	return v, err
+}
+
+func decodeFinishGithubLoginRequest(raw json.RawMessage, path string) (FinishGithubLoginRequest, error) {
+	var v FinishGithubLoginRequest
+	m, err := decodeObject(raw, path, "code", "nonce")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "code", "nonce"); err != nil {
+		return v, err
+	}
+	if v.Code, err = decodeString(m["code"], field(path, "code")); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.Code, field(path, "code"), 128); err != nil {
+		return v, err
+	}
+	if v.Nonce, err = decodeString(m["nonce"], field(path, "nonce")); err != nil {
+		return v, err
+	}
+	if err = checkMinLength(v.Nonce, field(path, "nonce"), 16); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.Nonce, field(path, "nonce"), 128); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+func decodeGitHubClient(raw json.RawMessage, path string) (GitHubClient, error) {
+	s, err := decodeString(raw, path)
+	if err != nil {
+		return "", err
+	}
+	switch v := GitHubClient(s); v {
+	case GitHubClientWeb, GitHubClientApp:
+		return v, nil
+	}
+	return "", invalid(path, "取值应为 web、app 之一")
+}
+
+func decodeGitHubIntent(raw json.RawMessage, path string) (GitHubIntent, error) {
+	s, err := decodeString(raw, path)
+	if err != nil {
+		return "", err
+	}
+	switch v := GitHubIntent(s); v {
+	case GitHubIntentLogin, GitHubIntentBind, GitHubIntentVerify:
+		return v, nil
+	}
+	return "", invalid(path, "取值应为 login、bind、verify 之一")
 }
 
 func decodeHelloRequest(raw json.RawMessage, path string) (HelloRequest, error) {
@@ -1229,6 +1322,50 @@ func decodeSource(raw json.RawMessage, path string) (Source, error) {
 	return "", invalid(path, "取值应为 netease、qq、bilibili、link 之一")
 }
 
+func decodeStartGithubLoginRequest(raw json.RawMessage, path string) (StartGithubLoginRequest, error) {
+	var v StartGithubLoginRequest
+	m, err := decodeObject(raw, path, "client", "currentPassword", "intent", "nonce")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "intent", "nonce"); err != nil {
+		return v, err
+	}
+	if r, ok := m["client"]; ok {
+		x, err := decodeGitHubClient(r, field(path, "client"))
+		if err != nil {
+			return v, err
+		}
+		v.Client = &x
+	}
+	if r, ok := m["currentPassword"]; ok {
+		x, err := decodeString(r, field(path, "currentPassword"))
+		if err != nil {
+			return v, err
+		}
+		if err = checkMinLength(x, field(path, "currentPassword"), 8); err != nil {
+			return v, err
+		}
+		if err = checkMaxLength(x, field(path, "currentPassword"), 128); err != nil {
+			return v, err
+		}
+		v.CurrentPassword = &x
+	}
+	if v.Intent, err = decodeGitHubIntent(m["intent"], field(path, "intent")); err != nil {
+		return v, err
+	}
+	if v.Nonce, err = decodeString(m["nonce"], field(path, "nonce")); err != nil {
+		return v, err
+	}
+	if err = checkMinLength(v.Nonce, field(path, "nonce"), 16); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.Nonce, field(path, "nonce"), 128); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
 func decodeTrack(raw json.RawMessage, path string) (Track, error) {
 	var v Track
 	m, err := decodeObject(raw, path, "id", "source")
@@ -1256,6 +1393,27 @@ func decodeTrack(raw json.RawMessage, path string) (Track, error) {
 		if err = checkPattern(v.ID, field(path, "id"), patternTrackIDWhenBilibili); err != nil {
 			return v, err
 		}
+	}
+	return v, nil
+}
+
+func decodeUnbindGithubRequest(raw json.RawMessage, path string) (UnbindGithubRequest, error) {
+	var v UnbindGithubRequest
+	m, err := decodeObject(raw, path, "currentPassword")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "currentPassword"); err != nil {
+		return v, err
+	}
+	if v.CurrentPassword, err = decodeString(m["currentPassword"], field(path, "currentPassword")); err != nil {
+		return v, err
+	}
+	if err = checkMinLength(v.CurrentPassword, field(path, "currentPassword"), 8); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.CurrentPassword, field(path, "currentPassword"), 128); err != nil {
+		return v, err
 	}
 	return v, nil
 }

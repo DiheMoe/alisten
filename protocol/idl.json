@@ -381,6 +381,16 @@
       "type": "string",
       "description": "配对码：8 位，由数字 2–9 和除 I、O 以外的大写字母组成",
       "pattern": "^[2-9A-HJ-NP-Z]{8}$"
+    },
+    "GitHubIntent": {
+      "type": "string",
+      "description": "login：游客用 GitHub 登录，GitHub 账号没有绑定过时就是注册；bind：已注册的账号绑定 GitHub；verify：只绑定了 GitHub 的账号补设用户名和密码之前，用绑定的 GitHub 确认身份",
+      "enum": ["login", "bind", "verify"]
+    },
+    "GitHubClient": {
+      "type": "string",
+      "description": "发起 GitHub 授权的客户端，决定授权结束之后跳到哪里。web：网页的 /auth/github；app：App 用系统浏览器授权，授权结束之后跳到 moe.dihe.alisten:/auth/github，回到 App",
+      "enum": ["web", "app"]
     }
   },
   "x-ws": {
@@ -801,7 +811,7 @@
     },
     {
       "name": "register",
-      "description": "游客注册账号：设置用户名和密码，成员和成员 token 都不变；站点关闭注册时返回 FORBIDDEN。只绑定了 GitHub 的账号也用它补设用户名和密码，不受注册开关限制",
+      "description": "游客注册账号：设置用户名和密码，成员和成员 token 都不变；站点关闭注册时返回 FORBIDDEN。只绑定了 GitHub 的账号也用它补设用户名和密码，不受注册开关限制，但发出请求的成员 token 要在 10 分钟内用绑定的 GitHub 确认过身份（startGithubLogin 的 verify），没有确认时返回 FORBIDDEN：拿到成员 token 的人不能抢先设成自己的密码。补设成功之后这次确认作废，账号在其他设备上的成员 token 随即失效，与修改密码相同；失败时确认仍然有效",
       "method": "POST",
       "path": "/api/account",
       "auth": "member",
@@ -1205,7 +1215,7 @@
     },
     {
       "name": "getSite",
-      "description": "品牌名和是否开放注册；没有设置过品牌名时是 Alisten",
+      "description": "品牌名、是否开放注册和是否提供 GitHub 登录；没有设置过品牌名时是 Alisten",
       "method": "GET",
       "path": "/api/site",
       "auth": "none",
@@ -1214,9 +1224,10 @@
         "additionalProperties": false,
         "properties": {
           "brandName": {"type": "string"},
-          "registrationOpen": {"type": "boolean"}
+          "registrationOpen": {"type": "boolean"},
+          "githubLogin": {"type": "boolean", "description": "后台配置了 GitHub OAuth App；为 false 时 GitHub 相关的接口返回 NOT_FOUND"}
         },
-        "required": ["brandName", "registrationOpen"]
+        "required": ["brandName", "registrationOpen", "githubLogin"]
       }
     },
     {
@@ -1490,6 +1501,48 @@
       "status": 204
     },
     {
+      "name": "adminGetGithubCredential",
+      "description": "GitHub 登录使用的 OAuth App：Client ID、Client Secret 是否已设置和要填进 OAuth App 的回调地址，不返回 Client Secret",
+      "method": "GET",
+      "path": "/api/admin/credentials/github",
+      "auth": "admin",
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "clientId": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "没有配置时为 null"},
+          "clientSecretSet": {"type": "boolean", "description": "是否保存了 Client Secret；它与 Client ID 一起保存、一起清除"},
+          "callbackUrl": {"type": "string", "description": "OAuth App 的 Authorization callback URL 要填这个地址"}
+        },
+        "required": ["clientId", "clientSecretSet", "callbackUrl"]
+      }
+    },
+    {
+      "name": "adminSetGithubCredential",
+      "description": "保存 GitHub 登录使用的 OAuth App，开启 GitHub 登录；Client ID 和 Client Secret 一起提交，覆盖已有的配置，立即对所有实例生效。授权进行中换了 OAuth App 时，GitHub 不认原来签发的授权码，这次登录失败",
+      "method": "PUT",
+      "path": "/api/admin/credentials/github",
+      "auth": "admin",
+      "status": 204,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "clientId": {"type": "string", "description": "1 到 100 个字母、数字、点、下划线或连字符", "pattern": "^[A-Za-z0-9._-]{1,100}$"},
+          "clientSecret": {"type": "string", "description": "1 到 200 个字母、数字、点、下划线或连字符", "pattern": "^[A-Za-z0-9._-]{1,200}$"}
+        },
+        "required": ["clientId", "clientSecret"]
+      }
+    },
+    {
+      "name": "adminDeleteGithubCredential",
+      "description": "清除 GitHub 登录使用的 OAuth App，关闭 GitHub 登录：GitHub 相关的接口返回 NOT_FOUND，已经绑定的 GitHub 保持绑定，已经登录的设备不受影响；只绑定了 GitHub 的账号没有密码，重新开启之前无法在其他设备上登录",
+      "method": "DELETE",
+      "path": "/api/admin/credentials/github",
+      "auth": "admin",
+      "status": 204
+    },
+    {
       "name": "adminListMedia",
       "description": "已存储的链接曲目和 B 站的歌",
       "method": "GET",
@@ -1740,6 +1793,75 @@
           "account": {"$ref": "#/$defs/Account"}
         },
         "required": ["memberToken", "member", "account"]
+      }
+    },
+    {
+      "name": "startGithubLogin",
+      "description": "发起 GitHub 授权，返回 GitHub 的授权地址。nonce 由客户端随机生成并保存，兑换时原样带上。GitHub 授权之后跳转到 /auth/github#code=<兑换码>，失败时跳转到 /auth/github#error=<denied|expired|failed>；client 为 app 时跳转到 moe.dihe.alisten:/auth/github，片段相同。只按发起授权时的 client 决定跳转目标，state 已经过期或用过时跳转到网页的 /auth/github；回调时后台已经关闭了 GitHub 登录，跳转到 failed。后台没有配置 GitHub OAuth App 时返回 NOT_FOUND。游客发起 bind 或 verify 时返回 FORBIDDEN，已注册的账号发起 login、已经绑定了 GitHub 的账号发起 bind、设置了密码的账号发起 verify 时返回 CONFLICT。bind 要带上当前密码，没带或不对时返回 INVALID_CREDENTIALS：只凭成员 token 不能更换登录凭证，否则拿到 token 的人换上自己的 GitHub 之后，本人修改密码、后台重置密码都赶不走他",
+      "method": "POST",
+      "path": "/api/auth/github",
+      "auth": "member",
+      "status": 201,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "intent": {"$ref": "#/$defs/GitHubIntent"},
+          "client": {"$ref": "#/$defs/GitHubClient", "description": "App 发起授权时填 app，让授权结束之后跳回 App；省略时为 web"},
+          "nonce": {"type": "string", "minLength": 16, "maxLength": 128},
+          "currentPassword": {"$ref": "#/$defs/AccountPassword", "description": "当前密码，bind 时必须带上，其他意图忽略"}
+        },
+        "required": ["intent", "nonce"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "url": {"type": "string"}
+        },
+        "required": ["url"]
+      }
+    },
+    {
+      "name": "finishGithubLogin",
+      "description": "用兑换码和发起授权时的 nonce 完成 GitHub 登录、注册或绑定，必须由发起授权的成员调用。GitHub 账号已经绑定了账号时登录它：返回账号的新成员 token，发出请求的游客 token 随即失效；没有绑定过时把它绑到发出请求的成员上（游客即注册），成员和成员 token 都不变。verify 不修改账号，GitHub 账号要是这个账号绑定的，否则返回 INVALID_CREDENTIALS；确认记在发出请求的成员 token 上，10 分钟内用它补设用户名和密码。兑换码过期、用过或 nonce 不对时返回 INVALID_CREDENTIALS，GitHub 账号已经绑定了其他账号时返回 CONFLICT，注册关闭时首次登录返回 FORBIDDEN，后台没有配置 GitHub OAuth App 时返回 NOT_FOUND",
+      "method": "POST",
+      "path": "/api/auth/github/exchange",
+      "auth": "member",
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {"type": "string", "maxLength": 128},
+          "nonce": {"type": "string", "minLength": 16, "maxLength": 128}
+        },
+        "required": ["code", "nonce"]
+      },
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "memberToken": {"type": "string", "description": "登录了已有的账号时才有"},
+          "member": {"$ref": "#/$defs/Member"},
+          "account": {"$ref": "#/$defs/Account"}
+        },
+        "required": ["member", "account"]
+      }
+    },
+    {
+      "name": "unbindGithub",
+      "description": "解绑 GitHub；账号还没有设置密码时返回 CONFLICT，解绑之后它就再也无法登录。要带上当前密码，不对时返回 INVALID_CREDENTIALS：只凭成员 token 不能更换登录凭证，理由同 startGithubLogin 的 bind。后台没有配置 GitHub OAuth App 时返回 NOT_FOUND",
+      "method": "POST",
+      "path": "/api/account/github/removals",
+      "auth": "member",
+      "status": 204,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "currentPassword": {"$ref": "#/$defs/AccountPassword"}
+        },
+        "required": ["currentPassword"]
       }
     }
   ]

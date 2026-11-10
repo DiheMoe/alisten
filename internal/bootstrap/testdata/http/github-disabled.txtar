@@ -1,0 +1,42 @@
+后台没有配置 GitHub OAuth App 时，站点说明不提供 GitHub 登录，发起授权、兑换和解绑都返回 NOT_FOUND。这里的请求会跟随跳转，回调的跳转目标见 TestGitHubOAuthAppChanges。
+
+-- request --
+GET /api/site
+-- response --
+200
+{"brandName": "Alisten", "registrationOpen": true, "githubLogin": false}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/auth/github
+Authorization: Bearer $alice
+
+{"intent": "login", "nonce": "0123456789abcdef"}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "站点没有开启 GitHub 登录"}}
+
+-- request --
+POST /api/auth/github/exchange
+Authorization: Bearer $alice
+
+{"code": "anything", "nonce": "0123456789abcdef"}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "站点没有开启 GitHub 登录"}}
+
+-- request --
+POST /api/account/github/removals
+Authorization: Bearer $alice
+
+{"currentPassword": "correct horse"}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "站点没有开启 GitHub 登录"}}

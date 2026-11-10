@@ -211,7 +211,8 @@ func (b *logBuffer) String() string {
 
 // 各场景共用一个 Valkey，而 Pub/Sub 不按逻辑库隔离：实例频道靠随机的实例 ID 区分；
 // members 和 tracks.prepared 两个频道靠场景依次运行、每个场景结束时停止服务来隔开。
-func startService(t *testing.T) service {
+// configure 在读取配置之后修改它，用来换上环境变量配置不了的测试替身，比如假的 GitHub 的地址。
+func startService(t *testing.T, configure ...func(*serveConfig)) service {
 	t.Helper()
 	if err := runMigrate(newLogger(io.Discard, slog.LevelInfo)); err != nil {
 		t.Fatal(err)
@@ -219,6 +220,9 @@ func startService(t *testing.T) service {
 	cfg, err := loadServeConfig()
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, f := range configure {
+		f(&cfg)
 	}
 	spans := tracetest.NewSpanRecorder()
 	tracer := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spans))

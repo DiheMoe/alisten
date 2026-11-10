@@ -19,6 +19,7 @@ import (
 
 	"github.com/dihemoe/alisten/internal/adapter/in/api"
 	"github.com/dihemoe/alisten/internal/adapter/in/worker"
+	"github.com/dihemoe/alisten/internal/adapter/out/github"
 	"github.com/dihemoe/alisten/internal/adapter/out/postgres"
 	"github.com/dihemoe/alisten/internal/adapter/out/queue"
 	"github.com/dihemoe/alisten/internal/adapter/out/redis"
@@ -81,9 +82,12 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 	registerRuntimeMetrics(metrics, host, gateway)
 	rooms := lobby.New(store, leases)
 	codes := redis.NewCodes(rdb)
+	accounts := identity.NewAccounts(store, store, redis.NewAccountQuota(rdb), codes, codes, redis.NewDevices(rdb), gateway)
+	// 每个请求的期限由 GitHub 适配器设置。
+	oauth := github.New(&http.Client{Transport: traceHTTP(http.DefaultTransport, tracer)}, cfg.github)
 	services := api.Services{
 		Identity:  identity.New(store, store, store, gateway),
-		Accounts:  identity.NewAccounts(store, store, redis.NewAccountQuota(rdb), codes, codes, redis.NewDevices(rdb), gateway),
+		Accounts:  accounts,
 		Playlists: playlist.New(store, store, store, music, redis.NewAccountQuota(rdb), shortlink.New(playlistlink.AllowedRedirectHost, playlistlink.Recognized)),
 		Lobby:     rooms,
 		Admin:     admin.New(cfg.adminToken, rooms, store, store, store, src.neteaseLogin, src.qqLogin, src.bilibiliLogin, store, gateway),
@@ -93,6 +97,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 		Playback:  media.NewPlayback(src.playback, store),
 		Site:      site.New(store),
 		Listens:   listen.New(store),
+		GitHub:    identity.NewGitHub(accounts, store, oauth, codes),
 
 		StorageURL: cfg.storageURL,
 		PublicURL:  cfg.publicOrigin,

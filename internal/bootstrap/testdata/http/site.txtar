@@ -4,7 +4,7 @@
 GET /api/site
 -- response --
 200
-{"brandName": "Alisten", "registrationOpen": true}
+{"brandName": "Alisten", "registrationOpen": true, "githubLogin": false}
 
 -- request --
 PATCH /api/admin/site
@@ -19,7 +19,7 @@ Authorization: Bearer admin-secret
 GET /api/site
 -- response --
 200
-{"brandName": "周末听歌会", "registrationOpen": true}
+{"brandName": "周末听歌会", "registrationOpen": true, "githubLogin": false}
 
 -- request --
 PATCH /api/admin/site
@@ -72,7 +72,7 @@ Authorization: Bearer admin-secret
 GET /api/site
 -- response --
 200
-{"brandName": "周末听歌会", "registrationOpen": false}
+{"brandName": "周末听歌会", "registrationOpen": false, "githubLogin": false}
 
 -- request --
 POST /api/members

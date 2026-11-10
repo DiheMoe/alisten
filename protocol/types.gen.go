@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "0023496d94e1b43f"
+const Version = "6bee23791ffa52ad"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -69,6 +69,12 @@ type AdminGetBilibiliCredentialResponse struct {
 	Set     bool           `json:"set"`
 }
 
+type AdminGetGithubCredentialResponse struct {
+	CallbackURL     string  `json:"callbackUrl"`
+	ClientID        *string `json:"clientId"`
+	ClientSecretSet bool    `json:"clientSecretSet"`
+}
+
 type AdminGetNeteaseCredentialResponse struct {
 	Account *SourceAccount `json:"account"`
 	Set     bool           `json:"set"`
@@ -122,6 +128,11 @@ type AdminResetAccountPasswordResponse struct {
 }
 
 type AdminResetRoomApiKeyRequest struct{}
+
+type AdminSetGithubCredentialRequest struct {
+	ClientID     string `json:"clientId"`
+	ClientSecret string `json:"clientSecret"`
+}
 
 type AdminSetYoutubeCredentialRequest struct {
 	Cookies string `json:"cookies"`
@@ -267,6 +278,17 @@ type ErrorInfo struct {
 	Message string    `json:"message"`
 }
 
+type FinishGithubLoginRequest struct {
+	Code  string `json:"code"`
+	Nonce string `json:"nonce"`
+}
+
+type FinishGithubLoginResponse struct {
+	Account     Account `json:"account"`
+	Member      Member  `json:"member"`
+	MemberToken *string `json:"memberToken,omitempty"`
+}
+
 type GetMeResponse struct {
 	Account       *Account `json:"account,omitempty"`
 	Member        Member   `json:"member"`
@@ -275,8 +297,24 @@ type GetMeResponse struct {
 
 type GetSiteResponse struct {
 	BrandName        string `json:"brandName"`
+	GithubLogin      bool   `json:"githubLogin"`
 	RegistrationOpen bool   `json:"registrationOpen"`
 }
+
+type GitHubClient string
+
+const (
+	GitHubClientWeb GitHubClient = "web"
+	GitHubClientApp GitHubClient = "app"
+)
+
+type GitHubIntent string
+
+const (
+	GitHubIntentLogin  GitHubIntent = "login"
+	GitHubIntentBind   GitHubIntent = "bind"
+	GitHubIntentVerify GitHubIntent = "verify"
+)
 
 type HelloRequest struct {
 	ProtocolVersion string `json:"protocolVersion"`
@@ -804,6 +842,17 @@ type SourceAccount struct {
 	Vip      *bool   `json:"vip"`
 }
 
+type StartGithubLoginRequest struct {
+	Client          *GitHubClient `json:"client,omitempty"`
+	CurrentPassword *string       `json:"currentPassword,omitempty"`
+	Intent          GitHubIntent  `json:"intent"`
+	Nonce           string        `json:"nonce"`
+}
+
+type StartGithubLoginResponse struct {
+	URL string `json:"url"`
+}
+
 type StoredMedia struct {
 	Key            string `json:"key"`
 	LastPlayedAtMs *int64 `json:"lastPlayedAtMs"`
@@ -831,6 +880,10 @@ type TrackMeta struct {
 type TrackSummary struct {
 	Meta  TrackMeta `json:"meta"`
 	Track Track     `json:"track"`
+}
+
+type UnbindGithubRequest struct {
+	CurrentPassword string `json:"currentPassword"`
 }
 
 type UpdateMeRequest struct {
@@ -929,6 +982,9 @@ var (
 	RouteAdminGetYoutubeCredential    = Route{Pattern: "GET /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 200}
 	RouteAdminSetYoutubeCredential    = Route{Pattern: "PUT /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 204}
 	RouteAdminDeleteYoutubeCredential = Route{Pattern: "DELETE /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 204}
+	RouteAdminGetGithubCredential     = Route{Pattern: "GET /api/admin/credentials/github", Auth: AuthAdmin, Status: 200}
+	RouteAdminSetGithubCredential     = Route{Pattern: "PUT /api/admin/credentials/github", Auth: AuthAdmin, Status: 204}
+	RouteAdminDeleteGithubCredential  = Route{Pattern: "DELETE /api/admin/credentials/github", Auth: AuthAdmin, Status: 204}
 	RouteAdminListMedia               = Route{Pattern: "GET /api/admin/media", Auth: AuthAdmin, Status: 200}
 	RouteAdminDeleteMedia             = Route{Pattern: "DELETE /api/admin/media/{key}", Auth: AuthAdmin, Status: 204}
 	RouteAdminUpdateSite              = Route{Pattern: "PATCH /api/admin/site", Auth: AuthAdmin, Status: 200}
@@ -947,6 +1003,9 @@ var (
 	RouteCopySharedPlaylist           = Route{Pattern: "POST /api/shared-playlists/{shareId}/copies", Auth: AuthMember, Status: 201}
 	RouteCreatePairingCode            = Route{Pattern: "POST /api/account/pairing-codes", Auth: AuthMember, Status: 201}
 	RouteRedeemPairingCode            = Route{Pattern: "POST /api/sessions/pairing", Auth: AuthMember, Status: 201}
+	RouteStartGithubLogin             = Route{Pattern: "POST /api/auth/github", Auth: AuthMember, Status: 201}
+	RouteFinishGithubLogin            = Route{Pattern: "POST /api/auth/github/exchange", Auth: AuthMember, Status: 200}
+	RouteUnbindGithub                 = Route{Pattern: "POST /api/account/github/removals", Auth: AuthMember, Status: 204}
 )
 
 var RoomRoutes = []RoomRoute{
