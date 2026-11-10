@@ -34,6 +34,7 @@
   --color-popover: #242427;
   --color-input: #29292d;
   --color-input-focused: #303034;
+  --color-input-on-card: #29292d;
   --color-search-box: #1f1f1f;
   --color-foreground: #f4f4f5;
   --color-foreground-subtle: #a6a6af;
@@ -51,6 +52,8 @@
   --color-destructive-foreground: #34151b;
   --color-success: #8cc9a5;
   --color-toast: #303034;
+  --color-avatar: #2c2c30;
+  --color-avatar-foreground: #d4d4d8;
   --color-overlay: rgb(0 0 0 / 55%);
   --color-shadow: rgb(0 0 0 / 24%);
   --glow-opacity: .8;
@@ -70,13 +73,14 @@
   --color-popover: #fff;
   --color-input: #f3f3f6;
   --color-input-focused: #fff;
+  --color-input-on-card: #fff;
   --color-search-box: #fff;
   --color-foreground: #202024;
   --color-foreground-subtle: #64646e;
   --color-foreground-subtlest: #6e6e78;
   --color-border: #e6e6eb;
   --color-border-hover: #b9b9c2;
-  --color-input-border: #d4d4dc;
+  --color-input-border: #84848e;
   --color-input-border-focused: #217521;
   --color-hover: #e8e8ed;
   --color-frame-hover: #d4d4dc;
@@ -87,6 +91,8 @@
   --color-destructive-foreground: #fff;
   --color-success: #287144;
   --color-toast: #fff;
+  --color-avatar: #dadae0;
+  --color-avatar-foreground: #4a4a52;
   --color-shadow: rgb(30 30 45 / 12%);
   --glow-opacity: .5;
   color-scheme: light;
@@ -105,13 +111,14 @@
     --color-popover: #fff;
     --color-input: #f3f3f6;
     --color-input-focused: #fff;
+    --color-input-on-card: #fff;
     --color-search-box: #fff;
     --color-foreground: #202024;
     --color-foreground-subtle: #64646e;
     --color-foreground-subtlest: #6e6e78;
     --color-border: #e6e6eb;
     --color-border-hover: #b9b9c2;
-    --color-input-border: #d4d4dc;
+    --color-input-border: #84848e;
     --color-input-border-focused: #217521;
     --color-hover: #e8e8ed;
     --color-frame-hover: #d4d4dc;
@@ -122,6 +129,8 @@
     --color-destructive-foreground: #fff;
     --color-success: #287144;
     --color-toast: #fff;
+    --color-avatar: #dadae0;
+    --color-avatar-foreground: #4a4a52;
     --color-shadow: rgb(30 30 45 / 12%);
     --glow-opacity: .5;
     color-scheme: light;

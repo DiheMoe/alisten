@@ -27,6 +27,8 @@ export function canGoForward(at: Position): boolean {
 interface EntryState {
   index: number
   title?: string
+  // 写入这条记录时所在的地址，也就是后退会回到的那条记录的地址。
+  from?: string
   modal?: true
 }
 
@@ -47,12 +49,14 @@ const queued: Write[] = []
 function readEntry(state: unknown): EntryState | null {
   if (typeof state !== 'object' || state === null)
     return null
-  const { index, title, modal } = state as Record<string, unknown>
+  const { index, title, from, modal } = state as Record<string, unknown>
   if (typeof index !== 'number' || !Number.isInteger(index) || index < 0)
     return null
   const entry: EntryState = { index }
   if (typeof title === 'string')
     entry.title = title
+  if (typeof from === 'string')
+    entry.from = from
   if (modal === true)
     entry.modal = true
   return entry
@@ -116,6 +120,8 @@ export function startHistory(onChange: () => void): boolean {
   current = { index: entry?.index ?? 0 }
   if (entry?.title !== undefined)
     current.title = entry.title
+  if (entry?.from !== undefined)
+    current.from = entry.from
   // 刷新时弹窗已经关闭，它留下的标记记录改作页面的记录。
   if (!entry || entry.modal)
     window.history.replaceState(current, '')
@@ -124,8 +130,8 @@ export function startHistory(onChange: () => void): boolean {
   return entry === null
 }
 
-export function currentEntry(): { position: Position, title: string | undefined } {
-  return { position, title: current.title }
+export function currentEntry(): { position: Position, title: string | undefined, from: string | undefined } {
+  return { position, title: current.title, from: current.from }
 }
 
 // 后退一个页面。弹窗的标记记录压在当前页面上（或者正在退掉它）时只退到页面的记录：落到那里时导航会收到通知，由它决定要不要接着后退。
@@ -153,6 +159,9 @@ export function writeEntry(url: string, replace: boolean, title?: string): void 
   const entryTitle = replace ? title ?? current.title : title
   if (entryTitle !== undefined)
     entry.title = entryTitle
+  const from = replace ? current.from : window.location.pathname + window.location.search
+  if (from !== undefined)
+    entry.from = from
   // 在大厅的加入、创建房间弹窗里换页面时，弹窗随旧页面一起关闭，新页面的记录直接顶替标记记录。
   const written = write(() => replace || current.modal
     ? window.history.replaceState(entry, '', url)

@@ -1,0 +1,60 @@
+.section-layout { container: section-layout / inline-size; height: 100%; min-height: 0; background: var(--color-content); }
+.section-layout-frame { display: grid; grid-template-columns: 240px minmax(0, 1fr); height: 100%; }
+.section-layout-sidebar { display: flex; flex-direction: column; gap: 20px; min-height: 0; overflow-y: auto; scrollbar-width: none; padding: 28px 12px 16px; border-right: 1px solid var(--color-card-hover); }
+.section-layout-heading { padding: 0 12px; }
+.section-layout-eyebrow { margin-bottom: 2px; overflow-wrap: anywhere; color: var(--color-brand); font-size: var(--text-ui-sm); font-weight: 500; }
+.section-layout-heading h1 { font-size: var(--text-ui-xl); line-height: 1.25; }
+.section-nav { display: flex; flex-direction: column; gap: 2px; }
+.section-nav-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; padding: 8px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--color-foreground-subtle); text-align: left; }
+.section-nav-item:hover { background: color-mix(in srgb, var(--color-card-hover) 45%, transparent); color: var(--color-foreground); }
+.section-nav-item[aria-current='page'] { background: var(--color-card-hover); color: var(--color-foreground); font-weight: 500; }
+.section-nav-item[aria-current='page'] > svg { color: var(--color-brand); }
+.section-nav-item:focus-visible { outline-offset: 0; }
+.section-nav-label, .section-list-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.section-badge { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--color-destructive); }
+.section-layout-footer { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--color-card-hover); }
+.section-layout-content { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 32px 40px 48px; animation: fade-in 120ms ease both; }
+.section-layout-main { max-width: 960px; }
+.section-layout-main h2:focus { outline: none; }
+.section-layout-list { display: flex; flex-direction: column; gap: 16px; height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 24px 16px 32px; animation: fade-in 120ms ease both; }
+.section-layout-list > .section-layout-heading { padding: 0 4px; margin-bottom: 4px; }
+.section-layout-list > .section-layout-footer { margin-top: 0; padding-top: 0; border-top: 0; }
+.section-list-item { flex-wrap: nowrap; column-gap: 12px; color: var(--color-foreground); }
+.section-list-item > svg:first-child { color: var(--color-foreground-subtle); }
+.section-list-summary { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-foreground-subtle); font-size: var(--text-ui-caption); }
+.section-list-chevron { margin-left: -6px; color: var(--color-foreground-subtlest); }
+.section-layout-back { display: inline-flex; align-items: center; gap: 2px; min-height: 36px; margin: 0 0 8px -6px; padding: 4px 12px 4px 2px; border: 0; border-radius: 8px; background: transparent; color: var(--color-brand); font-weight: 500; }
+.section-layout-back:hover { background: color-mix(in srgb, var(--color-brand) 10%, transparent); }
+.section-layout-back:focus-visible { outline-offset: 0; }
+.section-group-label { margin: 28px 4px 8px; color: var(--color-foreground-subtlest); font-size: var(--text-ui-caption); font-weight: 500; }
+/* 浅色主题里卡片和输入框的底色相同，卡片里的输入框要换一种底色才分得开。 */
+.section-group { --color-input: var(--color-input-on-card); border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-card); }
+.section-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; width: 100%; min-height: 56px; padding: 12px 16px; }
+/* 分隔线不用 surface：浅色主题里它和 card 同色，线会看不见。card-hover 在深色主题里与 surface 同色。 */
+.section-row + .section-row { border-top: 1px solid var(--color-card-hover); }
+.section-group > .section-row:first-child { border-top-left-radius: 13px; border-top-right-radius: 13px; }
+.section-group > .section-row:last-child { border-bottom-left-radius: 13px; border-bottom-right-radius: 13px; }
+.section-row-copy { display: flex; flex: 1 1 12em; flex-direction: column; gap: 2px; min-width: 0; }
+.section-row-title { font-weight: 500; }
+.section-row-description { overflow-wrap: anywhere; color: var(--color-foreground-subtle); font-size: var(--text-ui-caption); }
+:is(button, a).section-row { border: 0; background: transparent; color: inherit; text-align: left; text-decoration: none; }
+:is(button, a).section-row:hover { background: var(--color-card-hover); }
+:is(button, a).section-row:active { transform: none; background: var(--color-hover); }
+:is(button, a).section-row:focus-visible { outline-offset: -2px; }
+@container section-layout (max-width: 860px) {
+  .section-layout-frame[data-layout='split'] { grid-template-columns: 208px minmax(0, 1fr); }
+  .section-layout-content { padding: 28px 24px 40px; }
+}
+/* 宽屏上主区域也可能很窄，比如平板竖屏又开着右侧栏：分类栏改为内容上方的一行。 */
+@container section-layout (max-width: 599px) {
+  .section-layout-frame[data-layout='split'] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .section-layout-sidebar { flex-direction: row; align-items: center; gap: 8px; padding: 8px 12px; overflow-x: auto; scrollbar-width: thin; border-right: 0; border-bottom: 1px solid var(--color-card-hover); }
+  .section-layout-sidebar > .section-layout-heading { display: none; }
+  .section-nav { flex-direction: row; }
+  .section-nav-item { width: auto; white-space: nowrap; }
+  .section-layout-sidebar > .section-layout-footer { flex-shrink: 0; margin: 0 0 0 auto; padding: 0; border: 0; }
+  .section-layout-content { padding: 24px 20px 32px; }
+}
+@media (max-width: 767px) {
+  .section-layout > .section-layout-content { height: 100%; padding: 12px 16px 32px; }
+}

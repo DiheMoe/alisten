@@ -1,3 +1,4 @@
+import type { MediaSort } from '@/core/realtime'
 import { LogOut } from 'lucide-react'
 import { useState } from 'react'
 import { brandStore } from '@/core/brand'
@@ -10,6 +11,8 @@ import { SiteSettings } from './site-settings'
 import { SourceAccounts } from './source-accounts'
 import { StoredMedia } from './stored-media'
 import './admin.css'
+
+export type AdminSection = 'site' | 'registration' | 'users' | 'rooms' | 'sources' | 'media'
 
 function SignIn() {
   const [token, setToken] = useState('')
@@ -31,7 +34,7 @@ function SignIn() {
   )
 }
 
-export function AdminPage({ onEntered }: { onEntered: (ref: string) => void }) {
+export function AdminPage({ onEntered }: { section: AdminSection | null, q: string, page: number, sort: MediaSort, onEntered: (ref: string) => void }) {
   const signedIn = useStore(adminStore, s => s.signedIn)
   const brandName = useStore(brandStore, s => s.name)
   return (

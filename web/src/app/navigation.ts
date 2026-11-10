@@ -4,7 +4,7 @@ import { roomEntryStore } from '@/features/rooms'
 import { searchStore } from '@/features/search'
 import { canGoBack, canGoForward, currentEntry, goBack, startHistory, writeEntry } from '@/shared/lib/session-history'
 import { Store } from '@/shared/lib/store'
-import { formatRoute, isNewEntry, leaveStep, parseRoute } from './route'
+import { formatRoute, isNewEntry, leaveStep, parseRoute, upStep } from './route'
 
 interface NavigationState {
   route: Route
@@ -65,12 +65,25 @@ class NavigationStore extends Store<NavigationState> {
     this.#show(route)
   }
 
+  // 从设置或后台的分类回到分类列表，不新增记录。
+  up(list: Route): void {
+    const { position, from } = currentEntry()
+    if (upStep(list, from, canGoBack(position)) === 'back')
+      goBack()
+    else
+      this.replace(list)
+  }
+
   // 不在房间里时，房间的页面没有地址，去发现房间。换页面时侧栏保持原样。
   open(page: 'lobby' | 'admin' | 'settings' | 'history' | 'playlists' | RoomPage): void {
     const { panel } = this.state.route
     if (page === 'lobby' || page === 'history')
       this.navigate({ name: page, filter: '', panel })
-    else if (page === 'admin' || page === 'settings' || page === 'playlists')
+    else if (page === 'settings')
+      this.navigate({ name: page, section: null, panel })
+    else if (page === 'admin')
+      this.navigate({ name: page, section: null, panel, q: '', page: 1, sort: 'stored' })
+    else if (page === 'playlists')
       this.navigate({ name: page, panel })
     else
       this.#openRoomPage(ref => ({ name: page, ref, panel }))

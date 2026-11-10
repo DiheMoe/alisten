@@ -100,6 +100,12 @@ async function open(state: unknown = null) {
       get href() {
         return history.current.url
       },
+      get pathname() {
+        return new URL(history.current.url, 'https://alisten.test').pathname
+      },
+      get search() {
+        return new URL(history.current.url, 'https://alisten.test').search
+      },
     },
     addEventListener: (type: string, listener: EventListener) => history.events.addEventListener(type, listener),
   })
@@ -125,7 +131,7 @@ describe('打开页面', () => {
     const { firstOpen, history, currentEntry } = await open({ index: 3, title: '房间' })
     expect(firstOpen).toBe(false)
     expect(history.state).toEqual({ index: 3, title: '房间' })
-    expect(currentEntry()).toEqual({ position: { index: 3, last: 3 }, title: '房间' })
+    expect(currentEntry()).toEqual({ position: { index: 3, last: 3 }, title: '房间', from: undefined })
   })
 
   it('刷新时弹窗已经关闭，标记记录改作页面的记录', async () => {
@@ -152,10 +158,10 @@ describe('写入记录', () => {
     writeEntry('/a', false, '甲')
     writeEntry('/b', false)
     expect(history.urls).toEqual(['/start', '/a', '/b'])
-    expect(currentEntry()).toEqual({ position: { index: 2, last: 2 }, title: undefined })
+    expect(currentEntry()).toEqual({ position: { index: 2, last: 2 }, title: undefined, from: '/a' })
 
     history.press()
-    expect(currentEntry()).toEqual({ position: { index: 1, last: 2 }, title: '甲' })
+    expect(currentEntry()).toEqual({ position: { index: 1, last: 2 }, title: '甲', from: '/start' })
     expect(log).toEqual(['notify'])
   })
 
@@ -165,7 +171,7 @@ describe('写入记录', () => {
     expect(history.state).toEqual({ index: 1, title: '房间' })
     writeEntry('/b', true, '搜索')
     expect(history.urls).toEqual(['/b'])
-    expect(currentEntry()).toEqual({ position: { index: 1, last: 1 }, title: '搜索' })
+    expect(currentEntry()).toEqual({ position: { index: 1, last: 1 }, title: '搜索', from: undefined })
   })
 
   it('浏览器限制调用频率时地址暂时落后，序号不变，页面照常', async () => {
@@ -173,7 +179,7 @@ describe('写入记录', () => {
     history.failure = new DOMException('Too many calls', 'SecurityError')
     expect(() => writeEntry('/a', false)).not.toThrow()
     expect(() => writeEntry('/b', true, '甲')).not.toThrow()
-    expect(currentEntry()).toEqual({ position: { index: 0, last: 0 }, title: undefined })
+    expect(currentEntry()).toEqual({ position: { index: 0, last: 0 }, title: undefined, from: undefined })
 
     history.failure = null
     writeEntry('/c', false)
@@ -188,6 +194,28 @@ describe('写入记录', () => {
     history.press()
     expect(currentEntry().position).toEqual({ index: 2, last: 2 })
     expect(log).toEqual(['notify'])
+  })
+
+  it('新记录记下写入时的地址，也就是它前面那条记录的地址；替换时沿用，刷新之后还在', async () => {
+    const { writeEntry, currentEntry, history } = await open()
+    writeEntry('/settings', true)
+    writeEntry('/settings/appearance', false)
+    expect(currentEntry().from).toBe('/settings')
+    writeEntry('/admin/media?q=a', false)
+    writeEntry('/admin/media?q=ab', true)
+    expect(currentEntry().from).toBe('/settings/appearance')
+    expect(history.state).toEqual({ index: 2, from: '/settings/appearance' })
+
+    history.press()
+    expect(currentEntry().from).toBe('/settings')
+  })
+
+  it('刷新时沿用记录里的来处，别的脚本写入的来处不用', async () => {
+    expect((await open({ index: 2, from: '/settings' })).currentEntry().from).toBe('/settings')
+    const other = await open({ index: 2, from: 3 })
+    expect(other.currentEntry().from).toBeUndefined()
+    expect(other.history.state).toEqual({ index: 2, from: 3 })
+    expect((await open({ index: 2, from: '/settings', modal: true })).history.state).toEqual({ index: 2, from: '/settings' })
   })
 
   it('其他错误照常抛出', async () => {
@@ -275,7 +303,7 @@ describe('弹窗', () => {
 
     history.settle()
     expect(history.urls).toEqual(['/start', '/next'])
-    expect(currentEntry()).toEqual({ position: { index: 1, last: 1 }, title: '下一页' })
+    expect(currentEntry()).toEqual({ position: { index: 1, last: 1 }, title: '下一页', from: '/start' })
   })
 
   it('弹窗开着时替换地址：先退到页面的记录再替换，然后压回标记', async () => {
@@ -296,7 +324,7 @@ describe('弹窗', () => {
     registerModalHistory(() => {})
     writeEntry('/room', false)
     expect(history.urls).toEqual(['/start', '/room'])
-    expect(history.state).toEqual({ index: 1 })
+    expect(history.state).toEqual({ index: 1, from: '/start' })
     expect(currentEntry().position).toEqual({ index: 1, last: 1 })
   })
 

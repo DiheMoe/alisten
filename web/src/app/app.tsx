@@ -188,6 +188,20 @@ function RoutedLobby({ onEntered }: { onEntered: (ref: string) => void }) {
   return <Lobby filter={route.filter} onFilter={filter => navigationStore.navigate({ ...route, filter })} onEntered={onEntered} />
 }
 
+function RoutedSettings() {
+  const route = useStore(navigationStore, s => s.route)
+  if (route.name !== 'settings')
+    return null
+  return <SettingsPage section={route.section} />
+}
+
+function RoutedAdmin({ onEntered }: { onEntered: (ref: string) => void }) {
+  const route = useStore(navigationStore, s => s.route)
+  if (route.name !== 'admin')
+    return null
+  return <AdminPage section={route.section} q={route.q} page={route.page} sort={route.sort} onEntered={onEntered} />
+}
+
 function RoutedHistory() {
   const route = useStore(navigationStore, s => s.route)
   if (route.name !== 'history')
@@ -213,7 +227,7 @@ function RoutedGitHubLogin() {
   const route = useStore(navigationStore, s => s.route)
   if (route.name !== 'github-login')
     return null
-  return <GitHubLoginPage fragment={route.fragment} onDone={() => navigationStore.replace({ name: 'settings', panel: null })} />
+  return <GitHubLoginPage fragment={route.fragment} onDone={() => navigationStore.replace({ name: 'settings', section: 'account', panel: null })} />
 }
 
 function RoutedSearch() {
@@ -287,7 +301,7 @@ export function App() {
               <ErrorBoundary>
                 <Suspense fallback={pageLoading}>
                   {page === 'lobby' && <RoutedLobby onEntered={showRoom} />}
-                  {page === 'admin' && <AdminPage onEntered={showRoom} />}
+                  {page === 'admin' && <RoutedAdmin onEntered={showRoom} />}
                   {page === 'listen' && <RoomGate onBrowse={browse}><ListenPage /></RoomGate>}
                   {page === 'queue' && <RoomGate onBrowse={browse}><QueuePage /></RoomGate>}
                   {page === 'search' && <RoomGate onBrowse={browse}><RoutedSearch /></RoomGate>}
@@ -301,7 +315,7 @@ export function App() {
                     />
                   )}
                   {page === 'my-playlist' && <RoutedMyPlaylist />}
-                  {page === 'settings' && <SettingsPage />}
+                  {page === 'settings' && <RoutedSettings />}
                   {page === 'shared-playlist' && <RoutedSharedPlaylist />}
                   {page === 'pair' && <RoutedPair />}
                   {page === 'github-login' && <RoutedGitHubLogin />}

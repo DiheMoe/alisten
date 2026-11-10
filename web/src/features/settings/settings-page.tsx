@@ -32,6 +32,8 @@ interface SettingsDraft {
 
 type DraftKey = keyof SettingsDraft
 
+export type SettingsSection = 'account' | 'appearance' | 'playback' | 'performance' | 'privacy'
+
 const themeNames: Record<Theme, string> = { dark: '深色', light: '浅色', system: '跟随系统' }
 
 const levelNames: Record<PerformanceLevel, { name: string, description: string }> = {
@@ -65,7 +67,7 @@ function SettingRow({ id, title, description, field = false, children }: {
   )
 }
 
-export function SettingsPage() {
+export function SettingsPage(_: { section: SettingsSection | null }) {
   const headingRef = useRef<HTMLHeadingElement>(null)
   const member = useStore(profileStore, s => s.member)
   const email = useStore(profileStore, s => s.email)

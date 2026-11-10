@@ -1,6 +1,8 @@
-import type { Source } from '@/core/realtime'
+import type { MediaSort, Source } from '@/core/realtime'
+import type { AdminSection } from '@/features/admin'
 import type { SearchSource } from '@/features/history'
 import type { SearchQuery } from '@/features/search'
+import type { SettingsSection } from '@/features/settings'
 import { canOpenPlaylists, defaultSearchSource, keywordSearch } from '@/features/search'
 
 export type RoomPage = 'listen' | 'queue' | 'chat'
@@ -9,8 +11,10 @@ export type Panel = 'queue' | 'history' | 'chat'
 // panel 是宽屏右侧的侧栏，和当前页面相同时不显示。
 export type Route
   = | { name: 'lobby', filter: string, panel: Panel | null }
-    | { name: 'admin', panel: Panel | null }
-    | { name: 'settings', panel: Panel | null }
+    // section 为 null 时地址是 /admin 或 /settings：宽屏显示第一个分类，窄屏显示分类列表。
+    // q 和 page 只用于后台的房间和媒体，sort 只用于媒体。
+    | { name: 'admin', section: AdminSection | null, panel: Panel | null, q: string, page: number, sort: MediaSort }
+    | { name: 'settings', section: SettingsSection | null, panel: Panel | null }
     | { name: 'history', filter: string, panel: Panel | null }
     | { name: 'playlists', panel: Panel | null }
     | { name: 'my-playlist', id: string, panel: Panel | null }
@@ -25,6 +29,20 @@ export type Route
 
 export type Page = Route['name']
 
+const settingsSections: Record<SettingsSection, true> = { account: true, appearance: true, playback: true, performance: true, privacy: true }
+const adminSections: Record<AdminSection, true> = { site: true, registration: true, users: true, rooms: true, sources: true, media: true }
+const mediaSorts: Record<MediaSort, true> = { stored: true, idle: true, size: true }
+// 与接口对媒体搜索词的长度限制一致，按码点计：手改或截断的链接里更长的搜索词会让每次读取都失败。
+const mediaQueryMaxLength = 100
+
+function isOneOf<T extends string>(values: Record<T, true>, value: string): value is T {
+  return Object.hasOwn(values, value)
+}
+
+function isPaged(section: AdminSection | null): boolean {
+  return section === 'rooms' || section === 'media'
+}
+
 function parseSource(value: string | null): SearchSource | null {
   return value === 'qq' || value === 'netease' ? value : null
 }
@@ -34,9 +52,15 @@ function parsePanel(params: URLSearchParams): Panel | null {
   return panel === 'queue' || panel === 'history' || panel === 'chat' ? panel : null
 }
 
+// 超出安全整数的页码写回地址时会变成另一个数，接口也不接受：当作第 1 页。
 function parsePage(params: URLSearchParams): number {
   const page = Number(params.get('page'))
-  return Number.isInteger(page) && page > 1 ? page : 1
+  return Number.isSafeInteger(page) && page > 1 ? page : 1
+}
+
+function parseAdminQuery(section: AdminSection | null, params: URLSearchParams): string {
+  const q = isPaged(section) ? params.get('q') ?? '' : ''
+  return section === 'media' ? [...q].slice(0, mediaQueryMaxLength).join('') : q
 }
 
 function parseQuery(params: URLSearchParams): SearchQuery {
@@ -69,10 +93,26 @@ export function parseRoute({ pathname, search, hash }: Pick<Location, 'pathname'
   const panel = parsePanel(params)
   if (pathname === '/')
     return { name: 'lobby', filter: params.get('q') ?? '', panel }
-  if (pathname === '/admin')
-    return { name: 'admin', panel }
-  if (pathname === '/settings')
-    return { name: 'settings', panel }
+  const settings = /^\/settings(?:\/([^/]+))?$/.exec(pathname)
+  if (settings) {
+    const [, section = null] = settings
+    return section === null || isOneOf(settingsSections, section) ? { name: 'settings', section, panel } : null
+  }
+  const admin = /^\/admin(?:\/([^/]+))?$/.exec(pathname)
+  if (admin) {
+    const [, section = null] = admin
+    if (section !== null && !isOneOf(adminSections, section))
+      return null
+    const sort = params.get('sort') ?? ''
+    return {
+      name: 'admin',
+      section,
+      panel,
+      q: parseAdminQuery(section, params),
+      page: isPaged(section) ? parsePage(params) : 1,
+      sort: section === 'media' && isOneOf(mediaSorts, sort) ? sort : 'stored',
+    }
+  }
   if (pathname === '/history')
     return { name: 'history', filter: params.get('q') ?? '', panel }
   if (pathname === '/playlists')
@@ -115,6 +155,7 @@ function pathOf(route: Route): string {
       return '/'
     case 'admin':
     case 'settings':
+      return route.section ? `/${route.name}/${route.section}` : `/${route.name}`
     case 'history':
     case 'playlists':
       return `/${route.name}`
@@ -143,17 +184,27 @@ export function formatRoute(route: Route): string {
     writeQuery(route.query, params)
   if (route.name === 'playlist' && route.page > 1)
     params.set('page', String(route.page))
+  if (route.name === 'admin' && isPaged(route.section)) {
+    if (route.q)
+      params.set('q', route.q)
+    if (route.section === 'media' && route.sort !== 'stored')
+      params.set('sort', route.sort)
+    if (route.page > 1)
+      params.set('page', String(route.page))
+  }
   if (route.panel)
     params.set('panel', route.panel)
   const query = params.toString()
   return query ? `${pathOf(route)}?${query}` : pathOf(route)
 }
 
-// 换页面、进入另一个房间、提交新的关键词和打开另一个歌单写入新记录，后退一次回到上一个页面或上一次搜索；
-// 同一个页面里换展示方式、开关侧栏和输入筛选词只替换当前地址。
+// 换页面、进入另一个房间、换设置或后台的分类、提交新的关键词和打开另一个歌单写入新记录，后退一次回到上一个页面、分类或上一次搜索；
+// 同一个页面里换展示方式、开关侧栏、输入筛选词、排序和翻页只替换当前地址。
 export function isNewEntry(from: Route, to: Route): boolean {
   if (from.name !== to.name || ('ref' in from && 'ref' in to && from.ref !== to.ref))
     return true
+  if ((from.name === 'settings' && to.name === 'settings') || (from.name === 'admin' && to.name === 'admin'))
+    return from.section !== to.section
   if (from.name === 'my-playlist' && to.name === 'my-playlist')
     return from.id !== to.id
   if (from.name === 'search' && to.name === 'search')
@@ -163,6 +214,11 @@ export function isNewEntry(from: Route, to: Route): boolean {
   if (from.name === 'shared-playlist' && to.name === 'shared-playlist')
     return from.shareId !== to.shareId
   return false
+}
+
+// 从设置或后台的分类回到分类列表：上一条记录就是列表时后退，否则把当前记录换成列表。两种都不新增记录，返回键不会再回到刚离开的分类。
+export function upStep(list: Route, from: string | undefined, canBack: boolean): 'back' | 'replace' {
+  return canBack && from === formatRoute(list) ? 'back' : 'replace'
 }
 
 // 取消进入房间时离开这个房间的地址：在它的页面上就后退，一直退到进入房间之前的页面；没有可以后退的记录（直接打开的房间链接）时换成发现房间；不在它的页面上就留在原处。

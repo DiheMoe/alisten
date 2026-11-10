@@ -1,7 +1,9 @@
 import type { Route } from './route'
+import type { MediaSort } from '@/core/realtime'
+import type { AdminSection } from '@/features/admin'
 import type { SearchQuery } from '@/features/search'
 import { describe, expect, it } from 'vitest'
-import { formatRoute, isNewEntry, leaveStep, parseRoute } from './route'
+import { formatRoute, isNewEntry, leaveStep, parseRoute, upStep } from './route'
 
 function parse(url: string): Route | null {
   return parseRoute(new URL(url, 'https://alisten.test'))
@@ -11,8 +13,12 @@ describe('parseRoute', () => {
   it.each<[string, Route]>([
     ['/', { name: 'lobby', filter: '', panel: null }],
     ['/?q=+%E5%A4%9C&panel=chat', { name: 'lobby', filter: ' 夜', panel: 'chat' }],
-    ['/admin', { name: 'admin', panel: null }],
-    ['/settings?panel=queue', { name: 'settings', panel: 'queue' }],
+    ['/admin', { name: 'admin', section: null, panel: null, q: '', page: 1, sort: 'stored' }],
+    ['/admin/site', { name: 'admin', section: 'site', panel: null, q: '', page: 1, sort: 'stored' }],
+    ['/admin/rooms?q=jazz&page=2&panel=chat', { name: 'admin', section: 'rooms', panel: 'chat', q: 'jazz', page: 2, sort: 'stored' }],
+    ['/admin/media?q=lemon&sort=size&page=3', { name: 'admin', section: 'media', panel: null, q: 'lemon', page: 3, sort: 'size' }],
+    ['/settings?panel=queue', { name: 'settings', section: null, panel: 'queue' }],
+    ['/settings/privacy', { name: 'settings', section: 'privacy', panel: null }],
     ['/history', { name: 'history', filter: '', panel: null }],
     ['/history?q=%E6%99%B4&panel=history', { name: 'history', filter: '晴', panel: 'history' }],
     ['/playlists', { name: 'playlists', panel: null }],
@@ -36,6 +42,9 @@ describe('parseRoute', () => {
 
   it.each([
     ['/admin?from=menu', '/admin'],
+    ['/admin/users?q=a&page=2&sort=size', '/admin/users'],
+    ['/admin/rooms?sort=size', '/admin/rooms'],
+    ['/admin/media?sort=idle&page=1', '/admin/media?sort=idle'],
     ['/settings?panel=lyrics', '/settings'],
     ['/?q=', '/'],
     ['/r/my-room?panel=lyrics', '/r/my-room'],
@@ -46,13 +55,37 @@ describe('parseRoute', () => {
     ['/r/my-room/search?view=tracks&page=2', '/r/my-room/search?view=tracks'],
     ['/r/my-room/search?view=recommend&q=a&source=netease&page=2', '/r/my-room/search?view=recommend'],
     ['/r/my-room/playlists/netease/123?page=1.5', '/r/my-room/playlists/netease/123'],
+    ['/admin/media?page=99999999999999999999', '/admin/media'],
+    ['/admin/media?page=1e300', '/admin/media'],
+    ['/admin/media?page=9007199254740991', '/admin/media?page=9007199254740991'],
+    ['/r/my-room/playlists/netease/123?page=99999999999999999999', '/r/my-room/playlists/netease/123'],
   ])('%s 规范化为 %s', (url, canonical) => {
     const route = parse(url)
     expect(route && formatRoute(route)).toBe(canonical)
   })
 
-  it.each(['/r/', '/r/my-room/listen', '/r/my-room/queue/extra', '/settings/profile', '/r/my-room/playlists/qq/123', '/r/my-room/playlists/netease', '/s/', '/s/abc/def'])('%s 不对应任何页面', (url) => {
+  it.each(['/r/', '/r/my-room/listen', '/r/my-room/queue/extra', '/settings/profile', '/settings/', '/settings/account/extra', '/admin/', '/admin/overview', '/r/my-room/playlists/qq/123', '/r/my-room/playlists/netease', '/s/', '/s/abc/def'])('%s 不对应任何页面', (url) => {
     expect(parse(url)).toBeNull()
+  })
+
+  it('解析设置和后台的分类', () => {
+    expect(parseRoute({ pathname: '/settings/appearance', search: '', hash: '' })).toEqual({ name: 'settings', section: 'appearance', panel: null })
+    expect(parseRoute({ pathname: '/settings', search: '', hash: '' })).toEqual({ name: 'settings', section: null, panel: null })
+    expect(parseRoute({ pathname: '/settings/unknown', search: '', hash: '' })).toBeNull()
+    expect(parseRoute({ pathname: '/admin/media', search: '?q=lemon&sort=size&page=3', hash: '' })).toEqual({ name: 'admin', section: 'media', panel: null, q: 'lemon', page: 3, sort: 'size' })
+    expect(parseRoute({ pathname: '/admin/media', search: '?sort=bogus&page=0', hash: '' })).toEqual({ name: 'admin', section: 'media', panel: null, q: '', page: 1, sort: 'stored' })
+  })
+
+  it('媒体的搜索词截到接口允许的 100 个字符，按码点计；房间的搜索词在本地筛选，不截', () => {
+    const long = `${'a'.repeat(99)}🎵🎵`
+    expect(parse(`/admin/media?q=${encodeURIComponent(long)}`)).toMatchObject({ section: 'media', q: `${'a'.repeat(99)}🎵` })
+    expect(parse(`/admin/media?q=${'b'.repeat(100)}`)).toMatchObject({ q: 'b'.repeat(100) })
+    expect(parse(`/admin/rooms?q=${'c'.repeat(150)}`)).toMatchObject({ section: 'rooms', q: 'c'.repeat(150) })
+  })
+
+  it('写回地址时省略默认值', () => {
+    expect(formatRoute({ name: 'admin', section: 'media', panel: null, q: '', page: 1, sort: 'stored' })).toBe('/admin/media')
+    expect(formatRoute({ name: 'admin', section: 'rooms', panel: null, q: 'jazz', page: 2, sort: 'stored' })).toBe('/admin/rooms?q=jazz&page=2')
   })
 
   it('配对码从片段中读出，写回的地址不再带它', () => {
@@ -80,8 +113,18 @@ describe('isNewEntry', () => {
 
   it('开关侧栏和输入筛选词只替换当前地址', () => {
     expect(isNewEntry({ name: 'queue', ref: 'a', panel: null }, { name: 'queue', ref: 'a', panel: 'chat' })).toBe(false)
-    expect(isNewEntry({ name: 'settings', panel: null }, { name: 'settings', panel: 'chat' })).toBe(false)
+    expect(isNewEntry({ name: 'settings', section: null, panel: null }, { name: 'settings', section: null, panel: 'chat' })).toBe(false)
     expect(isNewEntry({ name: 'history', filter: '晴', panel: null }, { name: 'history', filter: '晴天', panel: null })).toBe(false)
+  })
+
+  it('换分类写入新记录，换搜索词、排序和页码只替换当前地址', () => {
+    const admin = (section: AdminSection | null, q: string, page: number, sort: MediaSort): Route => ({ name: 'admin', section, panel: null, q, page, sort })
+    expect(isNewEntry({ name: 'settings', section: null, panel: null }, { name: 'settings', section: 'account', panel: null })).toBe(true)
+    expect(isNewEntry({ name: 'settings', section: 'account', panel: null }, { name: 'settings', section: 'privacy', panel: null })).toBe(true)
+    expect(isNewEntry({ name: 'settings', section: 'privacy', panel: null }, { name: 'settings', section: null, panel: null })).toBe(true)
+    expect(isNewEntry(admin('rooms', '', 1, 'stored'), admin('media', '', 1, 'stored'))).toBe(true)
+    expect(isNewEntry(admin('media', '', 1, 'stored'), admin('media', 'lemon', 1, 'stored'))).toBe(false)
+    expect(isNewEntry(admin('media', 'lemon', 1, 'stored'), admin('media', 'lemon', 2, 'size'))).toBe(false)
   })
 
   it('打开另一个自己的歌单写入新记录，同一个歌单只换侧栏时替换当前地址', () => {
@@ -112,11 +155,27 @@ describe('isNewEntry', () => {
   })
 })
 
+describe('upStep', () => {
+  const list: Route = { name: 'settings', section: null, panel: null }
+
+  it('上一条记录就是分类列表时后退，不新增记录', () => {
+    expect(upStep(list, '/settings', true)).toBe('back')
+    expect(upStep({ name: 'admin', section: null, panel: null, q: '', page: 1, sort: 'stored' }, '/admin', true)).toBe('back')
+  })
+
+  it('从别的页面直接打开分类、或者没有可以后退的记录时，把当前记录换成分类列表', () => {
+    expect(upStep(list, '/playlists', true)).toBe('replace')
+    expect(upStep(list, '/settings/account', true)).toBe('replace')
+    expect(upStep(list, undefined, true)).toBe('replace')
+    expect(upStep(list, '/settings', false)).toBe('replace')
+  })
+})
+
 describe('leaveStep', () => {
   const leaving = new Set(['my-room', 'a1b2c3'])
 
   it('不在这个房间的页面上时留在原处', () => {
-    expect(leaveStep({ name: 'admin', panel: null }, leaving, true)).toBe('stay')
+    expect(leaveStep({ name: 'admin', section: null, panel: null, q: '', page: 1, sort: 'stored' }, leaving, true)).toBe('stay')
     expect(leaveStep({ name: 'listen', ref: 'other-room', panel: null }, leaving, true)).toBe('stay')
   })
 
