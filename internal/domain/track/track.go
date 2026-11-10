@@ -1,6 +1,7 @@
 package track
 
 import (
+	"net/url"
 	"strings"
 	"time"
 )
@@ -38,6 +39,14 @@ func asciiLower(s string) string {
 		}
 		return r
 	}, s)
+}
+
+func NetEasePageURL(id string) string {
+	return "https://music.163.com/#/song?id=" + url.QueryEscape(id)
+}
+
+func QQPageURL(id string) string {
+	return "https://y.qq.com/n/ryqq/songDetail/" + url.PathEscape(id)
 }
 
 type Meta struct {

@@ -80,7 +80,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 	services := api.Services{
 		Identity:  identity.New(store, store, store, gateway),
 		Accounts:  identity.NewAccounts(store, store, redis.NewAccountQuota(rdb), redis.NewDevices(rdb), gateway),
-		Playlists: playlist.New(store, store, store, music, redis.NewAccountQuota(rdb)),
+		Playlists: playlist.New(store, store, store, music, redis.NewAccountQuota(rdb), nil),
 		Lobby:     rooms,
 		Admin:     admin.New(cfg.adminToken, rooms, store, store, store, src.neteaseLogin, src.qqLogin, src.bilibiliLogin, store, gateway),
 		Gateway:   gateway,

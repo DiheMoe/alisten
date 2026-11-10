@@ -32,15 +32,16 @@ var (
 )
 
 type Service struct {
-	playlists port.Playlists
-	members   port.Members
-	tracks    port.Tracks
-	catalog   *catalog.Service
-	quota     port.AccountQuota
+	playlists  port.Playlists
+	members    port.Members
+	tracks     port.TrackLookup
+	catalog    *catalog.Service
+	quota      port.AccountQuota
+	shortLinks port.ShortLinks
 }
 
-func New(playlists port.Playlists, members port.Members, tracks port.Tracks, catalog *catalog.Service, quota port.AccountQuota) *Service {
-	return &Service{playlists: playlists, members: members, tracks: tracks, catalog: catalog, quota: quota}
+func New(playlists port.Playlists, members port.Members, tracks port.TrackLookup, catalog *catalog.Service, quota port.AccountQuota, shortLinks port.ShortLinks) *Service {
+	return &Service{playlists: playlists, members: members, tracks: tracks, catalog: catalog, quota: quota, shortLinks: shortLinks}
 }
 
 func (s *Service) List(ctx context.Context, memberID string) ([]port.PlaylistRecord, error) {
@@ -95,12 +96,8 @@ func (s *Service) Add(ctx context.Context, memberID, id string, t track.Track) (
 	if err := s.registered(ctx, memberID); err != nil {
 		return port.PlaylistItem{}, err
 	}
-	wait, err := s.quota.Take(ctx, "playlist:member:"+memberID, addBurst, addRefill)
-	if err != nil {
+	if err := s.take(ctx, "playlist:member:"+memberID, addBurst, addRefill); err != nil {
 		return port.PlaylistItem{}, err
-	}
-	if wait > 0 {
-		return port.PlaylistItem{}, ErrTooFast
 	}
 	meta, err := s.meta(ctx, t)
 	if err != nil {
@@ -156,6 +153,17 @@ func (s *Service) registered(ctx context.Context, memberID string) error {
 	}
 	if profile.Username == "" {
 		return ErrNotRegistered
+	}
+	return nil
+}
+
+func (s *Service) take(ctx context.Context, key string, burst int, refill time.Duration) error {
+	wait, err := s.quota.Take(ctx, key, burst, refill)
+	if err != nil {
+		return err
+	}
+	if wait > 0 {
+		return ErrTooFast
 	}
 	return nil
 }

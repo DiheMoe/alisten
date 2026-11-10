@@ -31,6 +31,16 @@ func (t tracksTable) PreparedTrack(_ context.Context, k track.Track) (port.Prepa
 	return p, ok, nil
 }
 
+func (t tracksTable) TrackMetas(_ context.Context, ts []track.Track) (map[track.Track]track.Meta, error) {
+	found := map[track.Track]track.Meta{}
+	for _, k := range ts {
+		if p, ok := t[k]; ok {
+			found[k] = p.Meta
+		}
+	}
+	return found, nil
+}
+
 func (tracksTable) SavePreparedTrack(context.Context, track.Track, port.PreparedTrack) error {
 	return nil
 }
@@ -54,21 +64,37 @@ func (roomQuota) TakePick(context.Context, string, int, time.Duration) (time.Dur
 type accountQuota struct {
 	exhausted bool
 	keys      []string
+	// 最近一次取额度时给的额度。
+	burst  int
+	refill time.Duration
 }
 
-func (q *accountQuota) Take(_ context.Context, key string, _ int, _ time.Duration) (time.Duration, error) {
+func (q *accountQuota) Take(_ context.Context, key string, burst int, refill time.Duration) (time.Duration, error) {
 	q.keys = append(q.keys, key)
+	q.burst, q.refill = burst, refill
 	if q.exhausted {
 		return time.Second, nil
 	}
 	return 0, nil
 }
 
+// 短链接到解析结果；不在表里的短链接解析失败。
+type shortLinks map[string]string
+
+func (l shortLinks) Resolve(_ context.Context, link string) (string, error) {
+	if final, ok := l[link]; ok {
+		return final, nil
+	}
+	return "", errors.New("跳转到了不受信任的主机")
+}
+
 type fixture struct {
-	svc    *Service
-	store  *porttest.Store
-	tracks tracksTable
-	quota  *accountQuota
+	svc     *Service
+	store   *porttest.Store
+	tracks  tracksTable
+	quota   *accountQuota
+	netease *porttest.Source
+	links   shortLinks
 }
 
 func newFixture(t *testing.T) fixture {
@@ -80,7 +106,8 @@ func newFixture(t *testing.T) fixture {
 	tracks := tracksTable{}
 	music := catalog.New(netease, porttest.NewSource(track.QQ), bilibili, bilibili, tracks, noHistory{}, store, roomQuota{})
 	q := &accountQuota{}
-	return fixture{svc: New(store, store, tracks, music, q), store: store, tracks: tracks, quota: q}
+	links := shortLinks{}
+	return fixture{svc: New(store, store, tracks, music, q, links), store: store, tracks: tracks, quota: q, netease: netease, links: links}
 }
 
 func (f fixture) member(t *testing.T, username string) member.Member {
@@ -130,6 +157,15 @@ func TestGuestCannotUsePlaylists(t *testing.T) {
 	}
 	if err := f.svc.Move(t.Context(), guest.ID, "any", []track.Track{sunny}, nil); !errors.Is(err, ErrNotRegistered) {
 		t.Errorf("游客调整顺序 = %v，期望 ErrNotRegistered", err)
+	}
+	if _, _, err := f.svc.ImportFile(t.Context(), guest.ID, "导入", []ImportedTrack{{Track: sunny, Title: "晴天"}}); !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("游客导入文件 = %v，期望 ErrNotRegistered", err)
+	}
+	if _, _, err := f.svc.ResolveLink(t.Context(), guest.ID, "https://music.163.com/playlist?id=1"); !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("游客解析歌单链接 = %v，期望 ErrNotRegistered", err)
+	}
+	if _, _, err := f.svc.ImportPlatform(t.Context(), guest.ID, "导入", track.NetEase, "1"); !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("游客导入平台歌单 = %v，期望 ErrNotRegistered", err)
 	}
 	if len(f.quota.keys) != 0 {
 		t.Errorf("游客不应消耗额度：%v", f.quota.keys)

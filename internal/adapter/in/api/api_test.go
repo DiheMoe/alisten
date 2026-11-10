@@ -158,7 +158,7 @@ func TestRequestBodyLimit(t *testing.T) {
 func TestPlaylistBatchBodyLimit(t *testing.T) {
 	store := porttest.New()
 	s := services(store, store, "")
-	s.Playlists = playlist.New(store, store, noTracks{}, s.Catalog, nil)
+	s.Playlists = playlist.New(store, store, noTracks{}, s.Catalog, nil, nil)
 	server, _ := start(t, s)
 	var created protocol.CreateMemberResponse
 	if err := json.Unmarshal([]byte(send(t, server, http.MethodPost, "/api/members", "{}").body), &created); err != nil {

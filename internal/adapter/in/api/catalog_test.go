@@ -17,6 +17,10 @@ func (noTracks) PreparedTrack(context.Context, track.Track) (port.PreparedTrack,
 	return port.PreparedTrack{}, false, nil
 }
 
+func (noTracks) TrackMetas(context.Context, []track.Track) (map[track.Track]track.Meta, error) {
+	return nil, nil
+}
+
 func (noTracks) SavePreparedTrack(context.Context, track.Track, port.PreparedTrack) error {
 	return nil
 }

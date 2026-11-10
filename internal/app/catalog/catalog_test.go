@@ -244,6 +244,26 @@ func TestFirstMatch(t *testing.T) {
 	}
 }
 
+func TestPlaylistSongsSkipsRoomQuota(t *testing.T) {
+	f := newFixture(t, history{})
+	songs := []port.Song{song(track.NetEase, "1", "晴天"), song(track.NetEase, "2", "七里香")}
+	f.add(f.netease, songs...)
+	f.netease.AddPlaylist(port.Playlist{ID: "p1", Name: "周杰伦"}, "2", "1")
+	if got, err := f.svc.PlaylistSongs(t.Context(), track.NetEase, "p1"); err != nil || !reflect.DeepEqual(got, []port.Song{songs[1], songs[0]}) {
+		t.Errorf("歌单内的歌曲 = %v, %v，期望按歌单的顺序", got, err)
+	}
+	if f.quota.calls != 0 {
+		t.Errorf("取了 %d 次房间的搜索额度，导入不走房间的额度", f.quota.calls)
+	}
+	if _, err := f.svc.PlaylistSongs(t.Context(), track.QQ, "p1"); !errors.Is(err, port.ErrProviderFailed) {
+		t.Errorf("QQ 音乐的歌单 = %v，期望 ErrProviderFailed", err)
+	}
+	f.netease.Fail(errors.New("网易云不可用"))
+	if _, err := f.svc.PlaylistSongs(t.Context(), track.NetEase, "p1"); !errors.Is(err, port.ErrProviderFailed) {
+		t.Errorf("上游出错时的错误 = %v，期望 ErrProviderFailed", err)
+	}
+}
+
 func TestTrackMetaOfBilibili(t *testing.T) {
 	f := newFixture(t, history{})
 	video := track.Track{Source: track.Bilibili, ID: "BV1xx411c7mD/2"}

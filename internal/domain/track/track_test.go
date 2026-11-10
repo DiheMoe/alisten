@@ -18,3 +18,17 @@ func TestLinkID(t *testing.T) {
 		}
 	}
 }
+
+func TestPlatformPageURL(t *testing.T) {
+	tests := []struct{ got, want string }{
+		{NetEasePageURL("186016"), "https://music.163.com/#/song?id=186016"},
+		{QQPageURL("0039MnYb0qxYhV"), "https://y.qq.com/n/ryqq/songDetail/0039MnYb0qxYhV"},
+		{NetEasePageURL("1&id=2#x"), "https://music.163.com/#/song?id=1%26id%3D2%23x"},
+		{QQPageURL("a/../b?c"), "https://y.qq.com/n/ryqq/songDetail/a%2F..%2Fb%3Fc"},
+	}
+	for _, tt := range tests {
+		if tt.got != tt.want {
+			t.Errorf("页面链接 = %q，期望 %q", tt.got, tt.want)
+		}
+	}
+}

@@ -84,6 +84,14 @@ func (s *Service) PlaylistTracks(ctx context.Context, roomID string, source trac
 	if err := s.take(ctx, roomID); err != nil {
 		return nil, err
 	}
+	return s.PlaylistSongs(ctx, source, playlistID)
+}
+
+// 不取房间的搜索额度：导入歌单按成员另外限流。
+func (s *Service) PlaylistSongs(ctx context.Context, source track.Source, playlistID string) ([]port.Song, error) {
+	if source != track.NetEase {
+		return nil, unsupported(source, "歌单内的歌曲")
+	}
 	songs, err := s.netease.PlaylistTracks(ctx, playlistID)
 	if err != nil {
 		return nil, upstream(source, "获取歌单内的歌曲", err)
