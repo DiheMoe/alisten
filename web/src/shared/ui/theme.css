@@ -41,7 +41,8 @@
   --color-foreground-subtlest: #90909a;
   --color-border: #333337;
   --color-border-hover: #585860;
-  --color-input-border: #414148;
+  /* 输入框边框和关闭状态的开关轨道是控件的边界，在卡片和弹窗的背景上至少要有 3:1 的对比度，否则看不出这里有个控件。 */
+  --color-input-border: #707078;
   --color-input-border-focused: #68d268;
   --color-hover: #303034;
   --color-frame-hover: #303034;
