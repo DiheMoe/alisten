@@ -58,6 +58,14 @@ type GitHubOAuthApps interface {
 	DeleteGitHubOAuthApp(ctx context.Context) error
 }
 
+// GitHub 的 OAuth 授权，使用调用方传入的 OAuth App。
+type GitHubOAuth interface {
+	// 请用户授权的地址：用户同意之后，GitHub 带着 state 和授权码回调，授权码与 verifier 绑定。
+	AuthorizeURL(app GitHubOAuthApp, state, verifier string) string
+	// 用回调带回的授权码和发起那次授权时的 verifier 换取 GitHub 用户的 ID。
+	UserID(ctx context.Context, app GitHubOAuthApp, code, verifier string) (int64, error)
+}
+
 // state 和兑换码只以 SHA-256 哈希的形式出现在端口中，所有实例共用。
 type GitHubLogins interface {
 	SaveRequest(ctx context.Context, stateHash []byte, r GitHubRequest, ttl time.Duration) error
