@@ -12,7 +12,7 @@ import { MyPlaylistPage, PlaylistsPage, SharedPlaylistPage } from '@/features/pl
 import { QueuePage, voteSkip } from '@/features/queue'
 import { copyInviteLink, EntryDialog, Lobby, roomEntryStore, RoomGate } from '@/features/rooms'
 import { HeaderSearch, PlaylistPage, SearchPage, searchStore } from '@/features/search'
-import { profileStore, SettingsPage } from '@/features/settings'
+import { PairPage, profileStore, SettingsPage } from '@/features/settings'
 import { useStore } from '@/shared/lib/use-store'
 import { Avatar, IconButton, lazyPage, Notifications, notificationStore, Skeleton } from '@/shared/ui'
 import { DetailPanel } from './detail-panel'
@@ -202,6 +202,13 @@ function RoutedMyPlaylist() {
   return <MyPlaylistPage id={route.id} onBack={() => navigationStore.open('playlists')} />
 }
 
+function RoutedPair() {
+  const route = useStore(navigationStore, s => s.route)
+  if (route.name !== 'pair')
+    return null
+  return <PairPage code={route.code} onSignedIn={() => navigationStore.replace({ name: 'lobby', filter: '', panel: null })} />
+}
+
 function RoutedSearch() {
   const route = useStore(navigationStore, s => s.route)
   if (route.name !== 'search')
@@ -289,6 +296,7 @@ export function App() {
                   {page === 'my-playlist' && <RoutedMyPlaylist />}
                   {page === 'settings' && <SettingsPage />}
                   {page === 'shared-playlist' && <RoutedSharedPlaylist />}
+                  {page === 'pair' && <RoutedPair />}
                 </Suspense>
               </ErrorBoundary>
             </main>

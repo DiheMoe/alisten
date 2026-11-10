@@ -54,6 +54,13 @@ describe('parseRoute', () => {
   it.each(['/r/', '/r/my-room/listen', '/r/my-room/queue/extra', '/settings/profile', '/r/my-room/playlists/qq/123', '/r/my-room/playlists/netease', '/s/', '/s/abc/def'])('%s 不对应任何页面', (url) => {
     expect(parse(url)).toBeNull()
   })
+
+  it('配对码从片段中读出，写回的地址不再带它', () => {
+    const route = parse('/pair?panel=chat#ABCD2345')
+    expect(route).toEqual({ name: 'pair', code: 'ABCD2345', panel: 'chat' })
+    expect(route && formatRoute(route)).toBe('/pair?panel=chat')
+    expect(parse('/pair')).toEqual({ name: 'pair', code: '', panel: null })
+  })
 })
 
 describe('isNewEntry', () => {

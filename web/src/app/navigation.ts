@@ -45,7 +45,8 @@ class NavigationStore extends Store<NavigationState> {
         route = { name: 'listen', ref: lastRoom, panel: null }
     }
     const url = formatRoute(route)
-    if (url !== window.location.pathname + window.location.search)
+    // 片段只用来带进配对码这类一次性的值，页面读到之后就从地址里去掉。
+    if (url !== window.location.pathname + window.location.search + window.location.hash)
       writeEntry(url, true)
     this.#show(route)
   }

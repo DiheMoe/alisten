@@ -18,6 +18,8 @@ export type Route
     | { name: 'search', ref: string, panel: Panel | null, query: SearchQuery }
     | { name: 'playlist', ref: string, panel: Panel | null, source: Source, id: string, page: number }
     | { name: 'shared-playlist', shareId: string, panel: Panel | null }
+    // 配对码在片段里，不进入请求和 Referer；写回地址时去掉，不留在历史记录中。
+    | { name: 'pair', code: string, panel: Panel | null }
 
 export type Page = Route['name']
 
@@ -60,7 +62,7 @@ function writeQuery(query: SearchQuery, params: URLSearchParams): void {
     params.set('page', String(query.page))
 }
 
-export function parseRoute({ pathname, search }: Pick<Location, 'pathname' | 'search'>): Route | null {
+export function parseRoute({ pathname, search, hash }: Pick<Location, 'pathname' | 'search' | 'hash'>): Route | null {
   const params = new URLSearchParams(search)
   const panel = parsePanel(params)
   if (pathname === '/')
@@ -73,6 +75,8 @@ export function parseRoute({ pathname, search }: Pick<Location, 'pathname' | 'se
     return { name: 'history', filter: params.get('q') ?? '', panel }
   if (pathname === '/playlists')
     return { name: 'playlists', panel }
+  if (pathname === '/pair')
+    return { name: 'pair', code: hash.slice(1), panel }
   const own = /^\/playlists\/([^/]+)$/.exec(pathname)
   if (own)
     return { name: 'my-playlist', id: own[1], panel }
@@ -112,6 +116,8 @@ function pathOf(route: Route): string {
       return `/${route.name}`
     case 'my-playlist':
       return `/playlists/${route.id}`
+    case 'pair':
+      return '/pair'
     case 'listen':
       return `/r/${route.ref}`
     case 'playlist':

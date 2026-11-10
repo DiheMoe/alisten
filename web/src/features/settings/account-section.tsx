@@ -4,10 +4,11 @@ import { api, IdentityRenewedError } from '@/core/api'
 import { errorMessage } from '@/core/errors'
 import { useStore } from '@/shared/lib/use-store'
 import { Modal, notificationStore } from '@/shared/ui'
+import { PairingCodeForm, PairingDialog } from './pairing-dialog'
 import { loginWithPassword } from './password-login'
 import { profileStore, switchIdentity } from './profile-store'
 
-type Dialog = 'register' | 'login' | 'password' | null
+type Dialog = 'register' | 'login' | 'password' | 'pairing' | 'redeem' | null
 
 const credentialTexts = { INVALID_ARGUMENT: '用户名要 3–32 位小写字母、数字、_ 或 -，密码要 8–128 位。' }
 
@@ -52,6 +53,7 @@ export function AccountRow() {
           {account
             ? (
                 <>
+                  <button type="button" className="button-secondary" onClick={() => setDialog('pairing')}>在新设备上登录</button>
                   <button type="button" className="button-secondary" onClick={() => setDialog('password')}>修改密码</button>
                   <button type="button" className="button-secondary" disabled={busy} onClick={() => void logout()}>退出登录</button>
                 </>
@@ -60,12 +62,19 @@ export function AccountRow() {
                 <>
                   {registrationOpen && <button type="button" className="button-secondary" onClick={() => setDialog('register')}>注册</button>}
                   <button type="button" className="button-secondary" onClick={() => setDialog('login')}>登录</button>
+                  <button type="button" className="button-secondary" onClick={() => setDialog('redeem')}>输入配对码</button>
                 </>
               )}
         </div>
       )}
       {(dialog === 'register' || dialog === 'login') && <CredentialsDialog mode={dialog} onClose={() => setDialog(null)} />}
       {dialog === 'password' && <PasswordDialog onClose={() => setDialog(null)} />}
+      {dialog === 'pairing' && <PairingDialog onClose={() => setDialog(null)} />}
+      {dialog === 'redeem' && (
+        <Modal title="输入配对码" onClose={() => setDialog(null)}>
+          <PairingCodeForm onSignedIn={switchIdentity} />
+        </Modal>
+      )}
     </div>
   )
 }
