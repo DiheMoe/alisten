@@ -1,4 +1,5 @@
 import type { Credential, Source, SourceId } from './source-credentials'
+import { QrCode } from 'lucide-react'
 import { useId, useState } from 'react'
 import { notificationStore } from '@/shared/ui'
 import { QrLoginDialog } from './qr-login-dialog'
@@ -21,7 +22,12 @@ function SourceCard({ source, credential: { state, reload } }: { source: Source,
       <div className="admin-card-actions">
         {state instanceof Error
           ? <button type="button" className="button-secondary" onClick={reload}>重试</button>
-          : <button type="button" className={state?.set ? 'button-secondary' : 'button-primary'} disabled={state === undefined} onClick={() => setSigningIn(true)}>{state?.set ? '重新登录' : '扫码登录'}</button>}
+          : (
+              <button type="button" className="button-secondary" disabled={state === undefined} onClick={() => setSigningIn(true)}>
+                {!state?.set && <QrCode size={16} aria-hidden="true" />}
+                {state?.set ? '重新登录' : '扫码登录'}
+              </button>
+            )}
       </div>
       {signingIn && (
         <QrLoginDialog
