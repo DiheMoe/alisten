@@ -20,6 +20,8 @@ export type Route
     | { name: 'shared-playlist', shareId: string, panel: Panel | null }
     // 配对码在片段里，不进入请求和 Referer；写回地址时去掉，不留在历史记录中。
     | { name: 'pair', code: string, panel: Panel | null }
+    // GitHub 授权之后的落地页，片段里是 code=<兑换码> 或 error=<错误码>，同样不留在地址中。
+    | { name: 'github-login', fragment: string, panel: Panel | null }
 
 export type Page = Route['name']
 
@@ -77,6 +79,8 @@ export function parseRoute({ pathname, search, hash }: Pick<Location, 'pathname'
     return { name: 'playlists', panel }
   if (pathname === '/pair')
     return { name: 'pair', code: hash.slice(1), panel }
+  if (pathname === '/auth/github')
+    return { name: 'github-login', fragment: hash.slice(1), panel }
   const own = /^\/playlists\/([^/]+)$/.exec(pathname)
   if (own)
     return { name: 'my-playlist', id: own[1], panel }
@@ -118,6 +122,8 @@ function pathOf(route: Route): string {
       return `/playlists/${route.id}`
     case 'pair':
       return '/pair'
+    case 'github-login':
+      return '/auth/github'
     case 'listen':
       return `/r/${route.ref}`
     case 'playlist':

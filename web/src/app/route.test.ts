@@ -61,6 +61,14 @@ describe('parseRoute', () => {
     expect(route && formatRoute(route)).toBe('/pair?panel=chat')
     expect(parse('/pair')).toEqual({ name: 'pair', code: '', panel: null })
   })
+
+  it('github 登录的结果从片段中读出，写回的地址不再带它', () => {
+    const route = parse('/auth/github#code=abc')
+    expect(route).toEqual({ name: 'github-login', fragment: 'code=abc', panel: null })
+    expect(route && formatRoute(route)).toBe('/auth/github')
+    expect(parse('/auth/github#error=denied')).toEqual({ name: 'github-login', fragment: 'error=denied', panel: null })
+    expect(parse('/auth/github/x')).toBeNull()
+  })
 })
 
 describe('isNewEntry', () => {

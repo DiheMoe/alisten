@@ -44,6 +44,11 @@ class ProfileStore extends Store<ProfileState> {
     await this.#moveLocalEmail()
   }
 
+  // 账号的绑定变了，成员和邮箱都不变。
+  updateAccount(account: Account): void {
+    this.setState({ account })
+  }
+
   // 返回 false 时，失败原因已经通过通知显示。
   async logout(): Promise<boolean> {
     try {

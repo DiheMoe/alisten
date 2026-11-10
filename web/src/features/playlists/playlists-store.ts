@@ -318,15 +318,17 @@ class PlaylistsStore extends Store<PlaylistsState> {
   }
 
   #onProfile = (): void => {
-    const username = profileStore.state.account?.username ?? null
-    if (username === this.#account)
+    const { member, account } = profileStore.state
+    // 只绑定了 GitHub 的账号没有用户名，用成员 ID 区分。
+    const owner = account ? account.username ?? member?.id ?? null : null
+    if (owner === this.#account)
       return
-    this.#account = username
+    this.#account = owner
     this.#generation++
     this.#membershipReads.clear()
     this.#syncing.clear()
     this.setState(empty)
-    if (username)
+    if (owner)
       void this.load()
   }
 

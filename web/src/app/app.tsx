@@ -12,7 +12,7 @@ import { MyPlaylistPage, PlaylistsPage, SharedPlaylistPage } from '@/features/pl
 import { QueuePage, voteSkip } from '@/features/queue'
 import { copyInviteLink, EntryDialog, Lobby, roomEntryStore, RoomGate } from '@/features/rooms'
 import { HeaderSearch, PlaylistPage, SearchPage, searchStore } from '@/features/search'
-import { PairPage, profileStore, SettingsPage } from '@/features/settings'
+import { GitHubLoginPage, PairPage, profileStore, SettingsPage } from '@/features/settings'
 import { useStore } from '@/shared/lib/use-store'
 import { Avatar, IconButton, lazyPage, Notifications, notificationStore, Skeleton } from '@/shared/ui'
 import { DetailPanel } from './detail-panel'
@@ -209,6 +209,13 @@ function RoutedPair() {
   return <PairPage code={route.code} onSignedIn={() => navigationStore.replace({ name: 'lobby', filter: '', panel: null })} />
 }
 
+function RoutedGitHubLogin() {
+  const route = useStore(navigationStore, s => s.route)
+  if (route.name !== 'github-login')
+    return null
+  return <GitHubLoginPage fragment={route.fragment} onDone={() => navigationStore.replace({ name: 'settings', panel: null })} />
+}
+
 function RoutedSearch() {
   const route = useStore(navigationStore, s => s.route)
   if (route.name !== 'search')
@@ -297,6 +304,7 @@ export function App() {
                   {page === 'settings' && <SettingsPage />}
                   {page === 'shared-playlist' && <RoutedSharedPlaylist />}
                   {page === 'pair' && <RoutedPair />}
+                  {page === 'github-login' && <RoutedGitHubLogin />}
                 </Suspense>
               </ErrorBoundary>
             </main>

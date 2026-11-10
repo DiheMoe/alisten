@@ -4,6 +4,7 @@ import { brandStore } from '@/core/brand'
 import { useStore } from '@/shared/lib/use-store'
 import { Accounts } from './accounts'
 import { adminStore } from './admin-store'
+import { GithubApp } from './github-app'
 import { PersistentRooms } from './persistent-rooms'
 import { SiteSettings } from './site-settings'
 import { SourceAccounts } from './source-accounts'
@@ -39,7 +40,7 @@ export function AdminPage({ onEntered }: { onEntered: (ref: string) => void }) {
         <div className="page-title">
           <span className="text-ui-sm accent">{brandName}</span>
           <h1 className="text-ui-xl">后台</h1>
-          <p className="text-ui-base muted">管理品牌名、注册、用户账号、常驻房间、音源账号和已存储的媒体。</p>
+          <p className="text-ui-base muted">管理品牌名、注册、GitHub 登录、用户账号、常驻房间、音源账号和已存储的媒体。</p>
         </div>
         {signedIn && (
           <button type="button" className="button-ghost" onClick={() => adminStore.signOut()}>
@@ -52,6 +53,7 @@ export function AdminPage({ onEntered }: { onEntered: (ref: string) => void }) {
         ? (
             <>
               <SiteSettings />
+              <GithubApp />
               <Accounts />
               <PersistentRooms onEntered={onEntered} />
               <SourceAccounts />

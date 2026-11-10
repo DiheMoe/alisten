@@ -12,7 +12,8 @@
 .admin-row-title { font-weight: 600; }
 .admin-row-meta { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .admin-row-actions { display: flex; align-items: center; gap: 8px; }
-.admin-brand-name { width: 240px; }
+.admin-brand-name, .admin-github-field { width: 240px; }
+.admin-github-callback { overflow-wrap: anywhere; }
 .admin-link { color: var(--color-foreground-subtle); }
 .admin-link:hover { color: var(--color-brand); }
 .admin-empty { padding: 8px 0; }
@@ -31,5 +32,5 @@
 @container admin (max-width: 600px) {
   .admin-row { flex-wrap: wrap; }
   .admin-row-actions { flex-basis: 100%; }
-  .admin-brand-name { flex: 1; width: auto; }
+  .admin-brand-name, .admin-github-field { flex: 1; width: auto; }
 }

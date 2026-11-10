@@ -103,6 +103,8 @@ beforeEach(() => {
     requests.push(request)
     if (request === 'GET /api/me/playlists')
       return read({ items: [...serverPlaylists] })
+    if (request === 'GET /api/me')
+      return json(200, { member: { id: 'm1', name: 'octocat', avatarHash: '' }, account: { github: true } })
     if (request === 'POST /api/me/playlist-memberships') {
       const { track } = JSON.parse(String(init.body)) as { track: Track }
       return read({ playlistIds: [...server].filter(([, tracks]) => tracks.has(key(track))).map(([id]) => id) })
@@ -470,6 +472,15 @@ describe('playlistsStore', () => {
     window.dispatchEvent(new Event('focus'))
     await flush()
     expect(requests.filter(r => r === 'GET /api/me/playlists')).toHaveLength(2)
+  })
+
+  it('只绑定了 GitHub 的账号没有用户名，同样读取歌单', async () => {
+    const { playlistsStore } = await import('./playlists-store')
+    const { profileStore } = await import('@/features/settings')
+    playlistsStore.start()
+    await profileStore.load()
+    await flush()
+    expect(playlistsStore.state.playlists).toEqual([favorites])
   })
 
   it('换账号之后，上一个账号的读取结果作废', async () => {
