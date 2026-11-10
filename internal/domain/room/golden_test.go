@@ -224,6 +224,8 @@ func formatEffect(e Effect) string {
 			modeNames[s.Mode], s.EntrySeq, formatPlaying(s.Current), formatEntryPtr(s.Pending), formatEntries(s.Waiting))
 	case RecordPlay:
 		return fmt.Sprintf("record %s %s-%s", formatEntry(e.Entry), offset(e.StartedAt), offset(e.EndedAt))
+	case RecordListen:
+		return fmt.Sprintf("listen [%s] %s@%s", strings.Join(e.Members, " "), formatEntry(e.Entry), offset(e.StartedAt))
 	case Emit:
 		return fmt.Sprintf("emit %d.%d %s", e.Term, e.Seq, formatEvent(e.Event))
 	case Close:

@@ -23,6 +23,7 @@ prepare netease:a
 -- 07 --
 > 1s prepared netease:a 3m
 persist mode=sequential entrySeq=1 current=#1(netease:a,ready)@1.2s pending=- waiting=[]
+listen [m1 m2 m3] #1(netease:a,ready)@1.2s
 emit 1.7 queue pending=- waiting=[]
 emit 1.8 playback #1(netease:a,ready)@1.2s
 schedule 1 3m1.2s

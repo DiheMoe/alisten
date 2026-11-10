@@ -227,10 +227,40 @@ func checkInvariants(t *testing.T, r *Room, before Snapshot, effects []Effect, t
 	} else if len(find[Persist](effects)) != 0 {
 		t.Fatalf("持久状态没变却落盘：%#v", effects)
 	}
+	checkListen(t, r, effects)
 	for _, e := range find[Emit](effects) {
 		if e.Term != term || e.Seq != *seq+1 {
 			t.Fatalf("任期 %d 中 seq %d 之后是任期 %d 的 %d", term, *seq, e.Term, e.Seq)
 		}
 		*seq = e.Seq
+	}
+}
+
+// 听歌记录只记正在播放的歌和在线的成员，排在落盘之后、广播之前。
+func checkListen(t *testing.T, r *Room, effects []Effect) {
+	t.Helper()
+	i := slices.IndexFunc(effects, func(e Effect) bool { _, ok := e.(RecordListen); return ok })
+	if i < 0 {
+		return
+	}
+	l := effects[i].(RecordListen)
+	if len(find[RecordListen](effects)) != 1 {
+		t.Fatalf("一批中有多个 RecordListen：%#v", effects)
+	}
+	if len(find[Emit](effects[:i])) != 0 || len(find[Persist](effects[i:])) != 0 {
+		t.Fatalf("RecordListen 应排在 Persist 之后、Emit 之前：%#v", effects)
+	}
+	if r.current == nil || l.Entry != r.current.Entry || !l.StartedAt.Equal(r.current.StartedAt) {
+		t.Fatalf("RecordListen 记的不是正在播放的歌：%#v，正在播放 %#v", l, r.current)
+	}
+	if len(l.Members) == 0 {
+		t.Fatal("RecordListen 没有成员")
+	}
+	seen := map[string]bool{}
+	for _, id := range l.Members {
+		if seen[id] || !slices.ContainsFunc(r.sessions, func(s Session) bool { return s.Member.ID == id }) {
+			t.Fatalf("RecordListen 的成员重复或不在线：%v，在线 %#v", l.Members, r.sessions)
+		}
+		seen[id] = true
 	}
 }

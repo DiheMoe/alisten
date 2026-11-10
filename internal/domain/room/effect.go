@@ -44,16 +44,25 @@ type RecordPlay struct {
 	EndedAt   time.Time
 }
 
+type RecordListen struct {
+	// 成员 ID，不重复。
+	Members []string
+	Entry   Entry
+	// 这首歌的开播时间。
+	StartedAt time.Time
+}
+
 type Close struct{}
 
-func (Persist) effect()    {}
-func (Emit) effect()       {}
-func (Reply) effect()      {}
-func (Prepare) effect()    {}
-func (Recommend) effect()  {}
-func (Schedule) effect()   {}
-func (RecordPlay) effect() {}
-func (Close) effect()      {}
+func (Persist) effect()      {}
+func (Emit) effect()         {}
+func (Reply) effect()        {}
+func (Prepare) effect()      {}
+func (Recommend) effect()    {}
+func (Schedule) effect()     {}
+func (RecordPlay) effect()   {}
+func (RecordListen) effect() {}
+func (Close) effect()        {}
 
 type Event interface{ event() }
 

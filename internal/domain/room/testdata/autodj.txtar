@@ -15,6 +15,7 @@ prepare netease:a
 -- 04 --
 > 20s prepared netease:a 3m
 persist mode=sequential entrySeq=1 current=#1(netease:a,ready)@20.2s pending=- waiting=[]
+listen [m1] #1(netease:a,ready)@20.2s
 emit 1.4 queue pending=- waiting=[]
 emit 1.5 playback #1(netease:a,ready)@20.2s
 schedule 2 3m20.2s
@@ -33,6 +34,7 @@ emit 1.8 queue pending=- waiting=[#2(netease:b,ready,auto)]
 > 3m20.2s timer 2
 persist mode=sequential entrySeq=2 current=#2(netease:b,ready,auto)@3m20.4s pending=- waiting=[]
 record #1(netease:a,ready) 20.2s-3m20.2s
+listen [m1] #2(netease:b,ready,auto)@3m20.4s
 emit 1.9 queue pending=- waiting=[]
 emit 1.10 playback #2(netease:b,ready,auto)@3m20.4s
 schedule 4 5m20.4s

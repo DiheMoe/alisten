@@ -164,6 +164,10 @@ func (r *Room) commit(b *batch) []Effect {
 	for _, p := range b.plays {
 		out = append(out, p)
 	}
+	// 排在广播之前：客户端看到开播时，听歌记录已经写好。
+	if l, ok := r.listened(b); ok {
+		out = append(out, l)
+	}
 	events := b.events
 	if after.Info != b.before.Info {
 		events = append(events, InfoChanged{Name: after.Info.Name, Description: after.Info.Description})
@@ -191,6 +195,27 @@ func (r *Room) commit(b *batch) []Effect {
 		out = append(out, *b.answer)
 	}
 	return append(out, b.tasks...)
+}
+
+// 开播了一首新歌时记给所有在线成员；正在播放的歌没变时，只记给这一批之前没有会话的成员。
+func (r *Room) listened(b *batch) (RecordListen, bool) {
+	c := r.current
+	if c == nil {
+		return RecordListen{}, false
+	}
+	started := b.before.Current == nil || b.before.Current.Entry.ID != c.Entry.ID
+	var members []string
+	for _, s := range r.sessions {
+		id := s.Member.ID
+		if slices.Contains(members, id) || !started && slices.ContainsFunc(b.sessions, func(old Session) bool { return old.Member.ID == id }) {
+			continue
+		}
+		members = append(members, id)
+	}
+	if len(members) == 0 {
+		return RecordListen{}, false
+	}
+	return RecordListen{Members: members, Entry: c.Entry, StartedAt: c.StartedAt}, true
 }
 
 func (r *Room) timer(b *batch, in Timer) {
