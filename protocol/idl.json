@@ -186,9 +186,10 @@
         "trackCount": {"type": "integer"},
         "createdAtMs": {"type": "integer"},
         "updatedAtMs": {"type": "integer"},
-        "coverUrl": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "歌单里排在最前、有封面的那首歌的封面；没有时为 null"}
+        "coverUrl": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "歌单里排在最前、有封面的那首歌的封面；没有时为 null"},
+        "shareId": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "分享链接 /s/<shareId> 中的 ID；没有分享时为 null"}
       },
-      "required": ["id", "name", "favorites", "trackCount", "createdAtMs", "updatedAtMs", "coverUrl"]
+      "required": ["id", "name", "favorites", "trackCount", "createdAtMs", "updatedAtMs", "coverUrl", "shareId"]
     },
     "MyPlaylistItem": {
       "type": "object",
@@ -362,6 +363,18 @@
         "heardAtMs": {"type": "integer", "description": "最近一次听到这首歌时它的开播时间"}
       },
       "required": ["track", "meta", "heardAtMs"]
+    },
+    "SharedPlaylist": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string"},
+        "favorites": {"type": "boolean", "description": "是否是“我喜欢”"},
+        "ownerName": {"type": "string", "description": "所有者的昵称"},
+        "ownerAvatarHash": {"type": "string", "description": "所有者邮箱的 MD5，未设置邮箱时为空字符串"},
+        "items": {"type": "array", "items": {"$ref": "#/$defs/MyPlaylistItem"}, "description": "新加入的在前"}
+      },
+      "required": ["name", "favorites", "ownerName", "ownerAvatarHash", "items"]
     }
   },
   "x-ws": {
@@ -1624,6 +1637,55 @@
       "path": "/api/me/listen-recording",
       "auth": "member",
       "status": 204
+    },
+    {
+      "name": "shareMyPlaylist",
+      "description": "开启分享或重新生成分享链接：每次都生成新的 shareId，之前的链接随即失效；“我喜欢”也能分享",
+      "method": "POST",
+      "path": "/api/me/playlists/{id}/share",
+      "auth": "member",
+      "request": {"type": "object", "additionalProperties": false, "properties": {}},
+      "response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "shareId": {"type": "string"}
+        },
+        "required": ["shareId"]
+      }
+    },
+    {
+      "name": "unshareMyPlaylist",
+      "description": "停止分享：分享链接随即失效；没有分享时也算成功",
+      "method": "DELETE",
+      "path": "/api/me/playlists/{id}/share",
+      "auth": "member",
+      "status": 204
+    },
+    {
+      "name": "getSharedPlaylist",
+      "description": "读取分享的歌单，不需要身份；不返回所有者的成员 ID 和用户名；停止分享、重新生成链接或删除歌单之后返回 NOT_FOUND",
+      "method": "GET",
+      "path": "/api/shared-playlists/{shareId}",
+      "auth": "none",
+      "response": {"$ref": "#/$defs/SharedPlaylist"}
+    },
+    {
+      "name": "copySharedPlaylist",
+      "description": "把分享的歌单复制成自己的新歌单，带上全部曲目和顺序；新歌单受“最多 50 个”的限制；分享已失效时返回 NOT_FOUND",
+      "method": "POST",
+      "path": "/api/shared-playlists/{shareId}/copies",
+      "auth": "member",
+      "status": 201,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"$ref": "#/$defs/PlaylistName"}
+        },
+        "required": ["name"]
+      },
+      "response": {"$ref": "#/$defs/MyPlaylist"}
     }
   ]
 }

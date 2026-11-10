@@ -38,7 +38,7 @@ GET /api/me/playlists
 Authorization: Bearer $alice
 -- response --
 200
-{"items": [{"id": "$favorites", "name": "我喜欢", "favorites": true, "trackCount": 0, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": null}]}
+{"items": [{"id": "$favorites", "name": "我喜欢", "favorites": true, "trackCount": 0, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": null, "shareId": null}]}
 
 -- request --
 POST /api/me/playlists/$favorites/items
@@ -93,7 +93,7 @@ Authorization: Bearer $alice
 {"name": "  通勤  "}
 -- response --
 201
-{"id": "$commute", "name": "通勤", "favorites": false, "trackCount": 0, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": null}
+{"id": "$commute", "name": "通勤", "favorites": false, "trackCount": 0, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": null, "shareId": null}
 
 -- request --
 POST /api/me/playlists
@@ -224,7 +224,7 @@ GET /api/me/playlists
 Authorization: Bearer $alice
 -- response --
 200
-{"items": [{"id": "$favorites", "name": "我喜欢", "favorites": true, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/qilixiang.jpg"}, {"id": "$commute", "name": "上班路上", "favorites": false, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/example.jpg"}]}
+{"items": [{"id": "$favorites", "name": "我喜欢", "favorites": true, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "shareId": null}, {"id": "$commute", "name": "上班路上", "favorites": false, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/example.jpg", "shareId": null}]}
 
 -- request --
 POST /api/me/playlist-memberships
@@ -289,7 +289,7 @@ GET /api/me/playlists
 Authorization: Bearer $bob
 -- response --
 200
-{"items": [{"id": "$bobFavorites", "name": "我喜欢", "favorites": true, "trackCount": 0, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": null}]}
+{"items": [{"id": "$bobFavorites", "name": "我喜欢", "favorites": true, "trackCount": 0, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": null, "shareId": null}]}
 
 -- request --
 POST /api/me/playlists/$bobFavorites/copies
@@ -377,4 +377,4 @@ GET /api/me/playlists
 Authorization: Bearer $alice
 -- response --
 200
-{"items": [{"id": "$favorites", "name": "我喜欢", "favorites": true, "trackCount": 1, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/qilixiang.jpg"}]}
+{"items": [{"id": "$favorites", "name": "我喜欢", "favorites": true, "trackCount": 1, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "shareId": null}]}

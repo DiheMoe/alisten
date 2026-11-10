@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "ae9a632d648f3840"
+const Version = "cbfa923a9cbe9f0a"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -179,6 +179,10 @@ func (v CopyMyPlaylistItemsRequest) MarshalJSON() ([]byte, error) {
 
 type CopyMyPlaylistItemsResponse struct {
 	Added int64 `json:"added"`
+}
+
+type CopySharedPlaylistRequest struct {
+	Name string `json:"name"`
 }
 
 type CreateMemberRequest struct{}
@@ -437,6 +441,7 @@ type MyPlaylist struct {
 	Favorites   bool    `json:"favorites"`
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
+	ShareID     *string `json:"shareId"`
 	TrackCount  int64   `json:"trackCount"`
 	UpdatedAtMs int64   `json:"updatedAtMs"`
 }
@@ -742,6 +747,28 @@ type SettingsUpdatedEvent struct {
 	PlayMode PlayMode `json:"playMode"`
 }
 
+type ShareMyPlaylistRequest struct{}
+
+type ShareMyPlaylistResponse struct {
+	ShareID string `json:"shareId"`
+}
+
+type SharedPlaylist struct {
+	Favorites       bool             `json:"favorites"`
+	Items           []MyPlaylistItem `json:"items"`
+	Name            string           `json:"name"`
+	OwnerAvatarHash string           `json:"ownerAvatarHash"`
+	OwnerName       string           `json:"ownerName"`
+}
+
+func (v SharedPlaylist) MarshalJSON() ([]byte, error) {
+	type plain SharedPlaylist
+	if v.Items == nil {
+		v.Items = []MyPlaylistItem{}
+	}
+	return json.Marshal(plain(v))
+}
+
 type Source string
 
 const (
@@ -895,6 +922,10 @@ var (
 	RouteClearMyListens               = Route{Pattern: "DELETE /api/me/listens", Auth: AuthMember, Status: 204}
 	RouteEnableListenRecording        = Route{Pattern: "PUT /api/me/listen-recording", Auth: AuthMember, Status: 204}
 	RouteDisableListenRecording       = Route{Pattern: "DELETE /api/me/listen-recording", Auth: AuthMember, Status: 204}
+	RouteShareMyPlaylist              = Route{Pattern: "POST /api/me/playlists/{id}/share", Auth: AuthMember, Status: 200}
+	RouteUnshareMyPlaylist            = Route{Pattern: "DELETE /api/me/playlists/{id}/share", Auth: AuthMember, Status: 204}
+	RouteGetSharedPlaylist            = Route{Pattern: "GET /api/shared-playlists/{shareId}", Auth: AuthNone, Status: 200}
+	RouteCopySharedPlaylist           = Route{Pattern: "POST /api/shared-playlists/{shareId}/copies", Auth: AuthMember, Status: 201}
 )
 
 var RoomRoutes = []RoomRoute{

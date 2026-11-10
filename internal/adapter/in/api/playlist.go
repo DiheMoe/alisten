@@ -24,6 +24,7 @@ func (s *server) playlistDTO(p port.PlaylistRecord) protocol.MyPlaylist {
 		CreatedAtMs: p.CreatedAt.UnixMilli(),
 		UpdatedAtMs: p.UpdatedAt.UnixMilli(),
 		CoverURL:    cover,
+		ShareID:     optional(p.ShareID),
 	}
 }
 
@@ -193,4 +194,49 @@ func (s *server) importMyPlatformPlaylist(ctx context.Context, c call) (any, err
 		return nil, err
 	}
 	return protocol.ImportMyPlatformPlaylistResponse{Playlist: s.playlistDTO(p), Imported: int64(n)}, nil
+}
+
+func (s *server) shareMyPlaylist(ctx context.Context, c call) (any, error) {
+	if _, err := protocol.DecodeShareMyPlaylistRequest(c.body); err != nil {
+		return nil, err
+	}
+	shareID, err := s.Playlists.Share(ctx, c.member.ID, c.r.PathValue("id"))
+	if err != nil {
+		return nil, err
+	}
+	return protocol.ShareMyPlaylistResponse{ShareID: shareID}, nil
+}
+
+func (s *server) unshareMyPlaylist(ctx context.Context, c call) (any, error) {
+	return nil, s.Playlists.Unshare(ctx, c.member.ID, c.r.PathValue("id"))
+}
+
+func (s *server) getSharedPlaylist(ctx context.Context, c call) (any, error) {
+	p, err := s.Playlists.Shared(ctx, c.r.PathValue("shareId"))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]protocol.MyPlaylistItem, len(p.Items))
+	for i, item := range p.Items {
+		items[i] = s.playlistItemDTO(item)
+	}
+	return protocol.SharedPlaylist{
+		Name:            p.Name,
+		Favorites:       p.Favorites,
+		OwnerName:       p.OwnerName,
+		OwnerAvatarHash: p.OwnerAvatarHash,
+		Items:           items,
+	}, nil
+}
+
+func (s *server) copySharedPlaylist(ctx context.Context, c call) (any, error) {
+	req, err := protocol.DecodeCopySharedPlaylistRequest(c.body)
+	if err != nil {
+		return nil, err
+	}
+	p, err := s.Playlists.CopyShared(ctx, c.member.ID, c.r.PathValue("shareId"), req.Name)
+	if err != nil {
+		return nil, err
+	}
+	return s.playlistDTO(p), nil
 }

@@ -119,7 +119,7 @@ Authorization: Bearer $alice
 ]}
 -- response --
 201
-{"playlist": {"id": "$imported", "name": "文件里的歌单", "favorites": false, "trackCount": 3, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/example.jpg"}, "imported": 3}
+{"playlist": {"id": "$imported", "name": "文件里的歌单", "favorites": false, "trackCount": 3, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/example.jpg", "shareId": null}, "imported": 3}
 
 -- request --
 GET /api/me/playlists/$imported/items
@@ -139,7 +139,7 @@ Authorization: Bearer $alice
 {"name": "   ", "tracks": []}
 -- response --
 201
-{"playlist": {"id": "$empty", "name": "导入的歌单", "favorites": false, "trackCount": 0, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": null}, "imported": 0}
+{"playlist": {"id": "$empty", "name": "导入的歌单", "favorites": false, "trackCount": 0, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": null, "shareId": null}, "imported": 0}
 
 -- request --
 POST /api/me/playlist-links
@@ -166,7 +166,7 @@ Authorization: Bearer $alice
 {"name": "周杰伦精选", "source": "netease", "playlistId": "3778678"}
 -- response --
 201
-{"playlist": {"id": "$platform", "name": "周杰伦精选", "favorites": false, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/example.jpg"}, "imported": 2}
+{"playlist": {"id": "$platform", "name": "周杰伦精选", "favorites": false, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/example.jpg", "shareId": null}, "imported": 2}
 
 -- request --
 POST /api/me/playlists/platform-imports

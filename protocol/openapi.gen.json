@@ -475,6 +475,20 @@
         ],
         "type": "object"
       },
+      "CopySharedPlaylistRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "歌单名：去掉首尾空白后 1 到 50 个字符",
+            "maxLength": 200,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "CreateMemberRequest": {
         "additionalProperties": false,
         "type": "object"
@@ -1087,6 +1101,17 @@
           "name": {
             "type": "string"
           },
+          "shareId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "分享链接 /s/<shareId> 中的 ID；没有分享时为 null"
+          },
           "trackCount": {
             "type": "integer"
           },
@@ -1101,7 +1126,8 @@
           "trackCount",
           "createdAtMs",
           "updatedAtMs",
-          "coverUrl"
+          "coverUrl",
+          "shareId"
         ],
         "type": "object"
       },
@@ -1700,6 +1726,57 @@
         ],
         "type": "object"
       },
+      "ShareMyPlaylistRequest": {
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "ShareMyPlaylistResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "shareId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "shareId"
+        ],
+        "type": "object"
+      },
+      "SharedPlaylist": {
+        "additionalProperties": false,
+        "properties": {
+          "favorites": {
+            "description": "是否是“我喜欢”",
+            "type": "boolean"
+          },
+          "items": {
+            "description": "新加入的在前",
+            "items": {
+              "$ref": "#/components/schemas/MyPlaylistItem"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ownerAvatarHash": {
+            "description": "所有者邮箱的 MD5，未设置邮箱时为空字符串",
+            "type": "string"
+          },
+          "ownerName": {
+            "description": "所有者的昵称",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "favorites",
+          "ownerName",
+          "ownerAvatarHash",
+          "items"
+        ],
+        "type": "object"
+      },
       "Source": {
         "enum": [
           "netease",
@@ -1956,7 +2033,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "ae9a632d648f3840"
+    "version": "cbfa923a9cbe9f0a"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3811,6 +3888,93 @@
         "summary": "把若干首歌移出歌单，一次 1 到 1000 首；不在歌单里的忽略"
       }
     },
+    "/api/me/playlists/{id}/share": {
+      "delete": {
+        "operationId": "unshareMyPlaylist",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "停止分享：分享链接随即失效；没有分享时也算成功"
+      },
+      "post": {
+        "operationId": "shareMyPlaylist",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareMyPlaylistRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareMyPlaylistResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "开启分享或重新生成分享链接：每次都生成新的 shareId，之前的链接随即失效；“我喜欢”也能分享"
+      }
+    },
     "/api/members": {
       "post": {
         "operationId": "createMember",
@@ -4606,6 +4770,98 @@
           }
         ],
         "summary": "退出登录：发出请求的成员 token 随即失效"
+      }
+    },
+    "/api/shared-playlists/{shareId}": {
+      "get": {
+        "operationId": "getSharedPlaylist",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shareId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedPlaylist"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [],
+        "summary": "读取分享的歌单，不需要身份；不返回所有者的成员 ID 和用户名；停止分享、重新生成链接或删除歌单之后返回 NOT_FOUND"
+      }
+    },
+    "/api/shared-playlists/{shareId}/copies": {
+      "post": {
+        "operationId": "copySharedPlaylist",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shareId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopySharedPlaylistRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyPlaylist"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "把分享的歌单复制成自己的新歌单，带上全部曲目和顺序；新歌单受“最多 50 个”的限制；分享已失效时返回 NOT_FOUND"
       }
     },
     "/api/site": {

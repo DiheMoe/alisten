@@ -1,0 +1,269 @@
+歌单分享：已注册的账号可以分享自己的任何歌单，包括“我喜欢”；每次开启都生成新的链接，旧链接随即失效；不需要身份就能读取分享，响应里没有所有者的成员 ID 和用户名；已注册的成员可以把分享的歌单复制成自己的新歌单；停止分享、删除歌单之后分享失效。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/account
+Authorization: Bearer $alice
+
+{"username": "alice", "password": "correct horse"}
+-- response --
+201
+{"account": {"username": "alice"}}
+
+-- request --
+PATCH /api/me
+Authorization: Bearer $alice
+
+{"email": "alice@example.com"}
+-- response --
+200
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}}
+
+-- request --
+GET /api/me/playlists
+Authorization: Bearer $alice
+-- response --
+200
+{"items": [{"id": "$favorites", "name": "我喜欢", "favorites": true, "trackCount": 0, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": null, "shareId": null}]}
+
+-- request --
+POST /api/me/playlists/$favorites/items
+Authorization: Bearer $alice
+
+{"track": {"source": "netease", "id": "186016"}}
+-- response --
+201
+{"item": {"track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000}}}
+
+-- request --
+POST /api/me/playlists/$favorites/items
+Authorization: Bearer $alice
+
+{"track": {"source": "netease", "id": "185811"}}
+-- response --
+201
+{"item": {"track": {"source": "netease", "id": "185811"}, "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000}}}
+
+-- request --
+POST /api/me/playlists/$favorites/share
+
+{}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "成员 token 无效"}}
+
+-- request --
+POST /api/me/playlists/$favorites/share
+Authorization: Bearer $alice
+
+{}
+-- response --
+200
+{"shareId": "$share"}
+
+-- request --
+GET /api/me/playlists
+Authorization: Bearer $alice
+-- response --
+200
+{"items": [{"id": "$favorites", "name": "我喜欢", "favorites": true, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "shareId": "$share"}]}
+
+-- request --
+GET /api/shared-playlists/$share
+-- response --
+200
+{"name": "我喜欢", "favorites": true, "ownerName": "$aliceName", "ownerAvatarHash": "c160f8cc69a4f0bf2b0362752353d060", "items": [
+  {"track": {"source": "netease", "id": "185811"}, "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000}},
+  {"track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000}}
+]}
+
+-- request --
+POST /api/me/playlists/$favorites/share
+Authorization: Bearer $alice
+
+{}
+-- response --
+200
+{"shareId": "$newShare"}
+
+-- request --
+GET /api/shared-playlists/$share
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "分享已失效"}}
+
+-- request --
+GET /api/shared-playlists/$newShare
+-- response --
+200
+{"name": "我喜欢", "favorites": true, "ownerName": "$aliceName", "ownerAvatarHash": "c160f8cc69a4f0bf2b0362752353d060", "items": [
+  {"track": {"source": "netease", "id": "185811"}, "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000}},
+  {"track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000}}
+]}
+
+-- request --
+GET /api/shared-playlists/not-a-share
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "分享已失效"}}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$bob", "member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""}}
+
+-- request --
+GET /api/shared-playlists/$newShare
+Authorization: Bearer $bob
+-- response --
+200
+{"name": "我喜欢", "favorites": true, "ownerName": "$aliceName", "ownerAvatarHash": "c160f8cc69a4f0bf2b0362752353d060", "items": [
+  {"track": {"source": "netease", "id": "185811"}, "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000}},
+  {"track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000}}
+]}
+
+-- request --
+POST /api/shared-playlists/$newShare/copies
+
+{"name": "抄来的"}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "成员 token 无效"}}
+
+-- request --
+POST /api/shared-playlists/$newShare/copies
+Authorization: Bearer $bob
+
+{"name": "抄来的"}
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "注册账号之后才能使用歌单"}}
+
+-- request --
+POST /api/me/playlists/$favorites/share
+Authorization: Bearer $bob
+
+{}
+-- response --
+403
+{"error": {"code": "FORBIDDEN", "message": "注册账号之后才能使用歌单"}}
+
+-- request --
+POST /api/account
+Authorization: Bearer $bob
+
+{"username": "bob", "password": "correct horse"}
+-- response --
+201
+{"account": {"username": "bob"}}
+
+-- request --
+POST /api/me/playlists/$favorites/share
+Authorization: Bearer $bob
+
+{}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "歌单不存在"}}
+
+-- request --
+DELETE /api/me/playlists/$favorites/share
+Authorization: Bearer $bob
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "歌单不存在"}}
+
+-- request --
+POST /api/shared-playlists/$newShare/copies
+Authorization: Bearer $bob
+
+{"name": "   "}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "name：去掉首尾空白后应有 1 到 50 个字符，其中至少一个看得见，不能包含控制字符"}}
+
+-- request --
+POST /api/shared-playlists/$newShare/copies
+Authorization: Bearer $bob
+
+{"name": "  抄来的  "}
+-- response --
+201
+{"id": "$copy", "name": "抄来的", "favorites": false, "trackCount": 2, "createdAtMs": 1, "updatedAtMs": 1, "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "shareId": null}
+
+-- request --
+GET /api/me/playlists/$copy/items
+Authorization: Bearer $bob
+-- response --
+200
+{"items": [
+  {"track": {"source": "netease", "id": "185811"}, "meta": {"title": "七里香", "artist": "周杰伦", "album": "七里香", "coverUrl": "https://p1.music.126.net/qilixiang.jpg", "pageUrl": "https://music.163.com/#/song?id=185811", "durationMs": 299000}},
+  {"track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000}}
+]}
+
+-- request --
+POST /api/shared-playlists/not-a-share/copies
+Authorization: Bearer $bob
+
+{"name": "抄来的"}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "分享已失效"}}
+
+-- request --
+DELETE /api/me/playlists/$favorites/share
+Authorization: Bearer $alice
+-- response --
+204
+
+-- request --
+DELETE /api/me/playlists/$favorites/share
+Authorization: Bearer $alice
+-- response --
+204
+
+-- request --
+GET /api/shared-playlists/$newShare
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "分享已失效"}}
+
+-- request --
+POST /api/shared-playlists/$newShare/copies
+Authorization: Bearer $bob
+
+{"name": "抄来的"}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "分享已失效"}}
+
+-- request --
+POST /api/me/playlists/$copy/share
+Authorization: Bearer $bob
+
+{}
+-- response --
+200
+{"shareId": "$copyShare"}
+
+-- request --
+DELETE /api/me/playlists/$copy
+Authorization: Bearer $bob
+-- response --
+204
+
+-- request --
+GET /api/shared-playlists/$copyShare
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "分享已失效"}}

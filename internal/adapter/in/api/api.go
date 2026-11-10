@@ -165,6 +165,10 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	srv.handle(mux, protocol.RouteClearMyListens, srv.clearMyListens)
 	srv.handle(mux, protocol.RouteEnableListenRecording, srv.enableListenRecording)
 	srv.handle(mux, protocol.RouteDisableListenRecording, srv.disableListenRecording)
+	srv.handle(mux, protocol.RouteShareMyPlaylist, srv.shareMyPlaylist)
+	srv.handle(mux, protocol.RouteUnshareMyPlaylist, srv.unshareMyPlaylist)
+	srv.handle(mux, protocol.RouteGetSharedPlaylist, srv.getSharedPlaylist)
+	srv.handle(mux, protocol.RouteCopySharedPlaylist, srv.copySharedPlaylist)
 	mux.HandleFunc("GET /ws", srv.websocket)
 	mux.HandleFunc("GET /api/room/events", srv.roomEvents)
 	mux.HandleFunc("GET /media/{source}/{id}", srv.redirectMedia)
@@ -352,6 +356,7 @@ var knownErrors = []struct {
 	{catalog.ErrRateLimited, protocol.ErrorCodeRateLimited},
 	{errClientOutdated, protocol.ErrorCodeClientOutdated},
 	{errPanicked, protocol.ErrorCodeInternal},
+	{port.ErrShareNotFound, protocol.ErrorCodeNotFound},
 }
 
 func errorInfo(err error) (info protocol.ErrorInfo, expected bool) {

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { sortPlaylists } from './playlist-sort'
 
 function playlist(id: string, name: string, trackCount: number, createdAtMs: number, updatedAtMs: number, favorites = false): MyPlaylist {
-  return { id, name, favorites, trackCount, createdAtMs, updatedAtMs, coverUrl: null }
+  return { id, name, favorites, trackCount, createdAtMs, updatedAtMs, coverUrl: null, shareId: null }
 }
 
 const favorites = playlist('p0', '我喜欢', 3, 50, 50, true)

@@ -195,6 +195,14 @@ func DecodeEnableListenRecordingRequest(body []byte) (EnableListenRecordingReque
 	return decodeEnableListenRecordingRequest(body, "")
 }
 
+func DecodeShareMyPlaylistRequest(body []byte) (ShareMyPlaylistRequest, error) {
+	return decodeShareMyPlaylistRequest(body, "")
+}
+
+func DecodeCopySharedPlaylistRequest(body []byte) (CopySharedPlaylistRequest, error) {
+	return decodeCopySharedPlaylistRequest(body, "")
+}
+
 func decodeAddMyPlaylistItemRequest(raw json.RawMessage, path string) (AddMyPlaylistItemRequest, error) {
 	var v AddMyPlaylistItemRequest
 	m, err := decodeObject(raw, path, "track")
@@ -499,6 +507,24 @@ func decodeCopyMyPlaylistItemsRequest(raw json.RawMessage, path string) (CopyMyP
 		return v, err
 	}
 	if err = checkMinItems(v.Tracks, field(path, "tracks"), 1); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+func decodeCopySharedPlaylistRequest(raw json.RawMessage, path string) (CopySharedPlaylistRequest, error) {
+	var v CopySharedPlaylistRequest
+	m, err := decodeObject(raw, path, "name")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "name"); err != nil {
+		return v, err
+	}
+	if v.Name, err = decodeString(m["name"], field(path, "name")); err != nil {
+		return v, err
+	}
+	if err = checkMaxLength(v.Name, field(path, "name"), 200); err != nil {
 		return v, err
 	}
 	return v, nil
@@ -1150,6 +1176,12 @@ func decodeSettingsSetPlayModeRequest(raw json.RawMessage, path string) (Setting
 		return v, err
 	}
 	return v, nil
+}
+
+func decodeShareMyPlaylistRequest(raw json.RawMessage, path string) (ShareMyPlaylistRequest, error) {
+	var v ShareMyPlaylistRequest
+	_, err := decodeObject(raw, path)
+	return v, err
 }
 
 func decodeSource(raw json.RawMessage, path string) (Source, error) {

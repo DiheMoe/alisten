@@ -25,15 +25,15 @@ class FakeStorage {
   }
 }
 
-const favorites = { id: 'p1', name: '我喜欢', favorites: true, trackCount: 1, createdAtMs: 1, updatedAtMs: 1, coverUrl: null }
+const favorites = { id: 'p1', name: '我喜欢', favorites: true, trackCount: 1, createdAtMs: 1, updatedAtMs: 1, coverUrl: null, shareId: null }
 const sunny = { source: 'netease', id: '186016' } as const
 const rain = { source: 'netease', id: '185811' } as const
-const commute = { id: 'p2', name: '通勤', favorites: false, trackCount: 0, createdAtMs: 1, updatedAtMs: 1, coverUrl: null }
+const commute = { id: 'p2', name: '通勤', favorites: false, trackCount: 0, createdAtMs: 1, updatedAtMs: 1, coverUrl: null, shareId: null }
 const meta = { title: '晴天', artist: '周杰伦', album: '叶惠美', coverUrl: '', pageUrl: '', durationMs: 0 }
 const notReady = '这首歌还在准备，准备好之后再保存'
 const full = '一个歌单最多 1000 首歌'
 const changed = '歌单已经变了，刷新之后再试'
-const imported = { id: 'p3', name: '导入的歌单', favorites: false, trackCount: 2, createdAtMs: 2, updatedAtMs: 2, coverUrl: null }
+const imported = { id: 'p3', name: '导入的歌单', favorites: false, trackCount: 2, createdAtMs: 2, updatedAtMs: 2, coverUrl: null, shareId: null }
 const fileTrack = { track: sunny, title: '晴天', durationMs: 269000 }
 
 let requests: string[]
