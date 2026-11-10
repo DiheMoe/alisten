@@ -12,7 +12,7 @@ import { rowAfterRemoval } from '@/shared/lib/removal-focus'
 import { useStore } from '@/shared/lib/use-store'
 import { ConfirmDialog, EmptyState, notificationStore, Skeleton } from '@/shared/ui'
 import { FavoritesMark, PlaylistCover } from './playlist-cover'
-import { formatPlaylistDate } from './playlist-date'
+import { playlistDates } from './playlist-date'
 import { exportFileName, exportPlaylist } from './playlist-file'
 import { PlaylistMenu } from './playlist-menu'
 import { PlaylistTracks } from './playlist-tracks'
@@ -246,7 +246,7 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
           </h1>
           {playlist && (
             <p className="text-ui-base muted">
-              {`${playlist.trackCount} 首，更新于${formatPlaylistDate(playlist.updatedAtMs, now)}，创建于${formatPlaylistDate(playlist.createdAtMs, now)}`}
+              {`${playlist.trackCount} 首，${playlistDates(playlist.updatedAtMs, playlist.createdAtMs, now)}`}
             </p>
           )}
           <div className="my-playlist-actions">
