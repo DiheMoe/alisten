@@ -27,6 +27,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/admin"
 	"github.com/dihemoe/alisten/internal/app/catalog"
 	"github.com/dihemoe/alisten/internal/app/identity"
+	"github.com/dihemoe/alisten/internal/app/listen"
 	"github.com/dihemoe/alisten/internal/app/lobby"
 	"github.com/dihemoe/alisten/internal/app/media"
 	"github.com/dihemoe/alisten/internal/app/playlist"
@@ -90,6 +91,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 		Media:     media.NewLibrary(store, store, objects),
 		Playback:  media.NewPlayback(src.playback, store),
 		Site:      site.New(store),
+		Listens:   listen.New(store),
 
 		StorageURL: cfg.storageURL,
 	}

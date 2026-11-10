@@ -570,6 +570,10 @@
         "additionalProperties": false,
         "type": "object"
       },
+      "EnableListenRecordingRequest": {
+        "additionalProperties": false,
+        "type": "object"
+      },
       "Entry": {
         "additionalProperties": false,
         "properties": {
@@ -690,10 +694,15 @@
           },
           "member": {
             "$ref": "#/components/schemas/Member"
+          },
+          "recordListens": {
+            "description": "是否把在房间里听到的歌记进播放历史",
+            "type": "boolean"
           }
         },
         "required": [
-          "member"
+          "member",
+          "recordListens"
         ],
         "type": "object"
       },
@@ -826,6 +835,21 @@
           "track",
           "title",
           "durationMs"
+        ],
+        "type": "object"
+      },
+      "ListMyListensResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MyListen"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
         ],
         "type": "object"
       },
@@ -1011,6 +1035,28 @@
         },
         "required": [
           "tracks"
+        ],
+        "type": "object"
+      },
+      "MyListen": {
+        "additionalProperties": false,
+        "properties": {
+          "heardAtMs": {
+            "description": "最近一次听到这首歌时它的开播时间",
+            "type": "integer"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/TrackMeta",
+            "description": "听到时的元数据"
+          },
+          "track": {
+            "$ref": "#/components/schemas/Track"
+          }
+        },
+        "required": [
+          "track",
+          "meta",
+          "heardAtMs"
         ],
         "type": "object"
       },
@@ -1383,6 +1429,18 @@
         },
         "required": [
           "account"
+        ],
+        "type": "object"
+      },
+      "RemoveMyListenRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "track": {
+            "$ref": "#/components/schemas/Track"
+          }
+        },
+        "required": [
+          "track"
         ],
         "type": "object"
       },
@@ -1898,7 +1956,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "ed36759d403f9894"
+    "version": "ae9a632d648f3840"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3033,6 +3091,159 @@
           }
         ],
         "summary": "修改昵称和头像；email 用来计算头像哈希，已注册的账号同时保存它，去掉首尾空白后应形如 name@example.com，空字符串表示清除"
+      }
+    },
+    "/api/me/listen-recording": {
+      "delete": {
+        "operationId": "disableListenRecording",
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "不再记录播放历史，已有的历史保留"
+      },
+      "put": {
+        "operationId": "enableListenRecording",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnableListenRecordingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "开始把在房间里听到的歌记进播放历史"
+      }
+    },
+    "/api/me/listens": {
+      "delete": {
+        "operationId": "clearMyListens",
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "清空播放历史"
+      },
+      "get": {
+        "operationId": "listMyListens",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListMyListensResponse"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "我的播放历史：在房间里听到过的歌，每首只留最近一次，最近听到的在前，最多 500 首；同一账号的所有设备看到同一份"
+      }
+    },
+    "/api/me/listens/removals": {
+      "post": {
+        "operationId": "removeMyListen",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveMyListenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "summary": "从播放历史中删除一首歌；不在历史里的忽略"
       }
     },
     "/api/me/playlist-links": {

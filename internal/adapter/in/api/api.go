@@ -19,6 +19,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/admin"
 	"github.com/dihemoe/alisten/internal/app/catalog"
 	"github.com/dihemoe/alisten/internal/app/identity"
+	"github.com/dihemoe/alisten/internal/app/listen"
 	"github.com/dihemoe/alisten/internal/app/lobby"
 	"github.com/dihemoe/alisten/internal/app/media"
 	"github.com/dihemoe/alisten/internal/app/playlist"
@@ -52,6 +53,7 @@ type Services struct {
 	Media     *media.Library
 	Playback  *media.Playback
 	Site      *site.Service
+	Listens   *listen.Service
 
 	// 浏览器访问对象存储时使用的地址前缀，结尾没有 /。
 	StorageURL string
@@ -158,6 +160,11 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	srv.handle(mux, protocol.RouteAdminCloseRegistration, srv.adminCloseRegistration)
 	srv.handle(mux, protocol.RouteAdminGetAccount, srv.adminGetAccount)
 	srv.handle(mux, protocol.RouteAdminResetAccountPassword, srv.adminResetAccountPassword)
+	srv.handle(mux, protocol.RouteListMyListens, srv.listMyListens)
+	srv.handle(mux, protocol.RouteRemoveMyListen, srv.removeMyListen)
+	srv.handle(mux, protocol.RouteClearMyListens, srv.clearMyListens)
+	srv.handle(mux, protocol.RouteEnableListenRecording, srv.enableListenRecording)
+	srv.handle(mux, protocol.RouteDisableListenRecording, srv.disableListenRecording)
 	mux.HandleFunc("GET /ws", srv.websocket)
 	mux.HandleFunc("GET /api/room/events", srv.roomEvents)
 	mux.HandleFunc("GET /media/{source}/{id}", srv.redirectMedia)

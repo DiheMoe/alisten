@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "ed36759d403f9894"
+const Version = "ae9a632d648f3840"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -212,6 +212,8 @@ type CreateTicketResponse struct {
 
 type Empty struct{}
 
+type EnableListenRecordingRequest struct{}
+
 type Entry struct {
 	Auto   bool        `json:"auto"`
 	By     *Member     `json:"by"`
@@ -253,8 +255,9 @@ type ErrorInfo struct {
 }
 
 type GetMeResponse struct {
-	Account *Account `json:"account,omitempty"`
-	Member  Member   `json:"member"`
+	Account       *Account `json:"account,omitempty"`
+	Member        Member   `json:"member"`
+	RecordListens bool     `json:"recordListens"`
 }
 
 type GetSiteResponse struct {
@@ -311,6 +314,18 @@ type ImportedTrack struct {
 	PageURL    *string `json:"pageUrl,omitempty"`
 	Title      string  `json:"title"`
 	Track      Track   `json:"track"`
+}
+
+type ListMyListensResponse struct {
+	Items []MyListen `json:"items"`
+}
+
+func (v ListMyListensResponse) MarshalJSON() ([]byte, error) {
+	type plain ListMyListensResponse
+	if v.Items == nil {
+		v.Items = []MyListen{}
+	}
+	return json.Marshal(plain(v))
 }
 
 type ListMyPlaylistItemsResponse struct {
@@ -408,6 +423,12 @@ func (v MoveMyPlaylistItemsRequest) MarshalJSON() ([]byte, error) {
 		v.Tracks = []Track{}
 	}
 	return json.Marshal(plain(v))
+}
+
+type MyListen struct {
+	HeardAtMs int64     `json:"heardAtMs"`
+	Meta      TrackMeta `json:"meta"`
+	Track     Track     `json:"track"`
 }
 
 type MyPlaylist struct {
@@ -579,6 +600,10 @@ type RegisterRequest struct {
 
 type RegisterResponse struct {
 	Account Account `json:"account"`
+}
+
+type RemoveMyListenRequest struct {
+	Track Track `json:"track"`
 }
 
 type RemoveMyPlaylistItemsRequest struct {
@@ -865,6 +890,11 @@ var (
 	RouteAdminCloseRegistration       = Route{Pattern: "DELETE /api/admin/registration", Auth: AuthAdmin, Status: 204}
 	RouteAdminGetAccount              = Route{Pattern: "GET /api/admin/accounts/{username}", Auth: AuthAdmin, Status: 200}
 	RouteAdminResetAccountPassword    = Route{Pattern: "POST /api/admin/accounts/{username}/password", Auth: AuthAdmin, Status: 200}
+	RouteListMyListens                = Route{Pattern: "GET /api/me/listens", Auth: AuthMember, Status: 200}
+	RouteRemoveMyListen               = Route{Pattern: "POST /api/me/listens/removals", Auth: AuthMember, Status: 204}
+	RouteClearMyListens               = Route{Pattern: "DELETE /api/me/listens", Auth: AuthMember, Status: 204}
+	RouteEnableListenRecording        = Route{Pattern: "PUT /api/me/listen-recording", Auth: AuthMember, Status: 204}
+	RouteDisableListenRecording       = Route{Pattern: "DELETE /api/me/listen-recording", Auth: AuthMember, Status: 204}
 )
 
 var RoomRoutes = []RoomRoute{

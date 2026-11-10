@@ -187,6 +187,14 @@ func DecodeAdminResetAccountPasswordRequest(body []byte) (AdminResetAccountPassw
 	return decodeAdminResetAccountPasswordRequest(body, "")
 }
 
+func DecodeRemoveMyListenRequest(body []byte) (RemoveMyListenRequest, error) {
+	return decodeRemoveMyListenRequest(body, "")
+}
+
+func DecodeEnableListenRecordingRequest(body []byte) (EnableListenRecordingRequest, error) {
+	return decodeEnableListenRecordingRequest(body, "")
+}
+
 func decodeAddMyPlaylistItemRequest(raw json.RawMessage, path string) (AddMyPlaylistItemRequest, error) {
 	var v AddMyPlaylistItemRequest
 	m, err := decodeObject(raw, path, "track")
@@ -568,6 +576,12 @@ func decodeCreateTicketRequest(raw json.RawMessage, path string) (CreateTicketRe
 		v.Password = &x
 	}
 	return v, nil
+}
+
+func decodeEnableListenRecordingRequest(raw json.RawMessage, path string) (EnableListenRecordingRequest, error) {
+	var v EnableListenRecordingRequest
+	_, err := decodeObject(raw, path)
+	return v, err
 }
 
 func decodeHelloRequest(raw json.RawMessage, path string) (HelloRequest, error) {
@@ -962,6 +976,21 @@ func decodeRegisterRequest(raw json.RawMessage, path string) (RegisterRequest, e
 		return v, err
 	}
 	if err = checkPattern(v.Username, field(path, "username"), patternRegisterRequestUsername); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+func decodeRemoveMyListenRequest(raw json.RawMessage, path string) (RemoveMyListenRequest, error) {
+	var v RemoveMyListenRequest
+	m, err := decodeObject(raw, path, "track")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "track"); err != nil {
+		return v, err
+	}
+	if v.Track, err = decodeTrack(m["track"], field(path, "track")); err != nil {
 		return v, err
 	}
 	return v, nil

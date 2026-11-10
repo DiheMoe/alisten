@@ -21,7 +21,7 @@ GET /api/me
 Authorization: Bearer $alice
 -- response --
 200
-{"member": {"id": "$aliceId", "name": "$guestName", "avatarHash": ""}}
+{"member": {"id": "$aliceId", "name": "$guestName", "avatarHash": ""}, "recordListens": true}
 
 -- request --
 PATCH /api/me
@@ -73,11 +73,11 @@ GET /api/me
 Authorization: Bearer $alice
 -- response --
 200
-{"member": {"id": "$aliceId", "name": "甲", "avatarHash": ""}}
+{"member": {"id": "$aliceId", "name": "甲", "avatarHash": ""}, "recordListens": true}
 
 -- request --
 GET /api/me
 Authorization: Bearer $bob
 -- response --
 200
-{"member": {"id": "$bobId", "name": "乙", "avatarHash": ""}}
+{"member": {"id": "$bobId", "name": "乙", "avatarHash": ""}, "recordListens": true}

@@ -1,0 +1,249 @@
+播放历史：开播时记给房间里的成员，开播之后进来的成员也记上正在播放的歌，关闭了记录的成员不记，已有的历史保留；
+可以删除一首、清空；游客登录账号时，游客的历史并入账号。读取历史要有成员 token。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/account
+Authorization: Bearer $alice
+
+{"username": "alice", "password": "correct horse"}
+-- response --
+201
+{"account": {"username": "alice"}}
+
+-- request --
+GET /api/me/listens
+Authorization: Bearer $alice
+-- response --
+200
+{"items": []}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$bob", "member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""}}
+
+-- request --
+DELETE /api/me/listen-recording
+Authorization: Bearer $bob
+-- response --
+204
+
+-- request --
+GET /api/me
+Authorization: Bearer $bob
+-- response --
+200
+{"member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""}, "recordListens": false}
+
+-- request --
+POST /api/admin/rooms
+Authorization: Bearer admin-secret
+
+{"name": "大厅", "description": ""}
+-- response --
+201
+Location: /api/rooms/$room
+{"id": "$room"}
+
+-- request --
+POST /api/rooms/$room/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+201
+{"ticket": "$ticketA"}
+
+-- connect alice --
+-- send alice --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$room", "ticket": "$ticketA", "protocolVersion": "$protocolVersion"}}
+-- receive alice --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 1, "room": {"id": "$room", "name": "大厅", "description": "", "kind": "persistent"},
+    "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
+
+-- send alice --
+{"kind": "request", "type": "queue.add", "id": "a1", "data": {"track": {"source": "netease", "id": "186016"}}}
+-- receive alice --
+{"kind": "event", "type": "room.activity", "term": 1, "seq": 2, "data": {"kind": "added", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+    "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"},
+  "message": "点了《晴天》"}}
+-- receive alice --
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 3, "data": {"items": [],
+  "pending": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+    "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}}
+-- receive alice --
+{"kind": "response", "type": "queue.add", "id": "a1", "data": {"entry": {"id": "1", "track": {"source": "netease", "id": "186016"},
+  "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
+  "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}}
+-- receive alice --
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 4, "data": {"pending": null, "items": []}}
+-- receive alice --
+{"kind": "event", "type": "playback.updated", "term": 1, "seq": 5, "data": {"nowPlaying": {
+  "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500},
+    "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "ready"},
+  "mediaUrl": "/media/netease/186016", "startedAtMs": 1, "durationMs": 269500, "gain": 1, "lyric": "[00:01.00]故事的小黄花"}}}
+
+-- request --
+GET /api/me/listens
+Authorization: Bearer $alice
+-- response --
+200
+{"items": [{"track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500}, "heardAtMs": 1}]}
+
+-- request --
+POST /api/rooms/$room/tickets
+Authorization: Bearer $bob
+
+{}
+-- response --
+201
+{"ticket": "$ticketB"}
+
+-- connect bob --
+-- send bob --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$room", "ticket": "$ticketB", "protocolVersion": "$protocolVersion"}}
+-- receive bob --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 6, "room": {"id": "$room", "name": "大厅", "description": "", "kind": "persistent"},
+    "playMode": "sequential", "pending": null, "items": [],
+    "nowPlaying": {
+      "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500},
+        "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "ready"},
+      "mediaUrl": "/media/netease/186016", "startedAtMs": 1, "durationMs": 269500, "gain": 1, "lyric": "[00:01.00]故事的小黄花"},
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}], "onlineCount": 2}}}}
+-- receive alice --
+{"kind": "event", "type": "members.updated", "term": 1, "seq": 6, "data": {
+  "sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}], "onlineCount": 2}}
+
+-- request --
+GET /api/me/listens
+Authorization: Bearer $bob
+-- response --
+200
+{"items": []}
+
+-- request --
+PUT /api/me/listen-recording
+Authorization: Bearer $bob
+
+{}
+-- response --
+204
+
+-- request --
+GET /api/me
+Authorization: Bearer $bob
+-- response --
+200
+{"member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""}, "recordListens": true}
+
+-- disconnect bob --
+-- receive alice --
+{"kind": "event", "type": "members.updated", "term": 1, "seq": 7, "data": {
+  "sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}
+
+-- connect again --
+-- send again --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$room", "ticket": "$ticketB", "protocolVersion": "$protocolVersion"}}
+-- receive again --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 8, "room": {"id": "$room", "name": "大厅", "description": "", "kind": "persistent"},
+    "playMode": "sequential", "pending": null, "items": [],
+    "nowPlaying": {
+      "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500},
+        "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "ready"},
+      "mediaUrl": "/media/netease/186016", "startedAtMs": 1, "durationMs": 269500, "gain": 1, "lyric": "[00:01.00]故事的小黄花"},
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}], "onlineCount": 2}}}}
+-- receive alice --
+{"kind": "event", "type": "members.updated", "term": 1, "seq": 8, "data": {
+  "sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}], "onlineCount": 2}}
+
+-- request --
+GET /api/me/listens
+Authorization: Bearer $bob
+-- response --
+200
+{"items": [{"track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500}, "heardAtMs": 1}]}
+
+-- request --
+POST /api/me/listens/removals
+Authorization: Bearer $alice
+
+{"track": {"source": "netease", "id": "186016"}}
+-- response --
+204
+
+-- request --
+POST /api/me/listens/removals
+Authorization: Bearer $alice
+
+{"track": {"source": "qq", "id": "0039MnYb0qxYhV"}}
+-- response --
+204
+
+-- request --
+GET /api/me/listens
+Authorization: Bearer $alice
+-- response --
+200
+{"items": []}
+
+-- request --
+POST /api/sessions
+Authorization: Bearer $bob
+
+{"username": "alice", "password": "correct horse"}
+-- response --
+201
+{"memberToken": "$alice2", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "device": "$bobDevice"}
+-- closed again --
+4401
+-- receive alice --
+{"kind": "event", "type": "members.updated", "term": 1, "seq": 9, "data": {
+  "sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}
+
+-- request --
+GET /api/me/listens
+Authorization: Bearer $alice2
+-- response --
+200
+{"items": [{"track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500}, "heardAtMs": 1}]}
+
+-- request --
+DELETE /api/me/listens
+Authorization: Bearer $alice2
+-- response --
+204
+
+-- request --
+GET /api/me/listens
+Authorization: Bearer $alice
+-- response --
+200
+{"items": []}
+
+-- request --
+GET /api/me/listens
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "成员 token 无效"}}

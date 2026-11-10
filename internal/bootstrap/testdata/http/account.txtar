@@ -22,7 +22,7 @@ GET /api/me
 Authorization: Bearer $alice
 -- response --
 200
-{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}}
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "recordListens": true}
 
 -- request --
 PATCH /api/me
@@ -38,7 +38,7 @@ GET /api/me
 Authorization: Bearer $alice
 -- response --
 200
-{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "account": {"username": "alice", "email": "Alice@Example.COM"}}
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "account": {"username": "alice", "email": "Alice@Example.COM"}, "recordListens": true}
 
 -- request --
 POST /api/account
@@ -62,7 +62,7 @@ GET /api/me
 Authorization: Bearer $bob
 -- response --
 200
-{"member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""}}
+{"member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""}, "recordListens": true}
 
 -- request --
 PATCH /api/me
@@ -78,7 +78,7 @@ GET /api/me
 Authorization: Bearer $bob
 -- response --
 200
-{"member": {"id": "$bobId", "name": "$bobName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}}
+{"member": {"id": "$bobId", "name": "$bobName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "recordListens": true}
 
 -- request --
 PATCH /api/me
@@ -139,7 +139,7 @@ GET /api/me
 Authorization: Bearer $alice2
 -- response --
 200
-{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "account": {"username": "alice", "email": "Alice@Example.COM"}}
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": "c160f8cc69a4f0bf2b0362752353d060"}, "account": {"username": "alice", "email": "Alice@Example.COM"}, "recordListens": true}
 
 -- request --
 PATCH /api/me
@@ -155,7 +155,7 @@ GET /api/me
 Authorization: Bearer $alice
 -- response --
 200
-{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}}
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice"}, "recordListens": true}
 
 -- request --
 GET /api/me

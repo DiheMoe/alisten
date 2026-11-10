@@ -42,6 +42,9 @@ func (s *server) getMe(ctx context.Context, c call) (any, error) {
 		dto := accountDTO(account)
 		resp.Account = &dto
 	}
+	if resp.RecordListens, err = s.Listens.Recording(ctx, c.member.ID); err != nil {
+		return nil, err
+	}
 	return resp, nil
 }
 
