@@ -40,7 +40,7 @@ func services(store *porttest.Store, rooms port.RoomDirectory, adminToken string
 	music := newCatalog(rooms, 10)
 	node := porttest.NewRedis().Node("a")
 	_, gateway := realtime.New(store, rooms, store, store, music, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
-	l := lobby.New(rooms, node)
+	l := lobby.New(rooms, node, porttest.Quota{})
 	accounts := identity.NewAccounts(store, store, nil, nil, nil, nil, gateway)
 	return Services{
 		Identity: identity.New(store, rooms, store, porttest.Quota{}, gateway),

@@ -104,7 +104,7 @@ func (g *GitHub) Authorize(ctx context.Context, memberID, clientIP string, inten
 			return "", err
 		}
 	}
-	if err := g.accounts.take(ctx, "github:ip:"+quotaAddr(clientIP), githubAuthorizeBurst, githubAuthorizeRefill); err != nil {
+	if err := g.accounts.take(ctx, "github:ip:"+QuotaAddr(clientIP), githubAuthorizeBurst, githubAuthorizeRefill); err != nil {
 		return "", err
 	}
 	state, stateHash := newSecret()

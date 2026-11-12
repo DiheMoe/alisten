@@ -58,7 +58,7 @@ func (a *Accounts) RedeemPairingCode(ctx context.Context, current member.Member,
 	if err := a.requireGuest(ctx, current.ID); err != nil {
 		return Session{}, Account{}, err
 	}
-	if err := a.take(ctx, "pairing:ip:"+quotaAddr(clientIP), pairingRedeemBurst, pairingRedeemRefill); err != nil {
+	if err := a.take(ctx, "pairing:ip:"+QuotaAddr(clientIP), pairingRedeemBurst, pairingRedeemRefill); err != nil {
 		return Session{}, Account{}, err
 	}
 	pairing, err := a.pairings.TakePairing(ctx, hashSecret(code))

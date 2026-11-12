@@ -60,7 +60,7 @@ type Session struct {
 }
 
 func (s *Service) CreateMember(ctx context.Context, clientIP string) (Session, error) {
-	if err := s.take(ctx, "member:ip:"+quotaAddr(clientIP), guestBurst, guestRefill, ErrTooManyGuests); err != nil {
+	if err := s.take(ctx, "member:ip:"+QuotaAddr(clientIP), guestBurst, guestRefill, ErrTooManyGuests); err != nil {
 		return Session{}, err
 	}
 	token, hash := newSecret()
@@ -110,7 +110,7 @@ func (s *Service) UpdateProfile(ctx context.Context, memberID string, p Profile)
 
 // memberToken 是发出请求的会话，票据属于这个会话，所以会话删除时票据随之失效。
 func (s *Service) IssueTicket(ctx context.Context, memberID, memberToken, clientIP, roomID, password string) (string, error) {
-	if err := s.take(ctx, "ticket:ip:"+quotaAddr(clientIP), ticketIPBurst, ticketIPRefill, ErrTooManyAttempts); err != nil {
+	if err := s.take(ctx, "ticket:ip:"+QuotaAddr(clientIP), ticketIPBurst, ticketIPRefill, ErrTooManyAttempts); err != nil {
 		return "", err
 	}
 	r, err := s.rooms.FindRoom(ctx, roomID)

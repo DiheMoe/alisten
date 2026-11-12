@@ -85,7 +85,7 @@ func (s *server) createRoom(ctx context.Context, c call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	id, err := s.Lobby.CreateRoom(ctx, lobby.NewRoom{Name: req.Name, Description: req.Description, Password: deref(req.Password)})
+	id, err := s.Lobby.CreateRoom(ctx, c.clientIP, lobby.NewRoom{Name: req.Name, Description: req.Description, Password: deref(req.Password)})
 	if err != nil {
 		return nil, err
 	}

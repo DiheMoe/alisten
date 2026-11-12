@@ -50,7 +50,7 @@ func newService(t *testing.T, token string) fixture {
 		stop()
 		wait()
 	})
-	l := lobby.New(store, node)
+	l := lobby.New(store, node, porttest.Quota{})
 	netease, qq, bilibili, youtube := porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies()
 	return fixture{admin: New(token, l, store, store, store, netease, qq, bilibili, youtube, gateway), store: store, youtube: youtube, netease: netease, qq: qq, bilibili: bilibili, node: node, host: host, gateway: gateway}
 }

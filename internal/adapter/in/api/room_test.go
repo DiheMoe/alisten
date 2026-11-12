@@ -59,7 +59,7 @@ func newRoomFixture(t *testing.T) roomFixture {
 		stop()
 		wait()
 	})
-	l := lobby.New(store, node)
+	l := lobby.New(store, node, porttest.Quota{})
 	server, _ := start(t, Services{
 		Identity:   identity.New(store, store, store, porttest.Quota{}, gateway),
 		Lobby:      l,

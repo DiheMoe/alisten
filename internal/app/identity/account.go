@@ -93,7 +93,7 @@ func (a *Accounts) Register(ctx context.Context, memberID, token, clientIP, user
 	if !settings.RegistrationOpen {
 		return Account{}, ErrRegistrationClosed
 	}
-	if err := a.take(ctx, "register:ip:"+quotaAddr(clientIP), registerBurst, registerRefill); err != nil {
+	if err := a.take(ctx, "register:ip:"+QuotaAddr(clientIP), registerBurst, registerRefill); err != nil {
 		return Account{}, err
 	}
 	hash, err := HashPassword(ctx, password)
@@ -118,7 +118,7 @@ func (a *Accounts) addCredentials(ctx context.Context, memberID, token, clientIP
 	if !verified {
 		return Account{}, ErrGitHubUnverified
 	}
-	if err := a.take(ctx, "register:ip:"+quotaAddr(clientIP), registerBurst, registerRefill); err != nil {
+	if err := a.take(ctx, "register:ip:"+QuotaAddr(clientIP), registerBurst, registerRefill); err != nil {
 		return Account{}, err
 	}
 	hash, err := HashPassword(ctx, password)
@@ -145,7 +145,7 @@ func (a *Accounts) Login(ctx context.Context, current member.Member, currentToke
 	}
 	// 按 IP 限制一个来源的尝试次数，按用户名限制一个账号被尝试的次数，这样换着 IP 猜同一个账号也会受限。
 	// 带着这个账号的凭证时改按凭证计数，这样别人反复猜密码耗尽了用户名额度，账号主人的设备仍然能登录。
-	if err := a.take(ctx, "login:ip:"+quotaAddr(clientIP), loginIPBurst, loginIPRefill); err != nil {
+	if err := a.take(ctx, "login:ip:"+QuotaAddr(clientIP), loginIPBurst, loginIPRefill); err != nil {
 		return Session{}, Account{}, "", err
 	}
 	known, err := a.knownDevice(ctx, device, username)
@@ -347,7 +347,7 @@ func (a *Accounts) ResetPassword(ctx context.Context, username string) (string, 
 }
 
 // IPv6 客户端通常分到整个 /64，可以在里面随意换地址，所以按 /64 计数。clientIP 由适配器给出，解析不了时原样使用。
-func quotaAddr(clientIP string) string {
+func QuotaAddr(clientIP string) string {
 	addr, err := netip.ParseAddr(clientIP)
 	if err != nil {
 		return clientIP

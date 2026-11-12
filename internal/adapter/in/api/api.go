@@ -344,6 +344,7 @@ var knownErrors = []struct {
 	{identity.ErrTooManyGuests, protocol.ErrorCodeRateLimited},
 	{identity.ErrTooManyRoomGuesses, protocol.ErrorCodeRateLimited},
 	{identity.ErrAccountNotFound, protocol.ErrorCodeNotFound},
+	{lobby.ErrTooManyRooms, protocol.ErrorCodeRateLimited},
 	{port.ErrUsernameTaken, protocol.ErrorCodeConflict},
 	{port.ErrAlreadyRegistered, protocol.ErrorCodeConflict},
 	{port.ErrPlaylistNotFound, protocol.ErrorCodeNotFound},

@@ -11,6 +11,8 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/member"
 )
 
+const clientIP = "203.0.113.7"
+
 func newService(t *testing.T, store *porttest.Store) (*Service, *realtime.Gateway) {
 	t.Helper()
 	node := porttest.NewRedis().Node("a")
@@ -30,17 +32,17 @@ func newService(t *testing.T, store *porttest.Store) (*Service, *realtime.Gatewa
 		stop()
 		wait()
 	})
-	return New(store, node), gateway
+	return New(store, node, porttest.Quota{}), gateway
 }
 
 func TestOnlineCount(t *testing.T) {
 	store := porttest.New()
 	s, gateway := newService(t, store)
-	busy, err := s.CreateRoom(t.Context(), NewRoom{Name: "热闹"})
+	busy, err := s.CreateRoom(t.Context(), clientIP, NewRoom{Name: "热闹"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	quiet, err := s.CreateRoom(t.Context(), NewRoom{Name: "冷清"})
+	quiet, err := s.CreateRoom(t.Context(), clientIP, NewRoom{Name: "冷清"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,8 +79,8 @@ func (unreadableCounts) OnlineCounts(context.Context, []string) ([]int, error) {
 }
 
 func TestUnreadableOnlineCountsAreUnavailable(t *testing.T) {
-	s := New(porttest.New(), unreadableCounts{})
-	id, err := s.CreateRoom(t.Context(), NewRoom{Name: "大厅"})
+	s := New(porttest.New(), unreadableCounts{}, porttest.Quota{})
+	id, err := s.CreateRoom(t.Context(), clientIP, NewRoom{Name: "大厅"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,5 +89,17 @@ func TestUnreadableOnlineCountsAreUnavailable(t *testing.T) {
 	}
 	if _, err := s.FindRoom(t.Context(), id); !errors.Is(err, realtime.ErrUnavailable) {
 		t.Errorf("FindRoom 的错误 = %v，期望 ErrUnavailable", err)
+	}
+}
+
+func TestCreateRoomRateLimitedByClientIP(t *testing.T) {
+	store := porttest.New()
+	s := New(store, porttest.NewRedis().Node("a"), porttest.Quota{Exhausted: map[string]bool{"room:ip:" + clientIP: true}})
+
+	if _, err := s.CreateRoom(t.Context(), clientIP, NewRoom{Name: "临时"}); !errors.Is(err, ErrTooManyRooms) {
+		t.Errorf("额度用完时的错误 = %v，期望 ErrTooManyRooms", err)
+	}
+	if _, err := s.CreateRoom(t.Context(), "203.0.113.8", NewRoom{Name: "临时"}); err != nil {
+		t.Errorf("另一个 IP 不受影响：%v", err)
 	}
 }

@@ -1,0 +1,70 @@
+创建临时房间按客户端 IP 限流。同一个 IP 10 分钟内最多创建 5 个，另一个客户端不受影响。
+
+-- request --
+POST /api/rooms
+X-Forwarded-For: 198.51.100.7
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$room1
+{"id": "$room1"}
+
+-- request --
+POST /api/rooms
+X-Forwarded-For: 198.51.100.7
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$room2
+{"id": "$room2"}
+
+-- request --
+POST /api/rooms
+X-Forwarded-For: 198.51.100.7
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$room3
+{"id": "$room3"}
+
+-- request --
+POST /api/rooms
+X-Forwarded-For: 198.51.100.7
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$room4
+{"id": "$room4"}
+
+-- request --
+POST /api/rooms
+X-Forwarded-For: 198.51.100.7
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$room5
+{"id": "$room5"}
+
+-- request --
+POST /api/rooms
+X-Forwarded-For: 198.51.100.7
+
+{"name": "临时", "description": ""}
+-- response --
+429
+{"error": {"code": "RATE_LIMITED", "message": "创建房间太频繁，请稍后再试。"}}
+
+-- request --
+POST /api/rooms
+X-Forwarded-For: 198.51.100.8
+
+{"name": "临时", "description": ""}
+-- response --
+201
+Location: /api/rooms/$other
+{"id": "$other"}

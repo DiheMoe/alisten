@@ -2,6 +2,7 @@ package lobby
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,13 +28,22 @@ type NewRoom struct {
 
 const onlineTimeout = 5 * time.Second
 
+var ErrTooManyRooms = errors.New("创建房间太频繁，请稍后再试。")
+
+// 创建临时房间按来源 IP 限制次数，因为任何人都能创建，每次都往存储里写一个房间，设了密码时还要算一次 argon2id。
+const (
+	roomBurst  = 5
+	roomRefill = 10 * time.Minute
+)
+
 type Service struct {
 	rooms  port.RoomDirectory
 	online port.OnlineCounts
+	quota  port.AccountQuota
 }
 
-func New(rooms port.RoomDirectory, online port.OnlineCounts) *Service {
-	return &Service{rooms: rooms, online: online}
+func New(rooms port.RoomDirectory, online port.OnlineCounts, quota port.AccountQuota) *Service {
+	return &Service{rooms: rooms, online: online, quota: quota}
 }
 
 func (s *Service) ListRooms(ctx context.Context) ([]Room, error) {
@@ -57,7 +67,14 @@ func (s *Service) FindRoom(ctx context.Context, ref string) (Room, error) {
 	return rooms[0], nil
 }
 
-func (s *Service) CreateRoom(ctx context.Context, r NewRoom) (string, error) {
+func (s *Service) CreateRoom(ctx context.Context, clientIP string, r NewRoom) (string, error) {
+	wait, err := s.quota.Take(ctx, "room:ip:"+identity.QuotaAddr(clientIP), roomBurst, roomRefill)
+	if err != nil {
+		return "", err
+	}
+	if wait > 0 {
+		return "", ErrTooManyRooms
+	}
 	hash, err := identity.HashPassword(ctx, r.Password)
 	if err != nil {
 		return "", err

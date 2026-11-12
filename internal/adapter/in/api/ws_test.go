@@ -140,7 +140,7 @@ func newWSFixtureWithTickets(t *testing.T, store *porttest.Store, tickets port.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	l := lobby.New(directory, node)
+	l := lobby.New(directory, node, porttest.Quota{})
 	f := &wsFixture{
 		identity: identity.New(store, directory, tickets, porttest.Quota{}, gateway),
 		lobby:    l,
@@ -187,7 +187,7 @@ func (f *wsFixture) enter(t *testing.T, roomID string) (string, member.Member, s
 		t.Fatal(err)
 	}
 	if roomID == "" {
-		if roomID, err = f.lobby.CreateRoom(t.Context(), lobby.NewRoom{Name: "临时"}); err != nil {
+		if roomID, err = f.lobby.CreateRoom(t.Context(), "203.0.113.7", lobby.NewRoom{Name: "临时"}); err != nil {
 			t.Fatal(err)
 		}
 	}
