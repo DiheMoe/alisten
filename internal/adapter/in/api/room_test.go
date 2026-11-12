@@ -61,7 +61,7 @@ func newRoomFixture(t *testing.T) roomFixture {
 	})
 	l := lobby.New(store, node)
 	server, _ := start(t, Services{
-		Identity:   identity.New(store, store, store, gateway),
+		Identity:   identity.New(store, store, store, porttest.Quota{}, gateway),
 		Lobby:      l,
 		Admin:      admin.New("secret", l, store, store, store, porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), gateway),
 		Gateway:    gateway,

@@ -341,6 +341,7 @@ var knownErrors = []struct {
 	{identity.ErrRegistrationClosed, protocol.ErrorCodeForbidden},
 	{identity.ErrNotRegistered, protocol.ErrorCodeForbidden},
 	{identity.ErrTooManyAttempts, protocol.ErrorCodeRateLimited},
+	{identity.ErrTooManyGuests, protocol.ErrorCodeRateLimited},
 	{identity.ErrAccountNotFound, protocol.ErrorCodeNotFound},
 	{port.ErrUsernameTaken, protocol.ErrorCodeConflict},
 	{port.ErrAlreadyRegistered, protocol.ErrorCodeConflict},

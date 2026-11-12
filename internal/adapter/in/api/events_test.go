@@ -383,7 +383,7 @@ func TestRoomEventsNeedRoomCredential(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()
 		f := newWSFixture(t, store, store, store)
-		session, err := f.identity.CreateMember(t.Context())
+		session, err := f.identity.CreateMember(t.Context(), "203.0.113.7")
 		if err != nil {
 			t.Fatal(err)
 		}

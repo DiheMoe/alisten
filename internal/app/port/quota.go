@@ -14,7 +14,7 @@ type RoomQuota interface {
 	TakePick(ctx context.Context, roomID string, burst int, refill time.Duration) (time.Duration, error)
 }
 
-// 注册、登录、修改密码的额度，按调用方拼出的键计数，所有实例共用。
+// 按调用方拼出的键计数的额度，所有实例共用。
 type AccountQuota interface {
 	// 与 RoomQuota.TakeSearch 相同：取到时返回 0，额度用完时返回还要等待的时长。
 	Take(ctx context.Context, key string, burst int, refill time.Duration) (time.Duration, error)

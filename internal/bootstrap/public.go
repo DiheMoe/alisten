@@ -86,7 +86,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 	// 每个请求的期限由 GitHub 适配器设置。
 	oauth := github.New(&http.Client{Transport: traceHTTP(http.DefaultTransport, tracer)}, cfg.github)
 	services := api.Services{
-		Identity:  identity.New(store, store, store, gateway),
+		Identity:  identity.New(store, store, store, redis.NewAccountQuota(rdb), gateway),
 		Accounts:  accounts,
 		Playlists: playlist.New(store, store, store, music, redis.NewAccountQuota(rdb), shortlink.New(playlistlink.AllowedRedirectHost, playlistlink.Recognized)),
 		Lobby:     rooms,

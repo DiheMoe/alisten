@@ -65,7 +65,7 @@ func newAccounts(t *testing.T) (a *Accounts, s *Service, store *porttest.Store, 
 		}
 	}
 	codes := porttest.NewCodes()
-	return NewAccounts(store, store, q, codes, codes, porttest.NewDevices(), gateway), New(store, store, store, gateway), store, q, revoked
+	return NewAccounts(store, store, q, codes, codes, porttest.NewDevices(), gateway), New(store, store, store, porttest.Quota{}, gateway), store, q, revoked
 }
 
 // 不计顺序。
@@ -336,7 +336,7 @@ func newDeviceAccounts(t *testing.T) (*Accounts, *Service, *porttest.Store, *fak
 	gateway := newGateway(store, node, node)
 	q := &fakeQuota{exhausted: map[string]bool{}}
 	devices := &recordingDevices{Devices: porttest.NewDevices()}
-	return NewAccounts(store, store, q, porttest.NewCodes(), porttest.NewCodes(), devices, gateway), New(store, store, store, gateway), store, q, devices
+	return NewAccounts(store, store, q, porttest.NewCodes(), porttest.NewCodes(), devices, gateway), New(store, store, store, porttest.Quota{}, gateway), store, q, devices
 }
 
 func deviceQuota(device string) string {
@@ -736,7 +736,7 @@ func TestAccountOperationsSucceedWhenRevocationFails(t *testing.T) {
 	store := porttest.New()
 	node := porttest.NewRedis().Node("a")
 	gateway := newGateway(store, node, noRevocation{node})
-	s := New(store, store, store, gateway)
+	s := New(store, store, store, porttest.Quota{}, gateway)
 	a := NewAccounts(store, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewCodes(), porttest.NewCodes(), porttest.NewDevices(), gateway)
 	alice := registerAccount(t, a, s, "alice", "correct horse")
 

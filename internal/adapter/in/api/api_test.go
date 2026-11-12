@@ -43,7 +43,7 @@ func services(store *porttest.Store, rooms port.RoomDirectory, adminToken string
 	l := lobby.New(rooms, node)
 	accounts := identity.NewAccounts(store, store, nil, nil, nil, nil, gateway)
 	return Services{
-		Identity: identity.New(store, rooms, store, gateway),
+		Identity: identity.New(store, rooms, store, porttest.Quota{}, gateway),
 		Accounts: accounts,
 		Lobby:    l,
 		Admin:    admin.New(adminToken, l, rooms, store, store, porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), gateway),
@@ -140,6 +140,21 @@ func TestSameOrigin(t *testing.T) {
 	want := failure(protocol.ErrorCodeForbidden, "服务器不接受从这个网址发出的操作，请用网站的正式地址打开。")
 	if got := send(t, server, http.MethodPost, "/api/members", "{}", "Origin", "https://evil.example"); got != want {
 		t.Errorf("列表外来源的请求 = %#v，期望 %#v", got, want)
+	}
+}
+
+func TestCreateMemberRateLimitedByClientIP(t *testing.T) {
+	store := porttest.New()
+	s := services(store, store, "")
+	s.Identity = identity.New(store, store, store, porttest.Quota{Exhausted: map[string]bool{"member:ip:198.51.100.7": true}}, s.Gateway)
+	server, _ := start(t, s)
+
+	want := failure(protocol.ErrorCodeRateLimited, "操作太频繁，请稍后再试。")
+	if got := send(t, server, http.MethodPost, "/api/members", "{}", "X-Forwarded-For", "198.51.100.7"); got != want {
+		t.Errorf("额度用完的 IP 创建成员 = %#v，期望 %#v", got, want)
+	}
+	if got := send(t, server, http.MethodPost, "/api/members", "{}", "X-Forwarded-For", "198.51.100.8"); got.status != http.StatusCreated {
+		t.Errorf("另一个 IP 创建成员 = %#v，期望成功", got)
 	}
 }
 
@@ -362,7 +377,7 @@ func (brokenProfiles) UpdateMember(context.Context, string, *string, *string, *s
 func TestUnexpectedErrorLogCarriesMember(t *testing.T) {
 	store := porttest.New()
 	s := services(store, store, "")
-	s.Identity = identity.New(brokenProfiles{store}, store, store, s.Gateway)
+	s.Identity = identity.New(brokenProfiles{store}, store, store, porttest.Quota{}, s.Gateway)
 	server, logs := start(t, s)
 	var created protocol.CreateMemberResponse
 	if err := json.Unmarshal([]byte(send(t, server, http.MethodPost, "/api/members", "{}").body), &created); err != nil {

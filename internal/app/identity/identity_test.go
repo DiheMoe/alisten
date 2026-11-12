@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"regexp"
+	"slices"
 	"testing"
 	"testing/synctest"
 
@@ -23,7 +24,15 @@ func newService(t *testing.T) (*Service, *porttest.Store) {
 	t.Helper()
 	store := porttest.New()
 	node := porttest.NewRedis().Node("a")
-	return New(store, store, store, newGateway(store, node, node)), store
+	return New(store, store, store, porttest.Quota{}, newGateway(store, node, node)), store
+}
+
+func newQuotaService(t *testing.T) (*Service, *porttest.Store, *fakeQuota) {
+	t.Helper()
+	store := porttest.New()
+	node := porttest.NewRedis().Node("a")
+	q := &fakeQuota{exhausted: map[string]bool{}}
+	return New(store, store, store, q, newGateway(store, node, node)), store, q
 }
 
 // 没有调用 realtime.Start，因为这些测试不运行房间。
@@ -34,7 +43,7 @@ func newGateway(store *porttest.Store, node *porttest.Node, bus port.Bus) *realt
 
 func createMember(t *testing.T, s *Service) Session {
 	t.Helper()
-	session, err := s.CreateMember(t.Context())
+	session, err := s.CreateMember(t.Context(), clientIP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,6 +77,18 @@ func TestCreateMember(t *testing.T) {
 	}
 	if other := createMember(t, s); other.MemberToken == session.MemberToken || other.Member.ID == session.Member.ID {
 		t.Error("每次都应创建新的成员和 token")
+	}
+}
+
+func TestCreateMemberTakesQuotaByIP(t *testing.T) {
+	s, _, q := newQuotaService(t)
+	createMember(t, s)
+	if want := []string{"member:ip:" + clientIP}; !slices.Equal(q.taken, want) {
+		t.Errorf("取的额度 = %v，期望 %v", q.taken, want)
+	}
+	q.exhausted["member:ip:"+clientIP] = true
+	if _, err := s.CreateMember(t.Context(), clientIP); !errors.Is(err, ErrTooManyGuests) {
+		t.Errorf("额度用完时的错误 = %v，期望 ErrTooManyGuests", err)
 	}
 }
 
@@ -124,7 +145,7 @@ func (noMemberBroadcast) PublishMember(context.Context, member.Member) error {
 func TestUpdateProfileFailsWhenBroadcastFails(t *testing.T) {
 	store := porttest.New()
 	node := porttest.NewRedis().Node("a")
-	s := New(store, store, store, newGateway(store, node, noMemberBroadcast{node}))
+	s := New(store, store, store, porttest.Quota{}, newGateway(store, node, noMemberBroadcast{node}))
 	session := createMember(t, s)
 
 	if _, err := s.UpdateProfile(t.Context(), session.Member.ID, Profile{Name: ptr("甲")}); !errors.Is(err, realtime.ErrUnavailable) {
@@ -152,7 +173,7 @@ func TestIssueTicketFailsWhenPasswordChangesMeanwhile(t *testing.T) {
 	store := porttest.New()
 	changed := passwordChangedStore{Store: store, newHash: hashPassword(t, "新密码")}
 	node := porttest.NewRedis().Node("a")
-	s := New(store, store, changed, newGateway(store, node, node))
+	s := New(store, store, changed, porttest.Quota{}, newGateway(store, node, node))
 	alice := createMember(t, s)
 	id := createRoom(t, store, "旧密码")
 
@@ -218,7 +239,7 @@ func TestEnterRoomLeavesWhenTicketIsRevokedWhileJoining(t *testing.T) {
 			stop()
 			wait()
 		})
-		s := New(store, store, &revokedAfterFirstLookup{Tickets: store}, gateway)
+		s := New(store, store, &revokedAfterFirstLookup{Tickets: store}, porttest.Quota{}, gateway)
 		alice := createMember(t, s)
 		id := createRoom(t, store, "")
 		ticket, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, id, "")
@@ -251,7 +272,7 @@ func TestEnterRoomJoinsTheStoredRoom(t *testing.T) {
 	store := porttest.New()
 	node := porttest.NewRedis().Node("a")
 	var logs bytes.Buffer
-	s := New(store, store, store, newGateway(store, node, loggedSubscriptions{node, slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil)))}))
+	s := New(store, store, store, porttest.Quota{}, newGateway(store, node, loggedSubscriptions{node, slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil)))}))
 	session := createMember(t, s)
 	alice := session.Member
 	id, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall"})

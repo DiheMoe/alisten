@@ -5,6 +5,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/realtime"
@@ -18,6 +19,14 @@ var (
 	ErrWrongPassword      = errors.New("房间密码错误")
 	ErrBotSession         = errors.New("API Key 只能用于 HTTP 接口")
 	ErrInvalidEmail       = errors.New("email：格式不正确，应形如 name@example.com")
+	ErrTooManyGuests      = errors.New("操作太频繁，请稍后再试。")
+)
+
+// 创建成员按来源 IP 限制次数，因为任何人都能创建成员，每次都往存储里写一个成员和一个会话。同一个 Wi-Fi 下的人共用一个 IP，
+// 突发额度要够一群人同时打开网页。
+const (
+	guestBurst  = 30
+	guestRefill = time.Minute
 )
 
 var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
@@ -26,11 +35,12 @@ type Service struct {
 	members port.Members
 	rooms   port.RoomDirectory
 	tickets port.Tickets
+	quota   port.AccountQuota
 	gateway *realtime.Gateway
 }
 
-func New(members port.Members, rooms port.RoomDirectory, tickets port.Tickets, gateway *realtime.Gateway) *Service {
-	return &Service{members: members, rooms: rooms, tickets: tickets, gateway: gateway}
+func New(members port.Members, rooms port.RoomDirectory, tickets port.Tickets, quota port.AccountQuota, gateway *realtime.Gateway) *Service {
+	return &Service{members: members, rooms: rooms, tickets: tickets, quota: quota, gateway: gateway}
 }
 
 type Session struct {
@@ -38,7 +48,10 @@ type Session struct {
 	Member      member.Member
 }
 
-func (s *Service) CreateMember(ctx context.Context) (Session, error) {
+func (s *Service) CreateMember(ctx context.Context, clientIP string) (Session, error) {
+	if err := s.take(ctx, "member:ip:"+quotaAddr(clientIP), guestBurst, guestRefill, ErrTooManyGuests); err != nil {
+		return Session{}, err
+	}
 	token, hash := newSecret()
 	m, err := s.members.CreateMember(ctx, hash, guestName())
 	if err != nil {
@@ -157,6 +170,17 @@ func (s *Service) EnterRoom(ctx context.Context, roomID, ticket string) (*realti
 		return nil, err
 	}
 	return session, nil
+}
+
+func (s *Service) take(ctx context.Context, key string, burst int, refill time.Duration, exhausted error) error {
+	wait, err := s.quota.Take(ctx, key, burst, refill)
+	if err != nil {
+		return err
+	}
+	if wait > 0 {
+		return exhausted
+	}
+	return nil
 }
 
 func NewAPIKey() (string, port.NewAPIKey) {

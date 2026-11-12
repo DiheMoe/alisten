@@ -25,7 +25,7 @@ func (s *server) createMember(ctx context.Context, c call) (any, error) {
 	if _, err := protocol.DecodeCreateMemberRequest(c.body); err != nil {
 		return nil, err
 	}
-	session, err := s.Identity.CreateMember(ctx)
+	session, err := s.Identity.CreateMember(ctx, c.clientIP)
 	if err != nil {
 		return nil, err
 	}

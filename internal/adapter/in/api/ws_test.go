@@ -142,7 +142,7 @@ func newWSFixtureWithTickets(t *testing.T, store *porttest.Store, tickets port.T
 	}
 	l := lobby.New(directory, node)
 	f := &wsFixture{
-		identity: identity.New(store, directory, tickets, gateway),
+		identity: identity.New(store, directory, tickets, porttest.Quota{}, gateway),
 		lobby:    l,
 		admin:    admin.New("secret", l, store, store, store, porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), gateway),
 		gateway:  gateway,
@@ -182,7 +182,7 @@ func newWSFixtureWithTickets(t *testing.T, store *porttest.Store, tickets port.T
 
 func (f *wsFixture) enter(t *testing.T, roomID string) (string, member.Member, string) {
 	t.Helper()
-	session, err := f.identity.CreateMember(t.Context())
+	session, err := f.identity.CreateMember(t.Context(), "203.0.113.7")
 	if err != nil {
 		t.Fatal(err)
 	}
