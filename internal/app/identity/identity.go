@@ -20,6 +20,7 @@ var (
 	ErrBotSession         = errors.New("API Key 只能用于 HTTP 接口")
 	ErrInvalidEmail       = errors.New("email：格式不正确，应形如 name@example.com")
 	ErrTooManyGuests      = errors.New("操作太频繁，请稍后再试。")
+	ErrTooManyRoomGuesses = errors.New("这个房间的密码尝试次数太多，请稍后再试。")
 )
 
 // 创建成员按来源 IP 限制次数，因为任何人都能创建成员，每次都往存储里写一个成员和一个会话。同一个 Wi-Fi 下的人共用一个 IP，
@@ -27,6 +28,16 @@ var (
 const (
 	guestBurst  = 30
 	guestRefill = time.Minute
+)
+
+// 换取票据按来源 IP 限制次数，因为每次都往存储里写一行，有密码的房间还要算一次 argon2id。网页会保存换到的票据，重进同一个房间不再换，
+// 所以正常使用用不了几次。有密码的房间还按房间限制校验密码的次数，这样换着 IP 猜同一个房间的密码也会受限。这份额度要在算 argon2id
+// 之前判断，这时还不知道密码对不对，所以输对的也算在内。输对的次数本来就少，几乎不占额度。
+const (
+	ticketIPBurst    = 10
+	ticketIPRefill   = time.Minute
+	ticketRoomBurst  = 20
+	ticketRoomRefill = time.Minute
 )
 
 var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
@@ -98,12 +109,18 @@ func (s *Service) UpdateProfile(ctx context.Context, memberID string, p Profile)
 }
 
 // memberToken 是发出请求的会话，票据属于这个会话，所以会话删除时票据随之失效。
-func (s *Service) IssueTicket(ctx context.Context, memberID, memberToken, roomID, password string) (string, error) {
+func (s *Service) IssueTicket(ctx context.Context, memberID, memberToken, clientIP, roomID, password string) (string, error) {
+	if err := s.take(ctx, "ticket:ip:"+quotaAddr(clientIP), ticketIPBurst, ticketIPRefill, ErrTooManyAttempts); err != nil {
+		return "", err
+	}
 	r, err := s.rooms.FindRoom(ctx, roomID)
 	if err != nil {
 		return "", err
 	}
 	if r.PasswordHash != "" {
+		if err := s.take(ctx, "ticket:room:"+r.Info.ID, ticketRoomBurst, ticketRoomRefill, ErrTooManyRoomGuesses); err != nil {
+			return "", err
+		}
 		ok, err := checkPassword(ctx, r.PasswordHash, password)
 		if err != nil {
 			return "", err

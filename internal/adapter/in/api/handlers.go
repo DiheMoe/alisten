@@ -101,7 +101,7 @@ func (s *server) createTicket(ctx context.Context, c call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	ticket, err := s.Identity.IssueTicket(ctx, c.member.ID, bearer(c.r), id, deref(req.Password))
+	ticket, err := s.Identity.IssueTicket(ctx, c.member.ID, bearer(c.r), c.clientIP, id, deref(req.Password))
 	if err != nil {
 		return nil, err
 	}

@@ -177,8 +177,47 @@ func TestIssueTicketFailsWhenPasswordChangesMeanwhile(t *testing.T) {
 	alice := createMember(t, s)
 	id := createRoom(t, store, "旧密码")
 
-	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, id, "旧密码"); !errors.Is(err, ErrWrongPassword) {
+	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, id, "旧密码"); !errors.Is(err, ErrWrongPassword) {
 		t.Errorf("密码在校验之后被修改，错误 = %v，期望 ErrWrongPassword", err)
+	}
+}
+
+func TestIssueTicketTakesQuota(t *testing.T) {
+	s, store, q := newQuotaService(t)
+	alice := createMember(t, s)
+	open, locked := createRoom(t, store, ""), createRoom(t, store, "芝麻开门")
+
+	q.taken = nil
+	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, open, ""); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"ticket:ip:" + clientIP}; !slices.Equal(q.taken, want) {
+		t.Errorf("没有密码的房间取的额度 = %v，期望 %v", q.taken, want)
+	}
+	q.taken = nil
+	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, locked, "芝麻关门"); !errors.Is(err, ErrWrongPassword) {
+		t.Fatalf("密码错误时 = %v，期望 ErrWrongPassword", err)
+	}
+	if want := []string{"ticket:ip:" + clientIP, "ticket:room:" + locked}; !slices.Equal(q.taken, want) {
+		t.Errorf("有密码的房间取的额度 = %v，期望 %v", q.taken, want)
+	}
+}
+
+func TestIssueTicketQuotaExhausted(t *testing.T) {
+	s, store, q := newQuotaService(t)
+	alice := createMember(t, s)
+	open, locked := createRoom(t, store, ""), createRoom(t, store, "芝麻开门")
+
+	q.exhausted["ticket:room:"+locked] = true
+	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, locked, "芝麻开门"); !errors.Is(err, ErrTooManyRoomGuesses) {
+		t.Errorf("房间的额度用完时，输对密码也 = %v，期望 ErrTooManyRoomGuesses", err)
+	}
+	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, open, ""); err != nil {
+		t.Errorf("别的房间不受影响：%v", err)
+	}
+	q.exhausted["ticket:ip:"+clientIP] = true
+	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, open, ""); !errors.Is(err, ErrTooManyAttempts) {
+		t.Errorf("IP 的额度用完时 = %v，期望 ErrTooManyAttempts", err)
 	}
 }
 
@@ -186,7 +225,7 @@ func TestTicketBelongsToIssuingSession(t *testing.T) {
 	s, store := newService(t)
 	alice := createMember(t, s)
 	id := createRoom(t, store, "")
-	ticket, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, id, "")
+	ticket, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, id, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +243,7 @@ func TestIssueTicketRejectsDeletedSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, id, ""); !errors.Is(err, ErrInvalidMemberToken) {
+	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, id, ""); !errors.Is(err, ErrInvalidMemberToken) {
 		t.Errorf("会话在签发之前被删除，错误 = %v，期望 ErrInvalidMemberToken", err)
 	}
 }
@@ -242,7 +281,7 @@ func TestEnterRoomLeavesWhenTicketIsRevokedWhileJoining(t *testing.T) {
 		s := New(store, store, &revokedAfterFirstLookup{Tickets: store}, porttest.Quota{}, gateway)
 		alice := createMember(t, s)
 		id := createRoom(t, store, "")
-		ticket, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, id, "")
+		ticket, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, id, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -279,7 +318,7 @@ func TestEnterRoomJoinsTheStoredRoom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ticket, err := s.IssueTicket(t.Context(), alice.ID, session.MemberToken, id, "")
+	ticket, err := s.IssueTicket(t.Context(), alice.ID, session.MemberToken, clientIP, id, "")
 	if err != nil {
 		t.Fatal(err)
 	}

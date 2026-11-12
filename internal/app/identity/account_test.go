@@ -85,7 +85,7 @@ func sameHashes(got [][]byte, tokens ...string) bool {
 
 func issueTicket(t *testing.T, s *Service, session Session, roomID string) string {
 	t.Helper()
-	ticket, err := s.IssueTicket(t.Context(), session.Member.ID, session.MemberToken, roomID, "")
+	ticket, err := s.IssueTicket(t.Context(), session.Member.ID, session.MemberToken, clientIP, roomID, "")
 	if err != nil {
 		t.Fatal(err)
 	}

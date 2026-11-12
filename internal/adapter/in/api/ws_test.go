@@ -191,7 +191,7 @@ func (f *wsFixture) enter(t *testing.T, roomID string) (string, member.Member, s
 			t.Fatal(err)
 		}
 	}
-	ticket, err := f.identity.IssueTicket(t.Context(), session.Member.ID, session.MemberToken, roomID, "")
+	ticket, err := f.identity.IssueTicket(t.Context(), session.Member.ID, session.MemberToken, "203.0.113.7", roomID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
