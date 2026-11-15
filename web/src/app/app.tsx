@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { Page, Panel, RoomPage, Route } from './route'
 import type { SearchQuery } from '@/features/search'
 import { ChevronLeft, ChevronRight, Headphones, History, House, Library, ListMusic, MessageCircle, MoreHorizontal, Search, Settings, Share2, UserRound, Wifi, WifiOff, X } from 'lucide-react'
-import { Suspense } from 'react'
+import { Suspense, useEffect, useRef } from 'react'
 import { profileStore } from '@/core/profile'
 import { roomStore } from '@/core/room'
 import { ChatPanel } from '@/features/chat'
@@ -102,13 +102,26 @@ function Header({ page }: { page: Page }) {
   const joined = useStore(roomEntryStore, s => s.phase === 'joined')
   const roomName = useStore(roomEntryStore, s => s.room?.name)
   const home = inRoom ? 'listen' : 'lobby'
+  const menuRef = useRef<HTMLDetailsElement>(null)
+  useEffect(() => {
+    const dismiss = (event: PointerEvent) => {
+      const menu = menuRef.current
+      if (menu?.open && !menu.contains(event.target as Node))
+        menu.removeAttribute('open')
+    }
+    document.addEventListener('pointerdown', dismiss)
+    return () => document.removeEventListener('pointerdown', dismiss)
+  }, [])
   return (
     <header className="workspace-header">
       <div className="header-leading">
         <details
+          ref={menuRef}
           className="header-menu"
           onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+            // 焦点落到菜单外的元素上时收起，比如按 Tab 移走焦点。relatedTarget 是 null 时不收起，因为 Safari 点按钮不会把焦点交给按钮，点菜单里的按钮时 relatedTarget 也是 null。点菜单外面时由上面的 pointerdown 收起。
+            const next = event.relatedTarget as Node | null
+            if (next && !event.currentTarget.contains(next))
               event.currentTarget.removeAttribute('open')
           }}
           onKeyDown={(event) => {
