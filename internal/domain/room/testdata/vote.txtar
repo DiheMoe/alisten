@@ -22,11 +22,11 @@ reply q06 enqueued #1(netease:a)
 prepare netease:a
 -- 07 --
 > 1s prepared netease:a 3m
-persist mode=sequential entrySeq=1 current=#1(netease:a,ready)@1.2s pending=- waiting=[]
-listen [m1 m2 m3] #1(netease:a,ready)@1.2s
+persist mode=sequential entrySeq=1 current=#1(netease:a,ready)@2.5s pending=- waiting=[]
+listen [m1 m2 m3] #1(netease:a,ready)@2.5s
 emit 1.7 queue pending=- waiting=[]
-emit 1.8 playback #1(netease:a,ready)@1.2s
-schedule 1 3m1.2s
+emit 1.8 playback #1(netease:a,ready)@2.5s
+schedule 1 3m2.5s
 -- 08 --
 > 10s vote m1
 emit 1.9 activity voted m1 #1(netease:a,ready) 1/2
@@ -37,7 +37,7 @@ reply q09 error conflict 你已经投过票了。
 -- 10 --
 > 12s vote m2
 persist mode=sequential entrySeq=1 current=- pending=- waiting=[]
-record #1(netease:a,ready) 1.2s-12s
+record #1(netease:a,ready) 2.5s-12s
 emit 1.10 activity skipped m2 #1(netease:a,ready) 2/2
 emit 1.11 playback -
 reply q10 voted 2/2 skipped

@@ -28,21 +28,21 @@ persist mode=sequential entrySeq=2 current=- pending=#1(netease:a) waiting=[#2(n
 emit 1.7 queue pending=#1(netease:a) waiting=[#2(netease:b,ready)]
 -- 07 --
 > 4s prepared netease:a 2m
-persist mode=sequential entrySeq=2 current=#1(netease:a,ready)@4.2s pending=- waiting=[#2(netease:b,ready)]
-listen [m1] #1(netease:a,ready)@4.2s
+persist mode=sequential entrySeq=2 current=#1(netease:a,ready)@5.5s pending=- waiting=[#2(netease:b,ready)]
+listen [m1] #1(netease:a,ready)@5.5s
 emit 1.8 queue pending=- waiting=[#2(netease:b,ready)]
-emit 1.9 playback #1(netease:a,ready)@4.2s
-schedule 1 2m4.2s
+emit 1.9 playback #1(netease:a,ready)@5.5s
+schedule 1 2m5.5s
 -- 08 --
 > 10s join s3 m2
-listen [m2] #1(netease:a,ready)@4.2s
+listen [m2] #1(netease:a,ready)@5.5s
 emit 1.10 members [s1=m1 s2=m1 s3=m2]
 -- 09 --
 > 11s join s4 m2
 emit 1.11 members [s1=m1 s2=m1 s3=m2 s4=m2]
 -- 10 --
 > 12s join s5 m3
-listen [m3] #1(netease:a,ready)@4.2s
+listen [m3] #1(netease:a,ready)@5.5s
 emit 1.12 members [s1=m1 s2=m1 s3=m2 s4=m2 s5=m3]
 -- 11 --
 > 13s join s6 m3
@@ -55,19 +55,19 @@ emit 1.14 members [s1=m1 s2=m1 s3=m2 s4=m2 s6=m3]
 emit 1.15 members [s1=m1 s2=m1 s3=m2 s4=m2]
 -- 14 --
 > 16s join s7 m3
-listen [m3] #1(netease:a,ready)@4.2s
+listen [m3] #1(netease:a,ready)@5.5s
 emit 1.16 members [s1=m1 s2=m1 s3=m2 s4=m2 s7=m3]
 -- 15 --
 > 2m4.2s timer 1
-persist mode=sequential entrySeq=2 current=#2(netease:b,ready)@2m4.4s pending=- waiting=[]
-record #1(netease:a,ready) 4.2s-2m4.2s
-listen [m1 m2 m3] #2(netease:b,ready)@2m4.4s
+persist mode=sequential entrySeq=2 current=#2(netease:b,ready)@2m5.7s pending=- waiting=[]
+record #1(netease:a,ready) 5.5s-2m5.5s
+listen [m1 m2 m3] #2(netease:b,ready)@2m5.7s
 emit 1.17 queue pending=- waiting=[]
-emit 1.18 playback #2(netease:b,ready)@2m4.4s
-schedule 2 3m4.4s
+emit 1.18 playback #2(netease:b,ready)@2m5.7s
+schedule 2 3m5.7s
 recommend 3
 -- 16 --
 > 3m4.4s timer 2
 persist mode=sequential entrySeq=2 current=- pending=- waiting=[]
-record #2(netease:b,ready) 2m4.4s-3m4.4s
+record #2(netease:b,ready) 2m5.7s-3m5.7s
 emit 1.19 playback -

@@ -36,27 +36,27 @@ reply q06 enqueued #4(netease:b2,round=1)
 prepare netease:b2
 -- 07 --
 > 1s prepared netease:a1 1m
-persist mode=rotation entrySeq=4 current=#1(netease:a1,ready)@1.2s pending=- waiting=[#3(netease:b1) #2(netease:a2,round=1) #4(netease:b2,round=1)]
+persist mode=rotation entrySeq=4 current=#1(netease:a1,ready)@2.5s pending=- waiting=[#3(netease:b1) #2(netease:a2,round=1) #4(netease:b2,round=1)]
 emit 1.10 queue pending=- waiting=[#3(netease:b1) #2(netease:a2,round=1) #4(netease:b2,round=1)]
-emit 1.11 playback #1(netease:a1,ready)@1.2s
-schedule 1 1m1.2s
+emit 1.11 playback #1(netease:a1,ready)@2.5s
+schedule 1 1m2.5s
 -- 08 --
 > 2s enqueue m1 netease:a3
-persist mode=rotation entrySeq=5 current=#1(netease:a1,ready)@1.2s pending=- waiting=[#3(netease:b1) #2(netease:a2,round=1) #4(netease:b2,round=1) #5(netease:a3,round=2)]
+persist mode=rotation entrySeq=5 current=#1(netease:a1,ready)@2.5s pending=- waiting=[#3(netease:b1) #2(netease:a2,round=1) #4(netease:b2,round=1) #5(netease:a3,round=2)]
 emit 1.12 activity added m1 #5(netease:a3,round=2)
 emit 1.13 queue pending=- waiting=[#3(netease:b1) #2(netease:a2,round=1) #4(netease:b2,round=1) #5(netease:a3,round=2)]
 reply q08 enqueued #5(netease:a3,round=2)
 prepare netease:a3
 -- 09 --
 > 3s like m3 5
-persist mode=rotation entrySeq=5 current=#1(netease:a1,ready)@1.2s pending=- waiting=[#5(netease:a3,likes=1,round=2) #3(netease:b1) #2(netease:a2,round=1) #4(netease:b2,round=1)]
+persist mode=rotation entrySeq=5 current=#1(netease:a1,ready)@2.5s pending=- waiting=[#5(netease:a3,likes=1,round=2) #3(netease:b1) #2(netease:a2,round=1) #4(netease:b2,round=1)]
 emit 1.14 activity liked m3 #5(netease:a3,likes=1,round=2)
 emit 1.15 queue pending=- waiting=[#5(netease:a3,likes=1,round=2) #3(netease:b1) #2(netease:a2,round=1) #4(netease:b2,round=1)]
 reply q09 liked 1
 -- 10 --
 > 1m1.2s timer 1
 persist mode=rotation entrySeq=5 current=- pending=#5(netease:a3,likes=1,round=2) waiting=[#3(netease:b1) #2(netease:a2,round=1) #4(netease:b2,round=1)]
-record #1(netease:a1,ready) 1.2s-1m1.2s
+record #1(netease:a1,ready) 2.5s-1m2.5s
 emit 1.16 queue pending=#5(netease:a3,likes=1,round=2) waiting=[#3(netease:b1) #2(netease:a2,round=1) #4(netease:b2,round=1)]
 emit 1.17 playback -
 -- 11 --

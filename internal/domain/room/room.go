@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	startLead           = 200 * time.Millisecond
+	// 开播时间比切歌晚 startLead。客户端收到切歌之后才开始加载音频，留出这段时间，网络正常的客户端加载好时还没到开播时间，就能和其他人同时从头放。
+	startLead           = 1500 * time.Millisecond
 	closeDelay          = 5 * time.Minute
 	autoDJQuiet         = 10 * time.Second
 	RefillInterval      = time.Minute

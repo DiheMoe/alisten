@@ -236,11 +236,11 @@ func TestEffectsRunInOrder(t *testing.T) {
 			"1/5 room.PlaybackChanged",
 		)
 
-		time.Sleep(sunnyP.Duration + 200*time.Millisecond)
+		time.Sleep(sunnyP.Duration + 1500*time.Millisecond)
 		synctest.Wait()
 		checkMessages(t, f.spy.take(), "1/6 room.PlaybackChanged")
 		plays := store.Plays(id)
-		startedAt := start.Add(200 * time.Millisecond)
+		startedAt := start.Add(1500 * time.Millisecond)
 		if len(plays) != 1 || !plays[0].StartedAt.Equal(startedAt) || !plays[0].EndedAt.Equal(startedAt.Add(sunnyP.Duration)) {
 			t.Errorf("播放记录 = %+v，期望一首从 %v 播到 %v", plays, startedAt, startedAt.Add(sunnyP.Duration))
 		}
@@ -379,7 +379,7 @@ func TestListensAreWrittenBeforeTheBroadcast(t *testing.T) {
 		f.send(t, id, room.Join{Session: "s2", Member: b})
 		checkLog(t, listens.messages(), "listen 1 186016", "1/6 room.MembersChanged")
 
-		startedAt := start.Add(200 * time.Millisecond)
+		startedAt := start.Add(1500 * time.Millisecond)
 		for _, m := range members {
 			got, err := f.store.MemberListens(t.Context(), m.ID)
 			if err != nil || len(got) != 1 || got[0].Track != sunny || got[0].Meta.Title != sunnyM.Title || !got[0].HeardAt.Equal(startedAt) {
@@ -609,7 +609,7 @@ func TestPanickingRecommendationKeepsRoomRunning(t *testing.T) {
 		f.send(t, id, command("r2", alice, room.Enqueue{Track: rain, Meta: rainM}))
 
 		// 第二首开播时等待队列已经空了，房间这时请求推荐。
-		time.Sleep(sunnyP.Duration + time.Second)
+		time.Sleep(sunnyP.Duration + 2*time.Second)
 		synctest.Wait()
 		f.spy.take()
 		checkPanicLog(t, logs, "AutoDJ 推荐时发生 panic", "播放历史坏了", "panickingHistory", id)
