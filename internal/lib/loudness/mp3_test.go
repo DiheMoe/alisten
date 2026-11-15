@@ -28,9 +28,9 @@ func TestAnalyzeReaderMP3MatchesReference(t *testing.T) {
 		integrated float64 // LUFS
 		peak       float64 // dBFS
 	}{
-		{"pink-44k1-32k-mono.mp3", -24.964, -14.83},
-		{"pink-22k05-32k-mono.mp3", -24.913, -14.64},
-		{"tones-22k05-32k-stereo.mp3", -13.471, -10.54},
+		{"pink-44k1-32k-mono.mp3", -24.916, -14.83},
+		{"pink-22k05-32k-mono.mp3", -24.819, -14.64},
+		{"tones-22k05-32k-stereo.mp3", -13.377, -10.54},
 	}
 	for _, tt := range tests {
 		t.Run(tt.file, func(t *testing.T) {

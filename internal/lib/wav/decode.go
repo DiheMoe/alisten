@@ -138,12 +138,9 @@ func (d *streamDecoder) Read(p []float64) (int, error) {
 func (d *streamDecoder) SampleRate() int { return d.rate }
 func (d *streamDecoder) Channels() int   { return d.ch }
 
+// format 和 bits 的组合由 supportedBits 把关。没有对应分支的组合会解成全零，而不是报错。
 func (d *streamDecoder) appendSamples(format, bits uint16, data []byte) {
-	bps := int(bits) / 8
-	if bps == 0 {
-		return
-	}
-	n := len(data) / bps
+	n := len(data) / (int(bits) / 8)
 	out := d.q.buf[d.q.grow(n):]
 	switch format {
 	case formatPCM:
@@ -183,6 +180,13 @@ func (d *streamDecoder) appendSamples(format, bits uint16, data []byte) {
 	}
 }
 
+func supportedBits(format, bits uint16) bool {
+	if format == formatFloat {
+		return bits == 32 || bits == 64
+	}
+	return bits == 8 || bits == 16 || bits == 24 || bits == 32
+}
+
 type wavHeader struct {
 	format   uint16
 	bits     uint16
@@ -196,19 +200,18 @@ func newWAVDecoder(r io.Reader) (Decoder, error) {
 	if err != nil {
 		return nil, err
 	}
-	bps := int(h.bits) / 8
-	if bps == 0 {
-		return nil, fmt.Errorf("wav: 不支持的位深 %d", h.bits)
-	}
 	if h.format != formatPCM && h.format != formatFloat {
 		return nil, fmt.Errorf("wav: 不支持的音频格式 0x%x", h.format)
+	}
+	if !supportedBits(h.format, h.bits) {
+		return nil, fmt.Errorf("wav: 不支持的位深 %d", h.bits)
 	}
 	d := &streamDecoder{rate: h.rate, ch: h.channels}
 	w := &wavDataReader{
 		r:      r,
 		format: h.format,
 		bits:   h.bits,
-		bps:    int64(bps),
+		bps:    int64(h.bits) / 8,
 		remain: h.dataSize,
 		raw:    make([]byte, 65536),
 	}

@@ -19,6 +19,8 @@ interface ProfileState {
 
 class ProfileStore extends Store<ProfileState> {
   #loading: Promise<void> | null = null
+  // 成功的修改数。读取返回时这个数变了，说明读到的可能是修改之前的值。
+  #edits = 0
 
   constructor() {
     super({ member: null, account: null, email: '', recordListens: null, failed: false })
@@ -40,12 +42,14 @@ class ProfileStore extends Store<ProfileState> {
 
   // 本机已有的邮箱存进新账号。存失败时只提示，不影响注册。这时本机的副本保留，下次加载时重试。
   async registered(account: Account): Promise<void> {
+    this.#edits += 1
     this.setState({ account })
     await this.#moveLocalEmail()
   }
 
   // 账号的绑定变了，成员和邮箱都不变。
   updateAccount(account: Account): void {
+    this.#edits += 1
     this.setState({ account })
   }
 
@@ -84,6 +88,7 @@ class ProfileStore extends Store<ProfileState> {
     catch (error) {
       throw new Error(error instanceof IdentityRenewedError ? '没有保存，再试一次。' : errorMessage(error))
     }
+    this.#edits += 1
     this.setState({ recordListens: on })
   }
 
@@ -91,6 +96,7 @@ class ProfileStore extends Store<ProfileState> {
   async #update(changes: { name?: string, email?: string }): Promise<unknown> {
     try {
       const { member } = await api.updateMe(changes)
+      this.#edits += 1
       const { account } = this.state
       if (account) {
         const email = changes.email?.trim() ?? this.state.email
@@ -118,7 +124,14 @@ class ProfileStore extends Store<ProfileState> {
   async #load(): Promise<void> {
     this.setState({ failed: false })
     try {
-      const { member, account, recordListens } = await api.getMe()
+      // 读取期间资料被改过的话，读到的值写进状态会把界面带回修改之前，所以重新读一次。
+      let edits: number
+      let me: Awaited<ReturnType<typeof api.getMe>>
+      do {
+        edits = this.#edits
+        me = await api.getMe()
+      } while (edits !== this.#edits)
+      const { member, account, recordListens } = me
       this.setState({ member, account: account ?? null, email: account ? account.email ?? '' : localStorage.getItem(emailKey) ?? '', recordListens, failed: false })
       if (account && !account.email)
         await this.#moveLocalEmail()

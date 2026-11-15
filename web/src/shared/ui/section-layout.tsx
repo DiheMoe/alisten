@@ -14,16 +14,17 @@ export interface SectionItem<T extends string> {
   hiddenInList?: boolean
 }
 
-let wideQuery: MediaQueryList | undefined
+let narrowQuery: MediaQueryList | undefined
 
-function wide(): MediaQueryList {
-  wideQuery ??= window.matchMedia('(min-width: 768px)')
-  return wideQuery
+// 和样式表用同一个查询。反过来查 (min-width: 768px) 的话，视口宽度落在 767 和 768 之间时，这里算窄屏而样式表算宽屏。
+function narrow(): MediaQueryList {
+  narrowQuery ??= window.matchMedia('(max-width: 767px)')
+  return narrowQuery
 }
 
-function subscribeWide(notify: () => void): () => void {
-  wide().addEventListener('change', notify)
-  return () => wide().removeEventListener('change', notify)
+function subscribeNarrow(notify: () => void): () => void {
+  narrow().addEventListener('change', notify)
+  return () => narrow().removeEventListener('change', notify)
 }
 
 function focusHeading(container: HTMLElement | null): void {
@@ -67,7 +68,7 @@ export function SectionLayout<T extends string>({ title, eyebrow, sections, curr
   footer?: ReactNode
   children: ReactNode
 }) {
-  const isWide = useSyncExternalStore(subscribeWide, () => wide().matches)
+  const isWide = !useSyncExternalStore(subscribeNarrow, () => narrow().matches)
   const navRef = useRef<HTMLElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -85,10 +86,10 @@ export function SectionLayout<T extends string>({ title, eyebrow, sections, curr
       return
     // 窄屏上列表和详情互相替换，宽屏上内容区按分类重新挂载，所以原来有焦点的元素已经不在了，焦点落到了 body 上。
     // 切换也可能来自 header 里的入口，或者浏览器的后退、前进。焦点还在分类栏或顶栏上时就留在原处。
-    const narrow = !wide().matches
-    if (narrow && current === null)
+    const isNarrow = narrow().matches
+    if (isNarrow && current === null)
       [...listRef.current?.querySelectorAll<HTMLElement>('[data-section]') ?? []].find(item => item.dataset.section === previous)?.focus()
-    else if (toContent || (narrow && previous === null) || document.activeElement === document.body)
+    else if (toContent || (isNarrow && previous === null) || document.activeElement === document.body)
       focusHeading(contentRef.current)
   }, [current])
 

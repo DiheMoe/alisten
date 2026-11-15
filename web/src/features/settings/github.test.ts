@@ -110,6 +110,7 @@ describe('落地页', () => {
     ['error=expired', 'GitHub 授权已经过期，请回到设置重新发起。'],
     ['error=failed', '没有从 GitHub 确认你的身份，请稍后再试。'],
     ['error=unknown', '没有从 GitHub 确认你的身份，请稍后再试。'],
+    ['error=toString', '没有从 GitHub 确认你的身份，请稍后再试。'],
     ['', '没有收到 GitHub 的授权结果，请回到设置重新发起。'],
   ])('%s', async (fragment, message) => {
     const { startGithubLogin, takeGithubLanding } = await import('./github')

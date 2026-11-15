@@ -22,8 +22,11 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/domain/track"
+	"github.com/dihemoe/alisten/internal/lib/childenv"
 )
 
 const (
@@ -33,6 +36,8 @@ const (
 	outputLimit = 64 << 10
 	reasonLimit = 300
 	metaFile    = "meta.json"
+	// yt-dlp 和它启动的进程写单个文件的上限。转出的 mp3 写过 MaxAudioSize 之后才停，所以留出余量。
+	fileSizeLimit = port.MaxAudioSize + 1<<20
 )
 
 // 下载失败的原因，用作指标的标签。
@@ -158,15 +163,43 @@ func args(link, dir, proxy, cookies string) []string {
 func run(ctx context.Context, dir string, args []string) (stdout, stderr []byte, err error) {
 	cmd := exec.CommandContext(ctx, executable, args...)
 	cmd.Dir = dir
-	cmd.Env = environ()
+	// 环境里的代理设置不能传给 yt-dlp。它模拟浏览器时用 curl 发请求，而 curl 即使指定了代理，仍会按 no_proxy 绕过代理。
+	cmd.Env = childenv.Minimal()
 	// yt-dlp 会启动 ffmpeg，超时或取消时杀掉整个进程组。
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = waitDelay
 	out, errOut := &tail{limit: outputLimit}, &tail{limit: outputLimit}
 	cmd.Stdout, cmd.Stderr = out, errOut
-	err = cmd.Run()
+	if err := cmd.Start(); err != nil {
+		return nil, nil, err
+	}
+	// --max-filesize 只在服务端给出长度时生效，没有长度的流和分片下载都不受它限制，会一直写到任务超时。
+	// 所以由内核限制单个文件的大小，写到上限时写入失败，yt-dlp 随之出错退出。这时 yt-dlp 刚启动，还没有开始下载，之后启动的 ffmpeg 继承这个上限。
+	limit := unix.Rlimit{Cur: fileSizeLimit, Max: fileSizeLimit}
+	if err := unix.Prlimit(cmd.Process.Pid, unix.RLIMIT_FSIZE, &limit, nil); err != nil {
+		_ = cmd.Cancel()
+		_ = cmd.Wait()
+		return nil, nil, fmt.Errorf("限制 yt-dlp 写出的文件大小：%w", err)
+	}
+	err = cmd.Wait()
+	// yt-dlp 自己退出时，它启动的进程可能还在。所以不管怎么结束的，都把进程组杀掉，免得留下的进程继续占着 CPU 和任务目录。
+	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	if err != nil && reachedSizeLimit(dir) {
+		err = port.ErrAudioTooLarge
+	}
 	return out.buf, redactCookies(errOut.lines()), err
+}
+
+// 正常的文件到不了 fileSizeLimit，写到这么大的文件是被内核截住的。
+func reachedSizeLimit(dir string) bool {
+	entries, _ := os.ReadDir(dir)
+	for _, entry := range entries {
+		if info, err := entry.Info(); err == nil && info.Mode().IsRegular() && info.Size() >= fileSizeLimit {
+			return true
+		}
+	}
+	return false
 }
 
 // yt-dlp 读 cookies 文件出错时，会在这些说明后面打印出错的行或值，而这些内容不能出现在日志和任务错误里。
@@ -174,18 +207,6 @@ var cookieEcho = regexp.MustCompile(`(cookie file entry|Netscape format cookies 
 
 func redactCookies(stderr []byte) []byte {
 	return cookieEcho.ReplaceAll(stderr, []byte("${1} [REDACTED]"))
-}
-
-// yt-dlp 模拟浏览器时用 curl 发请求，而 curl 即使指定了代理，仍会按环境变量 no_proxy 绕过代理，所以去掉环境中的代理设置。
-func environ() []string {
-	return slices.DeleteFunc(os.Environ(), func(kv string) bool {
-		name, _, _ := strings.Cut(kv, "=")
-		switch strings.ToLower(name) {
-		case "http_proxy", "https_proxy", "all_proxy", "no_proxy":
-			return true
-		}
-		return false
-	})
 }
 
 type tail struct {

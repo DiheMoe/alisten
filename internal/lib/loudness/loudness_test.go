@@ -42,16 +42,37 @@ func sine(sampleRate int, freq, amp, seconds float64) []float64 {
 	return samples
 }
 
+// BS.1770 在 48 kHz 下给出的系数表。
+func TestKWeightingMatchesBS1770(t *testing.T) {
+	shelf, highpass := kWeightingFilters(48000)
+	for _, tc := range []struct {
+		name      string
+		got, want biquad
+	}{
+		{"高频搁架", shelf, biquad{b0: 1.53512485958697, b1: -2.69169618940638, b2: 1.19839281085285, a1: -1.69065929318241, a2: 0.73248077421585}},
+		{"高通", highpass, biquad{b0: 1, b1: -2, b2: 1, a1: -1.99004745483398, a2: 0.99007225036621}},
+	} {
+		got := []float64{tc.got.b0, tc.got.b1, tc.got.b2, tc.got.a1, tc.got.a2}
+		want := []float64{tc.want.b0, tc.want.b1, tc.want.b2, tc.want.a1, tc.want.a2}
+		for i := range got {
+			if math.Abs(got[i]-want[i]) > 1e-12 {
+				t.Errorf("%s的系数 = %v，期望 BS.1770 的 %v", tc.name, got, want)
+				break
+			}
+		}
+	}
+}
+
 func TestAnalyzeSamplesSine(t *testing.T) {
 	const fs = 48000
-	// 997 Hz、振幅 0.25 的正弦波，原始 RMS 对应约 -12.73 LUFS。
-	// K 加权在 1 kHz 附近约有 +0.6 dB 增益，所以预期约 -12.1 LUFS。
+	// 997 Hz、振幅 0.25 的正弦波，左右声道的均方之和是 0.0625，即 -12.04 dB。
+	// K 加权在 997 Hz 处的增益是 +0.691 dB，和公式里 -0.691 的修正抵消，所以读数是 -12.04 LUFS。
 	res, err := AnalyzeSamples(sine(fs, 997, 0.25, 3), fs, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if math.Abs(res.Integrated-(-12.1)) > 1.0 {
-		t.Errorf("Integrated = %.2f LUFS, 预期约 -12.1", res.Integrated)
+	if math.Abs(res.Integrated-(-12.04)) > 0.01 {
+		t.Errorf("Integrated = %.4f LUFS, 预期约 -12.04", res.Integrated)
 	}
 	if math.Abs(res.Peak-(-12.04)) > 0.5 {
 		t.Errorf("Peak = %.2f dBFS, 预期约 -12.04", res.Peak)
@@ -91,7 +112,7 @@ func TestAnalyzeSamplesMonoIsDualMono(t *testing.T) {
 			if math.Abs(got.Integrated-want.Integrated) > 1e-9 || got.Peak != want.Peak || got.Duration != want.Duration {
 				t.Errorf("单声道 = %+v，期望与双声道相同：%+v", *got, *want)
 			}
-			// 振幅 0.25 的正弦波每个声道的均方是 0.03125，左右声道之和 0.0625 即 -12.04 dB。997 Hz 处 K 加权的增益与 -0.691 的修正基本抵消。
+			// 振幅 0.25 的正弦波每个声道的均方是 0.03125，左右声道之和 0.0625 即 -12.04 dB。997 Hz 处 K 加权的增益与 -0.691 的修正抵消。
 			if math.Abs(got.Integrated-(-12.04)) > 0.1 {
 				t.Errorf("Integrated = %.2f LUFS，期望约 -12.04", got.Integrated)
 			}

@@ -5,8 +5,7 @@ import { useEffect, useState } from 'react'
 import { api, ApiError } from '@/core/api'
 import { errorMessage } from '@/core/errors'
 import { roomStore, sameTrack } from '@/core/room'
-import { enqueue, sourceName } from '@/features/queue'
-import { bookTitle } from '@/shared/lib/book-title'
+import { enqueue, pickButton, sourceName } from '@/features/queue'
 import { useStore } from '@/shared/lib/use-store'
 import { Avatar, EmptyState, Skeleton, SongList } from '@/shared/ui'
 import { CopySharedPlaylistButton } from './copy-shared-playlist'
@@ -97,12 +96,10 @@ export function SharedPlaylistPage({ shareId }: { shareId: string }) {
   const { items } = playlist
   const actions = (_: SongItem, index: number): SongAction[] => {
     const { track, meta } = items[index]
-    const blocked = track.source === 'link' && ephemeral
     return [
       {
         icon: CirclePlus,
-        label: blocked ? '临时房间不能点链接里的歌' : `点歌${bookTitle(meta.title)}`,
-        disabled: !connected || blocked,
+        ...pickButton(track, meta.title, { connected, ephemeral }),
         run: async () => {
           await enqueue(track)
         },

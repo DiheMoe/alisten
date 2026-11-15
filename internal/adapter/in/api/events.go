@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -64,7 +65,7 @@ func (s *server) roomEvents(w http.ResponseWriter, r *http.Request) {
 		case r.Context().Err() != nil:
 			return
 		case err != nil:
-			if !stream.write([]byte(": ping\n\n")) {
+			if !stream.write(ctx, []byte(": ping\n\n")) {
 				return
 			}
 		case reason != 0:
@@ -127,11 +128,18 @@ func (st eventStream) event(ctx context.Context, name, id string, data any) bool
 	if id != "" {
 		frame += "id: " + id + "\n"
 	}
-	return st.write([]byte(frame + "data: " + string(payload) + "\n\n"))
+	return st.write(ctx, []byte(frame+"data: "+string(payload)+"\n\n"))
 }
 
-func (st eventStream) write(frame []byte) bool {
-	_ = st.rc.SetWriteDeadline(time.Now().Add(streamWriteTimeout))
+func (st eventStream) write(ctx context.Context, frame []byte) bool {
+	// 没有写期限就不写，因为客户端不再读取时，没有期限的写入会一直阻塞。
+	if err := st.rc.SetWriteDeadline(time.Now().Add(streamWriteTimeout)); err != nil {
+		// 不支持写期限说明外面包了一层没有转发它的中间件。其余的错误是连接已经关闭。
+		if errors.Is(err, http.ErrNotSupported) {
+			st.logger.ErrorContext(ctx, "事件流设不了写期限", "error", err)
+		}
+		return false
+	}
 	if _, err := st.w.Write(frame); err != nil {
 		return false
 	}

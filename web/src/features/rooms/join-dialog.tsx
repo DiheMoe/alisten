@@ -1,28 +1,21 @@
 import type { RoomListing } from '@/core/realtime'
 import { Headphones, LockKeyhole, Users } from 'lucide-react'
 import { useState } from 'react'
-import { api, loadTicket, saveTicket } from '@/core/api'
-import { Modal, notificationStore } from '@/shared/ui'
-import { joinErrorMessage } from './room-entry'
+import { loadTicket } from '@/core/api'
+import { Modal } from '@/shared/ui'
+import { roomEntryStore } from './room-entry'
 import './rooms.css'
 
-export function JoinDialog({ room, onJoined, onClose }: { room: RoomListing, onJoined: () => void, onClose: () => void }) {
+export function JoinDialog({ room, onJoined, onClose }: { room: RoomListing, onJoined?: () => void, onClose: () => void }) {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const needsPassword = room.hasPassword && !loadTicket(room.id)
   const submit = async () => {
     setBusy(true)
-    try {
-      if (!loadTicket(room.id)) {
-        const { ticket } = await api.createTicket(room.id, room.hasPassword ? { password } : {})
-        saveTicket(room.id, ticket)
-      }
-      onJoined()
-    }
-    catch (error) {
-      notificationStore.error(joinErrorMessage(error))
+    if (await roomEntryStore.join(room, password))
+      onJoined?.()
+    else
       setBusy(false)
-    }
   }
   return (
     <Modal title="加入房间" onClose={onClose}>

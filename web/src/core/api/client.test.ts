@@ -143,6 +143,24 @@ describe('发送请求', () => {
     const { api } = await load()
     await expect(api.listRooms()).rejects.toMatchObject({ code: null, message: '无法连接服务器，请检查网络后再试。', status: 0 })
   })
+
+  it('服务器 60 秒没有响应就放弃等待', async () => {
+    const timeout = new AbortController()
+    let limitMs = 0
+    vi.stubGlobal('AbortSignal', {
+      timeout: (ms: number) => {
+        limitMs = ms
+        return timeout.signal
+      },
+    })
+    vi.stubGlobal('fetch', (_path: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(init.signal?.reason))
+      timeout.abort(new DOMException('signal timed out', 'TimeoutError'))
+    }))
+    const { api } = await load()
+    await expect(api.listRooms()).rejects.toMatchObject({ code: null, message: '服务器没有及时响应，请稍后再试。', status: 0 })
+    expect(limitMs).toBe(60_000)
+  })
 })
 
 describe('token 失效时更换身份', () => {

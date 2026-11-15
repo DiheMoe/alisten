@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dihemoe/alisten/internal/app/port"
+	"github.com/dihemoe/alisten/internal/lib/childenv"
 )
 
 const (
@@ -127,6 +128,7 @@ func args(input, output string) []string {
 
 func run(ctx context.Context, argv []string) (stderr []byte, err error) {
 	cmd := exec.CommandContext(ctx, executable, argv...)
+	cmd.Env = childenv.Minimal()
 	cmd.WaitDelay = waitDelay
 	errOut := &tail{limit: outputLimit}
 	cmd.Stdout, cmd.Stderr = io.Discard, errOut

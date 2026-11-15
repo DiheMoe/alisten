@@ -325,8 +325,9 @@ func (d *idl) check() error {
 			return err
 		}
 	}
-	// 房间的事件流由 api 适配器手写，不在 IDL 中。
-	names := endpointNames{operations: map[string]bool{}, constants: map[string]bool{}, routes: map[string]string{"GET /api/room/events": "房间的事件流"}, paths: map[string]string{}}
+	// 这两条路由由 api 适配器手写，不在 IDL 中。IDL 里再声明同样的路由，ServeMux 登记时会 panic。
+	handwritten := map[string]string{"GET /api/room/events": "房间的事件流", "GET /api/auth/github/callback": "手写的 GitHub 回调"}
+	names := endpointNames{operations: map[string]bool{}, constants: map[string]bool{}, routes: handwritten, paths: map[string]string{}}
 	for i, m := range d.Requests {
 		names.operations[camel(m.Type)] = true
 		if err := d.checkRoomRoute(fmt.Sprintf("x-requests[%d]", i), m, names); err != nil {
@@ -1000,6 +1001,12 @@ func (d *idl) markInbound(s *schema) error {
 		d.inbound[def.name] = true
 		if def.Enum != nil {
 			continue
+		}
+		// $defs 先按响应的规则检查过，那里不允许 maxItems，而请求中的数组必须写 maxItems，所以被请求引用的类型里不可能有合法的数组。
+		for _, field := range slices.Sorted(maps.Keys(def.Properties)) {
+			if def.Properties[field].Type == "array" {
+				return fmt.Errorf("$defs.%s.properties.%s：请求引用的类型里不能有数组，数组要直接写在请求里", def.name, field)
+			}
 		}
 		if err := d.checkObject("$defs."+def.name, def, true); err != nil {
 			return err

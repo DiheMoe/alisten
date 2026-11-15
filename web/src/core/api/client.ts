@@ -4,6 +4,9 @@ import { Emitter } from '@/shared/lib/emitter'
 import { deleteAllTickets, deleteMemberToken, loadAdminToken, loadMemberToken, memberTokenKey, saveMemberToken } from './credentials'
 import { httpClient } from './http.gen'
 
+// 和 WebSocket 请求的超时一致。丢包的网络上 fetch 要等连接超时才会失败，不限时的话界面会一直停在等待里。
+const requestTimeoutMs = 60_000
+
 export class ApiError extends Error {
   readonly code: ErrorCode | null
   readonly status: number
@@ -70,9 +73,11 @@ async function sendOnce<T>(request: HttpRequest): Promise<T> {
   }
   let response: Response
   try {
-    response = await fetch(request.path, { method: request.method, headers, body })
+    response = await fetch(request.path, { method: request.method, headers, body, signal: AbortSignal.timeout(requestTimeoutMs) })
   }
-  catch {
+  catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError')
+      throw new ApiError('服务器没有及时响应，请稍后再试。', null, 0)
     throw new ApiError('无法连接服务器，请检查网络后再试。', null, 0)
   }
   if (!response.ok)

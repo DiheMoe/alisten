@@ -51,6 +51,8 @@ function deferred<T>() {
 
 let routes: Map<string, Handler>
 let requests: string[]
+// 每个接口最近一次请求的请求体。
+let bodies: Map<string, unknown>
 let unexpected: string[]
 let local: FakeStorage
 
@@ -81,6 +83,7 @@ beforeEach(() => {
   vi.resetModules()
   vi.useFakeTimers()
   requests = []
+  bodies = new Map()
   unexpected = []
   routes = new Map<string, Handler>([['GET /api/rooms/r1', found(listing())]])
   local = new FakeStorage()
@@ -89,6 +92,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', async (path: string, init: RequestInit) => {
     const route = `${init.method} ${path}`
     requests.push(route)
+    if (typeof init.body === 'string')
+      bodies.set(route, JSON.parse(init.body))
     const handler = routes.get(route)
     if (!handler) {
       unexpected.push(route)
@@ -148,6 +153,17 @@ describe('进入房间', () => {
     await roomEntryStore.enter('r1', listing())
     expect(requests).toEqual([])
     expect(roomEntryStore.state.phase).toBe('joining')
+  })
+
+  it('已经在这个房间里时再进一次不重连，用 id 或别名都一样', async () => {
+    routes.set('GET /api/rooms/party', found(listing({ slug: 'party' })))
+    const { roomEntryStore } = await entered('party')
+    await roomEntryStore.enter('r1')
+    await roomEntryStore.enter('party', listing({ slug: 'party' }))
+    expect(sockets).toHaveLength(1)
+    expect(socketAt(0).readyState).toBe(FakeSocket.OPEN)
+    expect(requests).toEqual(['GET /api/rooms/party'])
+    expect(roomEntryStore.state).toMatchObject({ phase: 'joined', ref: 'party' })
   })
 
   it('换一个房间进入时立刻离开当前房间，不等新房间查到', async () => {
@@ -256,6 +272,15 @@ describe('连接被服务端关闭', () => {
     expect(sockets).toHaveLength(1)
   })
 
+  it('进入之后房间改了密码，票据作废，同样重新查询房间，等用户再换票据', async () => {
+    const { roomEntryStore } = await entered()
+    routes.set('GET /api/rooms/r1', found(listing({ hasPassword: true })))
+    socketAt(0).lose(CloseCode.unauthorized)
+    await flush()
+    expect(local.getItem(ticketKey)).toBeNull()
+    expect(roomEntryStore.state).toEqual({ phase: 'needs-ticket', ref: 'r1', room: listing({ hasPassword: true }) })
+  })
+
   it('进入之后房间被关闭，进入 not-found 并忘掉这个房间，用别名进的也一样', async () => {
     routes.set('GET /api/rooms/party', found(listing({ slug: 'party' })))
     const { roomEntryStore, roomStore } = await entered('party')
@@ -275,6 +300,130 @@ describe('连接被服务端关闭', () => {
     socketAt(0).lose(CloseCode.invalidArgument)
     expect(roomEntryStore.state.phase).toBe('failed')
     expect(roomStore.state).toMatchObject({ roomId: null, stopCode: null })
+  })
+})
+
+describe('在加入弹窗里确认', () => {
+  const route = 'POST /api/rooms/r1/tickets'
+  const locked = listing({ hasPassword: true })
+
+  beforeEach(() => {
+    local.setItem(memberTokenKey, 'good')
+  })
+
+  it('没有票据时带着密码换取票据，保存之后用它进入', async () => {
+    routes.set(route, () => json(201, { ticket: 't9' }))
+    const { roomEntryStore } = await load()
+    await expect(roomEntryStore.join(locked, '芝麻开门')).resolves.toBe(true)
+    expect(bodies.get(route)).toEqual({ password: '芝麻开门' })
+    expect(local.getItem(ticketKey)).toBe('t9')
+    expect(roomEntryStore.state).toEqual({ phase: 'joining', ref: 'r1', room: locked })
+    socketAt(0).open()
+    expect(socketAt(0).last('hello').data).toMatchObject({ roomId: 'r1', ticket: 't9' })
+  })
+
+  it('房间没有密码时换票据不带密码，有别名的房间按别名进入', async () => {
+    routes.set(route, () => json(201, { ticket: 't9' }))
+    const { roomEntryStore } = await load()
+    await expect(roomEntryStore.join(listing({ slug: 'party' }), '')).resolves.toBe(true)
+    expect(bodies.get(route)).toEqual({})
+    expect(roomEntryStore.state).toMatchObject({ phase: 'joining', ref: 'party' })
+  })
+
+  it('已经有票据时不再换取', async () => {
+    local.setItem(ticketKey, 't1')
+    const { roomEntryStore } = await load()
+    await expect(roomEntryStore.join(listing(), '')).resolves.toBe(true)
+    expect(requests).toEqual([])
+    expect(roomEntryStore.state.phase).toBe('joining')
+  })
+
+  it('换票据失败时提示原因，不进入', async () => {
+    routes.set(route, () => errorResponse(429, 'RATE_LIMITED', '这个房间的密码尝试次数太多，请稍后再试。'))
+    const { roomEntryStore, notifications } = await load()
+    await expect(roomEntryStore.join(locked, '猜的')).resolves.toBe(false)
+    expect(notifications()).toEqual([{ tone: 'error', message: '这个房间的密码尝试次数太多，请稍后再试。' }])
+    expect(roomEntryStore.state.phase).toBe('idle')
+    expect(sockets).toHaveLength(0)
+  })
+
+  it('已经在这个房间里时不重连', async () => {
+    const { roomEntryStore } = await entered()
+    await expect(roomEntryStore.join(listing(), '')).resolves.toBe(true)
+    expect(sockets).toHaveLength(1)
+    expect(socketAt(0).readyState).toBe(FakeSocket.OPEN)
+    expect(roomEntryStore.state.phase).toBe('joined')
+  })
+
+  it('换票据期间关掉弹窗，票据换到之后留着，但不进入', async () => {
+    const ticket = deferred<Response>()
+    routes.set(route, () => ticket.promise)
+    const { roomEntryStore } = await load()
+    const joining = roomEntryStore.join(locked, '芝麻开门')
+    await flush()
+    roomEntryStore.cancelJoin()
+    ticket.resolve(json(201, { ticket: 't9' }))
+    await expect(joining).resolves.toBe(false)
+    expect(local.getItem(ticketKey)).toBe('t9')
+    expect(roomEntryStore.state.phase).toBe('idle')
+    expect(sockets).toHaveLength(0)
+  })
+
+  it('换票据期间关掉弹窗，之后换票据失败也不提示', async () => {
+    const ticket = deferred<Response>()
+    routes.set(route, () => ticket.promise)
+    const { roomEntryStore, notifications } = await load()
+    const joining = roomEntryStore.join(locked, '猜的')
+    await flush()
+    roomEntryStore.cancelJoin()
+    ticket.resolve(errorResponse(429, 'RATE_LIMITED', '这个房间的密码尝试次数太多，请稍后再试。'))
+    await expect(joining).resolves.toBe(false)
+    expect(notifications()).toEqual([])
+  })
+
+  it('换票据期间进了别的房间，票据换到之后不把人带回来', async () => {
+    const ticket = deferred<Response>()
+    routes.set(route, () => ticket.promise)
+    routes.set('GET /api/rooms/b', found(listing({ id: 'rb' })))
+    local.setItem('alisten.ticket.rb', 'tb')
+    const { roomEntryStore } = await load()
+    const joining = roomEntryStore.join(locked, '芝麻开门')
+    await flush()
+    await roomEntryStore.enter('b')
+    ticket.resolve(json(201, { ticket: 't9' }))
+    await expect(joining).resolves.toBe(false)
+    expect(roomEntryStore.state).toMatchObject({ phase: 'joining', ref: 'b' })
+    expect(sockets).toHaveLength(1)
+  })
+
+  it('等票据的进房被取消之后，还在换的票据不再生效', async () => {
+    const ticket = deferred<Response>()
+    routes.set(route, () => ticket.promise)
+    routes.set('GET /api/rooms/r1', found(locked))
+    const { roomEntryStore } = await load()
+    await roomEntryStore.enter('r1')
+    expect(roomEntryStore.state.phase).toBe('needs-ticket')
+    const joining = roomEntryStore.join(locked, '芝麻开门')
+    await flush()
+    roomEntryStore.reset()
+    ticket.resolve(json(201, { ticket: 't9' }))
+    await expect(joining).resolves.toBe(false)
+    expect(roomEntryStore.state).toEqual({ phase: 'idle', ref: null, room: null })
+    expect(sockets).toHaveLength(0)
+  })
+
+  it('还在查询的另一个房间不受弹窗影响', async () => {
+    const lookup = deferred<Response>()
+    routes.set('GET /api/rooms/b', () => lookup.promise)
+    routes.set(route, () => errorResponse(429, 'RATE_LIMITED', '这个房间的密码尝试次数太多，请稍后再试。'))
+    local.setItem('alisten.ticket.rb', 'tb')
+    const { roomEntryStore } = await load()
+    const entering = roomEntryStore.enter('b')
+    await expect(roomEntryStore.join(locked, '猜的')).resolves.toBe(false)
+    roomEntryStore.cancelJoin()
+    lookup.resolve(json(200, listing({ id: 'rb' })))
+    await entering
+    expect(roomEntryStore.state).toMatchObject({ phase: 'joining', ref: 'b' })
   })
 })
 

@@ -136,8 +136,8 @@ func TestSearchTracksPaginates(t *testing.T) {
 	if got, total, err := f.svc.SearchTracks(t.Context(), f.persistent, track.QQ, "晴天", 1, 10); err != nil || total != 1 || got[0].Track.ID != "0039MnYb0qxYhV" {
 		t.Errorf("QQ 的搜索结果 = %v, %d, %v", got, total, err)
 	}
-	if _, _, err := f.svc.SearchTracks(t.Context(), f.persistent, track.Link, "晴天", 1, 10); !errors.Is(err, port.ErrProviderFailed) {
-		t.Errorf("搜索链接的错误 = %v，期望 ErrProviderFailed", err)
+	if _, _, err := f.svc.SearchTracks(t.Context(), f.persistent, track.Link, "晴天", 1, 10); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("搜索链接的错误 = %v，期望 ErrUnsupported", err)
 	}
 	f.netease.Fail(errors.New("网易云不可用"))
 	if _, _, err := f.svc.SearchTracks(t.Context(), f.persistent, track.NetEase, "晴天", 1, 10); !errors.Is(err, port.ErrProviderFailed) {
@@ -239,8 +239,15 @@ func TestFirstMatch(t *testing.T) {
 	if got, m, err := f.svc.FirstMatch(t.Context(), track.QQ, "晴天"); err != nil || got.ID != "a" || m.Title != "晴天" {
 		t.Errorf("按关键词点歌 = %v, %v, %v，期望第一条搜索结果", got, m, err)
 	}
-	if _, _, err := f.svc.FirstMatch(t.Context(), track.QQ, "七里香"); !errors.Is(err, port.ErrProviderFailed) {
-		t.Errorf("没有搜索结果时的错误 = %v，期望 ErrProviderFailed", err)
+	if _, _, err := f.svc.FirstMatch(t.Context(), track.QQ, "七里香"); !errors.Is(err, ErrNoMatch) {
+		t.Errorf("没有搜索结果时的错误 = %v，期望 ErrNoMatch", err)
+	}
+	if _, _, err := f.svc.FirstMatch(t.Context(), track.Bilibili, "晴天"); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("在 B 站按关键词点歌 = %v，期望 ErrUnsupported", err)
+	}
+	f.qq.Fail(errors.New("QQ 音乐不可用"))
+	if _, _, err := f.svc.FirstMatch(t.Context(), track.QQ, "晴天"); !errors.Is(err, port.ErrProviderFailed) {
+		t.Errorf("上游出错时的错误 = %v，期望 ErrProviderFailed", err)
 	}
 }
 
@@ -261,8 +268,8 @@ func TestPlaylistSongsSkipsRoomQuota(t *testing.T) {
 	if got, err := f.svc.PlaylistSongs(t.Context(), track.QQ, "q1"); err != nil || !reflect.DeepEqual(got, []port.Song{qqSongs[1], qqSongs[0]}) {
 		t.Errorf("QQ 音乐歌单内的歌曲 = %v, %v，期望按歌单的顺序", got, err)
 	}
-	if _, err := f.svc.PlaylistSongs(t.Context(), track.Bilibili, "p1"); !errors.Is(err, port.ErrProviderFailed) {
-		t.Errorf("B 站的歌单 = %v，期望 ErrProviderFailed", err)
+	if _, err := f.svc.PlaylistSongs(t.Context(), track.Bilibili, "p1"); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("B 站的歌单 = %v，期望 ErrUnsupported", err)
 	}
 	f.netease.Fail(errors.New("网易云不可用"))
 	if _, err := f.svc.PlaylistSongs(t.Context(), track.NetEase, "p1"); !errors.Is(err, port.ErrProviderFailed) {
@@ -278,8 +285,8 @@ func TestPlaylistTracksTakesRoomQuota(t *testing.T) {
 	if got, err := f.svc.PlaylistTracks(t.Context(), f.ephemeral, track.QQ, "q1"); err != nil || !reflect.DeepEqual(got, songs) || f.quota.calls != 1 {
 		t.Errorf("在临时房间里打开 QQ 音乐的歌单 = %v, %v，取了 %d 次额度，期望取到歌曲、取 1 次额度", got, err, f.quota.calls)
 	}
-	if _, err := f.svc.PlaylistTracks(t.Context(), f.ephemeral, track.Bilibili, "q1"); !errors.Is(err, port.ErrProviderFailed) || f.quota.calls != 1 {
-		t.Errorf("B 站的歌单 = %v，取了 %d 次额度，期望 ErrProviderFailed，而且不取额度", err, f.quota.calls)
+	if _, err := f.svc.PlaylistTracks(t.Context(), f.ephemeral, track.Bilibili, "q1"); !errors.Is(err, ErrUnsupported) || f.quota.calls != 1 {
+		t.Errorf("B 站的歌单 = %v，取了 %d 次额度，期望 ErrUnsupported，而且不取额度", err, f.quota.calls)
 	}
 }
 

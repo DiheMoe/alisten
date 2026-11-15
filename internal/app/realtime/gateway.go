@@ -235,8 +235,9 @@ func (g *Gateway) announce(ctx context.Context, roomID string, m port.RoomMessag
 	}
 }
 
+// 调用方已经把资料落库了，所以广播不随请求取消。
 func (g *Gateway) MemberUpdated(ctx context.Context, m member.Member) error {
-	ctx, cancel := context.WithTimeout(ctx, clusterTimeout)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), clusterTimeout)
 	defer cancel()
 	if err := g.bus.PublishMember(ctx, m); err != nil {
 		return unavailable(err)

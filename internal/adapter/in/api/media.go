@@ -3,8 +3,11 @@ package api
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
+	"unicode/utf8"
 
+	"github.com/dihemoe/alisten/internal/app/media"
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/domain/track"
 	"github.com/dihemoe/alisten/protocol"
@@ -39,6 +42,11 @@ func (s *server) redirectTarget(ctx context.Context, r *http.Request, t track.Tr
 			err = s.panicked(ctx, r, value)
 		}
 	}()
+	// 路径里的 ID 不经过协议的解码，可以是任意字节。不是合法 UTF-8 或带 U+0000 的 ID 不属于任何曲目，
+	// 交给存储查询还会让数据库报错，所以在这里就按不在任何房间中处理。
+	if !utf8.ValidString(t.ID) || strings.ContainsRune(t.ID, 0) {
+		return "", media.ErrNotInRoom
+	}
 	return s.Playback.URL(ctx, t, time.Now())
 }
 

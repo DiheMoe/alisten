@@ -1,6 +1,6 @@
 import type { MyPlaylist } from '@/core/realtime'
 import { FileUp, Import, Link } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ActionMenu, Modal, notificationStore } from '@/shared/ui'
 import { importLimit, parsePlaylistFile } from './playlist-file'
 import { playlistsStore } from './playlists-store'
@@ -74,6 +74,14 @@ function ImportLinkDialog({ onClose, onImported }: { onClose: () => void, onImpo
   const [link, setLink] = useState('')
   const [name, setName] = useState(defaultImportName)
   const [busy, setBusy] = useState(false)
+  // 导入要等几秒。这期间对话框被关掉的话，导入完成时只提示，不再把页面带到新歌单。
+  const closedRef = useRef(false)
+  useEffect(() => {
+    closedRef.current = false
+    return () => {
+      closedRef.current = true
+    }
+  }, [])
   return (
     <Modal title="从链接导入" onClose={onClose}>
       <form
@@ -90,7 +98,8 @@ function ImportLinkDialog({ onClose, onImported }: { onClose: () => void, onImpo
             return
           }
           notificationStore.success(`已导入 ${result.imported} 首`)
-          onImported(result.playlist)
+          if (!closedRef.current)
+            onImported(result.playlist)
         }}
       >
         <label>

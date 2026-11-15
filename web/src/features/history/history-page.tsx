@@ -3,7 +3,7 @@ import { CirclePlus, Download, History, Search, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { roomStore, sameTrack } from '@/core/room'
 import { SaveToPlaylistButton } from '@/features/playlists'
-import { enqueue, sourceName } from '@/features/queue'
+import { enqueue, pickButton, sourceName } from '@/features/queue'
 import { bookTitle } from '@/shared/lib/book-title'
 import { formatClock } from '@/shared/lib/time'
 import { useStore } from '@/shared/lib/use-store'
@@ -23,7 +23,7 @@ function playedOn(ms: number): string {
   return new Date(ms).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-function HistoryRow({ listen, compact, connected, playing }: { listen: MyListen, compact: boolean, connected: boolean, playing: boolean }) {
+function HistoryRow({ listen, compact, connected, ephemeral, playing }: { listen: MyListen, compact: boolean, connected: boolean, ephemeral: boolean, playing: boolean }) {
   const { title, artist, album, coverUrl, pageUrl } = listen.meta
   const performer = artist || '未知艺术家'
   const source = sourceName(listen.track)
@@ -41,8 +41,7 @@ function HistoryRow({ listen, compact, connected, playing }: { listen: MyListen,
       <AsyncIconButton
         icon={CirclePlus}
         className="song-action"
-        label={`点歌${bookTitle(title)}`}
-        disabled={!connected}
+        {...pickButton(listen.track, title, { connected, ephemeral })}
         onAction={async () => {
           await enqueue(listen.track)
         }}
@@ -65,6 +64,7 @@ export function HistoryPage({ compact = false, filter = '', onFilter }: { compac
   const listens = useStore(historyStore, s => s.listens)
   const error = useStore(historyStore, s => s.error)
   const connected = useStore(roomStore, s => s.status === 'open')
+  const ephemeral = useStore(roomStore, s => s.room?.room.kind === 'ephemeral')
   const playing = useStore(roomStore, s => s.room?.nowPlaying?.entry.track)
   const [limit, setLimit] = useState(batchSize)
   const [confirming, setConfirming] = useState(false)
@@ -91,7 +91,7 @@ export function HistoryPage({ compact = false, filter = '', onFilter }: { compac
           return (
             <li key={`${listen.track.source}:${listen.track.id}`}>
               {(index === 0 || playedOn(shown[index - 1].heardAtMs) !== day) && <h2 className="history-date text-ui-sm muted">{day}</h2>}
-              <HistoryRow listen={listen} compact={compact} connected={connected} playing={sameTrack(listen.track, playing)} />
+              <HistoryRow listen={listen} compact={compact} connected={connected} ephemeral={ephemeral} playing={sameTrack(listen.track, playing)} />
             </li>
           )
         })}

@@ -9,10 +9,11 @@ import { notificationStore } from '@/shared/ui'
 const nonceKey = 'alisten.github-nonce'
 const intentKey = 'alisten.github-intent'
 
-const failures: Record<string, string> = {
-  denied: '你在 GitHub 上取消了授权。',
-  expired: 'GitHub 授权已经过期，请回到设置重新发起。',
-}
+// 用 Map 而不是普通对象。错误码来自地址，可能是 toString 这类原型上的属性名，用普通对象会查到原型上的函数。
+const failures = new Map([
+  ['denied', '你在 GitHub 上取消了授权。'],
+  ['expired', 'GitHub 授权已经过期，请回到设置重新发起。'],
+])
 
 function randomNonce(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32))
@@ -62,7 +63,7 @@ export function takeGithubLanding(fragment: string): GithubLanding {
   if (code)
     landing = nonce && intent ? { kind: 'exchange', code, nonce, intent } : { kind: 'failed', message: '这次 GitHub 登录不是在这个页面发起的，请回到设置重新发起。' }
   else if (error)
-    landing = { kind: 'failed', message: failures[error] ?? '没有从 GitHub 确认你的身份，请稍后再试。' }
+    landing = { kind: 'failed', message: failures.get(error) ?? '没有从 GitHub 确认你的身份，请稍后再试。' }
   else
     landing = { kind: 'failed', message: '没有收到 GitHub 的授权结果，请回到设置重新发起。' }
   landed = { fragment, landing }

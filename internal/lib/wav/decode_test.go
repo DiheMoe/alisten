@@ -124,6 +124,9 @@ func TestDecodeRejectsMalformedWAV(t *testing.T) {
 		{"没有 data 块", riff(pcm16), "缺少 data 块"},
 		{"MP3 编码的 WAV", riff(chunk("fmt ", fmtChunk(0x55, 1, 8000, 16)), chunk("data", le[int16](1))), "不支持的音频格式 0x55"},
 		{"4 位", riff(chunk("fmt ", fmtChunk(formatPCM, 1, 8000, 4)), chunk("data", []byte{1})), "不支持的位深 4"},
+		{"12 位", riff(chunk("fmt ", fmtChunk(formatPCM, 1, 8000, 12)), chunk("data", []byte{1, 2})), "不支持的位深 12"},
+		{"64 位整数", riff(chunk("fmt ", fmtChunk(formatPCM, 1, 8000, 64)), chunk("data", make([]byte, 8))), "不支持的位深 64"},
+		{"16 位浮点", riff(chunk("fmt ", fmtChunk(formatFloat, 1, 8000, 16)), chunk("data", le[int16](1))), "不支持的位深 16"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

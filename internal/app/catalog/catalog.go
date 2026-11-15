@@ -22,7 +22,11 @@ const (
 	autoDJLimit      = 10
 )
 
-var ErrRateLimited = errors.New("搜索过于频繁，请稍后再试。")
+var (
+	ErrRateLimited = errors.New("搜索过于频繁，请稍后再试。")
+	ErrNoMatch     = errors.New("没有找到匹配的歌曲。")
+	ErrUnsupported = errors.New("这个来源不支持这项操作。")
+)
 
 // RejectedLinkError 表示链接属于某个音源，但不能点播，例如 B 站的番剧和直播。RejectedLinkError 的文本就是返回给点歌人的原因。
 type RejectedLinkError struct {
@@ -167,7 +171,7 @@ func (s *Service) FirstMatch(ctx context.Context, source track.Source, keyword s
 		return track.Track{}, track.Meta{}, upstream(source, "搜索歌曲", err)
 	}
 	if len(songs) == 0 {
-		return track.Track{}, track.Meta{}, fmt.Errorf("在%s搜索 %q 没有结果：%w", source, keyword, port.ErrProviderFailed)
+		return track.Track{}, track.Meta{}, fmt.Errorf("在%s搜索 %q：%w", source, keyword, ErrNoMatch)
 	}
 	return songs[0].Track, songs[0].Meta, nil
 }
@@ -304,7 +308,7 @@ func (s *Service) searchable(source track.Source) (port.Source, error) {
 }
 
 func unsupported(source track.Source, what string) error {
-	return fmt.Errorf("%s不支持%s：%w", source, what, port.ErrProviderFailed)
+	return fmt.Errorf("%s不支持%s：%w", source, what, ErrUnsupported)
 }
 
 func upstream(source track.Source, what string, err error) error {

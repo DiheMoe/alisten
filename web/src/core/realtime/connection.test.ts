@@ -377,4 +377,22 @@ describe('网络和页面状态变化', () => {
     await vi.advanceTimersByTimeAsync(120_000)
     expect(sockets).toHaveLength(1)
   })
+
+  it('处理方收到断线通知时同步停止，到时间也不再连接', async () => {
+    const { connection, handlers } = await started()
+    handlers.status.mockImplementation((status: string) => {
+      if (status === 'reconnecting')
+        connection.stop()
+    })
+    socketAt(0).lose(abnormalClosure)
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(sockets).toHaveLength(1)
+  })
+
+  it('处理方收到握手响应时同步停止，不留下定时器', async () => {
+    const { connection, handlers } = start()
+    handlers.hello.mockImplementation(() => connection.stop())
+    await handshake(socketAt(0))
+    expect(vi.getTimerCount()).toBe(0)
+  })
 })

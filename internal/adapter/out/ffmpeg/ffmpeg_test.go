@@ -477,3 +477,24 @@ func TestTailKeepsLastBytes(t *testing.T) {
 		}
 	}
 }
+
+// worker 的环境里有数据库、Redis 和对象存储的密钥，ffmpeg 处理的是用户提交的文件，不该看到它们。
+func TestRunHidesSecretsFromFFmpeg(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, executable), []byte("#!/bin/sh\nenv > \"$(dirname \"$0\")/env.txt\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("STORAGE_SECRET_ACCESS_KEY", "对象存储的密钥")
+	if _, err := run(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+	env, err := os.ReadFile(filepath.Join(bin, "env.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 失败时不打印环境，因为里面可能有运行测试的人自己的密钥。
+	if hasPath, leaked := bytes.Contains(env, []byte("PATH=")), bytes.Contains(env, []byte("密钥")); !hasPath || leaked {
+		t.Errorf("ffmpeg 的环境里有 PATH = %v，有密钥 = %v，期望有 PATH，没有密钥", hasPath, leaked)
+	}
+}

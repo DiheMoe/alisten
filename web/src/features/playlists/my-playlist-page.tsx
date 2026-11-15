@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '@/core/api'
 import { errorMessage } from '@/core/errors'
 import { roomStore } from '@/core/room'
-import { enqueue } from '@/features/queue'
+import { enqueue, pickButton } from '@/features/queue'
 import { bookTitle } from '@/shared/lib/book-title'
 import { rowAfterRemoval } from '@/shared/lib/removal-focus'
 import { useStore } from '@/shared/lib/use-store'
@@ -185,12 +185,10 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
   }
   else {
     const actions = ({ track, meta }: MyPlaylistItem): SongAction[] => {
-      const blocked = track.source === 'link' && ephemeral
       return [
         {
           icon: CirclePlus,
-          label: blocked ? '临时房间不能点链接里的歌' : `点歌${bookTitle(meta.title)}`,
-          disabled: !connected || blocked,
+          ...pickButton(track, meta.title, { connected, ephemeral }),
           run: async () => {
             await enqueue(track)
           },

@@ -130,11 +130,12 @@ export function Lobby({ filter, onFilter, onEntered }: { filter: string, onFilte
           room={selected}
           onJoined={() => {
             setSelected(null)
-            const ref = selected.slug ?? selected.id
-            void roomEntryStore.enter(ref, selected)
-            onEntered(ref)
+            onEntered(selected.slug ?? selected.id)
           }}
-          onClose={() => setSelected(null)}
+          onClose={() => {
+            roomEntryStore.cancelJoin()
+            setSelected(null)
+          }}
         />
       )}
       {creating && (

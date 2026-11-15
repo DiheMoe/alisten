@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"maps"
 	"math/rand/v2"
+	"runtime/debug"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -413,6 +414,15 @@ func (h *Host) reject(ctx context.Context, roomID string, id room.RequestID, err
 
 func (h *Host) run(r *hostedRoom) {
 	defer h.finish(r)
+	// 处理输入时 ctx 换成这个输入的 ctx，这样 panic 的日志带着请求和成员。
+	ctx := r.ctx
+	// 房间的 goroutine 不在任何调用方的恢复范围之内，panic 会让进程退出，本实例上的房间随之全部停止。
+	// 恢复之后放弃这个房间，因为 Room 可能停在处理到一半的状态。下一次接管从落盘的快照恢复。
+	defer func() {
+		if value := recover(); value != nil {
+			h.logPanic(ctx, "房间的 goroutine 发生 panic，放弃房间", value)
+		}
+	}()
 	if !h.acquire(r) {
 		return
 	}
@@ -420,8 +430,8 @@ func (h *Host) run(r *hostedRoom) {
 	keepCtx, stopKeeping := context.WithCancel(context.Background())
 	r.stopKeeping = stopKeeping
 	h.work.Go(func() { h.keep(keepCtx, r) })
-	ctx, cancel := context.WithTimeout(r.ctx, storeTimeout)
-	term, snap, err := h.snapshots.TakeRoom(ctx, r.id)
+	takeCtx, cancel := context.WithTimeout(r.ctx, storeTimeout)
+	term, snap, err := h.snapshots.TakeRoom(takeCtx, r.id)
 	cancel()
 	if err != nil {
 		r.err = ErrUnavailable
@@ -452,7 +462,7 @@ func (h *Host) run(r *hostedRoom) {
 		case <-r.ctx.Done():
 			return
 		case e := <-r.inbox:
-			ctx := r.inputContext(e)
+			ctx = r.inputContext(e)
 			// 释放房间时只处理完当前的输入。
 			if r.ctx.Err() != nil || !h.holding(ctx, r) {
 				h.reject(ctx, r.id, e.requestID(), ErrUnavailable)
@@ -703,6 +713,13 @@ func (h *Host) prepare(ctx context.Context, r *hostedRoom, t track.Track) {
 	h.work.Go(func() {
 		ctx, cancel := r.detach(ctx)
 		defer cancel()
+		// panic 时按准备失败交回房间，否则这首歌一直停在准备中，轮到它时房间就播不下去了。
+		defer func() {
+			if value := recover(); value != nil {
+				h.logPanic(ctx, "准备曲目时发生 panic", value)
+				r.post(room.PrepareFailed{Track: t, Reason: "服务器出错了，请稍后再试。"})
+			}
+		}()
 		meta, result, err := h.preparer.Prepare(ctx, t)
 		if err != nil {
 			r.post(room.PrepareFailed{Track: t, Reason: err.Error()})
@@ -716,6 +733,11 @@ func (h *Host) recommend(ctx context.Context, r *hostedRoom, token room.Token) {
 	h.work.Go(func() {
 		ctx, cancel := r.detach(ctx)
 		defer cancel()
+		defer func() {
+			if value := recover(); value != nil {
+				h.logPanic(ctx, "AutoDJ 推荐时发生 panic", value)
+			}
+		}()
 		t, m, ok, err := h.catalog.Recommend(ctx, r.id)
 		if err != nil && r.ctx.Err() == nil {
 			h.logger.WarnContext(ctx, "AutoDJ 推荐失败", "error", err)
@@ -724,6 +746,10 @@ func (h *Host) recommend(ctx context.Context, r *hostedRoom, token room.Token) {
 			r.post(room.Recommended{Token: token, Track: t, Meta: m})
 		}
 	})
+}
+
+func (h *Host) logPanic(ctx context.Context, msg string, value any) {
+	h.logger.ErrorContext(ctx, msg, "panic", fmt.Sprint(value), "stack", string(debug.Stack()))
 }
 
 func (r *hostedRoom) release() {

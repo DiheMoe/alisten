@@ -207,6 +207,13 @@ func (s *server) perform(ctx context.Context, sess *realtime.Session, tag reques
 }
 
 func (s *server) write(ctx context.Context, conn *websocket.Conn, sess *realtime.Session, helloID string) {
+	// 和 command 一样不在 net/http 的恢复范围之内。恢复之后只断开这一条连接，读取循环随之结束，会话离开房间。
+	defer func() {
+		if value := recover(); value != nil {
+			s.logger.ErrorContext(ctx, "写 WebSocket 消息时发生 panic", "panic", fmt.Sprint(value), "stack", string(debug.Stack()))
+			_ = conn.CloseNow()
+		}
+	}()
 	for {
 		m, reason, err := sess.Next(ctx)
 		if err != nil {

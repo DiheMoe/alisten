@@ -1,5 +1,5 @@
 import type { RoomListing } from '@/core/realtime'
-import { api, ApiError, deleteTicket, IdentityRenewedError, loadTicket } from '@/core/api'
+import { api, ApiError, deleteTicket, IdentityRenewedError, loadTicket, saveTicket } from '@/core/api'
 import { errorMessage } from '@/core/errors'
 import { CloseCode } from '@/core/realtime'
 import { roomStore } from '@/core/room'
@@ -22,6 +22,8 @@ export function joinErrorMessage(error: unknown): string {
 
 class RoomEntryStore extends Store<EntryState> {
   #attempt = 0
+  // 加入弹窗里换票据的轮次。和 #attempt 分开，因为关掉弹窗不能打断另一个房间还在进行的进入。
+  #joining = 0
 
   constructor() {
     super({ phase: 'idle', ref: null, room: null })
@@ -31,8 +33,42 @@ class RoomEntryStore extends Store<EntryState> {
     roomStore.addEventListener('change', this.#onSession)
   }
 
-  async enter(ref: string, known?: RoomListing): Promise<void> {
+  // 已经在这个房间里时什么也不做。重进会断开再连接，这次进房以来的聊天就没了。
+  enter(ref: string, known?: RoomListing): Promise<void> {
+    const { phase, ref: entered, room } = this.state
+    if (phase === 'joined' && room && (ref === entered || ref === room.id || ref === room.slug || known?.id === room.id))
+      return Promise.resolve()
+    return this.#enter(ref, known)
+  }
+
+  // 用户在加入弹窗里确认之后调用。没有票据就先换取，再进入房间。返回 false 表示没有进入。
+  // 换票据期间弹窗被关掉，或者已经改去别的房间时，换到的票据留着，但不再进入，失败也不再提示。
+  async join(room: RoomListing, password: string): Promise<boolean> {
+    const joining = ++this.#joining
+    if (!loadTicket(room.id)) {
+      try {
+        const { ticket } = await api.createTicket(room.id, room.hasPassword ? { password } : {})
+        saveTicket(room.id, ticket)
+      }
+      catch (error) {
+        if (joining === this.#joining)
+          notificationStore.error(joinErrorMessage(error))
+        return false
+      }
+      if (joining !== this.#joining)
+        return false
+    }
+    void this.enter(room.slug ?? room.id, room)
+    return true
+  }
+
+  cancelJoin(): void {
+    ++this.#joining
+  }
+
+  async #enter(ref: string, known?: RoomListing): Promise<void> {
     const attempt = ++this.#attempt
+    ++this.#joining
     roomStore.leave()
     this.setState({ phase: 'resolving', ref, room: known ?? null })
     let room = known
@@ -72,11 +108,12 @@ class RoomEntryStore extends Store<EntryState> {
 
   retry(): void {
     if (this.state.ref)
-      void this.enter(this.state.ref)
+      void this.#enter(this.state.ref)
   }
 
   reset(): void {
     ++this.#attempt
+    ++this.#joining
     roomStore.leave()
     this.setState({ phase: 'idle', ref: null, room: null })
   }

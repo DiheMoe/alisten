@@ -108,6 +108,10 @@ Authorization: Bearer $alice
 -- receive alice --
 {"kind": "response", "type": "queue.add", "id": "a4", "data": {}, "error": {"code": "PROVIDER_ERROR", "message": "音乐平台没有正常响应，请稍后再试。"}}
 -- send alice --
+{"kind": "request", "type": "queue.add", "id": "a5", "data": {"source": "netease", "keyword": "没有这首歌"}}
+-- receive alice --
+{"kind": "response", "type": "queue.add", "id": "a5", "data": {}, "error": {"code": "NOT_FOUND", "message": "没有找到匹配的歌曲。"}}
+-- send alice --
 {"kind": "request", "type": "search.tracks", "id": "q1", "data": {"source": "netease", "keyword": "晴天", "page": 1, "pageSize": 10}}
 -- receive alice --
 {"kind": "response", "type": "search.tracks", "id": "q1", "data": {"total": 1, "items": [

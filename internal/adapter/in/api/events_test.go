@@ -2,9 +2,12 @@ package api
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -377,6 +380,32 @@ func TestRoomEventsEndWhenClientStopsReading(t *testing.T) {
 		synctest.Wait()
 		f.fill(t, hall)
 	})
+}
+
+// 能 Flush 但设不了写期限，像一层没有转发写期限的中间件。
+type flushOnlyWriter struct {
+	http.ResponseWriter
+	written bytes.Buffer
+}
+
+func (w *flushOnlyWriter) Write(p []byte) (int, error) { return w.written.Write(p) }
+
+func (w *flushOnlyWriter) Flush() {}
+
+func TestEventStreamNeedsWriteDeadline(t *testing.T) {
+	var logs bytes.Buffer
+	w := &flushOnlyWriter{}
+	stream := eventStream{w: w, rc: http.NewResponseController(w), logger: slog.New(slog.NewJSONHandler(&logs, nil))}
+	if stream.write(t.Context(), []byte(": ping\n\n")) || w.written.Len() != 0 {
+		t.Errorf("设不了写期限时写出了 %q，期望不写并结束事件流", w.written.String())
+	}
+	var entry map[string]any
+	if err := json.Unmarshal(logs.Bytes(), &entry); err != nil {
+		t.Fatalf("日志应只有一行 JSON：%v\n%s", err, &logs)
+	}
+	if entry["level"] != "ERROR" || entry["msg"] != "事件流设不了写期限" {
+		t.Errorf("日志 = %v，期望记录设不了写期限", entry)
+	}
 }
 
 func TestRoomEventsNeedRoomCredential(t *testing.T) {

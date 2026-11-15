@@ -367,6 +367,8 @@ var knownErrors = []struct {
 	{port.ErrProviderFailed, protocol.ErrorCodeProviderError},
 	{media.ErrNoPlayback, protocol.ErrorCodeProviderError},
 	{catalog.ErrRateLimited, protocol.ErrorCodeRateLimited},
+	{catalog.ErrNoMatch, protocol.ErrorCodeNotFound},
+	{catalog.ErrUnsupported, protocol.ErrorCodeInvalidArgument},
 	{errClientOutdated, protocol.ErrorCodeClientOutdated},
 	{errPanicked, protocol.ErrorCodeInternal},
 	{port.ErrShareNotFound, protocol.ErrorCodeNotFound},
@@ -391,7 +393,10 @@ func errorInfo(err error) (info protocol.ErrorInfo, expected bool) {
 	}
 	var roomErr *room.Error
 	if errors.As(err, &roomErr) {
-		return protocol.ErrorInfo{Code: roomErrorCodes[roomErr.Kind], Message: roomErr.Message}, true
+		// 没有映射的 Kind 往下按意外的错误处理。否则回复里的错误码是空的，在 HTTP 上状态码是 0，写响应头会 panic。
+		if code, ok := roomErrorCodes[roomErr.Kind]; ok {
+			return protocol.ErrorInfo{Code: code, Message: roomErr.Message}, true
+		}
 	}
 	var rejectedLink *catalog.RejectedLinkError
 	if errors.As(err, &rejectedLink) {

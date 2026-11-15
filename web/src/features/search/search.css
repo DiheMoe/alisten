@@ -75,7 +75,7 @@
 .search-feature-skeleton { display: flex; flex-direction: column; gap: 16px; min-height: 260px; padding: 20px; border-radius: 12px; background: var(--color-card); }
 .search-feature-skeleton span { width: 60%; height: 14px; border-radius: 4px; background: var(--color-card-hover); }
 .search-feature-skeleton span:first-child { width: 88px; height: 88px; border-radius: 8px; }
-.pagination { display: flex; justify-content: center; align-items: center; gap: 20px; padding: 24px 0 8px; }
+.search-pagination { display: flex; justify-content: center; align-items: center; gap: 20px; padding: 24px 0 8px; }
 :root[data-performance='low'] .search-popover { animation: fade-in 160ms ease both; }
 :root[data-performance='low'] .search-featured-song, :root[data-performance='low'] .search-playlist-card { transition: none; }
 :root[data-performance='low'] .search-playlist-open { transition-duration: 160ms; }

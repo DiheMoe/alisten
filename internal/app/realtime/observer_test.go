@@ -331,6 +331,36 @@ func (b contextBus) PublishSessionsRevoked(ctx context.Context, sessionTokenHash
 	return b.Bus.PublishSessionsRevoked(ctx, sessionTokenHashes)
 }
 
+func (b contextBus) PublishMember(ctx context.Context, m member.Member) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return b.Bus.PublishMember(ctx, m)
+}
+
+// 资料在广播之前已经落库。发起请求的客户端已经断开时照样广播，否则这个成员在各房间里的名字和头像会停在旧值。
+func TestMemberUpdateOutlivesItsRequest(t *testing.T) {
+	redis := porttest.NewRedis()
+	node, listener := redis.Node("a"), redis.Node("b")
+	if err := listener.SubscribeInstance(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	store := porttest.New()
+	_, g := New(store, store, store, unrevoked{}, nil, porttest.NewPreparer(), Cluster{Instance: "a", Leases: node, Liveness: node, Bus: contextBus{node}}, slog.New(slog.DiscardHandler))
+
+	request, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := g.MemberUpdated(request, alice); err != nil {
+		t.Fatalf("请求取消之后广播资料 = %v，期望照样发出", err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	d, err := listener.Receive(ctx)
+	if got, ok := d.(port.MemberDelivery); err != nil || !ok || got.Member != alice {
+		t.Errorf("收到 %#v, %v，期望 alice 的资料", d, err)
+	}
+}
+
 // 通知在凭证作废之后发出。发起请求的客户端已经断开时照样发出，发不出去时只记日志。
 func TestRevocationNoticesAreBestEffort(t *testing.T) {
 	redis := porttest.NewRedis()

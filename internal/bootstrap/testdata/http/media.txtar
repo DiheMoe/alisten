@@ -1,0 +1,19 @@
+播放地址的跳转不需要凭证。路径里的曲目 ID 不是合法的文本时，按这首歌不在任何房间中处理。
+
+-- request --
+GET /media/netease/%ff
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "这首歌不在任何房间中"}}
+
+-- request --
+GET /media/netease/%00
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "这首歌不在任何房间中"}}
+
+-- request --
+GET /media/qq/abc%00def
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "这首歌不在任何房间中"}}

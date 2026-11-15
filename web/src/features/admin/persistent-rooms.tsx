@@ -14,9 +14,7 @@ import { LoadFailed, SectionHead, StatusPill } from './section-head'
 
 function enterRoom(room: RoomListing, onEntered: (ref: string) => void): void {
   const ref = room.slug ?? room.id
-  const entry = roomEntryStore.state
-  if (entry.phase !== 'joined' || entry.room?.id !== room.id)
-    void roomEntryStore.enter(ref, room)
+  void roomEntryStore.enter(ref, room)
   onEntered(ref)
 }
 

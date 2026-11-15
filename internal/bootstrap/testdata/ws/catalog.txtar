@@ -52,7 +52,7 @@ Authorization: Bearer $alice
 -- send alice --
 {"kind": "request", "type": "search.tracks", "id": "q3", "data": {"source": "link", "keyword": "周杰伦", "page": 1, "pageSize": 10}}
 -- receive alice --
-{"kind": "response", "type": "search.tracks", "id": "q3", "data": {}, "error": {"code": "PROVIDER_ERROR", "message": "音乐平台没有正常响应，请稍后再试。"}}
+{"kind": "response", "type": "search.tracks", "id": "q3", "data": {}, "error": {"code": "INVALID_ARGUMENT", "message": "这个来源不支持这项操作。"}}
 -- send alice --
 {"kind": "request", "type": "search.playlists", "id": "q4", "data": {"source": "netease", "keyword": "周杰伦", "page": 1, "pageSize": 10}}
 -- receive alice --

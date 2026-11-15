@@ -402,3 +402,31 @@ describe('记录播放历史', () => {
     expect(profileStore.state.recordListens).toBe(true)
   })
 })
+
+describe('读取期间资料被修改', () => {
+  it('读到的旧值不写进状态，重新读一次', async () => {
+    local.setItem(memberTokenKey, 'good')
+    const renamed = { ...member, name: '新名字' }
+    const answer = (body: unknown) => new Response(JSON.stringify(body), { status: 200 })
+    let releaseStale!: (response: Response) => void
+    const stale = new Promise<Response>((resolve) => {
+      releaseStale = resolve
+    })
+    let reads = 0
+    vi.stubGlobal('fetch', (path: string, init: RequestInit) => {
+      if (`${init.method} ${path}` === 'PATCH /api/me')
+        return Promise.resolve(answer({ member: renamed }))
+      reads += 1
+      return reads === 1 ? stale : Promise.resolve(answer({ member: renamed, recordListens: true }))
+    })
+    const { profileStore } = await load()
+    const loading = profileStore.load()
+    await profileStore.save({ name: '新名字' })
+    expect(profileStore.state.member).toEqual(renamed)
+
+    releaseStale(answer({ member, recordListens: true }))
+    await loading
+    expect(profileStore.state.member).toEqual(renamed)
+    expect(reads).toBe(2)
+  })
+})

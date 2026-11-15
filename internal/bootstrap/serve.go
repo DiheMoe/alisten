@@ -184,7 +184,7 @@ func runServe(base *slog.Logger) (err error) {
 	publicServer := newHTTPServer(p.handler, base.With("component", "http"))
 	opsServer := newHTTPServer(recoverPanics(ops.NewHandler(ready, metrics, version), opsLogger), opsLogger)
 	go func() { fatal <- fmt.Errorf("HTTP 服务异常退出：%w", publicServer.Serve(publicListener)) }()
-	go func() { fatal <- fmt.Errorf("HTTP 服务异常退出：%w", opsServer.Serve(opsListener)) }()
+	go func() { fatal <- fmt.Errorf("运维端口异常退出：%w", opsServer.Serve(opsListener)) }()
 	logger.Info("服务已启动", "listen", publicListener.Addr().String(), "ops_listen", opsListener.Addr().String(), "instance", instance)
 
 	var failure error

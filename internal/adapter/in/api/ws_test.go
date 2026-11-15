@@ -387,6 +387,47 @@ func TestPanickingRequestFailsOnlyThatRequest(t *testing.T) {
 	})
 }
 
+func TestPanickingWriteClosesOnlyThatConnection(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		f := newWSFixture(t, store, store, store)
+		roomID, m, ticket := f.enter(t, "")
+		conn := f.join(t, roomID, ticket)
+		otherRoom, other, otherTicket := f.enter(t, "")
+		bystander := f.join(t, otherRoom, otherTicket)
+
+		// 没有事件的 Emit 是写消息的 goroutine 转换不了的。
+		if err := f.node.PublishRoom(t.Context(), roomID, port.Emitted{Emit: room.Emit{Term: 1, Seq: 2}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, frame, err := conn.Read(t.Context()); err == nil || websocket.CloseStatus(err) != -1 {
+			t.Errorf("读到 %s（%v），期望连接直接断开", frame, err)
+		}
+		synctest.Wait()
+		if got := f.gateway.Sessions(); got != 1 {
+			t.Errorf("还有 %d 个会话，期望只剩另一个房间的会话", got)
+		}
+
+		var entry map[string]any
+		if err := json.Unmarshal(f.logs.Bytes(), &entry); err != nil {
+			t.Fatalf("日志应只有一行 JSON：%v\n%s", err, f.logs)
+		}
+		stack, _ := entry["stack"].(string)
+		if entry["level"] != "ERROR" || entry["msg"] != "写 WebSocket 消息时发生 panic" || entry["panic"] != "未知的房间事件 <nil>" || !strings.Contains(stack, "(*server).event") {
+			t.Errorf("日志 = %v，期望记录 panic 的值，stack 字段是 panic 处的调用栈", entry)
+		}
+		if entry["room_id"] != roomID || entry["member_id"] != m.ID {
+			t.Errorf("日志 = %v，期望带着会话的房间 %s 和成员 %s", entry, roomID, m.ID)
+		}
+		f.logs.Reset()
+
+		writeFrame(t, bystander, `{"kind":"request","type":"chat.send","id":"c1","data":{"content":"还在"}}`)
+		self := `{"avatarHash":"","id":"` + other.ID + `","name":"` + other.Name + `"}`
+		checkMessage(t, bystander, `{"kind":"event","type":"chat.message","term":1,"seq":2,"data":{"member":`+self+`,"content":"还在","sentAtMs":1}}`)
+		checkMessage(t, bystander, `{"kind":"response","type":"chat.send","id":"c1","data":{}}`)
+	})
+}
+
 type brokenDirectory struct {
 	*porttest.Store
 	armed atomic.Bool

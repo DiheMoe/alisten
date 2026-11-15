@@ -99,12 +99,13 @@ class RoomStore extends Store<RoomStoreState> {
     if (connection !== this.#connection || !replica)
       return
     const outcome = replica.receive(event)
-    if (outcome.notice)
-      this.notices.emit(outcome.notice)
     if (outcome.changed)
       this.setState({ room: replica.state, live: true })
     if (outcome.sync)
       void this.sync()
+    // 通知最后派发。监听方抛出异常时后面的代码不再执行，补快照排在后面就会被跳过，副本一直停在等待快照。
+    if (outcome.notice)
+      this.notices.emit(outcome.notice)
   }
 
   #stop(connection: Connection, code: number): void {

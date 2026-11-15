@@ -18,3 +18,8 @@ export function pageItems(current: number, totalPages: number): (number | 'gap')
   }
   return items
 }
+
+// 页码来自地址栏，可能超出实际的页数。没有内容时算作只有 1 页。
+export function clampPage(page: number, total: number, pageSize: number): number {
+  return Math.min(Math.max(1, page), Math.max(1, Math.ceil(total / pageSize)))
+}

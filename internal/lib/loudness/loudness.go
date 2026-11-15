@@ -323,10 +323,11 @@ func kWeightingFilters(sampleRate int) (shelf, highpass biquad) {
 		)
 		K := math.Tan(math.Pi * f0 / fs)
 		a0 := 1 + K/Q + K*K
+		// 分子按 BS.1770 的系数表取 1、-2、1，不除以 a0。除以 a0 等于把整条频响乘以 1/a0，读数会比标准低，48 kHz 时低 0.043 LU，采样率越低差得越多。
 		highpass = biquad{
-			b0: 1 / a0,
-			b1: -2 / a0,
-			b2: 1 / a0,
+			b0: 1,
+			b1: -2,
+			b2: 1,
 			a1: 2 * (K*K - 1) / a0,
 			a2: (1 - K/Q + K*K) / a0,
 		}

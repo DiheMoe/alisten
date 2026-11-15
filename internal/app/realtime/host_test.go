@@ -485,6 +485,140 @@ func TestPrepareOfAbandonedRunIsDiscarded(t *testing.T) {
 	})
 }
 
+func newLoggedHostFixture(t *testing.T, snapshots port.RoomSnapshots, store *porttest.Store, preparer port.Preparer, music *catalog.Service) (*hostFixture, *logBuffer) {
+	t.Helper()
+	redis := porttest.NewRedis()
+	node := redis.Node("a")
+	logs := &logBuffer{}
+	f := startHost(t, &hostFixture{store: store, redis: redis, node: node, spy: spy{redis.Node("spy")}},
+		newHost(snapshots, store, store, preparer, music, cluster(node, "a"), slog.New(logctx.NewHandler(slog.NewJSONHandler(logs, nil)))))
+	return f, logs
+}
+
+// frame 是 panic 处的调用栈里一定有的函数名。
+func checkPanicLog(t *testing.T, logs *logBuffer, msg, value, frame, roomID string) map[string]any {
+	t.Helper()
+	entries := logs.entries(t, msg)
+	if len(entries) != 1 {
+		t.Fatalf("%q 的日志有 %d 条，期望 1 条", msg, len(entries))
+	}
+	e := entries[0]
+	stack, _ := e["stack"].(string)
+	if e["level"] != "ERROR" || e["panic"] != value || e["room_id"] != roomID || !strings.Contains(stack, frame) {
+		t.Errorf("日志 = %v，期望 ERROR 级别、带房间 %s 和 panic 的值 %q，stack 字段是 panic 处的调用栈", e, roomID, value)
+	}
+	return e
+}
+
+type panickingStore struct {
+	*porttest.Store
+	armed atomic.Bool
+}
+
+func (s *panickingStore) SaveRoom(ctx context.Context, term uint32, snap room.Snapshot, plays []room.RecordPlay) error {
+	if s.armed.Load() {
+		panic("存储坏了")
+	}
+	return s.Store.SaveRoom(ctx, term, snap, plays)
+}
+
+func TestPanicInRoomAbandonsOnlyThatRoom(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := &panickingStore{Store: porttest.New()}
+		songs := newSongs()
+		f, logs := newLoggedHostFixture(t, store, store.Store, songs.preparer, songs.music)
+		id, other := f.createRoom(t, room.Persistent), f.createRoom(t, room.Persistent)
+		f.send(t, id, room.Join{Session: "s1", Member: alice})
+		f.send(t, other, room.Join{Session: "s2", Member: bob})
+		f.spy.take()
+
+		store.armed.Store(true)
+		f.send(t, id, command("r1", alice, room.SetPlayMode{Mode: room.Random}))
+		store.armed.Store(false)
+		checkMessages(t, f.spy.take(), "rejected r1")
+		if owner := f.owner(t, id); owner != "" {
+			t.Errorf("放弃房间之后租约属于 %q，期望已经释放", owner)
+		}
+		if n := f.host.RoomsOwned(); n != 1 {
+			t.Errorf("RoomsOwned = %d，期望只剩另一个房间", n)
+		}
+		e := checkPanicLog(t, logs, "房间的 goroutine 发生 panic，放弃房间", "存储坏了", "panickingStore", id)
+		if e["request_id"] != "r1" || e["member_id"] != alice.ID {
+			t.Errorf("日志 = %v，期望带着正在处理的请求 r1 和成员 %s", e, alice.ID)
+		}
+
+		f.send(t, other, command("r2", bob, room.Sync{}))
+		f.send(t, id, command("r3", alice, room.Sync{}))
+		checkMessages(t, f.spy.take(), "reply r2 room.SyncResult", "started 2", "reply r3 room.SyncResult")
+	})
+}
+
+type panickingPreparer struct{}
+
+func (panickingPreparer) Finished(port.PrepareOutcome) {}
+
+func (panickingPreparer) Prepare(context.Context, track.Track) (track.Meta, track.Prepared, error) {
+	panic("准备坏了")
+}
+
+func TestPanickingPrepareFailsThatTrack(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		f, logs := newLoggedHostFixture(t, store, store, panickingPreparer{}, newSongs().music)
+		id := f.createRoom(t, room.Persistent)
+		f.send(t, id, room.Join{Session: "s1", Member: alice})
+		f.spy.take()
+
+		f.send(t, id, command("r1", alice, room.Enqueue{Track: sunny, Meta: sunnyM}))
+		msgs := f.spy.take()
+		checkMessages(t, msgs,
+			"1/2 room.Activity",
+			"1/3 room.QueueChanged",
+			"reply r1 room.EnqueueResult",
+			"1/4 room.Activity",
+			"1/5 room.QueueChanged",
+		)
+		if len(msgs) == 5 {
+			failed, _ := msgs[3].(port.Emitted).Emit.Event.(room.Activity)
+			if failed.Kind != room.ActivityFailed || failed.Entry.Track != sunny || failed.Reason != "服务器出错了，请稍后再试。" {
+				t.Errorf("房间动态 = %+v，期望这首歌准备失败", failed)
+			}
+		}
+		checkPanicLog(t, logs, "准备曲目时发生 panic", "准备坏了", "panickingPreparer", id)
+	})
+}
+
+type panickingHistory struct{ noHistory }
+
+func (panickingHistory) AutoDJSeeds(context.Context, string, bool) ([]track.Track, error) {
+	panic("播放历史坏了")
+}
+
+func TestPanickingRecommendationKeepsRoomRunning(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		bilibili := porttest.NewBilibili()
+		music := catalog.New(porttest.NewSource(track.NetEase), porttest.NewSource(track.QQ), bilibili, bilibili, noTracks{}, panickingHistory{}, nil, nil)
+		preparer := porttest.NewPreparer()
+		preparer.Add(sunny, sunnyM, sunnyP)
+		preparer.Add(rain, rainM, rainP)
+		f, logs := newLoggedHostFixture(t, store, store, preparer, music)
+		id := f.createRoom(t, room.Persistent)
+		f.send(t, id, room.Join{Session: "s1", Member: alice})
+		f.send(t, id, command("r1", alice, room.Enqueue{Track: sunny, Meta: sunnyM}))
+		f.send(t, id, command("r2", alice, room.Enqueue{Track: rain, Meta: rainM}))
+
+		// 第二首开播时等待队列已经空了，房间这时请求推荐。
+		time.Sleep(sunnyP.Duration + time.Second)
+		synctest.Wait()
+		f.spy.take()
+		checkPanicLog(t, logs, "AutoDJ 推荐时发生 panic", "播放历史坏了", "panickingHistory", id)
+
+		f.send(t, id, command("r3", alice, room.Sync{}))
+		checkMessages(t, f.spy.take(), "reply r3 room.SyncResult")
+	})
+}
+
 type failingDeleteStore struct {
 	*porttest.Store
 }

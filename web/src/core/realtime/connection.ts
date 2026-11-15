@@ -28,6 +28,7 @@ export class RequestError extends Error {
   }
 }
 
+// 处理方可以在任何回调里同步调用 stop()。所以 Connection 要先登记定时器再回调，因为 stop() 只清得掉已经登记的定时器。
 export interface ConnectionHandlers {
   status: (status: ConnectionStatus) => void
   hello: (response: HelloResponse) => void
@@ -133,10 +134,10 @@ export class Connection {
       this.#ready = true
       this.#attempt = 0
       clock.reset()
+      this.#pingTimer = setInterval(() => this.#ping(socket), pingIntervalMs)
       this.#setStatus('open')
       this.#handlers.hello(response)
       this.#ping(socket)
-      this.#pingTimer = setInterval(() => this.#ping(socket), pingIntervalMs)
     }, (error: RequestError) => {
       if (socket !== this.#socket)
         return
@@ -212,8 +213,8 @@ export class Connection {
       return
     }
     this.#attempt += 1
-    this.#setStatus('reconnecting')
     this.#retryTimer = setTimeout(() => this.#open(), reconnectDelay(this.#attempt))
+    this.#setStatus('reconnecting')
   }
 
   #detach(): void {

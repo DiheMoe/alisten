@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -166,6 +167,46 @@ func TestYtdlpRejectsAudioOverLimit(t *testing.T) {
 	}
 }
 
+// 没有长度的流不受 --max-filesize 限制，要靠单个文件的大小上限拦住。
+func TestYtdlpRejectsUnsizedStreamOverLimit(t *testing.T) {
+	link, _ := startPaths(t, map[string]http.Handler{
+		"/page": http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = io.WriteString(w, `<!doctype html><html><head><title>没有长度</title></head><body><audio src="/stream.wav"></audio></body></html>`)
+		}),
+		"/stream.wav": http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "audio/wav")
+			chunk := make([]byte, 1<<20)
+			for sent := 0; sent < fileSizeLimit+16<<20; sent += len(chunk) {
+				if _, err := w.Write(chunk); err != nil {
+					return
+				}
+				w.(http.Flusher).Flush()
+			}
+		}),
+	})
+	p := siteProxy(t)
+	dir := t.TempDir()
+	stdout, stderr, err := run(t.Context(), dir, args(link("/page"), dir, p.url, ""))
+	if err == nil {
+		_, err = collect(dir, stdout)
+	}
+	failure, err := classify(t.Context(), err, stderr, p.wasRefused())
+	var rejected *port.RejectedError
+	if failure != failureTooLarge || !errors.As(err, &rejected) || err.Error() != port.ErrAudioTooLarge.Error() {
+		t.Errorf("没有长度的流超过上限时 = %q, %v，期望不能准备，原因是 %q\nstdout:\n%s\nstderr:\n%s", failure, err, port.ErrAudioTooLarge, stdout, stderr)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if info, err := entry.Info(); err != nil || info.Size() > fileSizeLimit {
+			t.Errorf("%s 有 %d 字节（%v），期望不超过上限 %d", entry.Name(), info.Size(), err, fileSizeLimit)
+		}
+	}
+}
+
 type observed struct {
 	mu       sync.Mutex
 	failures []string
@@ -207,6 +248,31 @@ func fakeYtdlp(t *testing.T, script string) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// worker 的环境里有数据库、Redis 和对象存储的密钥，yt-dlp 和它启动的进程不该看到。
+func TestDownloadHidesSecretsFromYtdlp(t *testing.T) {
+	fakeYtdlp(t, "#!/bin/sh\nenv > env.txt\nprintf mp3 > audio.mp3\necho '{}' > meta.json\n")
+	t.Setenv("STORAGE_SECRET_ACCESS_KEY", "对象存储的密钥")
+	t.Setenv("DATABASE_PASSWORD", "数据库的密码")
+	root := t.TempDir()
+	_, release, err := New(root, net.DefaultResolver, noCookies{}, func(time.Duration, string) {}, slog.New(slog.DiscardHandler)).Download(t.Context(), "https://example.com/page")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	jobs, err := os.ReadDir(root)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("读取任务目录 %s：%v %v", root, jobs, err)
+	}
+	env, err := os.ReadFile(filepath.Join(root, jobs[0].Name(), "env.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 失败时不打印环境，因为里面可能有运行测试的人自己的密钥。
+	if hasPath, leaked := bytes.Contains(env, []byte("PATH=")), bytes.Contains(env, []byte("密钥")) || bytes.Contains(env, []byte("密码")); !hasPath || leaked {
+		t.Errorf("yt-dlp 的环境里有 PATH = %v，有密钥或密码 = %v，期望有 PATH，没有密钥和密码", hasPath, leaked)
+	}
 }
 
 func TestDownloadKeepsFilesUntilReleased(t *testing.T) {
@@ -307,6 +373,26 @@ func TestRunKillsProcessGroup(t *testing.T) {
 	for deadline := time.Now().Add(5 * time.Second); len(processesIn(t, dir)) > 0; time.Sleep(50 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatalf("超时之后仍有进程 %v", processesIn(t, dir))
+		}
+	}
+}
+
+// yt-dlp 自己退出之后，它启动的进程不能留着。留下的进程不拿着输出管道，所以 run 在 yt-dlp 退出时就返回。
+func TestRunKillsChildrenLeftBehind(t *testing.T) {
+	fakeYtdlp(t, "#!/bin/sh\nsleep 300 >/dev/null 2>&1 &\nexit 1\n")
+	dir := t.TempDir()
+	if _, _, err := run(t.Context(), dir, nil); err == nil {
+		t.Error("yt-dlp 以错误退出时 run 没有返回错误")
+	}
+	for deadline := time.Now().Add(5 * time.Second); len(processesIn(t, dir)) > 0; time.Sleep(50 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			left := processesIn(t, dir)
+			for _, pid := range left {
+				if n, err := strconv.Atoi(pid); err == nil {
+					_ = syscall.Kill(n, syscall.SIGKILL)
+				}
+			}
+			t.Fatalf("yt-dlp 退出之后仍有进程 %v", left)
 		}
 	}
 }

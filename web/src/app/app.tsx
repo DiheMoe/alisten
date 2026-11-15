@@ -235,7 +235,8 @@ function RoutedMyPlaylist() {
   const route = useStore(navigationStore, s => s.route)
   if (route.name !== 'my-playlist')
     return null
-  return <MyPlaylistPage id={route.id} onBack={() => navigationStore.open('playlists')} />
+  // 按歌单重新挂载。否则从一个歌单直接跳到另一个时，新歌单读回来之前显示的还是上一个歌单的曲目和选择。
+  return <MyPlaylistPage key={route.id} id={route.id} onBack={() => navigationStore.open('playlists')} />
 }
 
 function RoutedPair() {

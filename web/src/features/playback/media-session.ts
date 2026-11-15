@@ -17,7 +17,13 @@ export function showMediaSession(nowPlaying: NowPlaying | null): void {
     return
   }
   const { title, artist, album, coverUrl } = nowPlaying.entry.meta
-  navigator.mediaSession.metadata = new MediaMetadata({ title, artist, album, artwork: coverUrl ? [{ src: coverUrl }] : [] })
+  // 封面地址解析不了时 MediaMetadata 会抛出 TypeError。这时去掉封面再设置，因为异常抛给播放器的话，这首歌就不会加载。
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({ title, artist, album, artwork: coverUrl ? [{ src: coverUrl }] : [] })
+  }
+  catch {
+    navigator.mediaSession.metadata = new MediaMetadata({ title, artist, album })
+  }
 }
 
 export function setMediaSessionHandlers(handlers: MediaSessionHandlers | null): void {

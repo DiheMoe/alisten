@@ -28,7 +28,10 @@ class AvatarBase extends Store<{ url: string | null }> {
     this.#probing = true
     void reachable(gravatar, gravatarTimeoutMs)
       .catch(() => Promise.any(mirrors.map(base => reachable(base, mirrorTimeoutMs))))
-      .then(url => this.setState({ url }), () => {})
+      .then(url => this.setState({ url }), () => {
+        // 都不通时放开，下一个头像挂载时再探测一次。否则启动时没网，之后网络恢复了头像也不会出现。
+        this.#probing = false
+      })
   }
 }
 

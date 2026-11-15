@@ -8,6 +8,7 @@ import { historyStore } from '@/features/history'
 import { SavePlatformPlaylistButton } from '@/features/playlists'
 import { enqueue } from '@/features/queue'
 import { bookTitle } from '@/shared/lib/book-title'
+import { clampPage } from '@/shared/lib/page-items'
 import { useStore } from '@/shared/lib/use-store'
 import { Artwork, AsyncIconButton, EmptyState, IconButton, PlayingBars, Select, Skeleton, SongArtwork, SongList } from '@/shared/ui'
 import { SearchBox } from './search-box'
@@ -96,7 +97,7 @@ function PlaylistGrid({ playlists, connected, onOpen }: { playlists: PlaylistSum
 function Pagination({ page, total, disabled, onPage }: { page: number, total: number, disabled: boolean, onPage: (page: number) => void }) {
   const pages = Math.max(1, Math.ceil(total / pageSize))
   return (
-    <nav className="pagination" aria-label="翻页">
+    <nav className="search-pagination" aria-label="翻页">
       <IconButton icon={ArrowLeft} label="上一页" disabled={disabled || page <= 1} onClick={() => onPage(page - 1)} />
       <span className="text-ui-sm muted">{`${page} / ${pages}`}</span>
       <IconButton icon={ArrowRight} label="下一页" disabled={disabled || page >= pages} onClick={() => onPage(page + 1)} />
@@ -353,6 +354,7 @@ export function PlaylistPage({ title, page, onPage }: { title: string | undefine
   const loading = useStore(searchStore, s => s.loading)
   const failed = useStore(searchStore, s => s.failed)
   const connected = useStore(roomStore, s => s.status === 'open')
+  const shownPage = clampPage(page, tracks.length, pageSize)
   return (
     <div className="page-content search-page">
       <header className="search-page-heading search-playlist-heading">
@@ -377,8 +379,8 @@ export function PlaylistPage({ title, page, onPage }: { title: string | undefine
               {tracks.length
                 ? (
                     <>
-                      <TrackTable items={tracks.slice((page - 1) * pageSize, page * pageSize)} connected={connected} />
-                      <Pagination page={page} total={tracks.length} disabled={false} onPage={onPage} />
+                      <TrackTable items={tracks.slice((shownPage - 1) * pageSize, shownPage * pageSize)} connected={connected} />
+                      <Pagination page={shownPage} total={tracks.length} disabled={false} onPage={onPage} />
                     </>
                   )
                 : !failed && <EmptyState title="歌单里还没有歌曲" />}

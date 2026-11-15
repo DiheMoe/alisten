@@ -153,6 +153,12 @@ func TestParseIDLRejects(t *testing.T) {
 				"ids": map[string]any{"type": "array", "items": ref("Empty")},
 			})
 		}, "$defs.Batch.properties.ids：数组必须是必填字段"},
+		{"请求引用的类型中有数组", func(d map[string]any) {
+			defs(d)["Batch"] = object(map[string]any{
+				"ids": map[string]any{"type": "array", "items": ref("Empty")},
+			}, "ids")
+			d["x-requests"] = []any{roomRequest(object(map[string]any{"batch": ref("Batch")}, "batch"))}
+		}, "$defs.Batch.properties.ids：请求引用的类型里不能有数组，数组要直接写在请求里"},
 		{"请求数组没有 maxItems", func(d map[string]any) {
 			d["x-requests"] = []any{roomRequest(object(map[string]any{
 				"ids": map[string]any{"type": "array", "items": ref("Empty"), "minItems": 1},
@@ -426,6 +432,9 @@ func TestParseIDLRejects(t *testing.T) {
 		{"路径不在 /api 下", func(d map[string]any) {
 			d["x-http"] = []any{bodylessEndpoint("listRooms", "GET", "/rooms")}
 		}, `x-http[0]：method "GET" 或 path "/rooms" 不合法`},
+		{"与 GitHub 回调的路由重复", func(d map[string]any) {
+			d["x-http"] = []any{bodylessEndpoint("githubCallback", "GET", "/api/auth/github/callback")}
+		}, "x-http[0]：GET /api/auth/github/callback 与手写的 GitHub 回调重复"},
 		{"路径参数与 client 中的标识符重名", func(d map[string]any) {
 			d["x-http"] = []any{bodylessEndpoint("getRoom", "GET", "/api/rooms/{send}")}
 		}, "x-http[0]：路径参数 send 重复，或与生成的 TypeScript client 中的标识符重名"},

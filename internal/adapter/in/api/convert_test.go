@@ -137,6 +137,10 @@ func TestRoomErrorCodes(t *testing.T) {
 			t.Errorf("领域错误 %d 映射为 %#v, %v，期望 %s", kind, info, expected, code)
 		}
 	}
+	info, expected := errorInfo(&room.Error{Kind: room.NothingPlaying + 1, Message: "说明"})
+	if info.Code != protocol.ErrorCodeInternal || expected {
+		t.Errorf("没有映射的领域错误 = %#v, %v，期望按意外的错误回 INTERNAL", info, expected)
+	}
 }
 
 func TestPlayModes(t *testing.T) {
