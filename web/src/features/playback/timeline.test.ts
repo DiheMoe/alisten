@@ -1,6 +1,6 @@
 import type { PlaybackSnapshot } from './timeline'
 import { describe, expect, it } from 'vitest'
-import { driftSeekPosition, startLag, startPlan } from './timeline'
+import { driftSeekPosition, startPlan } from './timeline'
 
 function playback(positionMs: number, state: Partial<PlaybackSnapshot> = {}): PlaybackSnapshot {
   return { positionMs, paused: false, seeking: false, readyState: 4, ...state }
@@ -18,23 +18,6 @@ describe('startPlan', () => {
 
   it('超过时长时这首歌已经结束', () => {
     expect(startPlan(180_000, 180_000)).toEqual({ kind: 'ended' })
-  })
-})
-
-describe('startLag', () => {
-  it('还没到开始时间时不落后', () => {
-    expect(startLag(-200)).toBe(0)
-  })
-
-  it('开播 8 秒之内加载好时，落后的就是已经开播的时间', () => {
-    expect(startLag(0)).toBe(0)
-    expect(startLag(3000)).toBe(3000)
-    expect(startLag(8000)).toBe(8000)
-  })
-
-  it('开播超过 8 秒时不落后，直接从应在的位置放', () => {
-    expect(startLag(8001)).toBe(0)
-    expect(startLag(42_000)).toBe(0)
   })
 })
 

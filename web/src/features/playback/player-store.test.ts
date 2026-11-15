@@ -140,66 +140,18 @@ afterEach(async () => {
 })
 
 describe('开始播放', () => {
-  it('开播 8 秒之后才加载好时，从应在的位置开始', async () => {
+  it('加载好之后从应在的位置开始', async () => {
     await attached()
-    clock.nowMs = startedAtMs + 20_000
+    clock.nowMs = startedAtMs + 5000
     setPlaying(song('a'))
     expect(audio.src).toBe('/media/netease/a')
     expect(audio.loads).toBe(1)
     expect(audio.plays).toBe(0)
 
     audio.emit('canplay')
-    expect(audio.currentTime).toBe(20)
+    expect(audio.currentTime).toBe(5)
     expect(audio.playbackRate).toBe(1)
     expect(audio.plays).toBe(1)
-  })
-
-  it('开播 8 秒之内才加载好时从头放，之后一直落后同样的时间', async () => {
-    await attached()
-    clock.nowMs = startedAtMs + 5000
-    setPlaying(song('a'))
-    audio.emit('canplay')
-    expect(audio.currentTime).toBe(0)
-    expect(audio.plays).toBe(1)
-
-    audio.emit('playing')
-    audio.currentTime = 10
-    clock.nowMs = startedAtMs + 15_000
-    await vi.advanceTimersByTimeAsync(2000)
-    expect(audio.currentTime).toBe(10)
-
-    clock.nowMs = startedAtMs + 17_500
-    await vi.advanceTimersByTimeAsync(2000)
-    expect(audio.currentTime).toBe(12.5)
-  })
-
-  it('恢复播放和出错重载时沿用这首歌落后的时间，不从头再放', async () => {
-    const playerStore = await attached()
-    clock.nowMs = startedAtMs + 5000
-    setPlaying(song('a'))
-    audio.emit('canplay')
-
-    clock.nowMs = startedAtMs + 7000
-    playerStore.resume()
-    await flush()
-    expect(audio.currentTime).toBe(2)
-
-    audio.fail()
-    clock.nowMs = startedAtMs + 9000
-    audio.emit('canplay')
-    expect(audio.currentTime).toBe(4)
-  })
-
-  it('换歌之后重新决定落后多少', async () => {
-    await attached()
-    clock.nowMs = startedAtMs + 5000
-    setPlaying(song('a'))
-    audio.emit('canplay')
-    expect(audio.currentTime).toBe(0)
-
-    setPlaying(song('b', { startedAtMs: startedAtMs - 15_000 }))
-    audio.emit('canplay')
-    expect(audio.currentTime).toBe(20)
   })
 
   it('定位之后再次触发 canplay 不重新开始', async () => {
@@ -217,8 +169,8 @@ describe('开始播放', () => {
     audio.emit('canplay')
     expect(audio.plays).toBe(0)
 
-    setClock(0, startedAtMs + 20_000)
-    expect(audio.currentTime).toBe(20)
+    setClock(0, startedAtMs + 2000)
+    expect(audio.currentTime).toBe(2)
     expect(audio.plays).toBe(1)
 
     setClock(5)
@@ -386,14 +338,14 @@ describe('恢复播放', () => {
   it('取得最新快照之后按应在的位置再定位一次', async () => {
     const playerStore = await attached()
     setPlaying(song('a'))
-    clock.nowMs = startedAtMs + 20_000
+    clock.nowMs = startedAtMs + 1000
     playerStore.resume()
-    expect(audio.currentTime).toBe(20)
+    expect(audio.currentTime).toBe(1)
     expect(room.sync).toHaveBeenCalledTimes(1)
 
-    clock.nowMs = startedAtMs + 23_000
+    clock.nowMs = startedAtMs + 4000
     await flush()
-    expect(audio.currentTime).toBe(23)
+    expect(audio.currentTime).toBe(4)
   })
 
   it('同步期间换了歌时不按上一首定位', async () => {
