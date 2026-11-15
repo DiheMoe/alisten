@@ -2,11 +2,17 @@ import { useEffect, useEffectEvent, useRef } from 'react'
 import { playerStore } from './player-store'
 
 export function AudioEngine({ onNextTrack }: { onNextTrack: () => void }) {
-  const audioRef = useRef<HTMLAudioElement>(null)
+  const activeRef = useRef<HTMLAudioElement>(null)
+  const standbyRef = useRef<HTMLAudioElement>(null)
   const nextTrack = useEffectEvent(onNextTrack)
   useEffect(() => {
-    playerStore.attach(audioRef.current!, () => nextTrack())
+    playerStore.attach(activeRef.current!, standbyRef.current!, () => nextTrack())
     return () => playerStore.detach()
   }, [])
-  return <audio ref={audioRef} preload="auto" />
+  return (
+    <>
+      <audio ref={activeRef} preload="auto" />
+      <audio ref={standbyRef} preload="auto" />
+    </>
+  )
 }

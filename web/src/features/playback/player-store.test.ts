@@ -1,4 +1,4 @@
-import type { NowPlaying } from '@/core/realtime'
+import type { NextTrack, NowPlaying } from '@/core/realtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const startedAtMs = 100_000
@@ -68,7 +68,7 @@ function fakeClock() {
 
 function fakeRoom() {
   return Object.assign(new EventTarget(), {
-    state: { room: null as { nowPlaying: NowPlaying | null } | null },
+    state: { room: null as { nowPlaying: NowPlaying | null, next: NextTrack | null } | null },
     sync: vi.fn(() => Promise.resolve()),
   })
 }
@@ -85,13 +85,22 @@ function song(id: string, patch: Partial<NowPlaying> = {}): NowPlaying {
 }
 
 let audio: FakeAudio
+let standby: FakeAudio
 let clock: ReturnType<typeof fakeClock>
 let room: ReturnType<typeof fakeRoom>
 let frames: FrameRequestCallback[]
 
-function setPlaying(nowPlaying: NowPlaying | null): void {
-  room.state = { room: { nowPlaying } }
+function setRoom(nowPlaying: NowPlaying | null, next: NextTrack | null): void {
+  room.state = { room: { nowPlaying, next } }
   room.dispatchEvent(new Event('change'))
+}
+
+function setPlaying(nowPlaying: NowPlaying | null): void {
+  setRoom(nowPlaying, null)
+}
+
+function upNext(id: string, loadWithinMs: number | null = null): NextTrack {
+  return { entryId: id, mediaUrl: `/media/netease/${id}`, loadWithinMs }
 }
 
 function setClock(offsetMs: number | null, nowMs = clock.nowMs): void {
@@ -109,7 +118,7 @@ function nextFrame(): void {
 
 async function attached() {
   const { playerStore } = await import('./player-store')
-  playerStore.attach(audio as unknown as HTMLAudioElement, () => {})
+  playerStore.attach(audio as unknown as HTMLAudioElement, standby as unknown as HTMLAudioElement, () => {})
   return playerStore
 }
 
@@ -119,12 +128,13 @@ beforeEach(() => {
   vi.resetModules()
   vi.useFakeTimers()
   audio = new FakeAudio()
+  standby = new FakeAudio()
   clock = fakeClock()
   room = fakeRoom()
   frames = []
   vi.doMock('@/core/clock', () => ({ clock }))
   vi.doMock('@/core/room', async importOriginal => ({ ...await importOriginal<typeof import('@/core/room')>(), roomStore: room }))
-  vi.stubGlobal('document', { title: '' })
+  vi.stubGlobal('document', Object.assign(new EventTarget(), { title: '' }))
   vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} })
   vi.stubGlobal('requestAnimationFrame', (frame: FrameRequestCallback) => frames.push(frame))
   vi.stubGlobal('cancelAnimationFrame', () => {
@@ -663,7 +673,7 @@ describe('卸载', () => {
     playerStore.detach()
 
     const next = new FakeAudio()
-    playerStore.attach(next as unknown as HTMLAudioElement, () => {})
+    playerStore.attach(next as unknown as HTMLAudioElement, new FakeAudio() as unknown as HTMLAudioElement, () => {})
     expect(next.src).toBe('/media/netease/a')
   })
 
@@ -674,7 +684,7 @@ describe('卸载', () => {
     setPlaying(song('b'))
 
     const next = new FakeAudio()
-    playerStore.attach(next as unknown as HTMLAudioElement, () => {})
+    playerStore.attach(next as unknown as HTMLAudioElement, new FakeAudio() as unknown as HTMLAudioElement, () => {})
     expect(next.src).toBe('/media/netease/b')
   })
 
@@ -682,10 +692,203 @@ describe('卸载', () => {
     const { playerStore } = await import('./player-store')
     setPlaying(song('a'))
     audio.loadError = new Error('加载失败')
-    expect(() => playerStore.attach(audio as unknown as HTMLAudioElement, () => {})).toThrow('加载失败')
+    expect(() => playerStore.attach(audio as unknown as HTMLAudioElement, new FakeAudio() as unknown as HTMLAudioElement, () => {})).toThrow('加载失败')
 
     const { loads } = audio
     setPlaying(song('b'))
     expect(audio.loads).toBe(loads)
+  })
+})
+
+describe('预加载下一首', () => {
+  it('地址长期有效时，下一首一出现就在静音的备用元素上加载', async () => {
+    await attached()
+    setRoom(song('a'), upNext('b'))
+    audio.emit('canplay')
+    audio.emit('playing')
+    expect(standby.src).toBe('/media/netease/b')
+    expect(standby.loads).toBe(1)
+    expect(standby.muted).toBe(true)
+    expect(standby.plays).toBe(0)
+  })
+
+  it('地址有时效时，到结束前 loadWithinMs 才加载', async () => {
+    await attached()
+    clock.nowMs = startedAtMs + 10_000
+    setRoom(song('a'), upNext('b', 20_000))
+    audio.emit('canplay')
+    audio.emit('playing')
+    expect(standby.src).toBe('')
+    clock.nowMs = startedAtMs + 40_000
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(standby.src).toBe('/media/netease/b')
+  })
+
+  it('正在放的这首开始播放之前不预加载，开始播放之后才加载', async () => {
+    await attached()
+    setRoom(song('a'), upNext('b'))
+    expect(standby.src).toBe('')
+    audio.emit('canplay')
+    audio.emit('playing')
+    expect(standby.src).toBe('/media/netease/b')
+  })
+
+  it('下一首变了就换预加载的目标，没有下一首时清空备用元素', async () => {
+    await attached()
+    setRoom(song('a'), upNext('b'))
+    audio.emit('canplay')
+    audio.emit('playing')
+    setRoom(song('a'), upNext('c'))
+    expect(standby.src).toBe('/media/netease/c')
+    setRoom(song('a'), null)
+    expect(standby.src).toBe('')
+  })
+
+  it('切到预加载的那首时互换元素，不再加载，到开播时间从 0 开始放', async () => {
+    await attached()
+    setRoom(song('a'), upNext('b'))
+    audio.emit('canplay')
+    audio.emit('playing')
+    const nextStartMs = startedAtMs + durationMs + 1500
+    clock.nowMs = nextStartMs - 1500
+    setRoom(song('b', { startedAtMs: nextStartMs }), null)
+    expect(standby.loads).toBe(1)
+    expect(audio.src).toBe('')
+    expect(audio.muted).toBe(true)
+    expect(standby.plays).toBe(0)
+
+    clock.nowMs = nextStartMs
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(standby.plays).toBe(1)
+    expect(standby.currentTime).toBe(0)
+    expect(standby.muted).toBe(false)
+  })
+
+  it('按线上的事件顺序切歌时：先开播再换下一首，互换生效，下一首预加载到旧元素上', async () => {
+    await attached()
+    setRoom(song('a'), upNext('b'))
+    audio.emit('canplay')
+    audio.emit('playing')
+    const nextStartMs = startedAtMs + durationMs + 1500
+    clock.nowMs = nextStartMs - 1500
+    setRoom(song('b', { startedAtMs: nextStartMs }), upNext('b'))
+    expect(standby.loads).toBe(1)
+    expect(audio.src).toBe('')
+
+    setRoom(song('b', { startedAtMs: nextStartMs }), upNext('c'))
+    clock.nowMs = nextStartMs
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(standby.plays).toBe(1)
+    expect(standby.currentTime).toBe(0)
+
+    standby.emit('playing')
+    expect(audio.src).toBe('/media/netease/c')
+  })
+
+  async function swappedBeforeBuffered() {
+    const playerStore = await attached()
+    setRoom(song('a'), upNext('b'))
+    audio.emit('canplay')
+    audio.emit('playing')
+    standby.readyState = 1
+    const nextStartMs = startedAtMs + durationMs + 1500
+    clock.nowMs = nextStartMs - 1500
+    setRoom(song('b', { startedAtMs: nextStartMs }), upNext('b'))
+    return { playerStore, nextStartMs }
+  }
+
+  it('互换时备用元素还没缓冲好，到开播时间照样调用 play()，能播时按应在的位置定位', async () => {
+    const { nextStartMs } = await swappedBeforeBuffered()
+    clock.nowMs = nextStartMs
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(standby.plays).toBe(1)
+
+    clock.nowMs = nextStartMs + 3000
+    standby.readyState = 4
+    standby.emit('canplay')
+    expect(standby.currentTime).toBe(3)
+  })
+
+  it('互换之后 play() 被浏览器拒绝时，提示点击播放', async () => {
+    const { playerStore, nextStartMs } = await swappedBeforeBuffered()
+    standby.playError = new DOMException('blocked', 'NotAllowedError')
+    clock.nowMs = nextStartMs
+    await vi.advanceTimersByTimeAsync(1500)
+    await flush()
+    expect(playerStore.state.needsGesture).toBe(true)
+  })
+
+  it('互换之后还没能播就又切了一首，旧的 canplay 不会让上一首开始', async () => {
+    const { nextStartMs } = await swappedBeforeBuffered()
+    setRoom(song('c', { startedAtMs: nextStartMs - 1500 }), null)
+    const { plays } = standby
+    standby.emit('canplay')
+    expect(standby.plays).toBe(plays + 1)
+    expect(standby.src).toBe('/media/netease/c')
+  })
+
+  it('切到的不是预加载的那首时，照常在正在放的元素上加载', async () => {
+    await attached()
+    setRoom(song('a'), upNext('b'))
+    audio.emit('canplay')
+    audio.emit('playing')
+    setRoom(song('c'), null)
+    expect(audio.src).toBe('/media/netease/c')
+    expect(standby.src).toBe('')
+  })
+
+  it('备用元素出错时丢掉预加载，不再重试同一个地址，切歌时照常加载', async () => {
+    await attached()
+    setRoom(song('a'), upNext('b'))
+    audio.emit('canplay')
+    audio.emit('playing')
+    standby.fail()
+    expect(standby.src).toBe('')
+    setClock(5)
+    expect(standby.src).toBe('')
+    setRoom(song('b', { startedAtMs: startedAtMs + durationMs }), null)
+    expect(audio.src).toBe('/media/netease/b')
+  })
+
+  it('音量和增益只作用于正在放的元素，互换之后作用于新的元素', async () => {
+    await attached()
+    setRoom(song('a', { gain: 0.5 }), upNext('b'))
+    audio.emit('canplay')
+    audio.emit('playing')
+    expect(audio.volume).toBeCloseTo(0.375)
+    expect(standby.muted).toBe(true)
+    setRoom(song('b', { startedAtMs: startedAtMs + durationMs }), null)
+    expect(standby.volume).toBeCloseTo(0.75)
+    expect(standby.muted).toBe(false)
+    expect(audio.muted).toBe(true)
+  })
+
+  it('备用元素暂停时，正在放的元素照常发出位置', async () => {
+    await attached()
+    setRoom(song('a'), upNext('b'))
+    audio.emit('canplay')
+    audio.emit('playing')
+    standby.emit('pause')
+    expect(frames.length).toBe(1)
+  })
+
+  it('第一次点击时解锁备用元素，之后不再调用', async () => {
+    await attached()
+    document.dispatchEvent(new Event('click'))
+    expect(standby.loads).toBe(1)
+    document.dispatchEvent(new Event('touchend'))
+    document.dispatchEvent(new Event('keydown'))
+    expect(standby.loads).toBe(1)
+  })
+
+  it('卸载时两个元素都停下并清空', async () => {
+    const playerStore = await attached()
+    setRoom(song('a'), upNext('b'))
+    audio.emit('canplay')
+    audio.emit('playing')
+    playerStore.detach()
+    expect(audio.src).toBe('')
+    expect(standby.src).toBe('')
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

@@ -1,6 +1,7 @@
 import type { PlaybackSnapshot } from './timeline'
+import type { NextTrack, NowPlaying } from '@/core/realtime'
 import { describe, expect, it } from 'vitest'
-import { driftSeekPosition, startPlan } from './timeline'
+import { driftSeekPosition, preloadPlan, startPlan } from './timeline'
 
 function playback(positionMs: number, state: Partial<PlaybackSnapshot> = {}): PlaybackSnapshot {
   return { positionMs, paused: false, seeking: false, readyState: 4, ...state }
@@ -44,5 +45,35 @@ describe('driftSeekPosition', () => {
 
   it('正在定位时不进行校正', () => {
     expect(driftSeekPosition(playback(5001, { seeking: true }), 4000)).toBeNull()
+  })
+})
+
+describe('preloadPlan', () => {
+  const current = { entry: { id: 'a' }, startedAtMs: 100_000, durationMs: 60_000 } as NowPlaying
+  const next = (loadWithinMs: number | null): NextTrack => ({ entryId: 'b', mediaUrl: '/media/netease/b', loadWithinMs })
+  const load = { kind: 'load', entryId: 'b', url: '/media/netease/b' }
+
+  it('没有下一首或没有在播的歌时不加载', () => {
+    expect(preloadPlan(null, current, 100_000)).toEqual({ kind: 'none' })
+    expect(preloadPlan(next(null), null, 100_000)).toEqual({ kind: 'none' })
+  })
+
+  it('下一首就是刚开播的这首时不加载', () => {
+    const playing = { ...current, entry: { id: 'b' } } as NowPlaying
+    expect(preloadPlan(next(null), playing, 100_000)).toEqual({ kind: 'none' })
+  })
+
+  it('地址长期有效时马上加载，不需要时钟', () => {
+    expect(preloadPlan(next(null), current, null)).toEqual(load)
+  })
+
+  it('地址有时效时，等到结束前 loadWithinMs 才加载', () => {
+    expect(preloadPlan(next(20_000), current, 110_000)).toEqual({ kind: 'wait', delayMs: 30_000 })
+    expect(preloadPlan(next(20_000), current, 140_000)).toEqual(load)
+    expect(preloadPlan(next(20_000), current, 150_000)).toEqual(load)
+  })
+
+  it('地址有时效、时钟还没校准时不加载', () => {
+    expect(preloadPlan(next(20_000), current, null)).toEqual({ kind: 'none' })
   })
 })

@@ -8,7 +8,7 @@ import { notificationStore } from '@/shared/lib/notification-store'
 import { Store } from '@/shared/lib/store'
 import { documentTitle } from './document-title'
 import { setMediaSessionHandlers, showMediaSession } from './media-session'
-import { driftSeekPosition, startPlan } from './timeline'
+import { driftSeekPosition, haveFutureData, preloadPlan, startPlan } from './timeline'
 import { volumeStore } from './volume-store'
 
 const driftCheckIntervalMs = 2000
@@ -20,13 +20,21 @@ const mediaNoticeMs = 8000
 class PlayerStore extends Store<{ needsGesture: boolean }> {
   // 播放期间每帧发出一次当前位置（毫秒）。
   readonly frames = new Emitter<number>()
-  #audio: HTMLAudioElement | null = null
+  // 两个音频元素轮流使用。#active 放当前这首，#standby 提前加载下一首，切到预加载的那首时两者互换。
+  #active: HTMLAudioElement | null = null
+  #standby: HTMLAudioElement | null = null
+  #preloaded: { entryId: string, url: string } | null = null
+  // 预加载出错的条目和地址。再遇到同一个就不加载，否则每次房间或时钟变化都会重新请求一次。
+  #failedPreload: string | null = null
+  // 正在放的元素放这首歌时有没有发出过 playing。在这之前不开始预加载，免得和这首歌的缓冲抢带宽。
+  #playing = false
   #current: NowPlaying | null = null
   #load = 0
   #failures = 0
   #awaitingClock = false
   #startTimer: ReturnType<typeof setTimeout> | undefined
   #retryTimer: ReturnType<typeof setTimeout> | undefined
+  #preloadTimer: ReturnType<typeof setTimeout> | undefined
   #driftTimer: ReturnType<typeof setInterval> | undefined
   #frame: number | undefined
 
@@ -39,16 +47,22 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
     this.#showTitle()
   }
 
-  attach(audio: HTMLAudioElement, onNextTrack: () => void): void {
-    this.#audio = audio
+  attach(active: HTMLAudioElement, standby: HTMLAudioElement, onNextTrack: () => void): void {
+    this.#active = active
+    this.#standby = standby
     try {
-      audio.addEventListener('playing', this.#onPlaying)
-      audio.addEventListener('pause', this.#onPause)
-      audio.addEventListener('error', this.#onError)
+      for (const audio of [active, standby]) {
+        audio.addEventListener('playing', this.#onPlaying)
+        audio.addEventListener('pause', this.#onPause)
+        audio.addEventListener('error', this.#onError)
+      }
+      standby.muted = true
+      for (const type of ['click', 'touchend', 'keydown'])
+        document.addEventListener(type, this.#unlockStandby, { capture: true })
       roomStore.addEventListener('change', this.#onRoom)
       clock.addEventListener('change', this.#onClock)
       volumeStore.addEventListener('change', this.#applyVolume)
-      setMediaSessionHandlers({ play: () => this.resume(), pause: () => audio.pause(), nexttrack: onNextTrack })
+      setMediaSessionHandlers({ play: () => this.resume(), pause: () => this.#active?.pause(), nexttrack: onNextTrack })
       this.#onRoom()
     }
     catch (error) {
@@ -59,26 +73,33 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
   }
 
   detach(): void {
-    const audio = this.#audio
-    if (!audio)
+    const active = this.#active
+    const standby = this.#standby
+    if (!active || !standby)
       return
     this.#stop()
     // pause 事件要到下一个任务才派发，那时监听已经移除，所以定时器和 rAF 只能在这里取消。
-    this.#onPause()
-    audio.removeEventListener('playing', this.#onPlaying)
-    audio.removeEventListener('pause', this.#onPause)
-    audio.removeEventListener('error', this.#onError)
+    this.#stopTicking()
+    for (const audio of [active, standby]) {
+      audio.removeEventListener('playing', this.#onPlaying)
+      audio.removeEventListener('pause', this.#onPause)
+      audio.removeEventListener('error', this.#onError)
+    }
+    for (const type of ['click', 'touchend', 'keydown'])
+      document.removeEventListener(type, this.#unlockStandby, { capture: true })
     roomStore.removeEventListener('change', this.#onRoom)
     clock.removeEventListener('change', this.#onClock)
     volumeStore.removeEventListener('change', this.#applyVolume)
     setMediaSessionHandlers(null)
     showMediaSession(null)
     this.#current = null
-    this.#audio = null
+    this.#failedPreload = null
+    this.#active = null
+    this.#standby = null
   }
 
   positionMs(): number {
-    const audio = this.#audio
+    const audio = this.#active
     const current = this.#current
     if (!audio || !current)
       return 0
@@ -91,7 +112,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
       return
     this.setState({ needsGesture: false })
     // 出错的音频元素调用 play() 一定失败，只能重新加载。
-    if (this.#audio?.error)
+    if (this.#active?.error)
       this.#reload(current)
     else
       this.#start()
@@ -107,7 +128,11 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
   }
 
   #onRoom = (): void => {
-    const next = roomStore.state.room?.nowPlaying ?? null
+    this.#follow(roomStore.state.room?.nowPlaying ?? null)
+    this.#planPreload()
+  }
+
+  #follow(next: NowPlaying | null): void {
     const previous = this.#current
     if (next === previous)
       return
@@ -121,31 +146,108 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
     }
     if (playKey(previous) === playKey(next)) {
       // 同一首歌的新快照来自重连的握手或 room.sync，说明连接恢复了，所以不等下一次重试。重试用完之后也靠这样的快照恢复。
-      if (this.#audio?.error)
+      if (this.#active?.error)
         this.#reload(next)
       return
     }
     clearTimeout(this.#startTimer)
     clearTimeout(this.#retryTimer)
     this.#failures = 0
-    this.#loadSource(next.mediaUrl, ++this.#load)
+    this.#playing = false
+    const load = ++this.#load
+    if (this.#swapToPreloaded(next))
+      this.#startPreloaded(load)
+    else
+      this.#loadSource(next.mediaUrl, load)
   }
 
   #showTitle = (): void => {
     document.title = documentTitle(brandStore.state.name, this.#current?.entry.meta ?? null)
   }
 
-  #loadSource(url: string, load: number): void {
-    const audio = this.#audio
+  // 开播的正是备用元素预加载的那首时，两个元素互换并返回 true。原来正在放的元素停下、清空，成为新的备用元素。
+  #swapToPreloaded(next: NowPlaying): boolean {
+    const active = this.#active
+    const standby = this.#standby
+    const preloaded = this.#preloaded
+    if (!active || !standby || !preloaded || preloaded.entryId !== next.entry.id || preloaded.url !== next.mediaUrl)
+      return false
+    this.#preloaded = null
+    this.#playing = false
+    this.#stopTicking()
+    active.pause()
+    active.removeAttribute('src')
+    active.load()
+    active.muted = true
+    this.#active = standby
+    this.#standby = active
+    this.#applyVolume()
+    return true
+  }
+
+  // 互换之后马上开始，不等 canplay。iOS 上备用元素没解锁时等不到 canplay，马上调用 play() 才会得到 NotAllowedError，走“点击播放”的提示。还没缓冲好的，canplay 时再按应在的位置定位一次。
+  #startPreloaded(load: number): void {
+    const audio = this.#active
     if (!audio)
       return
-    // 定位之后还会再次触发 canplay，每次加载只处理第一次。
+    this.#start()
+    if (audio.readyState < haveFutureData)
+      this.#startOnCanPlay(audio, load)
+  }
+
+  // 定位之后还会再次触发 canplay，每次加载只处理第一次。
+  #startOnCanPlay(audio: HTMLAudioElement, load: number): void {
     audio.addEventListener('canplay', () => {
       if (load === this.#load)
         this.#start()
     }, { once: true })
+  }
+
+  #loadSource(url: string, load: number): void {
+    const audio = this.#active
+    if (!audio)
+      return
+    this.#startOnCanPlay(audio, load)
     audio.src = url
     audio.load()
+  }
+
+  #planPreload = (): void => {
+    clearTimeout(this.#preloadTimer)
+    const next = roomStore.state.room?.next ?? null
+    const preloaded = this.#preloaded
+    if (preloaded && (!next || preloaded.entryId !== next.entryId || preloaded.url !== next.mediaUrl))
+      this.#dropPreload()
+    const plan = preloadPlan(next, this.#current, clock.serverNow())
+    if (plan.kind === 'wait')
+      this.#preloadTimer = setTimeout(this.#planPreload, plan.delayMs)
+    else if (plan.kind === 'load' && this.#playing && !this.#preloaded && this.#failedPreload !== `${plan.entryId} ${plan.url}`)
+      this.#preload(plan.entryId, plan.url)
+  }
+
+  #preload(entryId: string, url: string): void {
+    const standby = this.#standby
+    if (!standby)
+      return
+    this.#preloaded = { entryId, url }
+    standby.src = url
+    standby.load()
+  }
+
+  #dropPreload(): void {
+    this.#preloaded = null
+    const standby = this.#standby
+    if (!standby)
+      return
+    standby.removeAttribute('src')
+    standby.load()
+  }
+
+  // 第一次点击、触摸或按键时对备用元素调一次 load()，因为 iOS 要求每个媒体元素在用户操作中解锁一次，否则互换之后 play() 会被拒绝。
+  #unlockStandby = (): void => {
+    for (const type of ['click', 'touchend', 'keydown'])
+      document.removeEventListener(type, this.#unlockStandby, { capture: true })
+    this.#standby?.load()
   }
 
   #reload(current: NowPlaying): void {
@@ -155,7 +257,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
 
   #start(): void {
     clearTimeout(this.#startTimer)
-    const audio = this.#audio
+    const audio = this.#active
     const current = this.#current
     if (!audio || !current)
       return
@@ -187,9 +289,17 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
   #onClock = (): void => {
     if (this.#awaitingClock && clock.offsetMs !== null)
       this.#start()
+    this.#planPreload()
   }
 
-  #onError = (): void => {
+  #onError = (event: Event): void => {
+    if (event.currentTarget === this.#standby) {
+      const preloaded = this.#preloaded
+      if (preloaded)
+        this.#failedPreload = `${preloaded.entryId} ${preloaded.url}`
+      this.#dropPreload()
+      return
+    }
     const current = this.#current
     if (!current)
       return
@@ -207,23 +317,32 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
       notificationStore.error('这首歌没能加载，已停止重试。', mediaNoticeMs)
   }
 
-  #onPlaying = (): void => {
+  #onPlaying = (event: Event): void => {
+    if (event.currentTarget !== this.#active)
+      return
     this.#failures = 0
     this.setState({ needsGesture: false })
     cancelAnimationFrame(this.#frame ?? 0)
     this.#frame = requestAnimationFrame(this.#tick)
     clearInterval(this.#driftTimer)
     this.#driftTimer = setInterval(this.#checkDrift, driftCheckIntervalMs)
+    this.#playing = true
+    this.#planPreload()
   }
 
-  #onPause = (): void => {
+  #onPause = (event: Event): void => {
+    if (event.currentTarget === this.#active)
+      this.#stopTicking()
+  }
+
+  #stopTicking(): void {
     cancelAnimationFrame(this.#frame ?? 0)
     this.#frame = undefined
     clearInterval(this.#driftTimer)
   }
 
   #tick = (): void => {
-    const audio = this.#audio
+    const audio = this.#active
     const current = this.#current
     if (!audio || !current || audio.paused) {
       this.#frame = undefined
@@ -237,7 +356,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
   }
 
   #checkDrift = (): void => {
-    const audio = this.#audio
+    const audio = this.#active
     const current = this.#current
     const now = clock.serverNow()
     if (!audio || !current || now === null)
@@ -256,7 +375,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
   }
 
   #applyVolume = (): void => {
-    const audio = this.#audio
+    const audio = this.#active
     if (!audio)
       return
     const gain = Math.min(maxGain, Math.max(0, this.#current?.gain ?? 1))
@@ -268,9 +387,12 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
     ++this.#load
     clearTimeout(this.#startTimer)
     clearTimeout(this.#retryTimer)
+    clearTimeout(this.#preloadTimer)
     this.#awaitingClock = false
+    this.#playing = false
     this.setState({ needsGesture: false })
-    const audio = this.#audio
+    this.#dropPreload()
+    const audio = this.#active
     if (!audio)
       return
     audio.pause()
