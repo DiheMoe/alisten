@@ -22,14 +22,7 @@ const (
 )
 
 func (s *Store) NeteaseCookie(ctx context.Context) (string, error) {
-	cookie, err := s.q.Credential(ctx, neteaseCookie)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("读取网易云 Cookie：%w", err)
-	}
-	return cookie, nil
+	return s.credential(ctx, neteaseCookie, "读取网易云 Cookie")
 }
 
 func (s *Store) SetNeteaseCookie(ctx context.Context, cookie string) error {
@@ -40,14 +33,7 @@ func (s *Store) SetNeteaseCookie(ctx context.Context, cookie string) error {
 }
 
 func (s *Store) QQCookie(ctx context.Context) (string, error) {
-	cookie, err := s.q.Credential(ctx, qqCookie)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("读取 QQ Cookie：%w", err)
-	}
-	return cookie, nil
+	return s.credential(ctx, qqCookie, "读取 QQ Cookie")
 }
 
 func (s *Store) SetQQCookie(ctx context.Context, cookie string) error {
@@ -58,14 +44,7 @@ func (s *Store) SetQQCookie(ctx context.Context, cookie string) error {
 }
 
 func (s *Store) BilibiliCredential(ctx context.Context) (string, error) {
-	credential, err := s.q.Credential(ctx, bilibiliCredential)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("读取 Bilibili 凭据：%w", err)
-	}
-	return credential, nil
+	return s.credential(ctx, bilibiliCredential, "读取 Bilibili 凭据")
 }
 
 func (s *Store) SetBilibiliCredential(ctx context.Context, credential string) error {
@@ -83,29 +62,29 @@ func (s *Store) SetYouTubeCookies(ctx context.Context, cookies string) error {
 }
 
 func (s *Store) YouTubeCookies(ctx context.Context) (string, error) {
-	cookies, err := s.q.Credential(ctx, youtubeCredential)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("读取 YouTube cookies：%w", err)
-	}
-	return cookies, nil
+	return s.credential(ctx, youtubeCredential, "读取 YouTube cookies")
 }
 
-func (s *Store) SetCookies(ctx context.Context, cookies string) error {
-	return s.SetYouTubeCookies(ctx, cookies)
-}
-
-func (s *Store) Status(ctx context.Context) (port.YouTubeCookiesStatus, error) {
-	credential, err := s.q.CredentialWithUpdatedAt(ctx, youtubeCredential)
+func (s *Store) YouTubeCookiesStatus(ctx context.Context) (port.YouTubeCookiesStatus, error) {
+	updatedAt, err := s.q.CredentialUpdatedAt(ctx, youtubeCredential)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return port.YouTubeCookiesStatus{}, nil
 	}
 	if err != nil {
 		return port.YouTubeCookiesStatus{}, fmt.Errorf("读取 YouTube cookies 状态：%w", err)
 	}
-	return port.YouTubeCookiesStatus{Set: true, UpdatedAt: credential.UpdatedAt}, nil
+	return port.YouTubeCookiesStatus{Set: true, UpdatedAt: updatedAt}, nil
+}
+
+func (s *Store) credential(ctx context.Context, name, what string) (string, error) {
+	value, err := s.q.Credential(ctx, name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("%s：%w", what, err)
+	}
+	return value, nil
 }
 
 func (s *Store) setCredential(ctx context.Context, name, value string) error {

@@ -26,7 +26,6 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/realtime"
 	"github.com/dihemoe/alisten/internal/app/site"
-	"github.com/dihemoe/alisten/internal/domain/member"
 	playlistorder "github.com/dihemoe/alisten/internal/domain/playlist"
 	"github.com/dihemoe/alisten/internal/domain/room"
 	"github.com/dihemoe/alisten/internal/lib/logctx"
@@ -40,6 +39,12 @@ const (
 	// 导入文件一次最多 1000 首，每首除了曲目还带标题、歌手、专辑和两个地址。nginx 中 /api/me/playlists/imports 的上限要与它保持一致。
 	maxImportBodyBytes = 1 << 20
 	requestDeadline    = 3 * time.Minute
+)
+
+// 两条长连接的路径。追踪要跳过它们，否则一条连接会被记成一条和连接一样长的 span。
+const (
+	WebSocketPath  = "/ws"
+	RoomEventsPath = "/api/room/events"
 )
 
 type Services struct {
@@ -72,24 +77,24 @@ type server struct {
 
 type call struct {
 	r      *http.Request
-	body   []byte
-	member member.Member
+	caller identity.Caller
+	// 只有 AuthAccount 的接口才有值。
+	owner  identity.AccountOwner
 	roomID string
 	ticket string
-	// 持有这张票据的成员会话的 token 哈希。API Key 没有会话。
-	memberSession []byte
 	// 票据是常驻房间的 API Key。
 	bot bool
 	// 发出请求的客户端地址，按来源限流时使用。
 	clientIP string
 }
 
-type handlerFunc func(ctx context.Context, c call) (any, error)
+type handlerFunc func(ctx context.Context, header http.Header, c call, body []byte) (any, error)
 
-// 带 Location 的接口，处理函数返回 located。
-type located struct {
-	location string
-	body     any
+// 用 routes 登记的接口，请求体不能超过 maxBody 字节。
+type routes struct {
+	s       *server
+	mux     *http.ServeMux
+	maxBody int64
 }
 
 func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider, logger *slog.Logger) http.Handler {
@@ -110,79 +115,82 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 		redirects: redirects,
 	}
 	mux := http.NewServeMux()
-	srv.handle(mux, protocol.RouteCreateMember, srv.createMember)
-	srv.handle(mux, protocol.RouteGetMe, srv.getMe)
-	srv.handle(mux, protocol.RouteUpdateMe, srv.updateMe)
-	srv.handle(mux, protocol.RouteRegister, srv.register)
-	srv.handle(mux, protocol.RouteChangePassword, srv.changePassword)
-	srv.handle(mux, protocol.RouteLogin, srv.login)
-	srv.handle(mux, protocol.RouteLogout, srv.logout)
-	srv.handle(mux, protocol.RouteListMyPlaylists, srv.listMyPlaylists)
-	srv.handle(mux, protocol.RouteCreateMyPlaylist, srv.createMyPlaylist)
-	srv.handle(mux, protocol.RouteRenameMyPlaylist, srv.renameMyPlaylist)
-	srv.handle(mux, protocol.RouteDeleteMyPlaylist, srv.deleteMyPlaylist)
-	srv.handle(mux, protocol.RouteListMyPlaylistItems, srv.listMyPlaylistItems)
-	srv.handle(mux, protocol.RouteAddMyPlaylistItem, srv.addMyPlaylistItem)
-	srv.handleLimit(mux, protocol.RouteRemoveMyPlaylistItems, maxBatchBodyBytes, srv.removeMyPlaylistItems)
-	srv.handle(mux, protocol.RouteListMyTrackPlaylists, srv.listMyTrackPlaylists)
-	srv.handleLimit(mux, protocol.RouteCopyMyPlaylistItems, maxBatchBodyBytes, srv.copyMyPlaylistItems)
-	srv.handleLimit(mux, protocol.RouteMoveMyPlaylistItems, maxBatchBodyBytes, srv.moveMyPlaylistItems)
-	srv.handleLimit(mux, protocol.RouteImportMyPlaylist, maxImportBodyBytes, srv.importMyPlaylist)
-	srv.handle(mux, protocol.RouteResolveMyPlaylistLink, srv.resolveMyPlaylistLink)
-	srv.handle(mux, protocol.RouteImportMyPlatformPlaylist, srv.importMyPlatformPlaylist)
-	srv.handle(mux, protocol.RouteListRooms, srv.listRooms)
-	srv.handle(mux, protocol.RouteGetRoom, srv.getRoom)
-	srv.handle(mux, protocol.RouteCreateRoom, srv.createRoom)
-	srv.handle(mux, protocol.RouteCreateTicket, srv.createTicket)
-	srv.handle(mux, protocol.RouteGetSite, srv.getSite)
+	rt := routes{s: srv, mux: mux, maxBody: maxBodyBytes}
+	batch := routes{s: srv, mux: mux, maxBody: maxBatchBodyBytes}
+	imports := routes{s: srv, mux: mux, maxBody: maxImportBodyBytes}
+	handleNoRequest(rt, protocol.RouteCreateMember, srv.createMember)
+	handleNoRequest(rt, protocol.RouteGetMe, srv.getMe)
+	handle(rt, protocol.RouteUpdateMe, srv.updateMe)
+	handle(rt, protocol.RouteRegister, srv.register)
+	handleNoContent(rt, protocol.RouteChangePassword, srv.changePassword)
+	handle(rt, protocol.RouteLogin, srv.login)
+	handleNoContentNoRequest(rt, protocol.RouteLogout, srv.logout)
+	handleNoRequest(rt, protocol.RouteListMyPlaylists, srv.listMyPlaylists)
+	handle(rt, protocol.RouteCreateMyPlaylist, srv.createMyPlaylist)
+	handleNoContent(rt, protocol.RouteRenameMyPlaylist, srv.renameMyPlaylist)
+	handleNoContentNoRequest(rt, protocol.RouteDeleteMyPlaylist, srv.deleteMyPlaylist)
+	handleNoRequest(rt, protocol.RouteListMyPlaylistItems, srv.listMyPlaylistItems)
+	handle(rt, protocol.RouteAddMyPlaylistItem, srv.addMyPlaylistItem)
+	handleNoContent(batch, protocol.RouteRemoveMyPlaylistItems, srv.removeMyPlaylistItems)
+	handle(rt, protocol.RouteListMyTrackPlaylists, srv.listMyTrackPlaylists)
+	handle(batch, protocol.RouteCopyMyPlaylistItems, srv.copyMyPlaylistItems)
+	handleNoContent(batch, protocol.RouteMoveMyPlaylistItems, srv.moveMyPlaylistItems)
+	handle(imports, protocol.RouteImportMyPlaylist, srv.importMyPlaylist)
+	handle(rt, protocol.RouteResolveMyPlaylistLink, srv.resolveMyPlaylistLink)
+	handle(rt, protocol.RouteImportMyPlatformPlaylist, srv.importMyPlatformPlaylist)
+	handleNoRequest(rt, protocol.RouteListRooms, srv.listRooms)
+	handleNoRequest(rt, protocol.RouteGetRoom, srv.getRoom)
+	handleLocated(rt, protocol.RouteCreateRoom, srv.createRoom)
+	handle(rt, protocol.RouteCreateTicket, srv.createTicket)
+	handleNoRequest(rt, protocol.RouteGetSite, srv.getSite)
 	for _, route := range protocol.RoomRoutes {
-		srv.handle(mux, route.Route, srv.roomRequest(route))
+		rt.register(route.Route, nil, srv.roomRequest(route))
 	}
-	srv.handle(mux, protocol.RouteAdminListRooms, srv.adminListRooms)
-	srv.handle(mux, protocol.RouteAdminCreateRoom, srv.adminCreateRoom)
-	srv.handle(mux, protocol.RouteAdminUpdateRoom, srv.adminUpdateRoom)
-	srv.handle(mux, protocol.RouteAdminDeleteRoom, srv.adminDeleteRoom)
-	srv.handle(mux, protocol.RouteAdminGetRoomApiKey, srv.adminGetRoomAPIKey)
-	srv.handle(mux, protocol.RouteAdminResetRoomApiKey, srv.adminResetRoomAPIKey)
-	srv.handle(mux, protocol.RouteAdminGetNeteaseCredential, srv.adminGetNeteaseCredential)
-	srv.handle(mux, protocol.RouteAdminGetQQCredential, srv.adminGetQQCredential)
-	srv.handle(mux, protocol.RouteAdminStartNeteaseLogin, srv.adminStartNeteaseLogin)
-	srv.handle(mux, protocol.RouteAdminCheckNeteaseLogin, srv.adminCheckNeteaseLogin)
-	srv.handle(mux, protocol.RouteAdminStartQQLogin, srv.adminStartQQLogin)
-	srv.handle(mux, protocol.RouteAdminCheckQQLogin, srv.adminCheckQQLogin)
-	srv.handle(mux, protocol.RouteAdminGetBilibiliCredential, srv.adminGetBilibiliCredential)
-	srv.handle(mux, protocol.RouteAdminStartBilibiliLogin, srv.adminStartBilibiliLogin)
-	srv.handle(mux, protocol.RouteAdminCheckBilibiliLogin, srv.adminCheckBilibiliLogin)
-	srv.handle(mux, protocol.RouteAdminGetYoutubeCredential, srv.adminGetYoutubeCredential)
-	srv.handle(mux, protocol.RouteAdminSetYoutubeCredential, srv.adminSetYoutubeCredential)
-	srv.handle(mux, protocol.RouteAdminDeleteYoutubeCredential, srv.adminDeleteYoutubeCredential)
-	srv.handle(mux, protocol.RouteAdminGetGithubCredential, srv.adminGetGithubCredential)
-	srv.handle(mux, protocol.RouteAdminSetGithubCredential, srv.adminSetGithubCredential)
-	srv.handle(mux, protocol.RouteAdminDeleteGithubCredential, srv.adminDeleteGithubCredential)
-	srv.handle(mux, protocol.RouteAdminListMedia, srv.adminListMedia)
-	srv.handle(mux, protocol.RouteAdminRemoveMedia, srv.adminRemoveMedia)
-	srv.handle(mux, protocol.RouteAdminUpdateSite, srv.adminUpdateSite)
-	srv.handle(mux, protocol.RouteAdminOpenRegistration, srv.adminOpenRegistration)
-	srv.handle(mux, protocol.RouteAdminCloseRegistration, srv.adminCloseRegistration)
-	srv.handle(mux, protocol.RouteAdminGetAccount, srv.adminGetAccount)
-	srv.handle(mux, protocol.RouteAdminResetAccountPassword, srv.adminResetAccountPassword)
-	srv.handle(mux, protocol.RouteListMyListens, srv.listMyListens)
-	srv.handle(mux, protocol.RouteRemoveMyListen, srv.removeMyListen)
-	srv.handle(mux, protocol.RouteClearMyListens, srv.clearMyListens)
-	srv.handle(mux, protocol.RouteEnableListenRecording, srv.enableListenRecording)
-	srv.handle(mux, protocol.RouteDisableListenRecording, srv.disableListenRecording)
-	srv.handle(mux, protocol.RouteShareMyPlaylist, srv.shareMyPlaylist)
-	srv.handle(mux, protocol.RouteUnshareMyPlaylist, srv.unshareMyPlaylist)
-	srv.handle(mux, protocol.RouteGetSharedPlaylist, srv.getSharedPlaylist)
-	srv.handle(mux, protocol.RouteCopySharedPlaylist, srv.copySharedPlaylist)
-	srv.handle(mux, protocol.RouteCreatePairingCode, srv.createPairingCode)
-	srv.handle(mux, protocol.RouteRedeemPairingCode, srv.redeemPairingCode)
-	srv.handle(mux, protocol.RouteStartGithubLogin, srv.startGithubLogin)
-	srv.handle(mux, protocol.RouteFinishGithubLogin, srv.finishGithubLogin)
-	srv.handle(mux, protocol.RouteUnbindGithub, srv.unbindGithub)
+	handleNoRequest(rt, protocol.RouteAdminListRooms, srv.adminListRooms)
+	handleLocated(rt, protocol.RouteAdminCreateRoom, srv.adminCreateRoom)
+	handleNoContent(rt, protocol.RouteAdminUpdateRoom, srv.adminUpdateRoom)
+	handleNoContentNoRequest(rt, protocol.RouteAdminDeleteRoom, srv.adminDeleteRoom)
+	handleNoRequest(rt, protocol.RouteAdminGetRoomApiKey, srv.adminGetRoomAPIKey)
+	handleLocatedNoRequest(rt, protocol.RouteAdminResetRoomApiKey, srv.adminResetRoomAPIKey)
+	handleNoRequest(rt, protocol.RouteAdminGetNeteaseCredential, srv.adminGetNeteaseCredential)
+	handleNoRequest(rt, protocol.RouteAdminGetQQCredential, srv.adminGetQQCredential)
+	handleNoRequest(rt, protocol.RouteAdminStartNeteaseLogin, srv.adminStartNeteaseLogin)
+	handle(rt, protocol.RouteAdminCheckNeteaseLogin, srv.adminCheckNeteaseLogin)
+	handle(rt, protocol.RouteAdminStartQQLogin, srv.adminStartQQLogin)
+	handle(rt, protocol.RouteAdminCheckQQLogin, srv.adminCheckQQLogin)
+	handleNoRequest(rt, protocol.RouteAdminGetBilibiliCredential, srv.adminGetBilibiliCredential)
+	handleNoRequest(rt, protocol.RouteAdminStartBilibiliLogin, srv.adminStartBilibiliLogin)
+	handle(rt, protocol.RouteAdminCheckBilibiliLogin, srv.adminCheckBilibiliLogin)
+	handleNoRequest(rt, protocol.RouteAdminGetYoutubeCredential, srv.adminGetYoutubeCredential)
+	handleNoContent(rt, protocol.RouteAdminSetYoutubeCredential, srv.adminSetYoutubeCredential)
+	handleNoContentNoRequest(rt, protocol.RouteAdminDeleteYoutubeCredential, srv.adminDeleteYoutubeCredential)
+	handleNoRequest(rt, protocol.RouteAdminGetGithubCredential, srv.adminGetGithubCredential)
+	handleNoContent(rt, protocol.RouteAdminSetGithubCredential, srv.adminSetGithubCredential)
+	handleNoContentNoRequest(rt, protocol.RouteAdminDeleteGithubCredential, srv.adminDeleteGithubCredential)
+	handle(rt, protocol.RouteAdminListMedia, srv.adminListMedia)
+	handle(rt, protocol.RouteAdminRemoveMedia, srv.adminRemoveMedia)
+	handle(rt, protocol.RouteAdminUpdateSite, srv.adminUpdateSite)
+	handleNoContentNoRequest(rt, protocol.RouteAdminOpenRegistration, srv.adminOpenRegistration)
+	handleNoContentNoRequest(rt, protocol.RouteAdminCloseRegistration, srv.adminCloseRegistration)
+	handleNoRequest(rt, protocol.RouteAdminGetAccount, srv.adminGetAccount)
+	handleNoRequest(rt, protocol.RouteAdminResetAccountPassword, srv.adminResetAccountPassword)
+	handleNoRequest(rt, protocol.RouteListMyListens, srv.listMyListens)
+	handleNoContent(rt, protocol.RouteRemoveMyListen, srv.removeMyListen)
+	handleNoContentNoRequest(rt, protocol.RouteClearMyListens, srv.clearMyListens)
+	handleNoContentNoRequest(rt, protocol.RouteEnableListenRecording, srv.enableListenRecording)
+	handleNoContentNoRequest(rt, protocol.RouteDisableListenRecording, srv.disableListenRecording)
+	handleNoRequest(rt, protocol.RouteShareMyPlaylist, srv.shareMyPlaylist)
+	handleNoContentNoRequest(rt, protocol.RouteUnshareMyPlaylist, srv.unshareMyPlaylist)
+	handleNoRequest(rt, protocol.RouteGetSharedPlaylist, srv.getSharedPlaylist)
+	handle(rt, protocol.RouteCopySharedPlaylist, srv.copySharedPlaylist)
+	handleNoRequest(rt, protocol.RouteCreatePairingCode, srv.createPairingCode)
+	handle(rt, protocol.RouteRedeemPairingCode, srv.redeemPairingCode)
+	handle(rt, protocol.RouteStartGithubLogin, srv.startGithubLogin)
+	handle(rt, protocol.RouteFinishGithubLogin, srv.finishGithubLogin)
+	handleNoContent(rt, protocol.RouteUnbindGithub, srv.unbindGithub)
 	mux.HandleFunc("GET "+GitHubCallbackPath, srv.githubCallback)
-	mux.HandleFunc("GET /ws", srv.websocket)
-	mux.HandleFunc("GET /api/room/events", srv.roomEvents)
+	mux.HandleFunc("GET "+WebSocketPath, srv.websocket)
+	mux.HandleFunc("GET "+RoomEventsPath, srv.roomEvents)
 	mux.HandleFunc("GET /media/{source}/{id}", srv.redirectMedia)
 	// HTTP 的错误响应体是 JSON，而 ServeMux 自带的 404、405 响应是纯文本。不带方法的兜底路由也会匹配方法不符的请求，
 	// 所以这些请求得到的也是 404，因为错误码里没有和 405 对应的。
@@ -203,25 +211,81 @@ func SameOrigin(allowedOrigins []string, next http.Handler) http.Handler {
 	})
 }
 
-func (s *server) handle(mux *http.ServeMux, route protocol.Route, fn handlerFunc) {
-	s.handleLimit(mux, route, maxBodyBytes, fn)
+func handle[Req, Resp any](rt routes, e protocol.Endpoint[Req, Resp], fn func(context.Context, call, Req) (Resp, error)) {
+	rt.register(e.Route, e.Params, func(ctx context.Context, _ http.Header, c call, body []byte) (any, error) {
+		req, err := e.Decode(c.r.PathValue, body)
+		if err != nil {
+			return nil, err
+		}
+		return fn(ctx, c, req)
+	})
 }
 
-func (s *server) handleLimit(mux *http.ServeMux, route protocol.Route, maxBody int64, fn handlerFunc) {
-	mux.HandleFunc(route.Pattern, func(w http.ResponseWriter, r *http.Request) {
+func handleLocated[Req, Resp any](rt routes, e protocol.LocatedEndpoint[Req, Resp], fn func(context.Context, call, Req) (Resp, string, error)) {
+	rt.register(e.Route, e.Params, func(ctx context.Context, header http.Header, c call, body []byte) (any, error) {
+		req, err := e.Decode(c.r.PathValue, body)
+		if err != nil {
+			return nil, err
+		}
+		resp, location, err := fn(ctx, c, req)
+		if err != nil {
+			return nil, err
+		}
+		header.Set("Location", location)
+		return resp, nil
+	})
+}
+
+func handleNoContent[Req any](rt routes, e protocol.NoContentEndpoint[Req], fn func(context.Context, call, Req) error) {
+	rt.register(e.Route, e.Params, func(ctx context.Context, _ http.Header, c call, body []byte) (any, error) {
+		req, err := e.Decode(c.r.PathValue, body)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fn(ctx, c, req)
+	})
+}
+
+func handleNoRequest[Resp any](rt routes, e protocol.Endpoint[protocol.NoRequest, Resp], fn func(context.Context, call) (Resp, error)) {
+	handle(rt, e, func(ctx context.Context, c call, _ protocol.NoRequest) (Resp, error) {
+		return fn(ctx, c)
+	})
+}
+
+func handleLocatedNoRequest[Resp any](rt routes, e protocol.LocatedEndpoint[protocol.NoRequest, Resp], fn func(context.Context, call) (Resp, string, error)) {
+	handleLocated(rt, e, func(ctx context.Context, c call, _ protocol.NoRequest) (Resp, string, error) {
+		return fn(ctx, c)
+	})
+}
+
+func handleNoContentNoRequest(rt routes, e protocol.NoContentEndpoint[protocol.NoRequest], fn func(context.Context, call) error) {
+	handleNoContent(rt, e, func(ctx context.Context, c call, _ protocol.NoRequest) error {
+		return fn(ctx, c)
+	})
+}
+
+// 先鉴权再读请求体，这样后台没有启用时，不管请求是否合法都返回 FORBIDDEN。
+func (rt routes) register(route protocol.Route, params []protocol.PathParam, fn handlerFunc) {
+	for _, p := range params {
+		if paramNotFound[p.Type] == nil {
+			panic(fmt.Sprintf("%s 的路径参数 %s 是 %s 类型，paramNotFound 中没有这个类型", route.Pattern, p.Name, p.Type))
+		}
+	}
+	rt.mux.HandleFunc(route.Pattern, func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), requestDeadline)
 		defer cancel()
-		ctx, resp, err := s.serve(ctx, w, r, route.Auth, maxBody, func(ctx context.Context, c call) (any, error) {
-			resp, err := fn(ctx, c)
-			if err != nil || !route.Location {
-				return resp, err
+		ctx, resp, err := rt.s.serve(ctx, r, route.Auth, func(ctx context.Context, c call) (any, error) {
+			var body []byte
+			if r.Method != http.MethodGet && r.Method != http.MethodDelete {
+				var err error
+				if body, err = io.ReadAll(http.MaxBytesReader(w, r.Body, rt.maxBody)); err != nil {
+					return nil, bodyError(r, err)
+				}
 			}
-			l := resp.(located)
-			w.Header().Set("Location", l.location)
-			return l.body, nil
+			return fn(ctx, w.Header(), c, body)
 		})
 		if err != nil {
-			s.fail(ctx, w, r, err)
+			rt.s.fail(ctx, w, r, err)
 			return
 		}
 		if route.Status == http.StatusNoContent {
@@ -232,9 +296,8 @@ func (s *server) handleLimit(mux *http.ServeMux, route protocol.Route, maxBody i
 	})
 }
 
-// 先鉴权再读请求体，这样后台没有启用时，不管请求是否合法都返回 FORBIDDEN。返回的 ctx 带着凭证所属的成员和房间，
-// 因为出错时的日志也要带上它们。
-func (s *server) serve(ctx context.Context, w http.ResponseWriter, r *http.Request, auth protocol.Auth, maxBody int64, fn handlerFunc) (logCtx context.Context, _ any, err error) {
+// 返回的 ctx 带着凭证所属的成员和房间，因为出错时的日志也要带上它们。
+func (s *server) serve(ctx context.Context, r *http.Request, auth protocol.Auth, fn func(context.Context, call) (any, error)) (logCtx context.Context, _ any, err error) {
 	defer func() {
 		if value := recover(); value != nil {
 			logCtx, err = ctx, s.panicked(ctx, r, value)
@@ -243,20 +306,25 @@ func (s *server) serve(ctx context.Context, w http.ResponseWriter, r *http.Reque
 	c := call{r: r, clientIP: clientIP(r)}
 	switch auth {
 	case protocol.AuthNone:
-	case protocol.AuthMember:
-		m, err := s.Identity.Authenticate(ctx, bearer(r))
+	case protocol.AuthMember, protocol.AuthAccount:
+		caller, err := s.Identity.Authenticate(ctx, bearer(r))
 		if err != nil {
 			return ctx, nil, err
 		}
-		c.member = m
-		ctx = logctx.WithMember(ctx, m.ID)
+		c.caller = caller
+		ctx = logctx.WithMember(ctx, caller.Member.ID)
+		if auth == protocol.AuthAccount {
+			if c.owner, err = caller.AccountOwner(); err != nil {
+				return ctx, nil, err
+			}
+		}
 	case protocol.AuthTicket:
 		c.ticket = bearer(r)
 		holder, err := s.Identity.VerifyTicket(ctx, c.ticket)
 		if err != nil {
 			return ctx, nil, err
 		}
-		c.roomID, c.member, c.memberSession, c.bot = holder.RoomID, holder.Member, holder.SessionTokenHash, holder.Bot
+		c.roomID, c.caller, c.bot = holder.RoomID, identity.Caller{Member: holder.Member, TokenHash: holder.SessionTokenHash}, holder.Bot
 		ctx = logctx.WithMember(logctx.WithRoom(ctx, holder.RoomID), holder.Member.ID)
 	case protocol.AuthAdmin:
 		if err := s.Admin.Authorize(bearer(r)); err != nil {
@@ -265,13 +333,6 @@ func (s *server) serve(ctx context.Context, w http.ResponseWriter, r *http.Reque
 	default:
 		// 未知的凭证类型按失败处理，不能当作不需要凭证。
 		return ctx, nil, fmt.Errorf("不支持的凭证类型 %d", auth)
-	}
-	if r.Method != http.MethodGet && r.Method != http.MethodDelete {
-		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
-		if err != nil {
-			return ctx, nil, bodyError(r, err)
-		}
-		c.body = body
 	}
 	resp, err := fn(ctx, c)
 	return ctx, resp, err
@@ -349,7 +410,6 @@ var knownErrors = []struct {
 	{port.ErrAlreadyRegistered, protocol.ErrorCodeConflict},
 	{port.ErrPlaylistNotFound, protocol.ErrorCodeNotFound},
 	{port.ErrFavoritesFixed, protocol.ErrorCodeConflict},
-	{playlist.ErrNotRegistered, protocol.ErrorCodeForbidden},
 	{playlist.ErrInvalidName, protocol.ErrorCodeInvalidArgument},
 	{playlist.ErrTooManyPlaylists, protocol.ErrorCodeConflict},
 	{playlist.ErrPlaylistFull, protocol.ErrorCodeConflict},
@@ -382,7 +442,20 @@ var knownErrors = []struct {
 	{port.ErrGitHubAlreadyBound, protocol.ErrorCodeConflict},
 }
 
+// 格式不对的路径参数指向的资源一定不存在，所以按参数的类型回复对应的资源不存在。
+var paramNotFound = map[string]error{
+	"RoomRef":      port.ErrRoomNotFound,
+	"RoomID":       port.ErrRoomNotFound,
+	"MyPlaylistID": port.ErrPlaylistNotFound,
+	"ShareID":      port.ErrShareNotFound,
+	"Username":     identity.ErrAccountNotFound,
+}
+
 func errorInfo(err error) (info protocol.ErrorInfo, expected bool) {
+	var param *protocol.PathParamError
+	if errors.As(err, &param) {
+		err = paramNotFound[param.Type]
+	}
 	var argument *protocol.ArgumentError
 	if errors.As(err, &argument) {
 		return protocol.ErrorInfo{Code: protocol.ErrorCodeInvalidArgument, Message: argument.Error()}, true

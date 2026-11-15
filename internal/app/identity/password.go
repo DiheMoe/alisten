@@ -54,6 +54,7 @@ func HashPassword(ctx context.Context, password string) (string, error) {
 }
 
 // 用户名不存在时拿 dummyPasswordHash 做一次同样的计算，这样响应时间不会暴露用户名是否存在。密码是随机值，不会与任何人输入的密码匹配。
+// 这个哈希只算一次，所有登录请求共用，所以不带任何一个请求的 ctx。否则那个请求取消时留下的错误会被一直复用。
 var dummyPasswordHash = sync.OnceValues(func() (string, error) {
 	password, _ := newSecret()
 	return HashPassword(context.Background(), password)

@@ -220,10 +220,12 @@ func formatEffect(e Effect) string {
 	switch e := e.(type) {
 	case Persist:
 		s := e.Snapshot
-		return fmt.Sprintf("persist mode=%s entrySeq=%d current=%s pending=%s waiting=%s",
+		line := fmt.Sprintf("persist mode=%s entrySeq=%d current=%s pending=%s waiting=%s",
 			modeNames[s.Mode], s.EntrySeq, formatPlaying(s.Current), formatEntryPtr(s.Pending), formatEntries(s.Waiting))
-	case RecordPlay:
-		return fmt.Sprintf("record %s %s-%s", formatEntry(e.Entry), offset(e.StartedAt), offset(e.EndedAt))
+		for _, p := range e.Plays {
+			line += fmt.Sprintf("\nrecord %s %s-%s", formatEntry(p.Entry), offset(p.StartedAt), offset(p.EndedAt))
+		}
+		return line
 	case RecordListen:
 		return fmt.Sprintf("listen [%s] %s@%s", strings.Join(e.Members, " "), formatEntry(e.Entry), offset(e.StartedAt))
 	case Emit:

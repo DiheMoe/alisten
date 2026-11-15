@@ -1,12 +1,12 @@
 import type { QrLoginTarget } from './qr-login-dialog'
-import type { CredentialState } from './source-account-view'
-import { useEffect, useState } from 'react'
+import type { CredentialState, SourceCredential } from './source-account-view'
 import { api } from '@/core/api'
+import { useResource } from '@/shared/lib/use-resource'
 import { adminStore } from './admin-store'
 
 export interface Source {
   name: string
-  credential: () => Promise<Exclude<CredentialState, Error | undefined>>
+  credential: () => Promise<SourceCredential>
   targets: QrLoginTarget[]
 }
 
@@ -43,28 +43,7 @@ export interface Credential {
 }
 
 function useCredential(source: Source): Credential {
-  const [state, setState] = useState<CredentialState>()
-  const [attempt, setAttempt] = useState(0)
-  useEffect(() => {
-    let active = true
-    adminStore.attempt(source.credential).then((result) => {
-      if (active)
-        setState(result)
-    }, (error: Error) => {
-      if (active)
-        setState(error)
-    })
-    return () => {
-      active = false
-    }
-  }, [source, attempt])
-  return {
-    state,
-    reload: () => {
-      setState(undefined)
-      setAttempt(n => n + 1)
-    },
-  }
+  return useResource(() => adminStore.attempt(source.credential), source)
 }
 
 // 分类栏要根据登录状态给“音源”加红点，所以后台页一打开就查询，不等打开这个分类。

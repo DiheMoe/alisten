@@ -1,9 +1,12 @@
 import type { MyPlaylist } from '@/core/realtime'
 import { FileUp, Import, Link } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { ActionMenu, Modal, notificationStore } from '@/shared/ui'
+import { notificationStore } from '@/shared/lib/notification-store'
+import { useSubmission } from '@/shared/lib/use-submission'
+import { ActionMenu, Modal } from '@/shared/ui'
 import { importLimit, parsePlaylistFile } from './playlist-file'
-import { playlistsStore } from './playlists-store'
+import { PlaylistNameField } from './playlist-name-field'
+import { isBlankPlaylistName, playlistsStore } from './playlists-store'
 import { defaultImportName } from './save-platform-playlist'
 
 async function importFile(file: File): Promise<void> {
@@ -73,7 +76,7 @@ export function ImportMenu({ onOpen }: { onOpen: (playlist: MyPlaylist) => void 
 function ImportLinkDialog({ onClose, onImported }: { onClose: () => void, onImported: (playlist: MyPlaylist) => void }) {
   const [link, setLink] = useState('')
   const [name, setName] = useState(defaultImportName)
-  const [busy, setBusy] = useState(false)
+  const { busy, submit } = useSubmission()
   // 导入要等几秒。这期间对话框被关掉的话，导入完成时只提示，不再把页面带到新歌单。
   const closedRef = useRef(false)
   useEffect(() => {
@@ -86,33 +89,27 @@ function ImportLinkDialog({ onClose, onImported }: { onClose: () => void, onImpo
     <Modal title="从链接导入" onClose={onClose}>
       <form
         className="form-stack"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault()
-          if (busy)
-            return
-          setBusy(true)
-          const found = await playlistsStore.resolveLink(link)
-          const result = found && await playlistsStore.importPlatform(name, found.source, found.playlistId)
-          if (!result) {
-            setBusy(false)
-            return
-          }
-          notificationStore.success(`已导入 ${result.imported} 首`)
-          if (!closedRef.current)
-            onImported(result.playlist)
+          void submit(async () => {
+            const found = await playlistsStore.resolveLink(link)
+            const result = found && await playlistsStore.importPlatform(name, found.source, found.playlistId)
+            if (!result)
+              return
+            notificationStore.success(`已导入 ${result.imported} 首`)
+            if (!closedRef.current)
+              onImported(result.playlist)
+          })
         }}
       >
         <label>
           歌单链接
           <input data-autofocus required placeholder="粘贴网易云音乐或 QQ 音乐的歌单链接、分享文字" value={link} onChange={event => setLink(event.target.value)} />
         </label>
-        <label>
-          歌单名
-          <input required maxLength={50} value={name} onChange={event => setName(event.target.value)} />
-        </label>
+        <PlaylistNameField value={name} onChange={setName} />
         <div className="dialog-actions">
           <button type="button" className="button-secondary" onClick={onClose}>取消</button>
-          <button type="submit" className="button-primary" disabled={busy || link.trim() === '' || name.trim() === ''}>{busy ? '正在导入…' : '导入'}</button>
+          <button type="submit" className="button-primary" disabled={busy || link.trim() === '' || isBlankPlaylistName(name)}>{busy ? '正在导入…' : '导入'}</button>
         </div>
       </form>
     </Modal>

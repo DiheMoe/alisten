@@ -1,14 +1,13 @@
-import type { Entry, PlayMode, Track } from '@/core/realtime'
+import type { Entry, Track } from '@/core/realtime'
 import type { SongItem } from '@/shared/ui'
 import { Heart, ListMusic, ListPlus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { roomStore } from '@/core/room'
+import { roomStore, sourceName } from '@/core/room'
 import { SaveToPlaylistDialog, saveToPlaylistLabel } from '@/features/playlists'
 import { bookTitle } from '@/shared/lib/book-title'
 import { useStore } from '@/shared/lib/use-store'
 import { EmptyState, IconButton, PlayingBars, Select, SongArtwork, SongList } from '@/shared/ui'
 import { likeEntry, removeEntry, setPlayMode } from './actions'
-import { sourceName } from './source'
 import './queue.css'
 
 const noEntries: Entry[] = []
@@ -64,7 +63,7 @@ export function QueuePage({ compact = false }: { compact?: boolean }) {
           ariaLabel="播放顺序"
           value={playMode}
           disabled={!connected}
-          onChange={value => void setPlayMode(value as PlayMode)}
+          onChange={value => void setPlayMode(value)}
           options={[
             { value: 'sequential', label: '顺序播放' },
             { value: 'rotation', label: '轮流播放' },

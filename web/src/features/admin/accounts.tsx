@@ -2,7 +2,9 @@ import type { AdminAccount } from '@/core/realtime'
 import { Search } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { api, ApiError } from '@/core/api'
-import { Avatar, ConfirmDialog, notificationStore, Skeleton } from '@/shared/ui'
+import { copyText } from '@/shared/lib/clipboard'
+import { notificationStore } from '@/shared/lib/notification-store'
+import { Avatar, ConfirmDialog, Skeleton } from '@/shared/ui'
 import { adminStore } from './admin-store'
 import { LoadFailed, SectionHead } from './section-head'
 
@@ -15,14 +17,10 @@ type Lookup
     | { phase: 'failed', message: string }
 
 async function copyPassword(password: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(password)
+  if (await copyText(password))
     notificationStore.success('已复制新密码')
-  }
-  catch {
-    // 非安全上下文没有剪贴板接口，用户也可能拒绝授权。
+  else
     notificationStore.info('没能写入剪贴板，请手动复制新密码。', 8000)
-  }
 }
 
 function findAccount(username: string): Promise<AdminAccount | null> {

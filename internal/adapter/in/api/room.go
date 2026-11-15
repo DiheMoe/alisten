@@ -2,16 +2,16 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/dihemoe/alisten/internal/app/admin"
-	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/protocol"
 )
 
 // bot 没有会话，用房间票据通过 HTTP 发送房间内请求，不出现在在线列表中。
 func (s *server) roomRequest(route protocol.RoomRoute) handlerFunc {
-	return func(ctx context.Context, c call) (_ any, err error) {
-		data, err := route.Decode(c.r.PathValue, c.r.URL.RawQuery, c.body)
+	return func(ctx context.Context, header http.Header, c call, body []byte) (_ any, err error) {
+		data, err := route.Decode(c.r.PathValue, c.r.URL.RawQuery, body)
 		if err != nil {
 			return nil, err
 		}
@@ -28,7 +28,7 @@ func (s *server) roomRequest(route protocol.RoomRoute) handlerFunc {
 		if resp, handled, err := s.answer(ctx, c.roomID, data); handled {
 			return resp, err
 		}
-		a, by, err := s.action(ctx, c.roomID, c.member, c.bot, data)
+		a, by, err := s.action(ctx, c.roomID, c.caller.Member, c.bot, data)
 		if err != nil {
 			return nil, err
 		}
@@ -38,33 +38,21 @@ func (s *server) roomRequest(route protocol.RoomRoute) handlerFunc {
 		}
 		resp := s.result(res)
 		if added, ok := resp.(protocol.QueueAddResponse); ok {
-			return located{location: "/api/room/queue/" + added.Entry.ID, body: added}, nil
+			header.Set("Location", "/api/room/queue/"+added.Entry.ID)
 		}
 		return resp, nil
 	}
 }
 
-func (s *server) adminUpdateRoom(ctx context.Context, c call) (any, error) {
-	id := c.r.PathValue("id")
-	if !uuidPattern.MatchString(id) {
-		return nil, port.ErrRoomNotFound
-	}
-	req, err := protocol.DecodeAdminUpdateRoomRequest(c.body)
-	if err != nil {
-		return nil, err
-	}
+func (s *server) adminUpdateRoom(ctx context.Context, c call, req protocol.AdminUpdateRoomRequest) error {
 	change := admin.RoomChange{Name: req.Name, Description: req.Description, Slug: req.Slug, Password: req.Password}
-	return nil, s.Admin.UpdateRoom(ctx, id, change)
+	return s.Admin.UpdateRoom(ctx, c.r.PathValue("id"), change)
 }
 
-func (s *server) adminGetRoomAPIKey(ctx context.Context, c call) (any, error) {
-	id := c.r.PathValue("id")
-	if !uuidPattern.MatchString(id) {
-		return nil, port.ErrRoomNotFound
-	}
-	status, err := s.Admin.RoomAPIKeyStatus(ctx, id)
+func (s *server) adminGetRoomAPIKey(ctx context.Context, c call) (protocol.AdminGetRoomApiKeyResponse, error) {
+	status, err := s.Admin.RoomAPIKeyStatus(ctx, c.r.PathValue("id"))
 	if err != nil {
-		return nil, err
+		return protocol.AdminGetRoomApiKeyResponse{}, err
 	}
 	resp := protocol.AdminGetRoomApiKeyResponse{Set: status.Set}
 	// 零值的 UnixMilli 是负数，协议约定没有 Key 时为 0。
@@ -74,25 +62,15 @@ func (s *server) adminGetRoomAPIKey(ctx context.Context, c call) (any, error) {
 	return resp, nil
 }
 
-func (s *server) adminResetRoomAPIKey(ctx context.Context, c call) (any, error) {
+func (s *server) adminResetRoomAPIKey(ctx context.Context, c call) (protocol.APIKey, string, error) {
 	id := c.r.PathValue("id")
-	if !uuidPattern.MatchString(id) {
-		return nil, port.ErrRoomNotFound
-	}
-	if _, err := protocol.DecodeAdminResetRoomApiKeyRequest(c.body); err != nil {
-		return nil, err
-	}
 	key, err := s.Admin.ResetRoomAPIKey(ctx, id)
 	if err != nil {
-		return nil, err
+		return protocol.APIKey{}, "", err
 	}
-	return located{location: "/api/admin/rooms/" + id + "/api-key", body: protocol.APIKey{Key: key}}, nil
+	return protocol.APIKey{Key: key}, "/api/admin/rooms/" + id + "/api-key", nil
 }
 
-func (s *server) adminDeleteRoom(ctx context.Context, c call) (any, error) {
-	id := c.r.PathValue("id")
-	if !uuidPattern.MatchString(id) {
-		return nil, port.ErrRoomNotFound
-	}
-	return nil, s.Admin.DeleteRoom(ctx, id)
+func (s *server) adminDeleteRoom(ctx context.Context, c call) error {
+	return s.Admin.DeleteRoom(ctx, c.r.PathValue("id"))
 }

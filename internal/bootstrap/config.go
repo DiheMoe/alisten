@@ -42,7 +42,7 @@ func loadServeConfig() (serveConfig, error) {
 	if err != nil {
 		return serveConfig{}, err
 	}
-	opsListen, err := listenAddr("ALISTEN_OPS_LISTEN", ":9090")
+	opsListen, err := loadOpsListen()
 	if err != nil {
 		return serveConfig{}, err
 	}
@@ -104,9 +104,6 @@ func loadServeConfig() (serveConfig, error) {
 // IP 地址写成规范形式。publicOrigin 只保留 scheme、主机名和端口，并把大小写和默认端口改成浏览器的写法。
 // 端口、国际化域名或 IP 地址的写法与浏览器不同时，启动时就报错，否则带 Origin 的请求全部被拒绝。
 func publicOrigin(value string) (string, error) {
-	if value == "" {
-		return "", errors.New("缺少 ALISTEN_PUBLIC_URL")
-	}
 	u, err := url.Parse(value)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
 		return "", fmt.Errorf("ALISTEN_PUBLIC_URL 的值 %q 不是 http 或 https 的绝对地址", value)

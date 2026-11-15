@@ -39,11 +39,7 @@ const (
 const loginDeviceTTL = 180 * 24 * time.Hour
 
 // 只绑定了 GitHub 的账号没有用户名，也没有密码。
-type Account struct {
-	Username string
-	Email    string
-	GitHub   bool
-}
+type Account = port.AccountProfile
 
 func accountOf(a port.Account) Account {
 	return Account{Username: a.Username, Email: a.Email, GitHub: a.GitHubID != 0}
@@ -53,14 +49,14 @@ func accountOf(a port.Account) Account {
 type Accounts struct {
 	members       port.Members
 	site          port.Site
-	quota         port.AccountQuota
+	quota         port.Quota
 	pairings      port.PairingCodes
 	verifications port.GitHubVerifications
 	devices       port.LoginDevices
 	gateway       *realtime.Gateway
 }
 
-func NewAccounts(members port.Members, site port.Site, quota port.AccountQuota, pairings port.PairingCodes, verifications port.GitHubVerifications, devices port.LoginDevices, gateway *realtime.Gateway) *Accounts {
+func NewAccounts(members port.Members, site port.Site, quota port.Quota, pairings port.PairingCodes, verifications port.GitHubVerifications, devices port.LoginDevices, gateway *realtime.Gateway) *Accounts {
 	return &Accounts{members: members, site: site, quota: quota, pairings: pairings, verifications: verifications, devices: devices, gateway: gateway}
 }
 
@@ -70,13 +66,13 @@ func (a *Accounts) Account(ctx context.Context, memberID string) (account Accoun
 	if err != nil {
 		return Account{}, false, err
 	}
-	return Account{Username: profile.Username, Email: profile.Email, GitHub: profile.GitHub}, profile.Registered(), nil
+	return profile, profile.Registered(), nil
 }
 
 // 给游客设置用户名和密码，成员和成员的会话都不变。只绑定了 GitHub 的账号也用 Register 补设用户名和密码，见 addCredentials。
-// token 是发出请求的成员 token，username 和 password 已经按协议校验过格式。
-func (a *Accounts) Register(ctx context.Context, memberID, token, clientIP, username, password string) (Account, error) {
-	profile, err := a.members.AccountProfile(ctx, memberID)
+// caller 是发出请求的会话，username 和 password 已经按协议校验过格式。
+func (a *Accounts) Register(ctx context.Context, caller Caller, clientIP, username, password string) (Account, error) {
+	profile, err := a.members.AccountProfile(ctx, caller.Member.ID)
 	if err != nil {
 		return Account{}, err
 	}
@@ -84,7 +80,7 @@ func (a *Accounts) Register(ctx context.Context, memberID, token, clientIP, user
 	case profile.Username != "":
 		return Account{}, port.ErrAlreadyRegistered
 	case profile.GitHub:
-		return a.addCredentials(ctx, memberID, token, clientIP, username, password, profile.Email)
+		return a.addCredentials(ctx, caller, clientIP, username, password, profile.Email)
 	}
 	settings, err := a.site.Settings(ctx)
 	if err != nil {
@@ -100,18 +96,18 @@ func (a *Accounts) Register(ctx context.Context, memberID, token, clientIP, user
 	if err != nil {
 		return Account{}, err
 	}
-	if err := a.members.Register(ctx, memberID, username, hash); err != nil {
+	if err := a.members.Register(ctx, caller.Member.ID, username, hash); err != nil {
 		return Account{}, err
 	}
-	return Account{Username: username, Email: profile.Email, GitHub: profile.GitHub}, nil
+	profile.Username = username
+	return profile, nil
 }
 
 // 拿到会话的人不能抢先给只绑定了 GitHub 的账号设成自己的密码，所以发出请求的会话要在 10 分钟内用账号绑定的 GitHub 确认过身份
 // （GitHub.Exchange 的 verify）。补设之后，账号除了这个会话，其他会话都失效，这与修改密码相同，对方会随之下线。
 // 补设不是注册新账号，注册关闭时照样可以。
-func (a *Accounts) addCredentials(ctx context.Context, memberID, token, clientIP, username, password, email string) (Account, error) {
-	tokenHash := hashSecret(token)
-	verified, err := a.verifications.Verified(ctx, tokenHash)
+func (a *Accounts) addCredentials(ctx context.Context, caller Caller, clientIP, username, password, email string) (Account, error) {
+	verified, err := a.verifications.Verified(ctx, caller.TokenHash)
 	if err != nil {
 		return Account{}, err
 	}
@@ -126,21 +122,21 @@ func (a *Accounts) addCredentials(ctx context.Context, memberID, token, clientIP
 		return Account{}, err
 	}
 	// 失败时（比如用户名已被占用）GitHub 确认仍然保留，换个用户名可以重试。同一个账号只能补设一次，由存储保证。
-	deleted, err := a.members.AddCredentials(ctx, memberID, username, hash, tokenHash)
+	deleted, err := a.members.AddCredentials(ctx, caller.Member.ID, username, hash, caller.TokenHash)
 	if err != nil {
 		return Account{}, err
 	}
 	a.gateway.RevokeSessions(ctx, deleted)
 	// 账号已经有了用户名，这次确认再也用不上了。删不掉也只是等确认过期，不影响补设的结果。
-	_ = a.verifications.DeleteVerification(ctx, tokenHash)
+	_ = a.verifications.DeleteVerification(ctx, caller.TokenHash)
 	return Account{Username: username, Email: email, GitHub: true}, nil
 }
 
-// current 是发出请求的成员，currentToken 是 current 的成员 token。只有游客能登录，成功后签发账号的新会话，游客的这个会话随即失效。
+// caller 是发出请求的会话。只有游客能登录，成功后签发账号的新会话，游客的这个会话随即失效。
 // device 是这台设备此前登录时拿到的登录设备凭证，没有时为空字符串，已经按协议校验过格式。成功时返回这台设备此后要带上的凭证。
 // 带来的凭证属于这个账号，并且签发之后密码没变过，就续期并原样返回，否则签发新的。
-func (a *Accounts) Login(ctx context.Context, current member.Member, currentToken, clientIP, username, password, device string) (Session, Account, string, error) {
-	if err := a.requireGuest(ctx, current.ID); err != nil {
+func (a *Accounts) Login(ctx context.Context, caller Caller, clientIP, username, password, device string) (Session, Account, string, error) {
+	if err := requireGuest(caller); err != nil {
 		return Session{}, Account{}, "", err
 	}
 	// 按 IP 限制一个来源的尝试次数，按用户名限制一个账号被尝试的次数，这样换着 IP 猜同一个账号也会受限。
@@ -170,7 +166,7 @@ func (a *Accounts) Login(ctx context.Context, current member.Member, currentToke
 	if err := a.devices.SaveDevice(ctx, hashSecret(device), account.Member.ID, passwordStamp(account.PasswordHash), loginDeviceTTL); err != nil {
 		return Session{}, Account{}, "", err
 	}
-	session, err := a.signIn(ctx, currentToken, account)
+	session, err := a.signIn(ctx, caller, account)
 	if errors.Is(err, port.ErrAccountPasswordChanged) {
 		return Session{}, Account{}, "", ErrInvalidCredentials
 	}
@@ -210,10 +206,8 @@ func passwordStamp(passwordHash string) []byte {
 }
 
 // 只有游客能登录，已经登录了账号的设备要先退出。
-func (a *Accounts) requireGuest(ctx context.Context, memberID string) error {
-	if _, registered, err := a.Account(ctx, memberID); err != nil {
-		return err
-	} else if registered {
+func requireGuest(caller Caller) error {
+	if _, err := caller.AccountOwner(); err == nil {
 		return ErrAlreadyLoggedIn
 	}
 	return nil
@@ -221,17 +215,16 @@ func (a *Accounts) requireGuest(ctx context.Context, memberID string) error {
 
 // 给发出请求的游客签发 account 的新会话，游客的这个会话随即失效。account.PasswordHash 是校验时读到的密码哈希。
 // 如果此后密码被修改或重置过，返回 port.ErrAccountPasswordChanged，由调用方按各自的登录方式告诉用户。
-func (a *Accounts) signIn(ctx context.Context, currentToken string, account port.Account) (Session, error) {
+func (a *Accounts) signIn(ctx context.Context, caller Caller, account port.Account) (Session, error) {
 	token, hash := newSecret()
-	guest := hashSecret(currentToken)
-	err := a.members.ReplaceSession(ctx, guest, account.Member.ID, hash, account.PasswordHash)
+	err := a.members.ReplaceSession(ctx, caller.TokenHash, account.Member.ID, hash, account.PasswordHash)
 	if errors.Is(err, port.ErrSessionNotFound) {
 		return Session{}, ErrInvalidMemberToken
 	}
 	if err != nil {
 		return Session{}, err
 	}
-	a.gateway.RevokeSessions(ctx, [][]byte{guest})
+	a.gateway.RevokeSessions(ctx, [][]byte{caller.TokenHash})
 	return Session{MemberToken: token, Member: account.Member}, nil
 }
 
@@ -261,18 +254,17 @@ func (a *Accounts) verify(ctx context.Context, username, password string) (port.
 	return account, nil
 }
 
-func (a *Accounts) Logout(ctx context.Context, token string) error {
-	hash := hashSecret(token)
-	if err := a.members.DeleteSession(ctx, hash); err != nil {
+func (a *Accounts) Logout(ctx context.Context, caller Caller) error {
+	if err := a.members.DeleteSession(ctx, caller.TokenHash); err != nil {
 		return err
 	}
-	a.gateway.RevokeSessions(ctx, [][]byte{hash})
+	a.gateway.RevokeSessions(ctx, [][]byte{caller.TokenHash})
 	return nil
 }
 
 // 修改成功后，账号除了发出请求的这个会话，其他会话都失效。
-func (a *Accounts) ChangePassword(ctx context.Context, memberID, token, currentPassword, newPassword string) error {
-	profile, err := a.members.AccountProfile(ctx, memberID)
+func (a *Accounts) ChangePassword(ctx context.Context, caller Caller, currentPassword, newPassword string) error {
+	profile, err := a.members.AccountProfile(ctx, caller.Member.ID)
 	if err != nil {
 		return err
 	}
@@ -283,7 +275,7 @@ func (a *Accounts) ChangePassword(ctx context.Context, memberID, token, currentP
 	case username == "":
 		return ErrNotRegistered
 	}
-	account, err := a.checkCurrentPassword(ctx, memberID, username, currentPassword)
+	account, err := a.checkCurrentPassword(ctx, caller.Member.ID, username, currentPassword)
 	if err != nil {
 		return err
 	}
@@ -292,7 +284,7 @@ func (a *Accounts) ChangePassword(ctx context.Context, memberID, token, currentP
 		return err
 	}
 	// 校验之后密码可能已经变了。被重置或被别的设备改过时，发出请求的会话已经被删掉，按 token 失效处理。同一个会话先改过时，当前密码已经不对。
-	deleted, err := a.members.ChangePassword(ctx, memberID, account.PasswordHash, hash, hashSecret(token))
+	deleted, err := a.members.ChangePassword(ctx, caller.Member.ID, account.PasswordHash, hash, caller.TokenHash)
 	switch {
 	case errors.Is(err, port.ErrSessionNotFound):
 		return ErrInvalidMemberToken
@@ -319,7 +311,15 @@ func (a *Accounts) checkCurrentPassword(ctx context.Context, memberID, username,
 }
 
 // Find 和 ResetPassword 只供后台使用，调用方要先校验管理 token。
-func (a *Accounts) Find(ctx context.Context, username string) (port.Account, error) {
+func (a *Accounts) Find(ctx context.Context, username string) (member.Member, Account, error) {
+	found, err := a.find(ctx, username)
+	if err != nil {
+		return member.Member{}, Account{}, err
+	}
+	return found.Member, accountOf(found), nil
+}
+
+func (a *Accounts) find(ctx context.Context, username string) (port.Account, error) {
 	account, err := a.members.AccountByUsername(ctx, username)
 	if errors.Is(err, port.ErrMemberNotFound) {
 		return port.Account{}, ErrAccountNotFound
@@ -329,7 +329,7 @@ func (a *Accounts) Find(ctx context.Context, username string) (port.Account, err
 
 // 生成随机的新密码，账号在所有设备上的会话随即失效。新密码只出现在返回值中。
 func (a *Accounts) ResetPassword(ctx context.Context, username string) (string, error) {
-	account, err := a.Find(ctx, username)
+	account, err := a.find(ctx, username)
 	if err != nil {
 		return "", err
 	}
@@ -359,12 +359,5 @@ func QuotaAddr(clientIP string) string {
 }
 
 func (a *Accounts) take(ctx context.Context, key string, burst int, refill time.Duration) error {
-	wait, err := a.quota.Take(ctx, key, burst, refill)
-	if err != nil {
-		return err
-	}
-	if wait > 0 {
-		return ErrTooManyAttempts
-	}
-	return nil
+	return takeQuota(ctx, a.quota, key, burst, refill, ErrTooManyAttempts)
 }

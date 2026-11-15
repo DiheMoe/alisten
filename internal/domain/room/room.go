@@ -98,7 +98,12 @@ func (r *Room) Handle(env Env, in Input) []Effect {
 	case MemberUpdated:
 		r.memberUpdated(in)
 	case UpdateInfo:
-		r.info.Name, r.info.Description = in.Name, in.Description
+		if in.Name != nil {
+			r.info.Name = *in.Name
+		}
+		if in.Description != nil {
+			r.info.Description = *in.Description
+		}
 		b.respond(in.RequestID, Done{}, nil)
 	case Delete:
 		r.stopPlayback(b)
@@ -158,11 +163,8 @@ func (b *batch) respond(id RequestID, res Result, err *Error) {
 func (r *Room) commit(b *batch) []Effect {
 	after := r.snapshot()
 	var out []Effect
-	if !sameSnapshot(b.before, after) {
-		out = append(out, Persist{Snapshot: after})
-	}
-	for _, p := range b.plays {
-		out = append(out, p)
+	if !sameSnapshot(b.before, after) || len(b.plays) > 0 {
+		out = append(out, Persist{Snapshot: after, Plays: b.plays})
 	}
 	// RecordListen 排在广播之前，这样客户端看到开播时，听歌记录已经写好。
 	if l, ok := r.listened(b); ok {

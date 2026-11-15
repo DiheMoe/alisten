@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/dihemoe/alisten/internal/adapter/out/postgres/internal/query"
 	"github.com/dihemoe/alisten/internal/app/port"
@@ -63,11 +62,8 @@ func (s *Store) ExistingTickets(ctx context.Context, tokenHashes [][]byte) ([][]
 	return existing, nil
 }
 
-const foreignKeyViolation = "23503"
-
 func sessionError(err error) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == foreignKeyViolation && pgErr.ConstraintName == "room_tickets_session_token_hash_fkey" {
+	if violates(err, foreignKeyViolation, "room_tickets_session_token_hash_fkey") {
 		return port.ErrSessionNotFound
 	}
 	return err

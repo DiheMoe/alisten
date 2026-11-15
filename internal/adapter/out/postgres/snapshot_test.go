@@ -60,10 +60,9 @@ func TestTakeRoomIncrementsTerm(t *testing.T) {
 		t.Errorf("再次接管的任期 = %d，期望 2", term)
 	}
 
-	for _, missing := range []string{"01a15778-1911-7a28-8b2e-e08c2a25f388", "r1"} {
-		if _, _, err := store.TakeRoom(t.Context(), missing); !errors.Is(err, port.ErrRoomNotFound) {
-			t.Errorf("TakeRoom(%q) 的错误 = %v，期望 ErrRoomNotFound", missing, err)
-		}
+	missing := "01a15778-1911-7a28-8b2e-e08c2a25f388"
+	if _, _, err := store.TakeRoom(t.Context(), missing); !errors.Is(err, port.ErrRoomNotFound) {
+		t.Errorf("TakeRoom(%q) 的错误 = %v，期望 ErrRoomNotFound", missing, err)
 	}
 }
 
@@ -95,7 +94,7 @@ func TestSavedSnapshotIsRestored(t *testing.T) {
 			Meta: track.Meta{Title: "待播", PageURL: "https://y.qq.com/n/ryqq/songDetail/2", Duration: time.Minute},
 		},
 		Waiting: []room.Entry{
-			{ID: 3, Track: link, Meta: linkMeta, By: alice, Likes: 2, Round: 3, Ready: true, Prep: queued, AddedAt: t0},
+			{ID: 3, Track: link, Meta: linkMeta, By: member.Member{ID: alice.ID, Name: "张三（bot）"}, Requester: "张三", Likes: 2, Round: 3, Ready: true, Prep: queued, AddedAt: t0},
 			{ID: 4, Track: netease("4"), Auto: true, Round: 1, AddedAt: t0.Add(time.Minute)},
 			{ID: 5, Track: unprepared, Meta: track.Meta{Title: unprepared.ID, CoverKey: "link/c/cover.png", PageURL: unprepared.ID}, By: alice, Round: 4, AddedAt: t0},
 		},
@@ -148,7 +147,7 @@ func TestSnapshotStoresMissingValuesAsNull(t *testing.T) {
 		t.Errorf("清空的房间描述 = %v，期望空串", description)
 	}
 	rows, err := pool.Query(t.Context(), `SELECT entry_id, concat_ws(',', CASE WHEN artist IS NULL THEN 'artist' END, CASE WHEN album IS NULL THEN 'album' END,
-		CASE WHEN cover_url IS NULL THEN 'cover_url' END, CASE WHEN by_name IS NULL THEN 'by_name' END, CASE WHEN by_avatar_hash IS NULL THEN 'by_avatar_hash' END)
+		CASE WHEN cover_url IS NULL THEN 'cover_url' END, CASE WHEN by_name IS NULL THEN 'by_name' END, CASE WHEN by_avatar_hash IS NULL THEN 'by_avatar_hash' END, CASE WHEN requester IS NULL THEN 'requester' END)
 		FROM room_entries WHERE room_id = $1 ORDER BY entry_id`, id)
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +162,7 @@ func TestSnapshotStoresMissingValuesAsNull(t *testing.T) {
 		}
 		missing = append(missing, fmt.Sprintf("%d:%s", entry, columns))
 	}
-	if want := []string{"1:artist,album,cover_url,by_avatar_hash", "2:artist,album,cover_url,by_name,by_avatar_hash"}; !slices.Equal(missing, want) {
+	if want := []string{"1:artist,album,cover_url,by_avatar_hash,requester", "2:artist,album,cover_url,by_name,by_avatar_hash,requester"}; !slices.Equal(missing, want) {
 		t.Errorf("各条目为 NULL 的列 = %v，期望 %v", missing, want)
 	}
 	if _, restored := takeRoom(t, store, id); !reflect.DeepEqual(restored, saved) {

@@ -44,7 +44,7 @@ func TestResetRoomAPIKey(t *testing.T) {
 	if err != nil || bot.RoomID != id || !bot.Bot || bot.Member.Name != "bot" || bot.Member.AvatarHash != "" {
 		t.Fatalf("Key 的持有者 = %#v, %v，期望这个房间的 bot 成员，昵称 bot，没有头像", bot, err)
 	}
-	if _, err := store.MemberByToken(t.Context(), tokenHash("k1")); !errors.Is(err, port.ErrMemberNotFound) {
+	if _, _, err := store.MemberByToken(t.Context(), tokenHash("k1")); !errors.Is(err, port.ErrMemberNotFound) {
 		t.Errorf("用 Key 查成员的错误 = %v，期望 ErrMemberNotFound：bot 的成员 token 不能是 Key", err)
 	}
 	var createdAt time.Time
@@ -82,7 +82,7 @@ func TestSettingPasswordKeepsAPIKey(t *testing.T) {
 	}
 	addTicket(t, pool, id)
 
-	if err := store.UpdateRoomAccess(t.Context(), id, port.AccessChange{PasswordHash: ptr("h1")}); err != nil {
+	if err := store.SetRoomPassword(t.Context(), id, "h1"); err != nil {
 		t.Fatal(err)
 	}
 	if holder, err := store.TicketHolder(t.Context(), tokenHash("k1")); err != nil || !reflect.DeepEqual(holder, bot) {

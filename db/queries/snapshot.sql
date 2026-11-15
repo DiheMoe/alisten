@@ -3,7 +3,7 @@ UPDATE rooms SET term = term + 1 WHERE id = @id RETURNING *;
 
 -- name: RoomEntries :many
 SELECT e.entry_id, e.slot, e.source, e.track_id, e.title, e.artist, e.album, e.cover_url, e.cover_key, e.page_url, e.meta_duration_ms,
-       e.by_member_id, e.by_name, e.by_avatar_hash, e.auto, e.likes, e.round, e.added_at, e.started_at,
+       e.by_member_id, e.by_name, e.by_avatar_hash, e.requester, e.auto, e.likes, e.round, e.added_at, e.started_at,
        t.title AS track_title, t.artist AS track_artist, t.album AS track_album, t.cover_url AS track_cover_url,
        t.cover_key AS track_cover_key, t.page_url AS track_page_url, t.duration_ms, t.gain, t.lyric, t.lyric_words, t.lyric_trans
 FROM room_entries e
@@ -21,10 +21,10 @@ DELETE FROM room_entries WHERE room_id = @room_id;
 -- name: InsertRoomEntries :copyfrom
 INSERT INTO room_entries (
     room_id, entry_id, slot, source, track_id, title, artist, album, cover_url, cover_key, page_url, meta_duration_ms,
-    by_member_id, by_name, by_avatar_hash, auto, likes, round, added_at, started_at
+    by_member_id, by_name, by_avatar_hash, requester, auto, likes, round, added_at, started_at
 ) VALUES (
     @room_id, @entry_id, @slot, @source, @track_id, @title, @artist, @album, @cover_url, @cover_key, @page_url, @meta_duration_ms,
-    @by_member_id, @by_name, @by_avatar_hash, @auto, @likes, @round, @added_at, @started_at
+    @by_member_id, @by_name, @by_avatar_hash, @requester, @auto, @likes, @round, @added_at, @started_at
 );
 
 -- name: InsertPlays :copyfrom

@@ -2,8 +2,8 @@ import type { Member } from '@/core/realtime'
 import type { RoomNotice } from '@/core/room'
 import { clock } from '@/core/clock'
 import { roomStore } from '@/core/room'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { Store } from '@/shared/lib/store'
-import { notificationStore } from '@/shared/ui'
 
 type ChatItem
   = | { kind: 'message', key: string, member: Member, text: string, atMs: number }

@@ -63,7 +63,7 @@ async function load() {
   const { copyInviteLink } = await import('./invite')
   const { roomStore } = await import('@/core/room')
   const { api } = await import('@/core/api')
-  const { notificationStore } = await import('@/shared/ui')
+  const { notificationStore } = await import('@/shared/lib/notification-store')
   roomEntryStore.start()
   const notifications = () => notificationStore.state.notifications.map(({ tone, message }) => ({ tone, message }))
   return { roomEntryStore, joinErrorMessage, copyInviteLink, roomStore, api, notifications }

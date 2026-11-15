@@ -1,4 +1,4 @@
-import type { AdminGetYoutubeCredentialResponse } from '@/core/api'
+import type { YoutubeCredentialState } from './youtube-cookies-view'
 import { describe, expect, it } from 'vitest'
 import { canSubmitYoutubeCookies, shouldWarnAboutPlaintext, youtubeCookiesTooLarge, youtubeCookiesView } from './youtube-cookies-view'
 
@@ -56,11 +56,11 @@ describe('shouldWarnAboutPlaintext', () => {
 })
 
 describe('youtubeCookiesView', () => {
-  const cases: { name: string, state: AdminGetYoutubeCredentialResponse | Error | undefined, want: ReturnType<typeof youtubeCookiesView> }[] = [
-    { name: '正在查询', state: undefined, want: { status: '正在查询', updatedAtMs: null } },
-    { name: '查询失败', state: new Error('网络不通'), want: { status: '查询失败', updatedAtMs: null } },
-    { name: '未配置', state: { set: false, updatedAtMs: 0 }, want: { status: '未配置', updatedAtMs: null } },
-    { name: '已配置并显示更新时间', state: { set: true, updatedAtMs: 1_793_184_000_000 }, want: { status: '已配置', updatedAtMs: 1_793_184_000_000 } },
+  const cases: { name: string, state: YoutubeCredentialState, want: ReturnType<typeof youtubeCookiesView> }[] = [
+    { name: '正在查询', state: { status: 'loading' }, want: { status: '正在查询', updatedAtMs: null } },
+    { name: '查询失败', state: { status: 'failed', error: '网络不通' }, want: { status: '查询失败', updatedAtMs: null } },
+    { name: '未配置', state: { status: 'loaded', value: { set: false, updatedAtMs: 0 } }, want: { status: '未配置', updatedAtMs: null } },
+    { name: '已配置并显示更新时间', state: { status: 'loaded', value: { set: true, updatedAtMs: 1_793_184_000_000 } }, want: { status: '已配置', updatedAtMs: 1_793_184_000_000 } },
   ]
 
   for (const tc of cases) {
@@ -70,7 +70,7 @@ describe('youtubeCookiesView', () => {
   }
 
   it('已有 cookies 不进入状态视图', () => {
-    const state = { set: true, updatedAtMs: 1_793_184_000_000, cookies: '虚构 cookie，不能回显' }
-    expect(youtubeCookiesView(state)).toEqual({ status: '已配置', updatedAtMs: 1_793_184_000_000 })
+    const value = { set: true, updatedAtMs: 1_793_184_000_000, cookies: '虚构 cookie，不能回显' }
+    expect(youtubeCookiesView({ status: 'loaded', value })).toEqual({ status: '已配置', updatedAtMs: 1_793_184_000_000 })
   })
 })

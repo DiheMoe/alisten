@@ -50,6 +50,17 @@ func createMember(t *testing.T, s *Service) Session {
 	return session
 }
 
+func callerOf(s Session) Caller {
+	return Caller{Member: s.Member, TokenHash: hashSecret(s.MemberToken)}
+}
+
+// 和 Authenticate 给已注册成员的会话相同。只用在请求发起时成员确实已经注册的用例上。
+func registeredCallerOf(s Session) Caller {
+	c := callerOf(s)
+	c.owner = AccountOwner{memberID: s.Member.ID}
+	return c
+}
+
 func createRoom(t *testing.T, store *porttest.Store, password string) string {
 	t.Helper()
 	id, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅", PasswordHash: hashPassword(t, password)})
@@ -72,7 +83,7 @@ func TestCreateMember(t *testing.T) {
 		t.Errorf("新成员 = %#v，期望默认昵称和空头像", session.Member)
 	}
 	hash := sha256.Sum256([]byte(session.MemberToken))
-	if m, err := store.MemberByToken(t.Context(), hash[:]); err != nil || m != session.Member {
+	if m, _, err := store.MemberByToken(t.Context(), hash[:]); err != nil || m != session.Member {
 		t.Errorf("存储中应按 token 的 SHA-256 找到成员：%#v, %v", m, err)
 	}
 	if other := createMember(t, s); other.MemberToken == session.MemberToken || other.Member.ID == session.Member.ID {
@@ -89,6 +100,42 @@ func TestCreateMemberTakesQuotaByIP(t *testing.T) {
 	q.exhausted["member:ip:"+clientIP] = true
 	if _, err := s.CreateMember(t.Context(), clientIP); !errors.Is(err, ErrTooManyGuests) {
 		t.Errorf("额度用完时的错误 = %v，期望 ErrTooManyGuests", err)
+	}
+}
+
+func TestOnlyRegisteredMembersGetAccountOwner(t *testing.T) {
+	s, store := newService(t)
+	guest, alice, gh := createMember(t, s), createMember(t, s), createMember(t, s)
+	if err := store.Register(t.Context(), alice.Member.ID, "alice", "hash"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BindGitHub(t.Context(), gh.Member.ID, 42); err != nil {
+		t.Fatal(err)
+	}
+	authenticate := func(session Session) Caller {
+		t.Helper()
+		caller, err := s.Authenticate(t.Context(), session.MemberToken)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return caller
+	}
+
+	if _, err := authenticate(guest).AccountOwner(); !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("游客的 AccountOwner = %v，期望 ErrNotRegistered", err)
+	}
+	for _, account := range []Session{alice, gh} {
+		if owner, err := authenticate(account).AccountOwner(); err != nil || owner.MemberID() != account.Member.ID {
+			t.Errorf("已注册成员 %s 的 AccountOwner = %q, %v", account.Member.ID, owner.MemberID(), err)
+		}
+	}
+	if _, err := callerOf(alice).AccountOwner(); !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("不是 Authenticate 返回的 Caller 取 AccountOwner = %v，期望 ErrNotRegistered", err)
+	}
+	caller := authenticate(alice)
+	caller.Member.ID = guest.Member.ID
+	if owner, err := caller.AccountOwner(); err != nil || owner.MemberID() != alice.Member.ID {
+		t.Errorf("改动 Member 之后的 AccountOwner = %q, %v，期望仍是 alice", owner.MemberID(), err)
 	}
 }
 
@@ -152,7 +199,7 @@ func TestUpdateProfileFailsWhenBroadcastFails(t *testing.T) {
 		t.Errorf("广播资料失败时错误 = %v，期望 realtime.ErrUnavailable", err)
 	}
 	hash := sha256.Sum256([]byte(session.MemberToken))
-	if m, err := store.MemberByToken(t.Context(), hash[:]); err != nil || m != (member.Member{ID: session.Member.ID, Name: "甲"}) {
+	if m, _, err := store.MemberByToken(t.Context(), hash[:]); err != nil || m != (member.Member{ID: session.Member.ID, Name: "甲"}) {
 		t.Errorf("广播失败之后存储中的成员 = %#v, %v，期望已经保存新资料", m, err)
 	}
 }
@@ -163,7 +210,7 @@ type passwordChangedStore struct {
 }
 
 func (s passwordChangedStore) CreateTicket(ctx context.Context, t port.NewTicket) error {
-	if err := s.UpdateRoomAccess(ctx, t.RoomID, port.AccessChange{PasswordHash: &s.newHash}); err != nil {
+	if err := s.SetRoomPassword(ctx, t.RoomID, s.newHash); err != nil {
 		return err
 	}
 	return s.Store.CreateTicket(ctx, t)
@@ -177,7 +224,7 @@ func TestIssueTicketFailsWhenPasswordChangesMeanwhile(t *testing.T) {
 	alice := createMember(t, s)
 	id := createRoom(t, store, "旧密码")
 
-	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, id, "旧密码"); !errors.Is(err, ErrWrongPassword) {
+	if _, err := s.IssueTicket(t.Context(), callerOf(alice), clientIP, id, "旧密码"); !errors.Is(err, ErrWrongPassword) {
 		t.Errorf("密码在校验之后被修改，错误 = %v，期望 ErrWrongPassword", err)
 	}
 }
@@ -188,14 +235,14 @@ func TestIssueTicketTakesQuota(t *testing.T) {
 	open, locked := createRoom(t, store, ""), createRoom(t, store, "芝麻开门")
 
 	q.taken = nil
-	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, open, ""); err != nil {
+	if _, err := s.IssueTicket(t.Context(), callerOf(alice), clientIP, open, ""); err != nil {
 		t.Fatal(err)
 	}
 	if want := []string{"ticket:ip:" + clientIP}; !slices.Equal(q.taken, want) {
 		t.Errorf("没有密码的房间取的额度 = %v，期望 %v", q.taken, want)
 	}
 	q.taken = nil
-	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, locked, "芝麻关门"); !errors.Is(err, ErrWrongPassword) {
+	if _, err := s.IssueTicket(t.Context(), callerOf(alice), clientIP, locked, "芝麻关门"); !errors.Is(err, ErrWrongPassword) {
 		t.Fatalf("密码错误时 = %v，期望 ErrWrongPassword", err)
 	}
 	if want := []string{"ticket:ip:" + clientIP, "ticket:room:" + locked}; !slices.Equal(q.taken, want) {
@@ -209,14 +256,14 @@ func TestIssueTicketQuotaExhausted(t *testing.T) {
 	open, locked := createRoom(t, store, ""), createRoom(t, store, "芝麻开门")
 
 	q.exhausted["ticket:room:"+locked] = true
-	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, locked, "芝麻开门"); !errors.Is(err, ErrTooManyRoomGuesses) {
+	if _, err := s.IssueTicket(t.Context(), callerOf(alice), clientIP, locked, "芝麻开门"); !errors.Is(err, ErrTooManyRoomGuesses) {
 		t.Errorf("房间的额度用完时，输对密码也 = %v，期望 ErrTooManyRoomGuesses", err)
 	}
-	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, open, ""); err != nil {
+	if _, err := s.IssueTicket(t.Context(), callerOf(alice), clientIP, open, ""); err != nil {
 		t.Errorf("别的房间不受影响：%v", err)
 	}
 	q.exhausted["ticket:ip:"+clientIP] = true
-	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, open, ""); !errors.Is(err, ErrTooManyAttempts) {
+	if _, err := s.IssueTicket(t.Context(), callerOf(alice), clientIP, open, ""); !errors.Is(err, ErrTooManyAttempts) {
 		t.Errorf("IP 的额度用完时 = %v，期望 ErrTooManyAttempts", err)
 	}
 }
@@ -225,7 +272,7 @@ func TestTicketBelongsToIssuingSession(t *testing.T) {
 	s, store := newService(t)
 	alice := createMember(t, s)
 	id := createRoom(t, store, "")
-	ticket, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, id, "")
+	ticket, err := s.IssueTicket(t.Context(), callerOf(alice), clientIP, id, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +290,7 @@ func TestIssueTicketRejectsDeletedSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, id, ""); !errors.Is(err, ErrInvalidMemberToken) {
+	if _, err := s.IssueTicket(t.Context(), callerOf(alice), clientIP, id, ""); !errors.Is(err, ErrInvalidMemberToken) {
 		t.Errorf("会话在签发之前被删除，错误 = %v，期望 ErrInvalidMemberToken", err)
 	}
 }
@@ -281,7 +328,7 @@ func TestEnterRoomLeavesWhenTicketIsRevokedWhileJoining(t *testing.T) {
 		s := New(store, store, &revokedAfterFirstLookup{Tickets: store}, porttest.Quota{}, gateway)
 		alice := createMember(t, s)
 		id := createRoom(t, store, "")
-		ticket, err := s.IssueTicket(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, id, "")
+		ticket, err := s.IssueTicket(t.Context(), callerOf(alice), clientIP, id, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -318,7 +365,7 @@ func TestEnterRoomJoinsTheStoredRoom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ticket, err := s.IssueTicket(t.Context(), alice.ID, session.MemberToken, clientIP, id, "")
+	ticket, err := s.IssueTicket(t.Context(), callerOf(session), clientIP, id, "")
 	if err != nil {
 		t.Fatal(err)
 	}

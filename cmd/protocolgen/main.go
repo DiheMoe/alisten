@@ -77,7 +77,8 @@ func generateFrom(path string) ([]output, error) {
 
 // 生成函数只处理 check 接受过的 IDL，所以直接依赖 check 保证的结构，不再重复检查。check 保证了以下几点：
 // 引用都指向存在的类型（标量类型已经展开），数组都有 items，anyOf 是 [类型, {"type": "null"}]，
-// allOf 的每个条件只按必填的枚举字段判断，需要解码函数的类型都已标记在 inbound 中。
+// allOf 的每个条件只按必填的枚举字段判断，需要解码函数的类型都已标记在 inbound 中，
+// x-http 路径中的每个参数都在 params 中引用了带 pattern 的字符串类型。
 func generate(d *idl) ([]output, error) {
 	types, err := goTypes(d)
 	if err != nil {

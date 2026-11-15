@@ -82,7 +82,7 @@ helm upgrade alisten \
 
 常驻房间支持生成 API Key，供第三方应用（如 IM 平台机器人）调用本项目的开放接口。调用时须通过 `Authorization: Bearer <API Key>` 请求头进行身份鉴权。API Key 仅在生成或重置时返回一次，请妥善保管。
 
-完整的接口定义、请求参数与响应结构见 [OpenAPI 规范文件](protocol/openapi.gen.json)。
+完整的接口定义、请求参数与响应结构见 [OpenAPI 规范文件](protocol/openapi.gen.json)。房间事件流不是一问一答的接口，规范文件没有收录。
 
 | 接口 | 说明 |
 | --- | --- |
@@ -96,6 +96,7 @@ helm upgrade alisten \
 | `POST /api/room/skip-votes` | 投票跳过当前播放的曲目 |
 | `PATCH /api/room/settings` | 设置播放模式 |
 | `POST /api/room/messages` | 发送房间聊天消息 |
+| `GET /api/room/events` | 订阅房间事件流 |
 
 ## 使用与版权
 

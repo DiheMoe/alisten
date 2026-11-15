@@ -70,7 +70,7 @@ async function handshake(roomId: string): Promise<FakeSocket> {
 async function started() {
   const { chatStore } = await import('./chat-store')
   const { roomStore } = await import('@/core/room')
-  const { notificationStore } = await import('@/shared/ui')
+  const { notificationStore } = await import('@/shared/lib/notification-store')
   chatStore.start()
   const join = (roomId: string) => {
     roomStore.join(roomId, 't1')

@@ -1,11 +1,14 @@
 import type { Source } from '@/core/realtime'
 import { ListPlus } from 'lucide-react'
 import { useState } from 'react'
-import { profileStore } from '@/features/settings'
+import { profileStore } from '@/core/profile'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { useStore } from '@/shared/lib/use-store'
-import { Modal, notificationStore } from '@/shared/ui'
+import { useSubmission } from '@/shared/lib/use-submission'
+import { Modal } from '@/shared/ui'
 import { AccountPrompt } from './account-prompt'
-import { playlistsStore } from './playlists-store'
+import { PlaylistNameField } from './playlist-name-field'
+import { isBlankPlaylistName, playlistsStore } from './playlists-store'
 
 export const defaultImportName = '导入的歌单'
 
@@ -25,34 +28,28 @@ export function SavePlatformPlaylistButton({ source, playlistId, name }: { sourc
 function SavePlatformPlaylistDialog({ source, playlistId, name: original, onClose }: { source: Source, playlistId: string, name: string, onClose: () => void }) {
   const account = useStore(profileStore, s => s.account)
   const [name, setName] = useState(original)
-  const [busy, setBusy] = useState(false)
+  const { busy, submit } = useSubmission()
   return (
     <Modal title="保存为我的歌单" onClose={onClose}>
       {account
         ? (
             <form
               className="form-stack"
-              onSubmit={async (event) => {
+              onSubmit={(event) => {
                 event.preventDefault()
-                if (busy)
-                  return
-                setBusy(true)
-                const result = await playlistsStore.importPlatform(name, source, playlistId)
-                if (!result) {
-                  setBusy(false)
-                  return
-                }
-                notificationStore.success(`已保存为“${result.playlist.name}”，共 ${result.imported} 首`)
-                onClose()
+                void submit(async () => {
+                  const result = await playlistsStore.importPlatform(name, source, playlistId)
+                  if (!result)
+                    return
+                  notificationStore.success(`已保存为“${result.playlist.name}”，共 ${result.imported} 首`)
+                  onClose()
+                })
               }}
             >
-              <label>
-                歌单名
-                <input data-autofocus required maxLength={50} value={name} onChange={event => setName(event.target.value)} />
-              </label>
+              <PlaylistNameField data-autofocus value={name} onChange={setName} />
               <div className="dialog-actions">
                 <button type="button" className="button-secondary" onClick={onClose}>取消</button>
-                <button type="submit" className="button-primary" disabled={busy || name.trim() === ''}>{busy ? '正在保存…' : '保存'}</button>
+                <button type="submit" className="button-primary" disabled={busy || isBlankPlaylistName(name)}>{busy ? '正在保存…' : '保存'}</button>
               </div>
             </form>
           )

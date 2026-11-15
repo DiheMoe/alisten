@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { rovingIndex } from '@/shared/lib/roving'
 
 export interface SectionItem<T extends string> {
   id: T
@@ -36,21 +37,14 @@ function focusHeading(container: HTMLElement | null): void {
   heading.focus({ preventScroll: true })
 }
 
-const keySteps: Partial<Record<string, (index: number, count: number) => number>> = {
-  ArrowDown: (index, count) => (index + 1) % count,
-  ArrowUp: (index, count) => (index - 1 + count) % count,
-  Home: () => 0,
-  End: (_, count) => count - 1,
-}
-
 function moveFocus(event: KeyboardEvent<HTMLElement>): void {
-  const step = keySteps[event.key]
   const items = [...event.currentTarget.querySelectorAll<HTMLElement>('[data-section]')]
   const index = items.indexOf(document.activeElement as HTMLElement)
-  if (!step || index === -1)
+  const next = rovingIndex(event.key, index, items.length, 'vertical')
+  if (next === null || index === -1)
     return
   event.preventDefault()
-  items[step(index, items.length)].focus()
+  items[next].focus()
 }
 
 // 宽屏：左侧分类栏加右侧内容。current 为 null 时按 defaultSection 高亮，children 也应当是 defaultSection 的内容。

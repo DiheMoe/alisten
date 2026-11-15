@@ -1,6 +1,6 @@
 import type { RoomListing } from '@/core/realtime'
 import { describe, expect, it } from 'vitest'
-import { filterRooms } from './room-filter'
+import { filterRooms, roomAfterRemoval } from './room-filter'
 
 function room(id: string, name: string, slug: string | null = null): RoomListing {
   return { id, name, slug, description: '', hasPassword: false, kind: 'persistent', onlineCount: 0 }
@@ -42,5 +42,24 @@ describe('filterRooms', () => {
     expect(result.items).toHaveLength(5)
     expect(filterRooms(rooms(45), '房间 4', 2)).toMatchObject({ totalPages: 1, page: 1 })
     expect(filterRooms([], '', 2)).toEqual({ items: [], totalPages: 1, page: 1 })
+  })
+})
+
+describe('roomAfterRemoval', () => {
+  it('焦点落到补上来的那一行，最后一行补进来的是下一页的第一行', () => {
+    const all = rooms(45)
+    expect(roomAfterRemoval(all, '5', '', 1)).toBe('6')
+    expect(roomAfterRemoval(all, '20', '', 1)).toBe('21')
+    expect(roomAfterRemoval(all, '45', '', 3)).toBeNull()
+  })
+
+  it('删空了这一页时显示的是上一页，焦点落到标题', () => {
+    expect(roomAfterRemoval(rooms(41), '41', '', 3)).toBeNull()
+    expect(roomAfterRemoval(rooms(1), '1', '', 1)).toBeNull()
+  })
+
+  it('按搜索之后的这一页找下一行', () => {
+    const sample = [room('a', '大猫听歌房'), room('b', '深夜电台'), room('c', '大猫二号'), room('d', '大猫三号')]
+    expect(roomAfterRemoval(sample, 'a', '大猫', 1)).toBe('c')
   })
 })

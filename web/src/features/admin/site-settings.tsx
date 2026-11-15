@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
 import { api } from '@/core/api'
 import { brandStore } from '@/core/brand'
 import { errorMessage } from '@/core/errors'
+import { useResource } from '@/shared/lib/use-resource'
 import { useStore } from '@/shared/lib/use-store'
 import { InlineTextField, Skeleton } from '@/shared/ui'
 import { adminStore } from './admin-store'
@@ -15,33 +15,16 @@ async function saveBrandName(name: string): Promise<void> {
 
 export function SiteSettings() {
   const brandName = useStore(brandStore, s => s.name)
-  // undefined 表示正在获取，Error 表示获取失败。
-  const [status, setStatus] = useState<'loaded' | Error>()
-  const [attempt, setAttempt] = useState(0)
-  useEffect(() => {
-    let active = true
-    brandStore.load().then(() => {
-      if (active)
-        setStatus('loaded')
-    }, (error: unknown) => {
-      if (active)
-        setStatus(new Error(errorMessage(error)))
-    })
-    return () => {
-      active = false
-    }
-  }, [attempt])
-  const retry = () => {
-    setStatus(undefined)
-    setAttempt(n => n + 1)
-  }
+  const { state, reload } = useResource(() => brandStore.load().catch((error: unknown) => {
+    throw new Error(errorMessage(error))
+  }))
   return (
     <section className="admin-section" aria-labelledby="admin-site-title">
       <SectionHead id="admin-site-title" title="站点" />
-      {status === undefined
+      {state.status === 'loading'
         ? <Skeleton rows={1} />
-        : status instanceof Error
-          ? <LoadFailed message={`暂时无法获取品牌名。${status.message}`} onRetry={retry} />
+        : state.status === 'failed'
+          ? <LoadFailed message={`暂时无法获取品牌名。${state.error}`} onRetry={reload} />
           : (
               <div className="section-group">
                 <div className="section-row">

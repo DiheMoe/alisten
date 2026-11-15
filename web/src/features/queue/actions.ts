@@ -1,9 +1,8 @@
-import type { PlayMode, Track } from '@/core/realtime'
+import type { PlayMode } from '@/core/realtime'
 import { errorMessage } from '@/core/errors'
-import { RequestError } from '@/core/realtime'
 import { roomStore } from '@/core/room'
 import { bookTitle } from '@/shared/lib/book-title'
-import { notificationStore } from '@/shared/ui'
+import { notificationStore } from '@/shared/lib/notification-store'
 
 async function run(action: () => Promise<string | null>): Promise<void> {
   try {
@@ -13,20 +12,6 @@ async function run(action: () => Promise<string | null>): Promise<void> {
   }
   catch (error) {
     notificationStore.error(errorMessage(error))
-  }
-}
-
-// 返回 false 时，失败原因已经通过通知显示。
-export async function enqueue(track: Track): Promise<boolean> {
-  try {
-    const { entry } = await roomStore.requests.queueAdd({ track })
-    notificationStore.success(`已点歌${bookTitle(entry.meta.title)}`)
-    return true
-  }
-  catch (error) {
-    // 点了认得出却不能点的 B 站链接时，INVALID_ARGUMENT 的 message 就是写给点歌人的原因。
-    notificationStore.error(track.source === 'link' && error instanceof RequestError && error.code === 'INVALID_ARGUMENT' ? error.message : errorMessage(error))
-    return false
   }
 }
 

@@ -1,70 +1,48 @@
-import type { AdminGetGithubCredentialResponse } from '@/core/api'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { api } from '@/core/api'
-import { ConfirmDialog, notificationStore, Skeleton } from '@/shared/ui'
+import { copyText } from '@/shared/lib/clipboard'
+import { notificationStore } from '@/shared/lib/notification-store'
+import { useResource } from '@/shared/lib/use-resource'
+import { useSubmission } from '@/shared/lib/use-submission'
+import { ConfirmDialog, Skeleton } from '@/shared/ui'
 import { adminStore } from './admin-store'
 import { githubAppDraft } from './github-app-draft'
 import { LoadFailed, StatusPill } from './section-head'
 
 async function copyCallbackUrl(url: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(url)
+  if (await copyText(url))
     notificationStore.success('已复制回调地址')
-  }
-  catch {
-    // 非安全上下文没有剪贴板接口，用户也可能拒绝授权。
+  else
     notificationStore.info(`请手动复制回调地址：${url}`, 8000)
-  }
 }
 
 export function GithubApp() {
-  // undefined 表示正在获取，Error 表示获取失败。
-  const [app, setApp] = useState<AdminGetGithubCredentialResponse | Error>()
-  const [attempt, setAttempt] = useState(0)
+  const credential = useResource(() => adminStore.attempt(() => api.adminGetGithubCredential()))
   // null 表示沿用已保存的 Client ID。
   const [clientId, setClientId] = useState<string | null>(null)
   // 服务端不返回已保存的 Client Secret，而它必须和 Client ID 一起提交，所以每次保存都要重新填写。
   const [clientSecret, setClientSecret] = useState('')
-  const [busy, setBusy] = useState(false)
+  const { busy, submit } = useSubmission()
   const [closing, setClosing] = useState(false)
-  useEffect(() => {
-    let active = true
-    adminStore.attempt(() => api.adminGetGithubCredential()).then((result) => {
-      if (active)
-        setApp(result)
-    }, (error: Error) => {
-      if (active)
-        setApp(error)
-    })
-    return () => {
-      active = false
-    }
-  }, [attempt])
   const refetch = () => {
-    setApp(undefined)
     setClientId(null)
     setClientSecret('')
-    setAttempt(n => n + 1)
+    credential.reload()
   }
-  if (app instanceof Error)
-    return <LoadFailed message={`暂时无法获取 GitHub 登录的配置。${app.message}`} onRetry={refetch} />
-  if (app === undefined)
+  if (credential.state.status === 'failed')
+    return <LoadFailed message={`暂时无法获取 GitHub 登录的配置。${credential.state.error}`} onRetry={refetch} />
+  if (credential.state.status === 'loading')
     return <Skeleton rows={3} />
+  const app = credential.state.value
   const draft = githubAppDraft(clientId ?? app.clientId ?? '', clientSecret)
   const save = async () => {
     if (draft === null)
       return
-    setBusy(true)
-    try {
-      const saved = await adminStore.call(() => api.adminSetGithubCredential(draft), { INVALID_ARGUMENT: 'Client ID 和 Client Secret 只能包含字母、数字、点、下划线和连字符，请从 GitHub 重新复制。' })
-      if (saved === null)
-        return
-      refetch()
-      notificationStore.success(app.clientId === null ? '已开启 GitHub 登录' : '已保存 GitHub OAuth App')
-    }
-    finally {
-      setBusy(false)
-    }
+    const saved = await adminStore.call(() => api.adminSetGithubCredential(draft), { INVALID_ARGUMENT: 'Client ID 和 Client Secret 只能包含字母、数字、点、下划线和连字符，请从 GitHub 重新复制。' })
+    if (saved === null)
+      return
+    refetch()
+    notificationStore.success(app.clientId === null ? '已开启 GitHub 登录' : '已保存 GitHub OAuth App')
   }
   return (
     <>
@@ -72,7 +50,7 @@ export function GithubApp() {
         className="section-group"
         onSubmit={(event) => {
           event.preventDefault()
-          void save()
+          void submit(save)
         }}
       >
         <div className="section-row">

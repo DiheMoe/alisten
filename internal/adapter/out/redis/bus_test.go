@@ -98,159 +98,31 @@ func (f *busFixture) next(t *testing.T) port.Delivery {
 func randomRoom() string { return rand.Text() }
 
 var (
-	when    = time.Date(2026, 10, 22, 8, 30, 0, 123456789, time.UTC)
-	alice   = member.Member{ID: "00000000-0000-7000-8000-00000000000a", Name: "alice", AvatarHash: "c160f8cc69a4f0bf2b0362752353d060"}
-	sunny   = track.Track{Source: track.NetEase, ID: "186016"}
-	waiting = room.Entry{
-		ID: 12, Track: sunny, By: alice, Likes: 2, Ready: true, AddedAt: when,
-		Meta: track.Meta{Title: "晴天", Artist: "周杰伦", Album: "叶惠美", CoverURL: "https://p1.music.126.net/example.jpg", PageURL: "https://music.163.com/#/song?id=186016", Duration: 269 * time.Second},
-	}
-	playing = withPrep(waiting)
-	link    = room.Entry{ID: 13, Track: track.Track{Source: track.Link, ID: "https://www.youtube.com/watch?v=x"}, Meta: track.Meta{Title: "https://www.youtube.com/watch?v=x"}, Auto: true, AddedAt: when}
-	current = room.NowPlaying{Entry: playing, StartedAt: when.Add(time.Minute)}
-	view    = room.View{
-		Term: 3, Seq: 128,
-		Snapshot: room.Snapshot{
-			Info:     room.Info{ID: "01a15778-1911-7a28-8b2e-e08c2a25f388", Name: "大厅", Description: "常驻", Kind: room.Persistent},
-			Mode:     room.Random,
-			EntrySeq: 13,
-			Waiting:  []room.Entry{link},
-			Pending:  &waiting,
-			Current:  &current,
-		},
-		Sessions: []room.Session{{ID: "a/s1", Member: alice}},
-	}
+	alice = member.Member{ID: "00000000-0000-7000-8000-00000000000a", Name: "alice", AvatarHash: "c160f8cc69a4f0bf2b0362752353d060"}
+	sunny = track.Track{Source: track.NetEase, ID: "186016"}
 )
 
-func withPrep(e room.Entry) room.Entry {
-	e.Prep = track.Prepared{Duration: 269500 * time.Millisecond, Gain: 0.75, Lyric: "[00:01.00]故事的小黄花"}
-	return e
-}
-
-func roomMessageSamples() []port.RoomMessage {
-	return []port.RoomMessage{
-		port.OwnerChanged{Term: 3},
-		port.Emitted{Emit: room.Emit{Term: 3, Seq: 1, Event: room.PlaybackChanged{Current: &current}}},
-		port.Emitted{Emit: room.Emit{Term: 3, Seq: 3, Event: room.QueueChanged{Pending: &waiting, Waiting: []room.Entry{link, waiting}}}},
-		port.Emitted{Emit: room.Emit{Term: 3, Seq: 4, Event: room.MembersChanged{Sessions: view.Sessions}}},
-		port.Emitted{Emit: room.Emit{Term: 3, Seq: 5, Event: room.ModeChanged{Mode: room.Random}}},
-		port.Emitted{Emit: room.Emit{Term: 3, Seq: 6, Event: room.InfoChanged{Name: "大厅", Description: "常驻"}}},
-		port.Emitted{Emit: room.Emit{Term: 3, Seq: 7, Event: room.ChatPosted{Member: alice, Text: "你好", SentAt: when}}},
-		port.Emitted{Emit: room.Emit{Term: 3, Seq: 1 << 40, Event: room.Activity{Kind: room.ActivityVoted, Member: alice, Entry: waiting, Votes: 1, Required: 2, Reason: "原因"}}},
-		port.Replied{Reply: room.Reply{RequestID: "a/r1", Result: room.Done{}}},
-		port.Replied{Reply: room.Reply{RequestID: "a/r2", Result: room.EnqueueResult{Entry: waiting}}},
-		port.Replied{Reply: room.Reply{RequestID: "a/r3", Result: room.LikeResult{Likes: 3}}},
-		port.Replied{Reply: room.Reply{RequestID: "a/r4", Result: room.VoteResult{Votes: 1, Required: 2, Skipped: true}}},
-		port.Replied{Reply: room.Reply{RequestID: "a/r5", Result: room.SyncResult{View: view}}},
-		port.Replied{Reply: room.Reply{RequestID: "a/r6", Err: &room.Error{Kind: room.QueueFull, Message: "临时房间的播放列表最多 10 首歌，等播放几首之后再点。"}}},
-		port.Rejected{RequestID: "a/r8", NotFound: true},
-		port.RoomClosed{},
-		port.OwnerReleased{},
-		port.TicketsRevoked{},
-		port.APIKeyReset{},
-	}
-}
-
-func TestRoomMessagesArriveInOrder(t *testing.T) {
+func TestInputWithoutTraceContextRecordsNoSpan(t *testing.T) {
 	client := newClient(t)
 	a, b := newBus(t, client, "v1"), newBus(t, client, "v1")
-	roomID := randomRoom()
-	if err := b.bus.SubscribeRoom(t.Context(), roomID); err != nil {
-		t.Fatal(err)
-	}
-	samples := roomMessageSamples()
-	for _, m := range samples {
-		if err := a.bus.PublishRoom(t.Context(), roomID, m); err != nil {
-			t.Fatalf("发布 %T：%v", m, err)
-		}
-	}
-	for _, want := range samples {
-		got := b.next(t)
-		if !reflect.DeepEqual(got, port.RoomDelivery{Room: roomID, Message: want}) {
-			t.Errorf("收到 %#v\n期望 %#v", got, want)
-		}
-	}
-}
-
-func TestOnlyPlayingEntryKeepsPreparedResultAcrossInstances(t *testing.T) {
-	client := newClient(t)
-	a, b := newBus(t, client, "v1"), newBus(t, client, "v1")
-	roomID := randomRoom()
-	if err := b.bus.SubscribeRoom(t.Context(), roomID); err != nil {
-		t.Fatal(err)
-	}
-	pending, queue := playing, []room.Entry{link, playing}
-	sentView, wantView := view, view
-	sentView.Snapshot.Pending, sentView.Snapshot.Waiting = &pending, queue
-	wantView.Snapshot.Waiting = []room.Entry{link, waiting}
-	emitted := func(e room.Event) port.RoomMessage { return port.Emitted{Emit: room.Emit{Term: 3, Seq: 1, Event: e}} }
-	replied := func(v room.View) port.RoomMessage {
-		return port.Replied{Reply: room.Reply{RequestID: "a/r1", Result: room.SyncResult{View: v}}}
-	}
-	for _, c := range []struct{ sent, want port.RoomMessage }{
-		{emitted(room.PlaybackChanged{Current: &current}), emitted(room.PlaybackChanged{Current: &current})},
-		{emitted(room.QueueChanged{Pending: &pending, Waiting: queue}), emitted(room.QueueChanged{Pending: &waiting, Waiting: []room.Entry{link, waiting}})},
-		{emitted(room.Activity{Kind: room.ActivityLiked, Member: alice, Entry: playing}), emitted(room.Activity{Kind: room.ActivityLiked, Member: alice, Entry: waiting})},
-		{replied(sentView), replied(wantView)},
-	} {
-		if err := a.bus.PublishRoom(t.Context(), roomID, c.sent); err != nil {
-			t.Fatalf("发布 %T：%v", c.sent, err)
-		}
-		if got, want := b.next(t), (port.RoomDelivery{Room: roomID, Message: c.want}); !reflect.DeepEqual(got, want) {
-			t.Errorf("收到 %#v\n期望 %#v", got, want)
-		}
-	}
-	// 房间状态和 effect 共用这些切片和指针。
-	if pending != playing || !slices.Equal(queue, []room.Entry{link, playing}) {
-		t.Error("编码时改写了房间状态")
-	}
-}
-
-func TestRoomInputs(t *testing.T) {
-	client := newClient(t)
-	a, b := newBus(t, client, "v1"), newBus(t, client, "v1")
-	join := port.RoomInput{Room: randomRoom(), Gateway: a.instance, Input: room.Join{Session: "a/s1", Member: alice}, Takeover: true}
-	if ok, err := a.bus.SendInput(t.Context(), b.instance, join); err != nil || ok {
-		t.Errorf("对方还没有订阅时 SendInput = %v, %v，期望 false", ok, err)
-	}
 	if err := b.bus.SubscribeInstance(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	name := "新大厅"
-	samples := []port.RoomInput{join}
-	for _, a := range []room.Action{room.Enqueue{Track: sunny, Meta: waiting.Meta}, room.Remove{Entry: 12}, room.Like{Entry: 12}, room.VoteSkip{}, room.SetPlayMode{Mode: room.Random}, room.Chat{Text: "你好"}, room.Sync{}} {
-		samples = append(samples, port.RoomInput{Room: join.Room, Gateway: "g", Input: room.Command{RequestID: "g/r1", Member: alice, Action: a}, Takeover: true})
+	in := port.RoomInput{Room: randomRoom(), Gateway: a.instance, Input: room.Join{Session: "a/s1", Member: alice}, Takeover: true}
+	if ok, err := a.bus.SendInput(t.Context(), b.instance, in); err != nil || !ok {
+		t.Fatalf("SendInput = %v, %v", ok, err)
 	}
-	samples = append(samples,
-		port.RoomInput{Room: join.Room, Gateway: "g", Input: room.Leave{Session: "a/s1"}},
-		port.RoomInput{Room: join.Room, Gateway: "g", Input: room.MemberUpdated{Member: alice}},
-		port.RoomInput{Room: join.Room, Gateway: "g", Input: room.Delete{RequestID: "g/r2"}, Takeover: true},
-		port.RoomInput{Room: join.Room, Gateway: "g", Patch: &port.InfoPatch{RequestID: "g/r3", Name: &name}, Takeover: true},
-	)
-	for _, in := range samples {
-		if ok, err := a.bus.SendInput(t.Context(), b.instance, in); err != nil || !ok {
-			t.Fatalf("SendInput(%#v) = %v, %v", in.Input, ok, err)
-		}
-	}
-	for _, want := range samples {
-		got, ok := b.next(t).(port.InputDelivery)
-		if !ok || !reflect.DeepEqual(got.Input, want) {
-			t.Errorf("收到 %#v\n期望 %#v", got, want)
-		}
-		if ok && trace.SpanContextFromContext(got.Context).IsValid() {
-			t.Errorf("发送时没有 span 的输入带着追踪上下文：%#v", got)
-		}
+	if got, ok := b.next(t).(port.InputDelivery); !ok || !reflect.DeepEqual(got.Input, in) {
+		t.Fatalf("收到 %#v，期望 %#v", got, in)
 	}
 	if n := len(b.spans.Ended()); n != 0 {
 		t.Errorf("没有追踪上下文的输入记了 %d 个 span", n)
 	}
-	if err := a.bus.PublishMember(t.Context(), alice); err != nil {
-		t.Fatal(err)
-	}
-	if got := b.next(t); got != (port.MemberDelivery{Member: alice}) {
-		t.Errorf("收到 %#v，期望成员资料", got)
-	}
-	if _, err := a.bus.SendInput(t.Context(), b.instance, port.RoomInput{Room: join.Room, Input: room.Timer{Token: 1}}); err == nil {
+}
+
+func TestTimerCannotBeSent(t *testing.T) {
+	a := newBus(t, newClient(t), "v1")
+	if _, err := a.bus.SendInput(t.Context(), rand.Text(), port.RoomInput{Room: randomRoom(), Input: room.Timer{Token: 1}}); err == nil {
 		t.Error("计时器只在本实例内投递，不应能编码")
 	}
 }
@@ -318,72 +190,19 @@ func TestDroppedInputRecordsNoSpan(t *testing.T) {
 	}
 }
 
-func TestPreparedOutcomes(t *testing.T) {
+// worker 只有 Publisher，没有 Bus。
+func TestPublisherReachesInstances(t *testing.T) {
 	client := newClient(t)
-	a, b := newBus(t, client, "v1"), newBus(t, client, "v1")
-	for _, f := range []*busFixture{a, b} {
-		if err := f.bus.SubscribeInstance(t.Context()); err != nil {
-			t.Fatal(err)
-		}
-	}
-	outcomes := []port.PrepareOutcome{
-		{Track: sunny, JobID: 1},
-		{Track: track.Track{Source: track.QQ, ID: "0039MnYb0qxYhV"}, JobID: 1 << 40, Reason: "酷我没有提供这首歌的播放地址"},
-	}
-	for _, o := range outcomes {
-		if err := a.bus.PublishPrepared(t.Context(), o); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, f := range []*busFixture{a, b} {
-		for _, o := range outcomes {
-			if got := f.next(t); got != (port.PreparedDelivery{Outcome: o}) {
-				t.Errorf("收到 %#v，期望 %#v", got, o)
-			}
-		}
-	}
-}
-
-func TestSessionsRevoked(t *testing.T) {
-	client := newClient(t)
-	a, b := newBus(t, client, "v1"), newBus(t, client, "v1")
-	for _, f := range []*busFixture{a, b} {
-		if err := f.bus.SubscribeInstance(t.Context()); err != nil {
-			t.Fatal(err)
-		}
-	}
-	hashes := [][]byte{{0x01, 0x02}, {0xff, 0x00, 0x7f}}
-	if err := a.bus.PublishSessionsRevoked(t.Context(), hashes); err != nil {
+	b := newBus(t, client, "v1")
+	if err := b.bus.SubscribeInstance(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []*busFixture{a, b} {
-		if got := f.next(t); !reflect.DeepEqual(got, port.SessionsRevokedDelivery{SessionTokenHashes: hashes}) {
-			t.Errorf("收到 %#v，期望被删除的会话 %x", got, hashes)
-		}
-	}
-}
-
-func TestUnsubscribeRoom(t *testing.T) {
-	client := newClient(t)
-	a, b := newBus(t, client, "v1"), newBus(t, client, "v1")
-	gone, kept := randomRoom(), randomRoom()
-	if err := b.bus.SubscribeRoom(t.Context(), gone); err != nil {
+	o := port.PrepareOutcome{Track: sunny, JobID: 1}
+	if err := NewPublisher(client, "worker", "v1").PublishPrepared(t.Context(), o); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.bus.UnsubscribeRoom(t.Context(), gone); err != nil {
-		t.Fatal(err)
-	}
-	// 退订不等服务端确认。同一个连接上的命令按顺序处理，所以之后的订阅生效时，退订也已经生效。
-	if err := b.bus.SubscribeRoom(t.Context(), kept); err != nil {
-		t.Fatal(err)
-	}
-	for _, id := range []string{gone, kept} {
-		if err := a.bus.PublishRoom(t.Context(), id, port.RoomClosed{}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if got := b.next(t); got != (port.RoomDelivery{Room: kept, Message: port.RoomClosed{}}) {
-		t.Errorf("退订之后收到 %#v，期望只收到另一个房间的消息", got)
+	if got := b.next(t); got != (port.PreparedDelivery{Outcome: o}) {
+		t.Errorf("收到 %#v，期望 %#v", got, o)
 	}
 }
 

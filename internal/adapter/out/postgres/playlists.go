@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -121,9 +120,6 @@ func firstCover(items []port.PlaylistItem) *port.Cover {
 }
 
 func (s *Store) RenamePlaylist(ctx context.Context, ownerID, id, name string) error {
-	if !isUUID(id) {
-		return port.ErrPlaylistNotFound
-	}
 	n, err := s.q.RenamePlaylist(ctx, query.RenamePlaylistParams{ID: id, OwnerID: ownerID, Name: name})
 	if err == nil && n == 0 {
 		err = s.unchangeable(ctx, ownerID, id)
@@ -135,9 +131,6 @@ func (s *Store) RenamePlaylist(ctx context.Context, ownerID, id, name string) er
 }
 
 func (s *Store) DeletePlaylist(ctx context.Context, ownerID, id string) error {
-	if !isUUID(id) {
-		return port.ErrPlaylistNotFound
-	}
 	n, err := s.q.DeletePlaylist(ctx, query.DeletePlaylistParams{ID: id, OwnerID: ownerID})
 	if err == nil && n == 0 {
 		err = s.unchangeable(ctx, ownerID, id)
@@ -163,9 +156,6 @@ func (s *Store) unchangeable(ctx context.Context, ownerID, id string) error {
 }
 
 func (s *Store) owned(ctx context.Context, ownerID, id string) error {
-	if !isUUID(id) {
-		return port.ErrPlaylistNotFound
-	}
 	_, err := s.q.PlaylistKind(ctx, query.PlaylistKindParams{ID: id, OwnerID: ownerID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return port.ErrPlaylistNotFound
@@ -189,24 +179,13 @@ func playlistItems(rows []query.PlaylistItem) []port.PlaylistItem {
 	for i, r := range rows {
 		items[i] = port.PlaylistItem{
 			Track: track.Track{Source: track.Source(r.Source), ID: r.TrackID},
-			Meta: track.Meta{
-				Title:    r.Title,
-				Artist:   orEmpty(r.Artist),
-				Album:    orEmpty(r.Album),
-				CoverURL: orEmpty(r.CoverURL),
-				CoverKey: track.ObjectKey(orEmpty(r.CoverKey)),
-				PageURL:  r.PageURL,
-				Duration: time.Duration(r.DurationMs) * time.Millisecond,
-			},
+			Meta:  metaColumns{Title: r.Title, Artist: r.Artist, Album: r.Album, CoverURL: r.CoverURL, CoverKey: r.CoverKey, PageURL: r.PageURL, DurationMs: r.DurationMs}.meta(),
 		}
 	}
 	return items
 }
 
 func (s *Store) AddPlaylistItem(ctx context.Context, ownerID, id string, item port.PlaylistItem, limit int) error {
-	if !isUUID(id) {
-		return port.ErrPlaylistNotFound
-	}
 	t, m := item.Track, item.Meta
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
@@ -253,9 +232,6 @@ func (s *Store) AddPlaylistItem(ctx context.Context, ownerID, id string, item po
 }
 
 func (s *Store) RemovePlaylistItems(ctx context.Context, ownerID, id string, tracks []track.Track) error {
-	if !isUUID(id) {
-		return port.ErrPlaylistNotFound
-	}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		if _, err := q.LockPlaylist(ctx, query.LockPlaylistParams{ID: id, OwnerID: ownerID}); errors.Is(err, pgx.ErrNoRows) {
@@ -277,18 +253,12 @@ func (s *Store) TrackPlaylists(ctx context.Context, ownerID string, t track.Trac
 	if err != nil {
 		return nil, fmt.Errorf("查询曲目 %s 所在的歌单：%w", t.ID, err)
 	}
-	if ids == nil {
-		ids = []string{}
-	}
 	return ids, nil
 }
 
 func (s *Store) CopyPlaylistItems(ctx context.Context, ownerID, fromID, toID string, tracks []track.Track, limit int) (int, error) {
 	var added int64
 	err := s.owned(ctx, ownerID, fromID)
-	if err == nil && !isUUID(toID) {
-		err = port.ErrPlaylistNotFound
-	}
 	if err == nil {
 		err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 			q := s.q.WithTx(tx)
@@ -321,9 +291,6 @@ func (s *Store) CopyPlaylistItems(ctx context.Context, ownerID, fromID, toID str
 }
 
 func (s *Store) MovePlaylistItems(ctx context.Context, ownerID, id string, tracks []track.Track, before *track.Track) error {
-	if !isUUID(id) {
-		return port.ErrPlaylistNotFound
-	}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		if _, err := q.LockPlaylist(ctx, query.LockPlaylistParams{ID: id, OwnerID: ownerID}); errors.Is(err, pgx.ErrNoRows) {
@@ -361,9 +328,6 @@ func (s *Store) MovePlaylistItems(ctx context.Context, ownerID, id string, track
 }
 
 func (s *Store) SetPlaylistShare(ctx context.Context, ownerID, id, shareID string) error {
-	if !isUUID(id) {
-		return port.ErrPlaylistNotFound
-	}
 	n, err := s.q.SetPlaylistShare(ctx, query.SetPlaylistShareParams{ID: id, OwnerID: ownerID, ShareID: nullable(shareID)})
 	if err == nil && n == 0 {
 		err = port.ErrPlaylistNotFound

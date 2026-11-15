@@ -2,7 +2,7 @@ import type { InlineSaveEvent, InlineSaveState } from './inline-save'
 import { useEffect, useRef, useState } from 'react'
 import { inlineSave } from './inline-save'
 
-const savedNoticeMs = 1500
+const savedNoticeBeforeFadeMs = 1500
 
 // 文本的保存流程：失焦或回车时 submit，Esc 时 revert。onSave 失败时抛出 Error，它的 message 是给用户看的原因。
 // submit 返回提交之后输入框里的值是否已经保存。没有改动也算已经保存，正在保存或者保存失败时返回 false。
@@ -22,7 +22,7 @@ export function useInlineSave(value: string, onSave: (value: string) => Promise<
   useEffect(() => {
     if (!savedNotice)
       return
-    const timer = setTimeout(setSavedNotice, savedNoticeMs, 0)
+    const timer = setTimeout(setSavedNotice, savedNoticeBeforeFadeMs, 0)
     return () => clearTimeout(timer)
   }, [savedNotice])
 

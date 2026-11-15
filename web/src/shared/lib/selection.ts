@@ -1,6 +1,6 @@
 export interface Selection {
   keys: ReadonlySet<string>
-  // Shift 点击从这里选起：最后一次逐首切换的那首。
+  // Shift 点击从这里选起：最后一次逐项切换的那一项。
   anchor: string | null
 }
 
@@ -27,7 +27,7 @@ export function selectAll(order: readonly string[]): Selection {
   return { keys: new Set(order), anchor: null }
 }
 
-// 列表重新读取之后，从选择里去掉已经不在列表里的歌。没有变化时返回原对象。
+// 列表重新读取之后，从选择里去掉已经不在列表里的项。没有变化时返回原对象。
 export function retain(selection: Selection, order: readonly string[]): Selection {
   const present = new Set(order)
   const keys = [...selection.keys].filter(key => present.has(key))

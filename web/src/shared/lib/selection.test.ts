@@ -1,6 +1,6 @@
-import type { Selection } from './track-selection'
+import type { Selection } from './selection'
 import { describe, expect, it } from 'vitest'
-import { noSelection, retain, selectAll, selectRange, toggle } from './track-selection'
+import { noSelection, retain, selectAll, selectRange, toggle } from './selection'
 
 const order = ['a', 'b', 'c', 'd', 'e']
 
@@ -8,7 +8,7 @@ function keys(selection: Selection): string[] {
   return [...selection.keys].sort()
 }
 
-describe('track-selection', () => {
+describe('selection', () => {
   it('单击和 ⌘ 点击逐首切换，并把这首作为锚点', () => {
     const one = toggle(noSelection, 'b')
     expect(keys(one)).toEqual(['b'])

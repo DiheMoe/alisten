@@ -18,7 +18,7 @@
 .button-destructive { background: var(--color-destructive); color: var(--color-destructive-foreground); }
 .search-field { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; border: 1px solid var(--color-input-border); border-radius: 8px; padding: 0 12px; background: var(--color-input); color: var(--color-foreground-subtle); }
 .search-field:focus-within { border-color: var(--color-input-border-focused); background: var(--color-input-focused); }
-.search-field input { border: 0 !important; background: transparent !important; padding: 11px 0 !important; }
+.search-field input { border: 0; background: transparent; padding: 11px 0; }
 .form-stack { display: flex; flex-direction: column; gap: 16px; }
 .form-stack label { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-ui-base); }
 .checkbox-label, .form-stack .checkbox-label { display: flex; flex-direction: row; align-items: center; gap: 8px; }

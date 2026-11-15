@@ -1,8 +1,7 @@
 .search-box { position: relative; flex: 1; min-width: 0; }
-.header-search { max-width: 620px; }
 .search-box-field { --color-input: var(--color-search-box); --color-input-focused: var(--color-search-box); display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 16px; border: 1px solid var(--color-input-border); border-radius: 24px; background: var(--color-input); color: var(--color-foreground-subtle); }
 .search-box-field.search-open, .search-box-field:focus-within { border-color: var(--color-input-border-focused); background: var(--color-input-focused); }
-.search-box-field input { border: 0 !important; padding: 10px 0 !important; background: transparent !important; }
+.search-box-field input { border: 0; padding: 10px 0; background: transparent; }
 .search-box-field .icon-button { width: 24px; height: 28px; }
 .search-inline .search-box-field { --color-input: var(--color-surface); --color-input-focused: var(--color-surface); height: 42px; gap: 10px; border-radius: 999px; }
 .search-inline .search-box-field > svg { width: 18px; }

@@ -1,5 +1,6 @@
-import { useEffect, useId, useState } from 'react'
+import { useId } from 'react'
 import { api } from '@/core/api'
+import { useResource } from '@/shared/lib/use-resource'
 import { useSettingSave } from '@/shared/lib/use-setting-save'
 import { SaveStatus, Skeleton, Switch } from '@/shared/ui'
 import { adminStore } from './admin-store'
@@ -34,36 +35,12 @@ function OpenRegistrationRow({ open, onSaved }: { open: boolean, onSaved: (open:
 }
 
 function OpenRegistration() {
-  // undefined 表示正在获取，Error 表示获取失败。
-  const [open, setOpen] = useState<boolean | Error>()
-  const [attempt, setAttempt] = useState(0)
-  useEffect(() => {
-    let active = true
-    adminStore.attempt(() => api.getSite()).then((site) => {
-      if (active)
-        setOpen(site.registrationOpen)
-    }, (error: Error) => {
-      if (active)
-        setOpen(error)
-    })
-    return () => {
-      active = false
-    }
-  }, [attempt])
-  if (open instanceof Error) {
-    return (
-      <LoadFailed
-        message={`暂时无法获取注册状态。${open.message}`}
-        onRetry={() => {
-          setOpen(undefined)
-          setAttempt(n => n + 1)
-        }}
-      />
-    )
-  }
-  if (open === undefined)
+  const open = useResource(() => adminStore.attempt(() => api.getSite()).then(site => site.registrationOpen))
+  if (open.state.status === 'failed')
+    return <LoadFailed message={`暂时无法获取注册状态。${open.state.error}`} onRetry={open.reload} />
+  if (open.state.status === 'loading')
     return <Skeleton rows={1} />
-  return <OpenRegistrationRow open={open} onSaved={setOpen} />
+  return <OpenRegistrationRow open={open.state.value} onSaved={open.set} />
 }
 
 export function Registration() {

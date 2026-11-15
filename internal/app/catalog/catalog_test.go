@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"sync"
@@ -32,48 +33,49 @@ type history struct {
 	seeds, queued, excluded []track.Track
 }
 
-func (h history) AutoDJSeeds(_ context.Context, _ string, includeQueue bool) ([]track.Track, error) {
+func (h history) AutoDJSeeds(_ context.Context, _ string, includeQueue bool, _ port.AutoDJWindow) ([]track.Track, error) {
 	if includeQueue {
 		return append(slices.Clone(h.seeds), h.queued...), nil
 	}
 	return h.seeds, nil
 }
 
-func (h history) AutoDJExclusions(context.Context, string) ([]track.Track, error) {
+func (h history) AutoDJExclusions(context.Context, string, port.AutoDJWindow) ([]track.Track, error) {
 	return h.excluded, nil
 }
 
 type quota struct {
 	mu        sync.Mutex
+	room      string
 	waits     []time.Duration
 	calls     int
 	pickWait  time.Duration
 	pickCalls int
 }
 
-func (q *quota) TakeSearch(_ context.Context, _ string, burst int, refill time.Duration) (time.Duration, error) {
+func (q *quota) Take(_ context.Context, key string, burst int, refill time.Duration) (time.Duration, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if burst != 10 || refill != time.Minute {
-		return 0, errors.New("临时房间的额度是突发 10 次，之后每分钟恢复 1 次")
+	switch key {
+	case "room:" + q.room + ":search":
+		if burst != 10 || refill != time.Minute {
+			return 0, errors.New("临时房间的额度是突发 10 次，之后每分钟恢复 1 次")
+		}
+		q.calls++
+		if len(q.waits) == 0 {
+			return 0, nil
+		}
+		wait := q.waits[0]
+		q.waits = q.waits[1:]
+		return wait, nil
+	case "room:" + q.room + ":pick":
+		if burst != 5 || refill != time.Minute {
+			return 0, errors.New("临时房间的点歌额度与房间的点歌限流相同：突发 5 次，之后每分钟恢复 1 次")
+		}
+		q.pickCalls++
+		return q.pickWait, nil
 	}
-	q.calls++
-	if len(q.waits) == 0 {
-		return 0, nil
-	}
-	wait := q.waits[0]
-	q.waits = q.waits[1:]
-	return wait, nil
-}
-
-func (q *quota) TakePick(_ context.Context, _ string, burst int, refill time.Duration) (time.Duration, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	if burst != 5 || refill != time.Minute {
-		return 0, errors.New("临时房间的点歌额度与房间的点歌限流相同：突发 5 次，之后每分钟恢复 1 次")
-	}
-	q.pickCalls++
-	return q.pickWait, nil
+	return 0, fmt.Errorf("取了 %q 的额度，期望是房间 %s 的搜索额度或点歌额度", key, q.room)
 }
 
 type fixture struct {
@@ -102,6 +104,7 @@ func newFixture(t *testing.T, h history) *fixture {
 	if f.persistent, err = rooms.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "常驻"}); err != nil {
 		t.Fatal(err)
 	}
+	f.quota.room = f.ephemeral
 	f.svc = New(f.netease, f.qq, f.bilibili, f.bilibili, f.tracks, h, rooms, f.quota)
 	return f
 }

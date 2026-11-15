@@ -177,18 +177,23 @@
       "required": ["member", "username"]
     },
     "PlaylistName": {"type": "string", "description": "歌单名：去掉首尾空白后 1 到 50 个字符", "maxLength": 200},
+    "MyPlaylistID": {
+      "type": "string",
+      "description": "歌单 ID：UUID，不区分大小写",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
     "MyPlaylist": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string"},
+        "id": {"$ref": "#/$defs/MyPlaylistID"},
         "name": {"type": "string"},
         "favorites": {"type": "boolean", "description": "是否是“我喜欢”"},
         "trackCount": {"type": "integer"},
         "createdAtMs": {"type": "integer"},
         "updatedAtMs": {"type": "integer"},
         "coverUrl": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "歌单里排在最前、有封面的那首歌的封面。歌单里没有带封面的歌时为 null"},
-        "shareId": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "分享链接 /s/<shareId> 中的 ID，没有分享时为 null"}
+        "shareId": {"anyOf": [{"$ref": "#/$defs/ShareID"}, {"type": "null"}], "description": "分享链接 /s/<shareId> 中的 ID，没有分享时为 null"}
       },
       "required": ["id", "name", "favorites", "trackCount", "createdAtMs", "updatedAtMs", "coverUrl", "shareId"]
     },
@@ -253,11 +258,21 @@
       },
       "required": ["entry", "mediaUrl", "startedAtMs", "durationMs", "gain", "lyric"]
     },
+    "RoomID": {
+      "type": "string",
+      "description": "房间 ID：UUID，不区分大小写",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "RoomRef": {
+      "type": "string",
+      "description": "房间 ID 或别名：房间 ID 是 UUID，不区分大小写。别名是 1 到 32 个小写字母、数字或连字符",
+      "pattern": "^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[a-z0-9-]{1,32})$"
+    },
     "RoomInfo": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string"},
+        "id": {"$ref": "#/$defs/RoomID"},
         "name": {"type": "string"},
         "description": {"type": "string"},
         "kind": {"$ref": "#/$defs/RoomKind"}
@@ -283,7 +298,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string"},
+        "id": {"$ref": "#/$defs/RoomID"},
         "slug": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "没有别名时为 null"},
         "name": {"type": "string"},
         "description": {"type": "string"},
@@ -380,6 +395,11 @@
       },
       "required": ["track", "meta", "heardAtMs"]
     },
+    "ShareID": {
+      "type": "string",
+      "description": "分享 ID：22 个 base64url 字符",
+      "pattern": "^[A-Za-z0-9_-]{22}$"
+    },
     "SharedPlaylist": {
       "type": "object",
       "additionalProperties": false,
@@ -417,7 +437,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "roomId": {"type": "string"},
+            "roomId": {"$ref": "#/$defs/RoomID"},
             "ticket": {"type": "string"},
             "protocolVersion": {"type": "string"}
           },
@@ -908,7 +928,7 @@
       "description": "我的歌单：“我喜欢”在最前，其余按创建的先后排列。只有已注册的账号能使用歌单",
       "method": "GET",
       "path": "/api/me/playlists",
-      "auth": "member",
+      "auth": "account",
       "response": {
         "type": "object",
         "additionalProperties": false,
@@ -923,7 +943,7 @@
       "description": "新建歌单：最多 50 个（含“我喜欢”），可以重名",
       "method": "POST",
       "path": "/api/me/playlists",
-      "auth": "member",
+      "auth": "account",
       "status": 201,
       "request": {
         "type": "object",
@@ -940,7 +960,8 @@
       "description": "重命名歌单。“我喜欢”不能重命名",
       "method": "PATCH",
       "path": "/api/me/playlists/{id}",
-      "auth": "member",
+      "params": {"id": {"$ref": "#/$defs/MyPlaylistID"}},
+      "auth": "account",
       "status": 204,
       "request": {
         "type": "object",
@@ -956,7 +977,8 @@
       "description": "删除歌单。“我喜欢”不能删除",
       "method": "DELETE",
       "path": "/api/me/playlists/{id}",
-      "auth": "member",
+      "params": {"id": {"$ref": "#/$defs/MyPlaylistID"}},
+      "auth": "account",
       "status": 204
     },
     {
@@ -964,7 +986,8 @@
       "description": "歌单里的歌，按歌单里的顺序排列。新加入的歌排在最前，moveMyPlaylistItems 可以调整顺序",
       "method": "GET",
       "path": "/api/me/playlists/{id}/items",
-      "auth": "member",
+      "params": {"id": {"$ref": "#/$defs/MyPlaylistID"}},
+      "auth": "account",
       "response": {
         "type": "object",
         "additionalProperties": false,
@@ -979,7 +1002,8 @@
       "description": "把一首歌加入歌单，元数据由服务端查询。链接曲目要先准备好。歌已经在歌单里时，歌单不变。一个歌单最多 1000 首",
       "method": "POST",
       "path": "/api/me/playlists/{id}/items",
-      "auth": "member",
+      "params": {"id": {"$ref": "#/$defs/MyPlaylistID"}},
+      "auth": "account",
       "status": 201,
       "request": {
         "type": "object",
@@ -1003,7 +1027,8 @@
       "description": "把若干首歌移出歌单，一次 1 到 1000 首。不在歌单里的歌忽略",
       "method": "POST",
       "path": "/api/me/playlists/{id}/removals",
-      "auth": "member",
+      "params": {"id": {"$ref": "#/$defs/MyPlaylistID"}},
+      "auth": "account",
       "status": 204,
       "request": {
         "type": "object",
@@ -1019,12 +1044,13 @@
       "description": "把另一个歌单里的若干首歌连同元数据复制到这个歌单，一次 1 到 1000 首。不在来源歌单里的歌和已经在这个歌单里的歌跳过。新复制的歌排在最前，彼此之间保持 tracks 里的先后。装不下时整批拒绝。返回实际复制的数量",
       "method": "POST",
       "path": "/api/me/playlists/{id}/copies",
-      "auth": "member",
+      "params": {"id": {"$ref": "#/$defs/MyPlaylistID"}},
+      "auth": "account",
       "request": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "from": {"type": "string", "description": "来源歌单的 ID"},
+          "from": {"$ref": "#/$defs/MyPlaylistID", "description": "来源歌单的 ID"},
           "tracks": {"type": "array", "items": {"$ref": "#/$defs/Track"}, "minItems": 1, "maxItems": 1000}
         },
         "required": ["from", "tracks"]
@@ -1043,7 +1069,8 @@
       "description": "调整歌单里的顺序：把 tracks 里在歌单中的歌按给出的先后放到 before 之前，不给 before 就放到最后。一次 1 到 1000 首。before 不能在 tracks 里，也必须还在歌单里",
       "method": "POST",
       "path": "/api/me/playlists/{id}/moves",
-      "auth": "member",
+      "params": {"id": {"$ref": "#/$defs/MyPlaylistID"}},
+      "auth": "account",
       "status": 204,
       "request": {
         "type": "object",
@@ -1060,7 +1087,7 @@
       "description": "这首歌在我的哪些歌单里",
       "method": "POST",
       "path": "/api/me/playlist-memberships",
-      "auth": "member",
+      "auth": "account",
       "request": {
         "type": "object",
         "additionalProperties": false,
@@ -1073,7 +1100,7 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "playlistIds": {"type": "array", "items": {"type": "string"}}
+          "playlistIds": {"type": "array", "items": {"$ref": "#/$defs/MyPlaylistID"}}
         },
         "required": ["playlistIds"]
       }
@@ -1083,7 +1110,7 @@
       "description": "把导出的歌单文件里的歌导入成一个新歌单，歌单名不合法时用“导入的歌单”。一次最多 1000 首，重复的歌只留第一次出现的位置。曲目表里已有的歌用服务端的元数据，没有的用文件里的元数据，其中标题为空的跳过。新歌单受“最多 50 个”的限制。返回实际导入的数量",
       "method": "POST",
       "path": "/api/me/playlists/imports",
-      "auth": "member",
+      "auth": "account",
       "status": 201,
       "request": {
         "type": "object",
@@ -1109,7 +1136,7 @@
       "description": "识别网易云和 QQ 音乐的歌单链接，短链接会跟随跳转",
       "method": "POST",
       "path": "/api/me/playlist-links",
-      "auth": "member",
+      "auth": "account",
       "request": {
         "type": "object",
         "additionalProperties": false,
@@ -1133,7 +1160,7 @@
       "description": "把平台歌单导入成一个新歌单，元数据取自平台。只收前 1000 首，重复的歌只留第一次出现的位置。歌单名不合法时返回 INVALID_ARGUMENT，不会像 importMyPlaylist 那样改用“导入的歌单”。新歌单受“最多 50 个”的限制。返回实际导入的数量。只支持网易云和 QQ 音乐，其他音源返回 INVALID_ARGUMENT",
       "method": "POST",
       "path": "/api/me/playlists/platform-imports",
-      "auth": "member",
+      "auth": "account",
       "status": 201,
       "request": {
         "type": "object",
@@ -1175,6 +1202,7 @@
       "description": "按 UUID 或别名查找房间",
       "method": "GET",
       "path": "/api/rooms/{ref}",
+      "params": {"ref": {"$ref": "#/$defs/RoomRef"}},
       "auth": "none",
       "response": {"$ref": "#/$defs/RoomListing"}
     },
@@ -1200,7 +1228,7 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "id": {"type": "string"}
+          "id": {"$ref": "#/$defs/RoomID"}
         },
         "required": ["id"]
       }
@@ -1210,6 +1238,7 @@
       "description": "换取进房票据。没有密码的房间可以不填 password",
       "method": "POST",
       "path": "/api/rooms/{id}/tickets",
+      "params": {"id": {"$ref": "#/$defs/RoomID"}},
       "auth": "member",
       "status": 201,
       "request": {
@@ -1283,7 +1312,7 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "id": {"type": "string"}
+          "id": {"$ref": "#/$defs/RoomID"}
         },
         "required": ["id"]
       }
@@ -1293,6 +1322,7 @@
       "description": "修改常驻房间。slug 为空字符串表示取消别名，password 为空字符串表示取消密码",
       "method": "PATCH",
       "path": "/api/admin/rooms/{id}",
+      "params": {"id": {"$ref": "#/$defs/RoomID"}},
       "auth": "admin",
       "status": 204,
       "request": {
@@ -1311,6 +1341,7 @@
       "description": "删除常驻房间",
       "method": "DELETE",
       "path": "/api/admin/rooms/{id}",
+      "params": {"id": {"$ref": "#/$defs/RoomID"}},
       "auth": "admin",
       "status": 204
     },
@@ -1319,6 +1350,7 @@
       "description": "常驻房间是否已经生成 API Key 及生成的时间，不返回 Key",
       "method": "GET",
       "path": "/api/admin/rooms/{id}/api-key",
+      "params": {"id": {"$ref": "#/$defs/RoomID"}},
       "auth": "admin",
       "response": {
         "type": "object",
@@ -1335,6 +1367,7 @@
       "description": "生成或重置常驻房间的 API Key：旧 Key 立即失效，新 Key 只在这次响应中返回",
       "method": "POST",
       "path": "/api/admin/rooms/{id}/api-key",
+      "params": {"id": {"$ref": "#/$defs/RoomID"}},
       "auth": "admin",
       "status": 201,
       "location": true,
@@ -1658,6 +1691,7 @@
       "description": "按用户名查找账号",
       "method": "GET",
       "path": "/api/admin/accounts/{username}",
+      "params": {"username": {"$ref": "#/$defs/Username"}},
       "auth": "admin",
       "response": {"$ref": "#/$defs/AdminAccount"}
     },
@@ -1666,6 +1700,7 @@
       "description": "重置账号的密码，生成随机的新密码，新密码只在这次响应中返回。账号在所有设备上的成员 token 随即失效",
       "method": "POST",
       "path": "/api/admin/accounts/{username}/password",
+      "params": {"username": {"$ref": "#/$defs/Username"}},
       "auth": "admin",
       "request": {
         "type": "object",
@@ -1746,13 +1781,14 @@
       "description": "开启分享或重新生成分享链接。每次都生成新的 shareId，之前的链接随即失效。“我喜欢”也能分享",
       "method": "POST",
       "path": "/api/me/playlists/{id}/share",
-      "auth": "member",
+      "params": {"id": {"$ref": "#/$defs/MyPlaylistID"}},
+      "auth": "account",
       "request": {"type": "object", "additionalProperties": false, "properties": {}},
       "response": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "shareId": {"type": "string"}
+          "shareId": {"$ref": "#/$defs/ShareID"}
         },
         "required": ["shareId"]
       }
@@ -1762,7 +1798,8 @@
       "description": "停止分享，分享链接随即失效。没有分享时也算成功",
       "method": "DELETE",
       "path": "/api/me/playlists/{id}/share",
-      "auth": "member",
+      "params": {"id": {"$ref": "#/$defs/MyPlaylistID"}},
+      "auth": "account",
       "status": 204
     },
     {
@@ -1770,6 +1807,7 @@
       "description": "读取分享的歌单，不需要身份。不返回所有者的成员 ID 和用户名。停止分享、重新生成链接或删除歌单之后，用原来的 shareId 读取返回 NOT_FOUND",
       "method": "GET",
       "path": "/api/shared-playlists/{shareId}",
+      "params": {"shareId": {"$ref": "#/$defs/ShareID"}},
       "auth": "none",
       "response": {"$ref": "#/$defs/SharedPlaylist"}
     },
@@ -1778,7 +1816,8 @@
       "description": "把分享的歌单复制成自己的新歌单，带上全部曲目和顺序。新歌单受“最多 50 个”的限制。分享已失效时返回 NOT_FOUND",
       "method": "POST",
       "path": "/api/shared-playlists/{shareId}/copies",
-      "auth": "member",
+      "params": {"shareId": {"$ref": "#/$defs/ShareID"}},
+      "auth": "account",
       "status": 201,
       "request": {
         "type": "object",
@@ -1795,7 +1834,7 @@
       "description": "已注册的账号生成配对码，新设备兑换之后就登录了这个账号。配对码 5 分钟内有效，只能兑换一次，发出请求的成员 token 失效时随之作废。游客调用时返回 FORBIDDEN",
       "method": "POST",
       "path": "/api/account/pairing-codes",
-      "auth": "member",
+      "auth": "account",
       "status": 201,
       "request": {
         "type": "object",

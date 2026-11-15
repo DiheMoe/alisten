@@ -3,9 +3,10 @@ import type { MediaSort, StoredMedia } from '@/core/realtime'
 import type { SelectOption } from '@/shared/ui'
 import { Database, Search, SearchX } from 'lucide-react'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { rowAfterRemoval } from '@/shared/lib/removal-focus'
 import { useStore } from '@/shared/lib/use-store'
-import { ConfirmDialog, EmptyState, notificationStore, Pagination, Select, Skeleton } from '@/shared/ui'
+import { ConfirmDialog, EmptyState, Pagination, Select, Skeleton } from '@/shared/ui'
 import { fallbackPage, MediaStore } from './media-store'
 import { MediaTable } from './media-table'
 import { deleteConfirmText, formatSize, removalMessage, searchDraft } from './media-view'
@@ -16,7 +17,7 @@ const searchDelayMs = 300
 // 与接口对 q 的长度限制一致。
 const searchMaxLength = 100
 
-const sortOptions: (SelectOption & { value: MediaSort })[] = [
+const sortOptions: SelectOption<MediaSort>[] = [
   { value: 'stored', label: '最近存储' },
   { value: 'idle', label: '最久未播放' },
   { value: 'size', label: '占用最大' },
@@ -128,7 +129,7 @@ export function MediaPage({ q, sort, page, onNavigate }: MediaQuery & { onNaviga
       )}
       <div className="media-toolbar" data-hidden={chosen.length > 0 || undefined}>
         <MediaSearch q={q} onSearch={next => onNavigate({ q: next, sort, page: 1 })} />
-        <Select className="media-sort" ariaLabel="排序" value={sort} options={sortOptions} onChange={next => onNavigate({ q, sort: next as MediaSort, page: 1 })} />
+        <Select className="media-sort" ariaLabel="排序" value={sort} options={sortOptions} onChange={next => onNavigate({ q, sort: next, page: 1 })} />
         {list && list.total > 0 && <span className="media-total">{`共 ${list.total.toLocaleString('zh-CN')} 首 · 占用 ${formatSize(list.totalBytes)}`}</span>}
       </div>
       {content()}

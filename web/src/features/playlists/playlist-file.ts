@@ -1,9 +1,10 @@
 import type { ImportedTrack, MyPlaylistItem, Source } from '@/core/realtime'
+import { SourceValues } from '@/core/realtime'
 
 const format = 'alisten.playlist'
 export const importLimit = 1000
 const maxDurationMs = 86_400_000
-const sources: ReadonlySet<string> = new Set<Source>(['netease', 'qq', 'bilibili', 'link'])
+const sources: ReadonlySet<string> = new Set(SourceValues)
 const notPlaylistFile = '这个文件不是导出的歌单。'
 
 export interface PlaylistFile {

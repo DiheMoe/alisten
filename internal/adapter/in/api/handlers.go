@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"regexp"
 
 	"github.com/dihemoe/alisten/internal/app/admin"
 	"github.com/dihemoe/alisten/internal/app/identity"
@@ -13,114 +12,79 @@ import (
 	"github.com/dihemoe/alisten/protocol"
 )
 
-// 路径中的房间 ID、别名和用户名不经过协议解码。格式不正确的房间 ID、别名或用户名一定不存在，其中含有 U+0000 等字符的还会让
-// PostgreSQL 报错，所以直接按不存在处理。
-var (
-	uuidPattern     = regexp.MustCompile(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-	slugPattern     = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
-	usernamePattern = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
-)
-
-func (s *server) createMember(ctx context.Context, c call) (any, error) {
-	if _, err := protocol.DecodeCreateMemberRequest(c.body); err != nil {
-		return nil, err
-	}
+func (s *server) createMember(ctx context.Context, c call) (protocol.CreateMemberResponse, error) {
 	session, err := s.Identity.CreateMember(ctx, c.clientIP)
 	if err != nil {
-		return nil, err
+		return protocol.CreateMemberResponse{}, err
 	}
 	return protocol.CreateMemberResponse{MemberToken: session.MemberToken, Member: memberDTO(session.Member)}, nil
 }
 
-func (s *server) getMe(ctx context.Context, c call) (any, error) {
-	resp := protocol.GetMeResponse{Member: memberDTO(c.member)}
-	account, registered, err := s.Accounts.Account(ctx, c.member.ID)
+func (s *server) getMe(ctx context.Context, c call) (protocol.GetMeResponse, error) {
+	resp := protocol.GetMeResponse{Member: memberDTO(c.caller.Member)}
+	account, registered, err := s.Accounts.Account(ctx, c.caller.Member.ID)
 	if err != nil {
-		return nil, err
+		return protocol.GetMeResponse{}, err
 	}
 	if registered {
 		dto := accountDTO(account)
 		resp.Account = &dto
 	}
-	if resp.RecordListens, err = s.Listens.Recording(ctx, c.member.ID); err != nil {
-		return nil, err
+	if resp.RecordListens, err = s.Listens.Recording(ctx, c.caller.Member.ID); err != nil {
+		return protocol.GetMeResponse{}, err
 	}
 	return resp, nil
 }
 
-func (s *server) updateMe(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeUpdateMeRequest(c.body)
+func (s *server) updateMe(ctx context.Context, c call, req protocol.UpdateMeRequest) (protocol.UpdateMeResponse, error) {
+	m, err := s.Identity.UpdateProfile(ctx, c.caller.Member.ID, identity.Profile{Name: req.Name, Email: req.Email})
 	if err != nil {
-		return nil, err
-	}
-	m, err := s.Identity.UpdateProfile(ctx, c.member.ID, identity.Profile{Name: req.Name, Email: req.Email})
-	if err != nil {
-		return nil, err
+		return protocol.UpdateMeResponse{}, err
 	}
 	return protocol.UpdateMeResponse{Member: memberDTO(m)}, nil
 }
 
-func (s *server) listRooms(ctx context.Context, _ call) (any, error) {
+func (s *server) listRooms(ctx context.Context, _ call) (protocol.ListRoomsResponse, error) {
 	rooms, err := s.Lobby.ListRooms(ctx)
 	if err != nil {
-		return nil, err
+		return protocol.ListRoomsResponse{}, err
 	}
 	return protocol.ListRoomsResponse{Items: listings(rooms)}, nil
 }
 
-func (s *server) getRoom(ctx context.Context, c call) (any, error) {
-	ref := c.r.PathValue("ref")
-	if !uuidPattern.MatchString(ref) && !slugPattern.MatchString(ref) {
-		return nil, port.ErrRoomNotFound
-	}
-	r, err := s.Lobby.FindRoom(ctx, ref)
+func (s *server) getRoom(ctx context.Context, c call) (protocol.RoomListing, error) {
+	r, err := s.Lobby.FindRoom(ctx, c.r.PathValue("ref"))
 	if err != nil {
-		return nil, err
+		return protocol.RoomListing{}, err
 	}
 	return listing(r), nil
 }
 
-func (s *server) createRoom(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeCreateRoomRequest(c.body)
-	if err != nil {
-		return nil, err
-	}
+func (s *server) createRoom(ctx context.Context, c call, req protocol.CreateRoomRequest) (protocol.CreateRoomResponse, string, error) {
 	id, err := s.Lobby.CreateRoom(ctx, c.clientIP, lobby.NewRoom{Name: req.Name, Description: req.Description, Password: deref(req.Password)})
 	if err != nil {
-		return nil, err
+		return protocol.CreateRoomResponse{}, "", err
 	}
-	return located{location: "/api/rooms/" + id, body: protocol.CreateRoomResponse{ID: id}}, nil
+	return protocol.CreateRoomResponse{ID: id}, "/api/rooms/" + id, nil
 }
 
-func (s *server) createTicket(ctx context.Context, c call) (any, error) {
-	id := c.r.PathValue("id")
-	if !uuidPattern.MatchString(id) {
-		return nil, port.ErrRoomNotFound
-	}
-	req, err := protocol.DecodeCreateTicketRequest(c.body)
+func (s *server) createTicket(ctx context.Context, c call, req protocol.CreateTicketRequest) (protocol.CreateTicketResponse, error) {
+	ticket, err := s.Identity.IssueTicket(ctx, c.caller, c.clientIP, c.r.PathValue("id"), deref(req.Password))
 	if err != nil {
-		return nil, err
-	}
-	ticket, err := s.Identity.IssueTicket(ctx, c.member.ID, bearer(c.r), c.clientIP, id, deref(req.Password))
-	if err != nil {
-		return nil, err
+		return protocol.CreateTicketResponse{}, err
 	}
 	return protocol.CreateTicketResponse{Ticket: ticket}, nil
 }
 
-func (s *server) adminListRooms(ctx context.Context, _ call) (any, error) {
+func (s *server) adminListRooms(ctx context.Context, _ call) (protocol.AdminListRoomsResponse, error) {
 	rooms, err := s.Admin.ListRooms(ctx)
 	if err != nil {
-		return nil, err
+		return protocol.AdminListRoomsResponse{}, err
 	}
 	return protocol.AdminListRoomsResponse{Items: listings(rooms)}, nil
 }
 
-func (s *server) adminCreateRoom(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeAdminCreateRoomRequest(c.body)
-	if err != nil {
-		return nil, err
-	}
+func (s *server) adminCreateRoom(ctx context.Context, _ call, req protocol.AdminCreateRoomRequest) (protocol.AdminCreateRoomResponse, string, error) {
 	id, err := s.Admin.CreateRoom(ctx, admin.NewRoom{
 		Name:        req.Name,
 		Description: req.Description,
@@ -128,39 +92,39 @@ func (s *server) adminCreateRoom(ctx context.Context, c call) (any, error) {
 		Password:    deref(req.Password),
 	})
 	if err != nil {
-		return nil, err
+		return protocol.AdminCreateRoomResponse{}, "", err
 	}
-	return located{location: "/api/rooms/" + id, body: protocol.AdminCreateRoomResponse{ID: id}}, nil
+	return protocol.AdminCreateRoomResponse{ID: id}, "/api/rooms/" + id, nil
 }
 
-func (s *server) adminGetNeteaseCredential(ctx context.Context, _ call) (any, error) {
+func (s *server) adminGetNeteaseCredential(ctx context.Context, _ call) (protocol.AdminGetNeteaseCredentialResponse, error) {
 	status, err := s.Admin.NeteaseCredentialStatus(ctx)
 	if err != nil {
-		return nil, err
+		return protocol.AdminGetNeteaseCredentialResponse{}, err
 	}
 	return protocol.AdminGetNeteaseCredentialResponse{Set: status.Set, Account: sourceAccountDTO(status.Account)}, nil
 }
 
-func (s *server) adminGetQQCredential(ctx context.Context, _ call) (any, error) {
+func (s *server) adminGetQQCredential(ctx context.Context, _ call) (protocol.AdminGetQQCredentialResponse, error) {
 	status, err := s.Admin.QQCredentialStatus(ctx)
 	if err != nil {
-		return nil, err
+		return protocol.AdminGetQQCredentialResponse{}, err
 	}
 	return protocol.AdminGetQQCredentialResponse{Set: status.Set, Account: sourceAccountDTO(status.Account)}, nil
 }
 
-func (s *server) adminGetBilibiliCredential(ctx context.Context, _ call) (any, error) {
+func (s *server) adminGetBilibiliCredential(ctx context.Context, _ call) (protocol.AdminGetBilibiliCredentialResponse, error) {
 	status, err := s.Admin.BilibiliCredentialStatus(ctx)
 	if err != nil {
-		return nil, err
+		return protocol.AdminGetBilibiliCredentialResponse{}, err
 	}
 	return protocol.AdminGetBilibiliCredentialResponse{Set: status.Set, Account: sourceAccountDTO(status.Account)}, nil
 }
 
-func (s *server) adminGetYoutubeCredential(ctx context.Context, _ call) (any, error) {
+func (s *server) adminGetYoutubeCredential(ctx context.Context, _ call) (protocol.AdminGetYoutubeCredentialResponse, error) {
 	status, err := s.Admin.YouTubeCookiesStatus(ctx)
 	if err != nil {
-		return nil, err
+		return protocol.AdminGetYoutubeCredentialResponse{}, err
 	}
 	resp := protocol.AdminGetYoutubeCredentialResponse{Set: status.Set}
 	// 零值的 UnixMilli 是负数，协议约定没有填写时为 0。

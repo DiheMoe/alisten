@@ -21,20 +21,15 @@ func (q *Queries) Credential(ctx context.Context, name string) (string, error) {
 	return value, err
 }
 
-const credentialWithUpdatedAt = `-- name: CredentialWithUpdatedAt :one
-SELECT value, updated_at FROM credentials WHERE name = $1
+const credentialUpdatedAt = `-- name: CredentialUpdatedAt :one
+SELECT updated_at FROM credentials WHERE name = $1
 `
 
-type CredentialWithUpdatedAtRow struct {
-	Value     string
-	UpdatedAt time.Time
-}
-
-func (q *Queries) CredentialWithUpdatedAt(ctx context.Context, name string) (CredentialWithUpdatedAtRow, error) {
-	row := q.db.QueryRow(ctx, credentialWithUpdatedAt, name)
-	var i CredentialWithUpdatedAtRow
-	err := row.Scan(&i.Value, &i.UpdatedAt)
-	return i, err
+func (q *Queries) CredentialUpdatedAt(ctx context.Context, name string) (time.Time, error) {
+	row := q.db.QueryRow(ctx, credentialUpdatedAt, name)
+	var updated_at time.Time
+	err := row.Scan(&updated_at)
+	return updated_at, err
 }
 
 const deleteCredential = `-- name: DeleteCredential :exec

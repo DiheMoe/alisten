@@ -96,7 +96,7 @@ func (f githubFixture) authorize(t *testing.T, s Session, intent port.GitHubInte
 func (f githubFixture) flow(t *testing.T, s Session, intent port.GitHubIntent, code string) (GitHubResult, error) {
 	t.Helper()
 	exchange := f.authorize(t, s, intent, "nonce-"+s.MemberToken, code)
-	return f.g.Exchange(t.Context(), s.Member, s.MemberToken, exchange, "nonce-"+s.MemberToken)
+	return f.g.Exchange(t.Context(), callerOf(s), exchange, "nonce-"+s.MemberToken)
 }
 
 func TestGitHubRegistersThenLogsIn(t *testing.T) {
@@ -227,18 +227,18 @@ func TestGitHubExchangeChecksNonceAndMember(t *testing.T) {
 	mallory := registerAccount(t, f.a, f.s, "mallory", "correct horse")
 
 	exchange := f.authorize(t, mallory, port.GitHubBind, "mallory-nonce", "code-42")
-	if _, err := f.g.Exchange(t.Context(), alice.Member, alice.MemberToken, exchange, "alice-nonce"); !errors.Is(err, ErrGitHubLoginExpired) {
+	if _, err := f.g.Exchange(t.Context(), callerOf(alice), exchange, "alice-nonce"); !errors.Is(err, ErrGitHubLoginExpired) {
 		t.Errorf("别的设备兑换 = %v，期望 ErrGitHubLoginExpired", err)
 	}
-	if _, err := f.g.Exchange(t.Context(), mallory.Member, mallory.MemberToken, exchange, "mallory-nonce"); !errors.Is(err, ErrGitHubLoginExpired) {
+	if _, err := f.g.Exchange(t.Context(), callerOf(mallory), exchange, "mallory-nonce"); !errors.Is(err, ErrGitHubLoginExpired) {
 		t.Errorf("兑换失败之后再兑换 = %v，期望兑换码已经作废", err)
 	}
 
 	exchange = f.authorize(t, mallory, port.GitHubBind, "mallory-nonce", "code-42")
-	if _, err := f.g.Exchange(t.Context(), mallory.Member, mallory.MemberToken, exchange, "guessed-nonce"); !errors.Is(err, ErrGitHubLoginExpired) {
+	if _, err := f.g.Exchange(t.Context(), callerOf(mallory), exchange, "guessed-nonce"); !errors.Is(err, ErrGitHubLoginExpired) {
 		t.Errorf("nonce 不对 = %v，期望 ErrGitHubLoginExpired", err)
 	}
-	if _, err := f.g.Exchange(t.Context(), mallory.Member, mallory.MemberToken, "unknown", "mallory-nonce"); !errors.Is(err, ErrGitHubLoginExpired) {
+	if _, err := f.g.Exchange(t.Context(), callerOf(mallory), "unknown", "mallory-nonce"); !errors.Is(err, ErrGitHubLoginExpired) {
 		t.Errorf("不存在的兑换码 = %v，期望 ErrGitHubLoginExpired", err)
 	}
 	if p, _ := f.store.AccountProfile(t.Context(), mallory.Member.ID); p.GitHub {
@@ -247,10 +247,10 @@ func TestGitHubExchangeChecksNonceAndMember(t *testing.T) {
 
 	guest := createMember(t, f.s)
 	exchange = f.authorize(t, guest, port.GitHubLogin, "nonce", "code-42")
-	if _, err := f.a.Register(t.Context(), guest.Member.ID, guest.MemberToken, clientIP, "guest", "correct horse"); err != nil {
+	if _, err := f.a.Register(t.Context(), callerOf(guest), clientIP, "guest", "correct horse"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.g.Exchange(t.Context(), guest.Member, guest.MemberToken, exchange, "nonce"); !errors.Is(err, ErrAlreadyLoggedIn) {
+	if _, err := f.g.Exchange(t.Context(), registeredCallerOf(guest), exchange, "nonce"); !errors.Is(err, ErrAlreadyLoggedIn) {
 		t.Errorf("发起登录之后注册了账号再兑换 = %v，期望 ErrAlreadyLoggedIn", err)
 	}
 }
@@ -353,7 +353,7 @@ func TestGitHubCodesExpire(t *testing.T) {
 			t.Fatalf("9 分钟之后回调 = %v，期望 state 仍然有效", err)
 		}
 		time.Sleep(time.Minute + time.Second)
-		if _, err := f.g.Exchange(t.Context(), guest.Member, guest.MemberToken, exchange, "nonce"); !errors.Is(err, ErrGitHubLoginExpired) {
+		if _, err := f.g.Exchange(t.Context(), callerOf(guest), exchange, "nonce"); !errors.Is(err, ErrGitHubLoginExpired) {
 			t.Errorf("1 分钟之后兑换 = %v，期望 ErrGitHubLoginExpired", err)
 		}
 	})
@@ -394,7 +394,7 @@ func TestGitHubUnbind(t *testing.T) {
 	if _, err := f.flow(t, gh, port.GitHubVerify, "code-42"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "octocat", "correct horse"); err != nil {
+	if _, err := f.a.Register(t.Context(), callerOf(gh), clientIP, "octocat", "correct horse"); err != nil {
 		t.Fatal(err)
 	}
 	f.q.taken = nil
@@ -429,7 +429,7 @@ func TestGitHubCannotBeSwappedWithSessionAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	borrowed := createMember(t, f.s)
-	stolen, _, _, err := f.a.Login(t.Context(), borrowed.Member, borrowed.MemberToken, clientIP, "alice", "correct horse", "")
+	stolen, _, _, err := f.a.Login(t.Context(), callerOf(borrowed), clientIP, "alice", "correct horse", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,7 +439,7 @@ func TestGitHubCannotBeSwappedWithSessionAlone(t *testing.T) {
 	if _, err := f.g.Authorize(t.Context(), bob.Member.ID, clientIP, port.GitHubBind, port.GitHubWeb, "nonce", "guessed horse"); !errors.Is(err, ErrWrongCurrentPassword) {
 		t.Errorf("不知道密码时给没有绑定 GitHub 的账号发起绑定 = %v，期望 ErrWrongCurrentPassword", err)
 	}
-	if err := f.a.ChangePassword(t.Context(), alice.Member.ID, alice.MemberToken, "correct horse", "battery staple"); err != nil {
+	if err := f.a.ChangePassword(t.Context(), callerOf(alice), "correct horse", "battery staple"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.a.ResetPassword(t.Context(), "alice"); err != nil {
@@ -479,7 +479,7 @@ func TestGitHubVerify(t *testing.T) {
 	if _, err := f.flow(t, gh, port.GitHubVerify, "code-7"); !errors.Is(err, ErrGitHubMismatch) {
 		t.Errorf("用别的 GitHub 确认 = %v，期望 ErrGitHubMismatch", err)
 	}
-	if _, err := f.a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "octocat", "correct horse"); !errors.Is(err, ErrGitHubUnverified) {
+	if _, err := f.a.Register(t.Context(), callerOf(gh), clientIP, "octocat", "correct horse"); !errors.Is(err, ErrGitHubUnverified) {
 		t.Errorf("用别的 GitHub 确认之后补设 = %v，期望 ErrGitHubUnverified", err)
 	}
 	result, err := f.flow(t, gh, port.GitHubVerify, "code-42")
@@ -489,7 +489,7 @@ func TestGitHubVerify(t *testing.T) {
 	if _, ok := tokenOwner(t, f.store, gh.MemberToken); !ok {
 		t.Error("确认不更换会话")
 	}
-	if account, err := f.a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "octocat", "correct horse"); err != nil || account != (Account{Username: "octocat", GitHub: true}) {
+	if account, err := f.a.Register(t.Context(), callerOf(gh), clientIP, "octocat", "correct horse"); err != nil || account != (Account{Username: "octocat", GitHub: true}) {
 		t.Errorf("确认之后补设 = %#v, %v", account, err)
 	}
 }
@@ -506,7 +506,7 @@ func TestGitHubVerificationExpires(t *testing.T) {
 			t.Fatal(err)
 		}
 		time.Sleep(10*time.Minute + time.Second)
-		if _, err := f.a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "octocat", "correct horse"); !errors.Is(err, ErrGitHubUnverified) {
+		if _, err := f.a.Register(t.Context(), callerOf(gh), clientIP, "octocat", "correct horse"); !errors.Is(err, ErrGitHubUnverified) {
 			t.Errorf("确认 10 分钟之后补设 = %v，期望 ErrGitHubUnverified", err)
 		}
 	})
@@ -603,7 +603,7 @@ func TestGitHubDisabled(t *testing.T) {
 	if got := f.oauth.calls.Load(); got != calls {
 		t.Error("关闭之后不应请求 GitHub")
 	}
-	if _, err := f.g.Exchange(t.Context(), guest.Member, guest.MemberToken, exchange, "nonce"); !errors.Is(err, ErrGitHubDisabled) {
+	if _, err := f.g.Exchange(t.Context(), callerOf(guest), exchange, "nonce"); !errors.Is(err, ErrGitHubDisabled) {
 		t.Errorf("关闭之后兑换 = %v，期望 ErrGitHubDisabled", err)
 	}
 	if err := f.g.Unbind(t.Context(), alice.Member.ID, "correct horse"); !errors.Is(err, ErrGitHubDisabled) {

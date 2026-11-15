@@ -69,7 +69,8 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 		return public{}, fmt.Errorf("创建 River client：%w", err)
 	}
 	preparer := prepare.New(media.NewTracks(store, objects), queue.New(jobs), logger)
-	music := catalog.New(src.netease, src.qq, src.bilibili, src.bilibiliLinks, store, store, store, redis.NewRoomQuota(rdb))
+	quota := redis.NewQuota(rdb)
+	music := catalog.New(src.netease, src.qq, src.bilibili, src.bilibiliLinks, store, store, store, quota)
 	leases := redis.NewLeases(rdb, instance)
 	cluster := realtime.Cluster{
 		Instance: instance,
@@ -80,15 +81,15 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 	runtimeLogger := base.With("component", "realtime")
 	host, gateway := realtime.New(measure(media.NewSnapshots(store, objects, runtimeLogger), metrics), store, store, store, music, preparer, cluster, runtimeLogger)
 	registerRuntimeMetrics(metrics, host, gateway)
-	rooms := lobby.New(store, leases, redis.NewAccountQuota(rdb))
+	rooms := lobby.New(store, leases, quota)
 	codes := redis.NewCodes(rdb)
-	accounts := identity.NewAccounts(store, store, redis.NewAccountQuota(rdb), codes, codes, redis.NewDevices(rdb), gateway)
+	accounts := identity.NewAccounts(store, store, quota, codes, codes, redis.NewDevices(rdb), gateway)
 	// 每个请求的期限由 GitHub 适配器设置。
 	oauth := github.New(&http.Client{Transport: traceHTTP(http.DefaultTransport, tracer)}, cfg.github)
 	services := api.Services{
-		Identity:  identity.New(store, store, store, redis.NewAccountQuota(rdb), gateway),
+		Identity:  identity.New(store, store, store, quota, gateway),
 		Accounts:  accounts,
-		Playlists: playlist.New(store, store, store, music, redis.NewAccountQuota(rdb), shortlink.New(playlistlink.AllowedRedirectHost, playlistlink.Recognized)),
+		Playlists: playlist.New(store, store, music, quota, shortlink.New(traceHTTP(http.DefaultTransport, tracer), playlistlink.AllowedRedirectHost, playlistlink.Recognized)),
 		Lobby:     rooms,
 		Admin:     admin.New(cfg.adminToken, rooms, store, store, store, src.neteaseLogin, src.qqLogin, src.bilibiliLogin, store, gateway),
 		Gateway:   gateway,
@@ -108,7 +109,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 		host:    host,
 		gateway: gateway,
 		jobs:    jobs,
-		watch:   worker.Watch(jobs, gateway.PublishPrepared, observe, logger),
+		watch:   worker.Watch(jobs, prepare.Announce(cluster.Bus, logger), observe, logger),
 	}, nil
 }
 
@@ -124,7 +125,7 @@ func publicHandler(next http.Handler, tracing bool, tracer trace.TracerProvider,
 	return otelhttp.NewHandler(next, "alisten",
 		otelhttp.WithTracerProvider(tracer),
 		otelhttp.WithPropagators(propagation.NewCompositeTextMapPropagator()),
-		otelhttp.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/ws" && r.URL.Path != "/api/room/events" }),
+		otelhttp.WithFilter(func(r *http.Request) bool { return r.URL.Path != api.WebSocketPath && r.URL.Path != api.RoomEventsPath }),
 	)
 }
 

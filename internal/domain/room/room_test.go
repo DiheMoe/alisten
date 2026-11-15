@@ -36,10 +36,10 @@ func TestDeleteEndsThePlayingSong(t *testing.T) {
 		kinds = append(kinds, fmt.Sprintf("%T", e))
 	}
 	// Close 会删除房间，播放记录必须先写入。
-	if want := []string{"room.Persist", "room.RecordPlay", "room.Emit", "room.Close", "room.Reply"}; !slices.Equal(kinds, want) {
-		t.Fatalf("删除时应依次落盘、记录播放、广播、关闭、回复：%v", kinds)
+	if want := []string{"room.Persist", "room.Emit", "room.Close", "room.Reply"}; !slices.Equal(kinds, want) {
+		t.Fatalf("删除时应依次落盘并记录播放、广播、关闭、回复：%v", kinds)
 	}
-	plays := find[RecordPlay](effects)
+	plays := recorded(effects)
 	if plays[0].Entry.Track != netease("a") || !plays[0].StartedAt.Equal(started) || !plays[0].EndedAt.Equal(t0.Add(time.Minute)) {
 		t.Fatalf("删除房间时应记下正在播放的歌：%#v", plays)
 	}
@@ -53,7 +53,7 @@ func TestDeleteRecordsAnOverdueSongAtItsEnd(t *testing.T) {
 	playing(t, r, 0, netease("a"), 3*time.Minute)
 	ends := r.current.EndsAt()
 
-	plays := find[RecordPlay](r.Handle(at(10*time.Minute), Delete{RequestID: "q"}))
+	plays := recorded(r.Handle(at(10*time.Minute), Delete{RequestID: "q"}))
 	if len(plays) != 1 || !plays[0].EndedAt.Equal(ends) {
 		t.Fatalf("已超过原定结束时间的歌应按原定结束时间记录：%#v", plays)
 	}
@@ -65,5 +65,27 @@ func TestInputsWithTokenZeroAreDropped(t *testing.T) {
 	}
 	if effects := listenedRoom(t).Handle(at(time.Minute), Recommended{Token: 0, Track: netease("b")}); len(effects) != 0 {
 		t.Fatalf("没有待回的推荐时不应接受 token 为 0 的推荐：%#v", effects)
+	}
+}
+
+func TestUpdateInfoKeepsFieldsNotGiven(t *testing.T) {
+	r, _ := Restore(at(0), 1, Snapshot{Info: Info{ID: "r1", Name: "房间", Description: "介绍", Kind: Persistent}, Mode: Sequential})
+	name, description := "新名字", "新介绍"
+	tests := []struct {
+		in   UpdateInfo
+		want []InfoChanged
+	}{
+		{UpdateInfo{RequestID: "q1", Name: &name}, []InfoChanged{{Name: "新名字", Description: "介绍"}}},
+		{UpdateInfo{RequestID: "q2", Description: &description}, []InfoChanged{{Name: "新名字", Description: "新介绍"}}},
+		{UpdateInfo{RequestID: "q3"}, nil},
+	}
+	for _, tt := range tests {
+		effects := r.Handle(at(0), tt.in)
+		if got := events[InfoChanged](effects); !slices.Equal(got, tt.want) {
+			t.Errorf("%s 之后的 InfoChanged = %+v，期望 %+v", tt.in.RequestID, got, tt.want)
+		}
+		if replies := find[Reply](effects); len(replies) != 1 || replies[0].RequestID != tt.in.RequestID || replies[0].Err != nil {
+			t.Errorf("%s 的回复 = %+v，期望成功", tt.in.RequestID, replies)
+		}
 	}
 }

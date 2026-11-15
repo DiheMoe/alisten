@@ -27,7 +27,7 @@ func (s *Store) TakeRoom(_ context.Context, id string) (uint32, room.Snapshot, e
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r := s.room(id)
-	if !uuidPattern.MatchString(id) || r == nil {
+	if r == nil {
 		return 0, room.Snapshot{}, fmt.Errorf("接管房间 %s：%w", id, port.ErrRoomNotFound)
 	}
 	st := s.states[r.Info.ID]

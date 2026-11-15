@@ -1,24 +1,25 @@
 import type { KeyboardEvent } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
+import { rovingIndex } from '@/shared/lib/roving'
 
-export interface SelectOption {
-  value: string
+export interface SelectOption<T extends string = string> {
+  value: T
   label: string
 }
 
-interface SelectProps {
+interface SelectProps<T extends string> {
   id?: string
-  value: string
-  options: readonly SelectOption[]
-  onChange: (value: string) => void
+  value: T
+  options: readonly SelectOption<T>[]
+  onChange: (value: T) => void
   ariaLabel?: string
   ariaDescribedBy?: string
   disabled?: boolean
   className?: string
 }
 
-export function Select({ id, value, options, onChange, ariaLabel, ariaDescribedBy, disabled = false, className = '' }: SelectProps) {
+export function Select<T extends string>({ id, value, options, onChange, ariaLabel, ariaDescribedBy, disabled = false, className = '' }: SelectProps<T>) {
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -58,12 +59,6 @@ export function Select({ id, value, options, onChange, ariaLabel, ariaDescribedB
     close()
   }
 
-  const move = (direction: 1 | -1) => {
-    if (!options.length)
-      return
-    setActiveIndex(index => (index + direction + options.length) % options.length)
-  }
-
   const openMenu = (index = selectedIndex) => {
     setActiveIndex(index)
     setOpen(true)
@@ -83,22 +78,14 @@ export function Select({ id, value, options, onChange, ariaLabel, ariaDescribedB
   }
 
   const onListboxKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    switch (event.key) {
+    const { key } = event
+    switch (key) {
       case 'ArrowDown':
-        event.preventDefault()
-        move(1)
-        break
       case 'ArrowUp':
-        event.preventDefault()
-        move(-1)
-        break
       case 'Home':
-        event.preventDefault()
-        setActiveIndex(0)
-        break
       case 'End':
         event.preventDefault()
-        setActiveIndex(Math.max(0, options.length - 1))
+        setActiveIndex(index => rovingIndex(key, index, options.length, 'vertical') ?? index)
         break
       case 'Enter':
       case ' ':

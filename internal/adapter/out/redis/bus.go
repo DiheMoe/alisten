@@ -47,14 +47,23 @@ var errBusClosed = errors.New("实例间消息的订阅已经关闭")
 func instanceChannel(id string) string { return "inst:" + id }
 func roomChannel(id string) string     { return roomPrefix + id }
 
-type Bus struct {
+// 只发布、不订阅的一方用 Publisher，比如只广播准备结果的 worker。这样不必为用不到的订阅准备连接、指标和追踪。
+type Publisher struct {
 	client   *goredis.Client
 	instance string
 	version  string
-	tracer   trace.Tracer
-	logger   *slog.Logger
-	dropped  *prometheus.CounterVec
-	done     chan struct{}
+}
+
+func NewPublisher(client *goredis.Client, instanceID, version string) Publisher {
+	return Publisher{client: client, instance: instanceID, version: version}
+}
+
+type Bus struct {
+	Publisher
+	tracer  trace.Tracer
+	logger  *slog.Logger
+	dropped *prometheus.CounterVec
+	done    chan struct{}
 
 	// 持有 mu 时不调用可能等网络的 go-redis 方法，因为 Receive 处理 PONG、报告中断都要拿 mu。
 	mu       sync.Mutex
@@ -80,16 +89,14 @@ func NewBus(client *goredis.Client, instanceID, version string, metrics promethe
 	dropped.WithLabelValues("malformed")
 	metrics.MustRegister(dropped)
 	return &Bus{
-		client:   client,
-		instance: instanceID,
-		version:  version,
-		tracer:   tracer.Tracer("github.com/dihemoe/alisten/internal/adapter/out/redis"),
-		logger:   logger,
-		dropped:  dropped,
-		done:     make(chan struct{}),
-		ps:       client.Subscribe(context.Background()),
-		channels: map[string]bool{},
-		waiters:  map[string]chan struct{}{},
+		Publisher: NewPublisher(client, instanceID, version),
+		tracer:    tracer.Tracer("github.com/dihemoe/alisten/internal/adapter/out/redis"),
+		logger:    logger,
+		dropped:   dropped,
+		done:      make(chan struct{}),
+		ps:        client.Subscribe(context.Background()),
+		channels:  map[string]bool{},
+		waiters:   map[string]chan struct{}{},
 	}
 }
 
@@ -207,21 +214,21 @@ func (b *Bus) PublishSessionsRevoked(ctx context.Context, sessionTokenHashes [][
 	return err
 }
 
-func (b *Bus) PublishPrepared(ctx context.Context, o port.PrepareOutcome) error {
+func (p Publisher) PublishPrepared(ctx context.Context, o port.PrepareOutcome) error {
 	data, err := json.Marshal(o)
 	if err != nil {
 		return err
 	}
-	_, err = b.publish(ctx, preparedChannel, kindPrepared, data, nil)
+	_, err = p.publish(ctx, preparedChannel, kindPrepared, data, nil)
 	return err
 }
 
-func (b *Bus) publish(ctx context.Context, channel, kind string, data json.RawMessage, carrier map[string]string) (int64, error) {
-	payload, err := json.Marshal(envelope{Version: b.version, From: b.instance, Kind: kind, Trace: carrier, Data: data})
+func (p Publisher) publish(ctx context.Context, channel, kind string, data json.RawMessage, carrier map[string]string) (int64, error) {
+	payload, err := json.Marshal(envelope{Version: p.version, From: p.instance, Kind: kind, Trace: carrier, Data: data})
 	if err != nil {
 		return 0, err
 	}
-	receivers, err := b.client.Publish(ctx, channel, payload).Result()
+	receivers, err := p.client.Publish(ctx, channel, payload).Result()
 	if err != nil {
 		return 0, fmt.Errorf("发布到 %s：%w", channel, err)
 	}

@@ -82,14 +82,14 @@ func TestDecodeTrackArray(t *testing.T) {
 		{`{}`, "tracks：缺少必填字段"},
 	}
 	for _, tt := range tests {
-		_, err := DecodeRemoveMyPlaylistItemsRequest([]byte(tt.body))
+		_, err := RouteRemoveMyPlaylistItems.Decode(validPath, []byte(tt.body))
 		if got := errText(err); got != tt.want {
 			t.Errorf("%s = %q，期望 %q", tt.body, got, tt.want)
 		}
 	}
 	for _, elem := range []string{one, "{}"} {
 		tooMany := `{"tracks":[` + elem + strings.Repeat(","+elem, 1000) + `]}`
-		if got := errText(func() error { _, err := DecodeRemoveMyPlaylistItemsRequest([]byte(tooMany)); return err }()); got != "tracks：元素不能超过 1000 个" {
+		if got := errText(func() error { _, err := RouteRemoveMyPlaylistItems.Decode(validPath, []byte(tooMany)); return err }()); got != "tracks：元素不能超过 1000 个" {
 			t.Errorf("1001 个 %s = %q，期望先按个数拒绝、不再解码元素", elem, got)
 		}
 	}

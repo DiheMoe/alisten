@@ -1,13 +1,13 @@
 import type { KeywordQuery, SearchQuery } from './search-store'
 import { Clock, Link, Search, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
-import { roomStore } from '@/core/room'
-import { historyStore } from '@/features/history'
-import { enqueue } from '@/features/queue'
+import { KeywordLimits } from '@/core/realtime'
+import { enqueue, roomStore } from '@/core/room'
 import { useStore } from '@/shared/lib/use-store'
 import { IconButton } from '@/shared/ui'
 import { pickableLink } from './link'
-import { keywordSearch, recordSearch, searchStore } from './search-store'
+import { searchHistoryStore } from './search-history-store'
+import { keywordSearch, searchStore, startSearch } from './search-store'
 import './search.css'
 
 const recentLimit = 4
@@ -16,8 +16,8 @@ export function SearchBox({ className, recent, onSearch }: { className: string, 
   const text = useStore(searchStore, s => s.text)
   const connected = useStore(roomStore, s => s.status === 'open')
   const kind = useStore(roomStore, s => s.room?.room.kind)
-  const searches = useStore(historyStore, s => s.searches)
-  const searchesEnabled = useStore(historyStore, s => s.searchesEnabled)
+  const searches = useStore(searchHistoryStore, s => s.searches)
+  const searchesEnabled = useStore(searchHistoryStore, s => s.searchesEnabled)
   const [open, setOpen] = useState(false)
   const [linking, setLinking] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -37,11 +37,8 @@ export function SearchBox({ className, recent, onSearch }: { className: string, 
     return () => document.removeEventListener('pointerdown', dismiss)
   }, [open])
   const search = (query: KeywordQuery) => {
-    // 不在房间里时不会搜索，也就不记入搜索历史。
-    if (roomStore.state.roomId !== null)
-      recordSearch(query)
     setOpen(false)
-    onSearch(query)
+    startSearch(query, onSearch)
   }
   return (
     <div
@@ -70,7 +67,7 @@ export function SearchBox({ className, recent, onSearch }: { className: string, 
           aria-expanded={popover}
           aria-controls={popover ? popoverId : undefined}
           placeholder="想播放什么？"
-          maxLength={500}
+          maxLength={KeywordLimits.maxLength}
           value={text}
           onFocus={() => setOpen(true)}
           onClick={() => setOpen(true)}

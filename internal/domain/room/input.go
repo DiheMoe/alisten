@@ -20,10 +20,11 @@ type MemberUpdated struct {
 	Member member.Member
 }
 
+// Name 和 Description 为 nil 表示保持不变，因为管理接口只修改给出的字段。
 type UpdateInfo struct {
 	RequestID   RequestID
-	Name        string
-	Description string
+	Name        *string
+	Description *string
 }
 
 type Delete struct {
@@ -73,6 +74,8 @@ type Action interface{ action() }
 type Enqueue struct {
 	Track track.Track
 	Meta  track.Meta
+	// bot 代点时替谁点的歌，是 bot 填的名字。成员自己点的歌为空。
+	Requester string
 }
 
 type Remove struct {

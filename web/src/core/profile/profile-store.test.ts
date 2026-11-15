@@ -39,7 +39,7 @@ let patchError: { status: number, code: string } | null
 let extraRoutes: Map<string, () => Response>
 
 async function load() {
-  const [{ profileStore, switchIdentity }, { identityEvents }, { notificationStore }] = await Promise.all([import('./profile-store'), import('@/core/api'), import('@/shared/ui')])
+  const [{ profileStore, switchIdentity }, { identityEvents }, { notificationStore }] = await Promise.all([import('./profile-store'), import('@/core/api'), import('@/shared/lib/notification-store')])
   return { profileStore, switchIdentity, identityEvents, notificationStore }
 }
 
@@ -126,38 +126,6 @@ describe('其他标签页更换身份', () => {
     local.setItem(memberTokenKey, 'other')
     for (const listener of storageListeners) listener({ key: memberTokenKey })
     expect(reload).toHaveBeenCalledOnce()
-  })
-})
-
-describe('退出登录', () => {
-  beforeEach(() => {
-    local.setItem(memberTokenKey, 'account')
-  })
-
-  it('成功后删除 token 并重新加载页面', async () => {
-    extraRoutes.set('DELETE /api/sessions/current', () => new Response(null, { status: 204 }))
-    const { profileStore } = await load()
-    await profileStore.logout()
-    expect(local.getItem(memberTokenKey)).toBeNull()
-    expect(reload).toHaveBeenCalledOnce()
-  })
-
-  it('会话已经失效、客户端换成了新的游客时，重新加载页面', async () => {
-    extraRoutes.set('DELETE /api/sessions/current', () => new Response(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: '身份已失效' } }), { status: 401 }))
-    extraRoutes.set('POST /api/members', () => new Response(JSON.stringify({ member: renewed, memberToken: 'guest' }), { status: 200 }))
-    me = { member: renewed }
-    const { profileStore } = await load()
-    await profileStore.logout()
-    expect(local.getItem(memberTokenKey)).toBe('guest')
-    expect(reload).toHaveBeenCalledOnce()
-  })
-
-  it('其他错误不重新加载页面，token 保留', async () => {
-    extraRoutes.set('DELETE /api/sessions/current', () => new Response(JSON.stringify({ error: { code: 'INTERNAL', message: '出错了' } }), { status: 500 }))
-    const { profileStore } = await load()
-    expect(await profileStore.logout()).toBe(false)
-    expect(local.getItem(memberTokenKey)).toBe('account')
-    expect(reload).not.toHaveBeenCalled()
   })
 })
 

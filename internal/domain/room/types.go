@@ -42,16 +42,18 @@ type Info struct {
 }
 
 type Entry struct {
-	ID      EntryID
-	Track   track.Track
-	Meta    track.Meta
-	By      member.Member
-	Auto    bool
-	Likes   int
-	Round   int
-	Ready   bool
-	Prep    track.Prepared
-	AddedAt time.Time
+	ID    EntryID
+	Track track.Track
+	Meta  track.Meta
+	By    member.Member
+	// bot 代点时替谁点的歌，是 bot 填的名字。成员自己点的歌为空。
+	Requester string
+	Auto      bool
+	Likes     int
+	Round     int
+	Ready     bool
+	Prep      track.Prepared
+	AddedAt   time.Time
 }
 
 type NowPlaying struct {

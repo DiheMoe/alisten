@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -23,7 +22,6 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/riverqueue/river"
 	"go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/dihemoe/alisten/internal/adapter/in/ops"
 	"github.com/dihemoe/alisten/internal/adapter/in/worker"
@@ -37,13 +35,11 @@ import (
 	"github.com/dihemoe/alisten/internal/adapter/out/ytdlp"
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/prepare"
-	"github.com/dihemoe/alisten/internal/lib/logctx"
 )
 
 const (
 	// 停止 River client 和关闭运维端口共用这段期限。这段期限加上导出剩余追踪的 flushTimeout，不能超过 Kubernetes 30 秒的退出宽限期。
 	workerStopTimeout = 25 * time.Second
-	publishTimeout    = 5 * time.Second
 	waitingInterval   = 15 * time.Second
 	waitingTimeout    = 5 * time.Second
 )
@@ -186,21 +182,11 @@ func newMediaWorker(cfg workerConfig, pool *pgxpool.Pool, rdb *goredis.Client, s
 	if err != nil {
 		return mediaWorker{}, fmt.Errorf("创建 River client：%w", err)
 	}
-	// worker 只发布准备结果、不订阅，不会丢弃实例间消息，所以不暴露丢弃的计数。worker 也不会收到房间输入，所以不记录收到输入的 span。
-	bus := redis.NewBus(rdb, instance, version, prometheus.NewRegistry(), noop.NewTracerProvider(), base.With("component", "bus"))
-	publish := func(o port.PrepareOutcome) {
-		ctx, cancel := context.WithTimeout(logctx.WithJob(context.Background(), o.JobID), publishTimeout)
-		defer cancel()
-		// 广播失败时只记录日志，因为等待的一方会定期按任务 ID 核对。
-		if err := bus.PublishPrepared(ctx, o); err != nil {
-			logger.WarnContext(ctx, "广播准备结果失败", "source", o.Track.Source, "track_id", o.Track.ID, "error", err)
-		}
-	}
 	return mediaWorker{
 		pool:     pool,
 		rdb:      rdb,
 		jobs:     jobs,
-		watch:    worker.Watch(jobs, publish, observed.prepared, logger),
+		watch:    worker.Watch(jobs, prepare.Announce(redis.NewPublisher(rdb, instance, version), logger), observed.prepared, logger),
 		metrics:  metrics,
 		observed: observed,
 		instance: instance,
@@ -212,46 +198,25 @@ func newMediaWorker(cfg workerConfig, pool *pgxpool.Pool, rdb *goredis.Client, s
 // 一直运行到 ctx 结束，或者运维端口、River client 意外停止。意外停止时返回错误，交给容器编排重启。
 // 数据库迁移完成之前保持未就绪，迁移完成之后才启动 River client。
 func (w mediaWorker) run(ctx context.Context, listener net.Listener) error {
-	var dependenciesReady, stopping atomic.Bool
-	var starting sync.Mutex
-	ready := func() bool { return dependenciesReady.Load() && !stopping.Load() }
+	life := newLifecycle()
 	fatal := make(chan error, 2)
-	migrated := make(chan struct{})
-	var migratedOnce sync.Once
 	background, stopBackground := context.WithCancel(context.Background())
 	var running sync.WaitGroup
+	running.Go(func() { life.watch(background, w.pool, w.rdb, w.logger) })
 	running.Go(func() {
-		watchReadiness(background, readinessInterval, func(ctx context.Context) error {
-			if err := postgres.CheckMigrations(ctx, w.pool); err != nil {
-				return err
-			}
-			migratedOnce.Do(func() { close(migrated) })
-			return pingRedis(ctx, w.rdb)
-		}, &dependenciesReady, &stopping, w.logger)
-	})
-	running.Go(func() {
-		select {
-		case <-migrated:
-		case <-background.Done():
-			return
-		}
-		// 开始退出之后不再启动 River client，因为这时才启动的 client 不会被停止，运行中的任务要等 20 分钟才由 River 重新调度。
-		starting.Lock()
-		if stopping.Load() {
-			starting.Unlock()
-			return
-		}
 		// River client 只在退出时停止，不随 context 结束而停止。
-		err := w.jobs.Start(context.Background())
-		starting.Unlock()
+		started, err := life.startMigrated(background, func() error { return w.jobs.Start(context.Background()) })
 		if err != nil {
 			fatal <- fmt.Errorf("启动 River client：%w", err)
+			return
+		}
+		if !started {
 			return
 		}
 		go w.watch()
 		select {
 		case <-w.jobs.Stopped():
-			if !stopping.Load() {
+			if !life.stopping.Load() {
 				fatal <- errors.New("执行准备任务的 River client 意外停止")
 			}
 		case <-background.Done():
@@ -264,18 +229,10 @@ func (w mediaWorker) run(ctx context.Context, listener net.Listener) error {
 	w.metrics.MustRegister(
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-			Name: "alisten_ready",
-			Help: "本实例最近一次就绪检查的结果，1 为就绪，0 为未就绪。",
-		}, func() float64 {
-			if ready() {
-				return 1
-			}
-			return 0
-		}),
+		life.readyGauge(),
 	)
 	opsLogger := w.base.With("component", "ops")
-	opsServer := newHTTPServer(recoverPanics(ops.NewHandler(ready, w.metrics, version), opsLogger), opsLogger)
+	opsServer := newHTTPServer(recoverPanics(ops.NewHandler(life.ready, w.metrics, version), opsLogger), opsLogger)
 	go func() { fatal <- fmt.Errorf("运维端口异常退出：%w", opsServer.Serve(listener)) }()
 	w.logger.Info("worker 已启动", "ops_listen", listener.Addr().String(), "instance", w.instance)
 
@@ -285,9 +242,7 @@ func (w mediaWorker) run(ctx context.Context, listener net.Listener) error {
 	case <-ctx.Done():
 	}
 	// worker 不接收流量，不必等待入口摘除。
-	starting.Lock()
-	stopping.Store(true)
-	starting.Unlock()
+	life.stop()
 
 	stopCtx, cancel := context.WithTimeout(context.Background(), workerStopTimeout)
 	defer cancel()

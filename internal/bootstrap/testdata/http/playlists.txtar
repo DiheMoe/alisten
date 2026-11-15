@@ -13,7 +13,7 @@ GET /api/me/playlists
 Authorization: Bearer $alice
 -- response --
 403
-{"error": {"code": "FORBIDDEN", "message": "注册账号之后才能使用歌单"}}
+{"error": {"code": "FORBIDDEN", "message": "还没有注册账号"}}
 
 -- request --
 POST /api/me/playlists
@@ -22,7 +22,7 @@ Authorization: Bearer $alice
 {"name": "通勤"}
 -- response --
 403
-{"error": {"code": "FORBIDDEN", "message": "注册账号之后才能使用歌单"}}
+{"error": {"code": "FORBIDDEN", "message": "还没有注册账号"}}
 
 -- request --
 POST /api/account

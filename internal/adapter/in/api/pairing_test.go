@@ -1,12 +1,10 @@
 package api
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"testing"
-	"time"
 
 	"rsc.io/qr"
 
@@ -15,17 +13,11 @@ import (
 	"github.com/dihemoe/alisten/protocol"
 )
 
-type unlimited struct{}
-
-func (unlimited) Take(context.Context, string, int, time.Duration) (time.Duration, error) {
-	return 0, nil
-}
-
 // 二维码的内容是网页上兑换配对码的地址，配对码放在片段里。
 func TestPairingCodeQRImage(t *testing.T) {
 	store := porttest.New()
 	s := services(store, store, "")
-	s.Accounts = identity.NewAccounts(store, store, unlimited{}, porttest.NewCodes(), porttest.NewCodes(), porttest.NewDevices(), s.Gateway)
+	s.Accounts = identity.NewAccounts(store, store, porttest.Quota{}, porttest.NewCodes(), porttest.NewCodes(), porttest.NewDevices(), s.Gateway)
 	s.PublicURL = "https://alisten.example"
 	server, _ := start(t, s)
 	token := memberToken(t, server)

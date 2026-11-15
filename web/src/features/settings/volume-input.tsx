@@ -4,12 +4,11 @@ import { beginVolumeEdit, changeVolumeDraft, commitVolumeDraft, initialVolumeEdi
 interface VolumeInputProps {
   volume: number
   onCommit: (volume: number) => void
-  id?: string
-  className?: string
-  disabled?: boolean
+  id: string
+  className: string
 }
 
-export function VolumeInput({ volume, onCommit, id, className = '', disabled = false }: VolumeInputProps) {
+export function VolumeInput({ volume, onCommit, id, className }: VolumeInputProps) {
   const [editor, setEditor] = useState(() => initialVolumeEditor(volume))
   const syncedEditor = syncVolumeDraft(editor, volume)
   const commit = () => {
@@ -28,7 +27,6 @@ export function VolumeInput({ volume, onCommit, id, className = '', disabled = f
         max="100"
         value={volume}
         aria-label="音量"
-        disabled={disabled}
         onChange={(event) => {
           const next = Number(event.target.value)
           setEditor(current => changeVolumeDraft(current, String(next)))
@@ -45,7 +43,6 @@ export function VolumeInput({ volume, onCommit, id, className = '', disabled = f
           inputMode="numeric"
           value={syncedEditor.draft}
           aria-label="音量百分比"
-          disabled={disabled}
           onFocus={() => setEditor(current => beginVolumeEdit(current))}
           onChange={event => setEditor(current => changeVolumeDraft(current, event.target.value))}
           onBlur={commit}

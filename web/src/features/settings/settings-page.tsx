@@ -1,12 +1,12 @@
 import type { SectionItem } from '@/shared/ui'
 import { Contrast, Gauge, Music, Shield, UserRound } from 'lucide-react'
 import { useEffect } from 'react'
+import { profileStore } from '@/core/profile'
 import { volumeStore } from '@/features/playback'
 import { useStore } from '@/shared/lib/use-store'
 import { SectionLayout } from '@/shared/ui'
 import { appearanceStore } from './appearance-store'
 import { performanceStore } from './performance-store'
-import { profileStore } from './profile-store'
 import { AccountSettings, IdentityEntry } from './settings-account'
 import { AppearanceSettings } from './settings-appearance'
 import { sectionSummaries } from './settings-labels'
@@ -24,7 +24,7 @@ export function SettingsPage({ section, onSection, onOpenHistory }: {
   onSection: (section: SettingsSection | null) => void
   onOpenHistory: () => void
 }) {
-  const { site, reload: reloadSite } = useSite()
+  const { state: site, reload: reloadSite } = useSite()
   const summaries = sectionSummaries({
     theme: useStore(appearanceStore, s => s.theme),
     level: useStore(performanceStore, s => s.level),

@@ -2,7 +2,9 @@ import type { Route } from './route'
 import type { MediaSort } from '@/core/realtime'
 import type { AdminSection } from '@/features/admin'
 import type { SearchQuery } from '@/features/search'
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { adminSections, navigationAllowlist, settingsSections } from './page-paths'
 import { formatRoute, isNewEntry, leaveStep, parseRoute, upStep } from './route'
 
 function parse(url: string): Route | null {
@@ -10,7 +12,7 @@ function parse(url: string): Route | null {
 }
 
 describe('parseRoute', () => {
-  it.each<[string, Route]>([
+  const pages: [string, Route][] = [
     ['/', { name: 'lobby', filter: '', panel: null }],
     ['/?q=+%E5%A4%9C&panel=chat', { name: 'lobby', filter: ' 夜', panel: 'chat' }],
     ['/admin', { name: 'admin', section: null, panel: null, q: '', page: 1, sort: 'stored' }],
@@ -37,12 +39,14 @@ describe('parseRoute', () => {
     ['/r/my-room/playlists/qq/123', { name: 'playlist', ref: 'my-room', panel: null, source: 'qq', id: '123', page: 1 }],
     ['/s/AbC_-1x', { name: 'shared-playlist', shareId: 'AbC_-1x', panel: null }],
     ['/s/AbC_-1x?panel=queue', { name: 'shared-playlist', shareId: 'AbC_-1x', panel: 'queue' }],
-  ])('%s', (url, route) => {
+  ]
+
+  it.each(pages)('%s', (url, route) => {
     expect(parse(url)).toEqual(route)
     expect(formatRoute(route)).toBe(url)
   })
 
-  it.each([
+  const normalizations: [string, string][] = [
     ['/admin?from=menu', '/admin'],
     ['/admin/users?q=a&page=2&sort=size', '/admin/users'],
     ['/admin/rooms?sort=size', '/admin/rooms'],
@@ -61,12 +65,16 @@ describe('parseRoute', () => {
     ['/admin/media?page=1e300', '/admin/media'],
     ['/admin/media?page=9007199254740991', '/admin/media?page=9007199254740991'],
     ['/r/my-room/playlists/netease/123?page=99999999999999999999', '/r/my-room/playlists/netease/123'],
-  ])('%s 规范化为 %s', (url, canonical) => {
+  ]
+
+  it.each(normalizations)('%s 规范化为 %s', (url, canonical) => {
     const route = parse(url)
     expect(route && formatRoute(route)).toBe(canonical)
   })
 
-  it.each(['/r/', '/r/my-room/listen', '/r/my-room/queue/extra', '/settings/profile', '/settings/', '/settings/account/extra', '/admin/', '/admin/overview', '/r/my-room/playlists/bilibili/123', '/r/my-room/playlists/netease', '/s/', '/s/abc/def'])('%s 不对应任何页面', (url) => {
+  const unknown = ['/r/', '/r/my-room/listen', '/r/my-room/queue/extra', '/settings/profile', '/settings/', '/settings/account/extra', '/admin/', '/admin/overview', '/r/my-room/playlists/bilibili/123', '/r/my-room/playlists/netease', '/s/', '/s/abc/def']
+
+  it.each(unknown)('%s 不对应任何页面', (url) => {
     expect(parse(url)).toBeNull()
   })
 
@@ -90,6 +98,36 @@ describe('parseRoute', () => {
     expect(route && formatRoute(route)).toBe('/auth/github')
     expect(parse('/auth/github#error=denied')).toEqual({ name: 'github-login', fragment: 'error=denied', panel: null })
     expect(parse('/auth/github/x')).toBeNull()
+  })
+
+  // 开发服务器对任何路径都返回 index.html。所以 nginx 或 Service Worker 漏掉一个页面时，本地看不出来，
+  // 部署之后在那个页面上刷新才会得到 404。
+  describe('nginx 和 Service Worker 认得的页面路径', () => {
+    const conf = readFileSync(new URL('../../nginx/default.conf', import.meta.url), 'utf8')
+    const locations = [...conf.matchAll(/location ~ (\S+) \{\s+add_header Cache-Control "no-cache";\s+try_files \/index\.html =404;/g)].map(match => new RegExp(match[1]))
+    const urls = [
+      ...pages.map(([url]) => url),
+      ...normalizations.map(([url]) => url),
+      ...Object.keys(settingsSections).map(section => `/settings/${section}`),
+      ...Object.keys(adminSections).map(section => `/admin/${section}`),
+      '/pair',
+      '/auth/github',
+    ]
+
+    function served(url: string): { nginx: boolean, worker: boolean } {
+      const { pathname, search } = new URL(url, 'https://alisten.test')
+      return { nginx: locations.some(location => location.test(pathname)), worker: navigationAllowlist.some(allowed => allowed.test(pathname + search)) }
+    }
+
+    it('路由认得的地址，两边都返回 index.html', () => {
+      expect(urls.filter(url => parse(url) === null)).toEqual([])
+      expect(urls.filter(url => !served(url).nginx)).toEqual([])
+      expect(urls.filter(url => !served(url).worker)).toEqual([])
+    })
+
+    it('两边对同一个地址的结论相同', () => {
+      expect([...urls, ...unknown].filter(url => served(url).nginx !== served(url).worker)).toEqual([])
+    })
   })
 })
 

@@ -1,51 +1,37 @@
-import type { AdminGetRoomApiKeyResponse } from '@/core/api'
 import type { RoomListing } from '@/core/realtime'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '@/core/api'
+import { copyText } from '@/shared/lib/clipboard'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { formatDateTime } from '@/shared/lib/time'
-import { ConfirmDialog, Modal, notificationStore } from '@/shared/ui'
+import { useResource } from '@/shared/lib/use-resource'
+import { ConfirmDialog, Modal } from '@/shared/ui'
 import { adminStore } from './admin-store'
 
-// 非安全上下文（比如局域网的明文 HTTP）没有剪贴板接口，用户也可能拒绝授权。这时返回 false，由调用方让用户手动复制。
 async function copyApiKey(key: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(key)
+  const copied = await copyText(key)
+  if (copied)
     notificationStore.success('已复制 API Key')
-    return true
-  }
-  catch {
-    return false
-  }
+  return copied
 }
 
 export function RoomApiKeyDialog({ room, onClose }: { room: RoomListing, onClose: () => void }) {
-  // undefined 表示正在获取，null 表示获取失败。
-  const [status, setStatus] = useState<AdminGetRoomApiKeyResponse | null>()
-  const [attempt, setAttempt] = useState(0)
+  const { state: keyStatus, reload: refetch } = useResource(async () => {
+    const result = await adminStore.call(() => api.adminGetRoomApiKey(room.id))
+    if (result === null)
+      throw new Error('暂时无法获取 API Key 的状态。')
+    return result
+  }, room.id)
   // 只有生成或重置的响应里有 Key，关掉弹窗就再也看不到了。
   const [key, setKey] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [resetting, setResetting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    let active = true
-    void adminStore.call(() => api.adminGetRoomApiKey(room.id)).then((result) => {
-      if (active)
-        setStatus(result)
-    })
-    return () => {
-      active = false
-    }
-  }, [room.id, attempt])
   // 不用 autoFocus，因为确认弹窗卸载时会把焦点还给打开它之前聚焦的元素（比如这个弹窗的关闭按钮），时间晚于 autoFocus。这个 effect 在还回焦点之后才运行。
   useEffect(() => {
     if (key !== null)
       inputRef.current?.focus()
   }, [key])
-  const refetch = () => {
-    setStatus(undefined)
-    setAttempt(n => n + 1)
-  }
   // 请求失败时服务端仍可能已经重置了 Key（比如响应没有送达），所以重新获取状态。
   const renew = async (): Promise<string | null> => {
     const result = await adminStore.call(() => api.adminResetRoomApiKey(room.id))
@@ -87,14 +73,14 @@ export function RoomApiKeyDialog({ room, onClose }: { room: RoomListing, onClose
             )
           : (
               <>
-                {status === undefined && <p className="text-ui-base muted">正在获取…</p>}
-                {status === null && (
+                {keyStatus.status === 'loading' && <p className="text-ui-base muted">正在获取…</p>}
+                {keyStatus.status === 'failed' && (
                   <div className="admin-failed">
-                    <p className="text-ui-caption muted">暂时无法获取 API Key 的状态。</p>
+                    <p className="text-ui-caption muted">{keyStatus.error}</p>
                     <button type="button" className="button-secondary" onClick={refetch}>重试</button>
                   </div>
                 )}
-                {status?.set === false && (
+                {keyStatus.status === 'loaded' && !keyStatus.value.set && (
                   <>
                     <p className="text-ui-base muted">还没有 API Key。</p>
                     <div className="dialog-actions">
@@ -102,9 +88,9 @@ export function RoomApiKeyDialog({ room, onClose }: { room: RoomListing, onClose
                     </div>
                   </>
                 )}
-                {status?.set && (
+                {keyStatus.status === 'loaded' && keyStatus.value.set && (
                   <>
-                    <p className="text-ui-base muted">{`生成于 ${formatDateTime(status.createdAtMs)}。Key 只在生成时显示一次，丢失后只能重置。`}</p>
+                    <p className="text-ui-base muted">{`生成于 ${formatDateTime(keyStatus.value.createdAtMs)}。Key 只在生成时显示一次，丢失后只能重置。`}</p>
                     <div className="dialog-actions">
                       <button type="button" className="button-secondary" onClick={() => setResetting(true)}>重置</button>
                     </div>

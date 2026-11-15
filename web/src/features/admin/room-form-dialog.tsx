@@ -2,6 +2,8 @@ import type { AdminUpdateRoomRequest } from '@/core/api'
 import type { RoomListing } from '@/core/realtime'
 import { useId, useState } from 'react'
 import { api } from '@/core/api'
+import { RoomDescriptionLimits, RoomNameLimits } from '@/core/realtime'
+import { useSubmission } from '@/shared/lib/use-submission'
 import { Modal, Select } from '@/shared/ui'
 import { adminStore } from './admin-store'
 
@@ -15,32 +17,26 @@ export function RoomFormDialog({ room, onSaved, onClose }: { room: RoomListing |
   const [slug, setSlug] = useState(room?.slug ?? '')
   const [passwordChange, setPasswordChange] = useState<PasswordChange>(room ? 'keep' : 'set')
   const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
+  const { busy, submit } = useSubmission()
   const slugHintId = useId()
   const slugInvalid = slug !== '' && !slugPattern.test(slug)
   const save = async () => {
-    setBusy(true)
     const fields = { name: name.trim(), description: description.trim() }
-    try {
-      const saved = room
-        ? await adminStore.call(() => {
-            const patch: AdminUpdateRoomRequest = { ...fields }
-            // slug 或 password 为空字符串表示取消别名或密码。
-            if (slug !== (room.slug ?? ''))
-              patch.slug = slug
-            if (passwordChange === 'set')
-              patch.password = password
-            if (passwordChange === 'remove')
-              patch.password = ''
-            return api.adminUpdateRoom(room.id, patch)
-          })
-        : await adminStore.call(() => api.adminCreateRoom({ ...fields, ...(slug ? { slug } : {}), ...(password ? { password } : {}) }))
-      if (saved !== null)
-        onSaved()
-    }
-    finally {
-      setBusy(false)
-    }
+    const saved = room
+      ? await adminStore.call(() => {
+          const patch: AdminUpdateRoomRequest = { ...fields }
+          // slug 或 password 为空字符串表示取消别名或密码。
+          if (slug !== (room.slug ?? ''))
+            patch.slug = slug
+          if (passwordChange === 'set')
+            patch.password = password
+          if (passwordChange === 'remove')
+            patch.password = ''
+          return api.adminUpdateRoom(room.id, patch)
+        })
+      : await adminStore.call(() => api.adminCreateRoom({ ...fields, ...(slug ? { slug } : {}), ...(password ? { password } : {}) }))
+    if (saved !== null)
+      onSaved()
   }
   return (
     <Modal title={room ? '编辑常驻房间' : '新建常驻房间'} onClose={onClose}>
@@ -48,16 +44,16 @@ export function RoomFormDialog({ room, onSaved, onClose }: { room: RoomListing |
         className="form-stack"
         onSubmit={(event) => {
           event.preventDefault()
-          void save()
+          void submit(save)
         }}
       >
         <label>
           房间名称
-          <input data-autofocus value={name} onChange={event => setName(event.target.value)} required maxLength={80} />
+          <input data-autofocus value={name} onChange={event => setName(event.target.value)} required maxLength={RoomNameLimits.maxLength} />
         </label>
         <label>
           房间描述
-          <textarea value={description} onChange={event => setDescription(event.target.value)} maxLength={500} rows={3} />
+          <textarea value={description} onChange={event => setDescription(event.target.value)} maxLength={RoomDescriptionLimits.maxLength} rows={3} />
         </label>
         <div className="admin-field">
           <label>
@@ -73,11 +69,11 @@ export function RoomFormDialog({ room, onSaved, onClose }: { room: RoomListing |
             密码
             <Select
               value={passwordChange}
-              onChange={value => setPasswordChange(value as PasswordChange)}
+              onChange={setPasswordChange}
               options={[
                 { value: 'keep', label: room.hasPassword ? '保持现有密码' : '保持无密码' },
                 { value: 'set', label: room.hasPassword ? '修改密码' : '设置密码' },
-                ...(room.hasPassword ? [{ value: 'remove', label: '取消密码' }] : []),
+                ...(room.hasPassword ? [{ value: 'remove' as const, label: '取消密码' }] : []),
               ]}
             />
           </label>

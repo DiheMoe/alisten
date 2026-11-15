@@ -33,6 +33,9 @@ func tsProtocol(d *idl) []byte {
 		fmt.Fprintf(&b, "  %s: %d,\n", c.Name, c.Code)
 	}
 	b.WriteString("} as const\n")
+	for _, c := range d.tsConstants() {
+		fmt.Fprintf(&b, "\nexport const %s = %s\n", c.name, c.value)
+	}
 
 	b.WriteString("\nexport type Send = <T extends RequestType>(type: T, data: RequestDataMap[T]) => Promise<ResponseDataMap[T]>\n")
 	b.WriteString("\nexport function roomRequests(send: Send) {\n  return {\n")
@@ -215,7 +218,7 @@ func tsHTTP(d *idl) []byte {
 				requestBody = ", body"
 			}
 		}
-		fmt.Fprintf(&body, "    %s: (%s) => send<%s>({ method: '%s', path: %s, auth: '%s'%s }),\n", e.Name, strings.Join(params, ", "), response, e.Method, quoted, e.Auth, requestBody)
+		fmt.Fprintf(&body, "    %s: (%s) => send<%s>({ method: '%s', path: %s, auth: '%s'%s }),\n", e.Name, strings.Join(params, ", "), response, e.Method, quoted, e.credential(), requestBody)
 	}
 	body.WriteString("  }\n}\n")
 
@@ -264,14 +267,76 @@ func writeTSMap[T any](b *bytes.Buffer, name string, items []T, entry func(T) (s
 	b.WriteString("}\n")
 }
 
+type tsConstant struct {
+	def, name, value string
+}
+
+// 每个具名类型的约束都导出，这样网页要用新的约束时直接引用，不用回头改生成器。
+func (d *idl) tsConstants() []tsConstant {
+	var consts []tsConstant
+	for _, def := range slices.Sorted(maps.Keys(d.Defs)) {
+		s := d.Defs[def]
+		if s.Enum != nil {
+			consts = append(consts, tsConstant{def, def + "Values", "[" + tsLiterals(s.Enum, ", ") + "] as const"})
+		}
+		if limits := tsLimits(s); len(limits) > 0 {
+			consts = append(consts, tsConstant{def, def + "Limits", "{ " + strings.Join(limits, ", ") + " } as const"})
+		}
+		if s.Pattern != "" {
+			consts = append(consts, tsConstant{def, def + "Pattern", tsRegExp(s.Pattern)})
+		}
+	}
+	return consts
+}
+
+// pattern 是 Go 的语法，这里放进带 u 标志的正则字面量，因为 u 标志让 JavaScript 和 Go 一样按码点匹配。
+// TypeScript 会检查字面量的语法，所以 JavaScript 不接受的写法在类型检查时就会报错。两边都接受、含义却不同的写法由 checkPortablePattern 在检查 IDL 时拒绝。
+// 没有转义的 / 会提前结束字面量，所以要补上反斜杠。
+func tsRegExp(pattern string) string {
+	var b strings.Builder
+	escaped := false
+	for _, r := range pattern {
+		if r == '/' && !escaped {
+			b.WriteByte('\\')
+		}
+		escaped = r == '\\' && !escaped
+		b.WriteRune(r)
+	}
+	return "/" + b.String() + "/u"
+}
+
+func tsLimits(s *schema) []string {
+	var limits []string
+	if s.MinLength != nil {
+		limits = append(limits, fmt.Sprintf("minLength: %d", *s.MinLength))
+	}
+	if s.MaxLength != nil {
+		limits = append(limits, fmt.Sprintf("maxLength: %d", *s.MaxLength))
+	}
+	if s.MaxBytes != nil {
+		limits = append(limits, fmt.Sprintf("maxBytes: %d", *s.MaxBytes))
+	}
+	if s.Minimum != nil {
+		limits = append(limits, fmt.Sprintf("minimum: %d", *s.Minimum))
+	}
+	if s.Maximum != nil {
+		limits = append(limits, fmt.Sprintf("maximum: %d", *s.Maximum))
+	}
+	return limits
+}
+
+func tsLiterals(values []string, sep string) string {
+	quoted := make([]string, len(values))
+	for i, v := range values {
+		quoted[i] = "'" + v + "'"
+	}
+	return strings.Join(quoted, sep)
+}
+
 func writeTSType(b *bytes.Buffer, name string, s *schema) {
 	switch {
 	case s.Enum != nil:
-		values := make([]string, len(s.Enum))
-		for i, v := range s.Enum {
-			values[i] = "'" + v + "'"
-		}
-		fmt.Fprintf(b, "\nexport type %s = %s\n", name, strings.Join(values, " | "))
+		fmt.Fprintf(b, "\nexport type %s = %s\n", name, tsLiterals(s.Enum, " | "))
 	case len(s.Properties) == 0:
 		fmt.Fprintf(b, "\nexport type %s = Record<string, never>\n", name)
 	case s.OneOf != nil:

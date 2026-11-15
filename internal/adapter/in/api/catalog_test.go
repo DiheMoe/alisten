@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,11 +28,11 @@ func (noTracks) SavePreparedTrack(context.Context, track.Track, port.PreparedTra
 
 type history struct{}
 
-func (history) AutoDJSeeds(context.Context, string, bool) ([]track.Track, error) {
+func (history) AutoDJSeeds(context.Context, string, bool, port.AutoDJWindow) ([]track.Track, error) {
 	return []track.Track{sunnyTrack}, nil
 }
 
-func (history) AutoDJExclusions(context.Context, string) ([]track.Track, error) {
+func (history) AutoDJExclusions(context.Context, string, port.AutoDJWindow) ([]track.Track, error) {
 	return nil, nil
 }
 
@@ -40,17 +41,16 @@ type quota struct {
 	left int
 }
 
-func (q *quota) TakeSearch(context.Context, string, int, time.Duration) (time.Duration, error) {
+func (q *quota) Take(_ context.Context, key string, _ int, _ time.Duration) (time.Duration, error) {
+	if strings.HasSuffix(key, ":pick") {
+		return 0, nil
+	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.left == 0 {
 		return time.Minute, nil
 	}
 	q.left--
-	return 0, nil
-}
-
-func (q *quota) TakePick(context.Context, string, int, time.Duration) (time.Duration, error) {
 	return 0, nil
 }
 

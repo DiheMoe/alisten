@@ -64,6 +64,7 @@ type InsertRoomEntriesParams struct {
 	ByMemberID     *string
 	ByName         *string
 	ByAvatarHash   *string
+	Requester      *string
 	Auto           bool
 	Likes          int32
 	Round          int64
@@ -90,7 +91,7 @@ func (q *Queries) MarkPlayed(ctx context.Context, arg MarkPlayedParams) error {
 
 const roomEntries = `-- name: RoomEntries :many
 SELECT e.entry_id, e.slot, e.source, e.track_id, e.title, e.artist, e.album, e.cover_url, e.cover_key, e.page_url, e.meta_duration_ms,
-       e.by_member_id, e.by_name, e.by_avatar_hash, e.auto, e.likes, e.round, e.added_at, e.started_at,
+       e.by_member_id, e.by_name, e.by_avatar_hash, e.requester, e.auto, e.likes, e.round, e.added_at, e.started_at,
        t.title AS track_title, t.artist AS track_artist, t.album AS track_album, t.cover_url AS track_cover_url,
        t.cover_key AS track_cover_key, t.page_url AS track_page_url, t.duration_ms, t.gain, t.lyric, t.lyric_words, t.lyric_trans
 FROM room_entries e
@@ -114,6 +115,7 @@ type RoomEntriesRow struct {
 	ByMemberID     *string
 	ByName         *string
 	ByAvatarHash   *string
+	Requester      *string
 	Auto           bool
 	Likes          int32
 	Round          int64
@@ -156,6 +158,7 @@ func (q *Queries) RoomEntries(ctx context.Context, roomID string) ([]RoomEntries
 			&i.ByMemberID,
 			&i.ByName,
 			&i.ByAvatarHash,
+			&i.Requester,
 			&i.Auto,
 			&i.Likes,
 			&i.Round,

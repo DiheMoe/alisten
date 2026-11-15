@@ -126,6 +126,7 @@ func (r iteratorForInsertRoomEntries) Values() ([]interface{}, error) {
 		r.rows[0].ByMemberID,
 		r.rows[0].ByName,
 		r.rows[0].ByAvatarHash,
+		r.rows[0].Requester,
 		r.rows[0].Auto,
 		r.rows[0].Likes,
 		r.rows[0].Round,
@@ -139,5 +140,5 @@ func (r iteratorForInsertRoomEntries) Err() error {
 }
 
 func (q *Queries) InsertRoomEntries(ctx context.Context, arg []InsertRoomEntriesParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"room_entries"}, []string{"room_id", "entry_id", "slot", "source", "track_id", "title", "artist", "album", "cover_url", "cover_key", "page_url", "meta_duration_ms", "by_member_id", "by_name", "by_avatar_hash", "auto", "likes", "round", "added_at", "started_at"}, &iteratorForInsertRoomEntries{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"room_entries"}, []string{"room_id", "entry_id", "slot", "source", "track_id", "title", "artist", "album", "cover_url", "cover_key", "page_url", "meta_duration_ms", "by_member_id", "by_name", "by_avatar_hash", "requester", "auto", "likes", "round", "added_at", "started_at"}, &iteratorForInsertRoomEntries{rows: arg})
 }

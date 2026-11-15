@@ -2,7 +2,7 @@
 export interface InlineSaveState {
   draft: string
   saved: string
-  status: 'idle' | 'saving' | 'saved' | 'error'
+  status: 'idle' | 'saving' | 'saved' | 'failed'
   error: string | null
 }
 
@@ -23,12 +23,12 @@ export function inlineSave(state: InlineSaveState, event: InlineSaveEvent): Inli
       if (state.status === 'saving')
         return state
       if (state.draft === state.saved)
-        return state.status === 'error' ? { ...state, status: 'idle', error: null } : state
+        return state.status === 'failed' ? { ...state, status: 'idle', error: null } : state
       return { ...state, status: 'saving', error: null }
     case 'succeeded':
       return state.status === 'saving' ? { ...state, saved: event.value, status: 'saved', error: null } : state
     case 'failed':
-      return state.status === 'saving' ? { ...state, status: 'error', error: event.error } : state
+      return state.status === 'saving' ? { ...state, status: 'failed', error: event.error } : state
     case 'revert':
       // 已经发出的保存撤不回来，等它的结果。
       if (state.status === 'saving')

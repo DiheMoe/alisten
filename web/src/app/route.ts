@@ -1,9 +1,10 @@
 import type { MediaSort, Source } from '@/core/realtime'
 import type { AdminSection } from '@/features/admin'
-import type { SearchSource } from '@/features/history'
-import type { SearchQuery } from '@/features/search'
+import type { SearchQuery, SearchSource } from '@/features/search'
 import type { SettingsSection } from '@/features/settings'
-import { defaultSearchSource, keywordSearch } from '@/features/search'
+import { MediaSortValues } from '@/core/realtime'
+import { defaultSearchSource, isSearchSource, keywordSearch } from '@/features/search'
+import { adminSections, settingsSections } from './page-paths'
 
 export type RoomPage = 'listen' | 'queue' | 'chat'
 export type Panel = 'queue' | 'history' | 'chat'
@@ -29,9 +30,6 @@ export type Route
 
 export type Page = Route['name']
 
-const settingsSections: Record<SettingsSection, true> = { account: true, appearance: true, playback: true, performance: true, privacy: true }
-const adminSections: Record<AdminSection, true> = { site: true, registration: true, users: true, rooms: true, sources: true, media: true }
-const mediaSorts: Record<MediaSort, true> = { stored: true, idle: true, size: true }
 // 和接口对媒体搜索词的长度限制一致，按码点计。手改或截断的链接里如果搜索词更长，每次读取都会失败。
 const mediaQueryMaxLength = 100
 
@@ -44,7 +42,7 @@ function isPaged(section: AdminSection | null): boolean {
 }
 
 function parseSource(value: string | null): SearchSource | null {
-  return value === 'qq' || value === 'netease' ? value : null
+  return isSearchSource(value) ? value : null
 }
 
 function parsePanel(params: URLSearchParams): Panel | null {
@@ -110,7 +108,7 @@ export function parseRoute({ pathname, search, hash }: Pick<Location, 'pathname'
       panel,
       q: parseAdminQuery(section, params),
       page: isPaged(section) ? parsePage(params) : 1,
-      sort: section === 'media' && isOneOf(mediaSorts, sort) ? sort : 'stored',
+      sort: section === 'media' ? MediaSortValues.find(value => value === sort) ?? 'stored' : 'stored',
     }
   }
   if (pathname === '/history')

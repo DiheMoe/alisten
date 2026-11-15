@@ -1,11 +1,12 @@
+import type { SearchCategory, SearchSource } from './records'
 import type { ErrorTexts } from '@/core/errors'
 import type { PlaylistSummary, Source, TrackSummary } from '@/core/realtime'
-import type { SearchCategory, SearchSource } from '@/features/history'
 import { errorMessage } from '@/core/errors'
+import { KeywordLimits } from '@/core/realtime'
 import { roomStore } from '@/core/room'
-import { historyStore } from '@/features/history'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { Store } from '@/shared/lib/store'
-import { notificationStore } from '@/shared/ui'
+import { searchHistoryStore } from './search-history-store'
 
 export type SearchView = SearchCategory | 'recommend'
 
@@ -27,8 +28,8 @@ export const pageSize = 20
 export const defaultSearchSource: SearchSource = 'qq'
 const cacheLimit = 10
 const cacheTtlMs = 10 * 60 * 1000
-// 搜索框最多输入 500 个字符，但地址里的关键词可能更长，超过时服务端返回 INVALID_ARGUMENT。
-const keywordTexts: ErrorTexts = { INVALID_ARGUMENT: '关键词太长了，最多 500 个字符。' }
+// 搜索框最多输入 KeywordLimits.maxLength 个字符，但地址里的关键词可能更长，超过时服务端返回 INVALID_ARGUMENT。
+const keywordTexts: ErrorTexts = { INVALID_ARGUMENT: `关键词太长了，最多 ${KeywordLimits.maxLength} 个字符。` }
 
 interface Cached<T> {
   value: T
@@ -62,10 +63,12 @@ export function keywordSearch(keyword: string, source: SearchSource, category: S
   return { view: category, keyword, source, page }
 }
 
-// 用户发起的搜索记入搜索历史，包括提交、点最近搜索、换来源和类别。翻页、推荐、打开歌单，以及前进、后退还原的搜索都不记。
-export function recordSearch(query: KeywordQuery): void {
-  if (query.keyword)
-    historyStore.recordSearch(query.keyword, query.source, query.view)
+// 用户发起的搜索都从这里交给 onSearch，这样才会记入搜索历史。用户发起的搜索包括提交、点最近搜索、换来源和类别。翻页、推荐、打开歌单，以及前进、后退还原的搜索都不记，所以不经过这里。
+// 不在房间里时不会搜索，也就不记入搜索历史。
+export function startSearch(query: KeywordQuery, onSearch: (query: SearchQuery) => void): void {
+  if (query.keyword && roomStore.state.roomId !== null)
+    searchHistoryStore.recordSearch(query.keyword, query.source, query.view)
+  onSearch(query)
 }
 
 function sameQuery(a: SearchQuery, b: SearchQuery): boolean {

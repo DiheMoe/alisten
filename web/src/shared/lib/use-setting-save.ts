@@ -2,7 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react'
 import { idleSave, settingSave, shownValue } from './setting-save'
 
 // “已保存”显示 1.5 秒，再用 0.4 秒淡出，和 ui.css 里 .save-status-saved 的动画一致。
-export const savedNoticeMs = 1900
+export const savedNoticeWithFadeMs = 1900
 
 // 改完立即保存。save 是同步函数时，写的是这台设备上的 store，抛出的是浏览器的存储错误。save 返回 Promise 时写的是服务端，失败时抛出 Error，message 是给用户看的原因。
 export function useSettingSave<T>(saved: T, save: (value: T) => void | Promise<void>) {
@@ -14,7 +14,7 @@ export function useSettingSave<T>(saved: T, save: (value: T) => void | Promise<v
   useEffect(() => {
     if (state.status !== 'saved')
       return
-    const timer = setTimeout(dispatch, savedNoticeMs, { type: 'expired' })
+    const timer = setTimeout(dispatch, savedNoticeWithFadeMs, { type: 'expired' })
     return () => clearTimeout(timer)
   }, [state])
 

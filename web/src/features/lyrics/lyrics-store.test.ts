@@ -10,7 +10,7 @@ async function setup() {
   vi.resetModules()
   const room = Object.assign(new EventTarget(), { state: { room: null as { nowPlaying: NowPlaying | null } | null } })
   const frames = new Emitter<number>()
-  vi.doMock('@/core/room', () => ({ roomStore: room }))
+  vi.doMock('@/core/room', async importOriginal => ({ ...await importOriginal<typeof import('@/core/room')>(), roomStore: room }))
   vi.doMock('@/features/playback', () => ({ playerStore: { frames } }))
   const { lyricsStore } = await import('./lyrics-store')
   lyricsStore.start()

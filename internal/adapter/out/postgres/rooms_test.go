@@ -89,7 +89,7 @@ func TestSlugIsUniqueAndOnlyForPersistentRooms(t *testing.T) {
 	if _, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "重名", Slug: "hall"}); !errors.Is(err, port.ErrSlugTaken) {
 		t.Errorf("新建房间使用已占用的别名，错误 = %v，期望 ErrSlugTaken", err)
 	}
-	if err := store.UpdateRoomAccess(t.Context(), other, port.AccessChange{Slug: ptr("hall")}); !errors.Is(err, port.ErrSlugTaken) {
+	if err := store.SetRoomSlug(t.Context(), other, "hall"); !errors.Is(err, port.ErrSlugTaken) {
 		t.Errorf("改用已占用的别名，错误 = %v，期望 ErrSlugTaken", err)
 	}
 	_, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Ephemeral, Name: "临时", Slug: "temp"})
@@ -100,63 +100,61 @@ func TestSlugIsUniqueAndOnlyForPersistentRooms(t *testing.T) {
 	}
 }
 
-func TestUpdateRoomAccess(t *testing.T) {
+func TestSetRoomSlug(t *testing.T) {
 	store, pool := newStore(t)
 	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall"})
 	addTicket(t, pool, id)
 
-	if err := store.UpdateRoomAccess(t.Context(), id, port.AccessChange{Slug: ptr("")}); err != nil {
+	if err := store.SetRoomSlug(t.Context(), id, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.FindRoom(t.Context(), "hall"); !errors.Is(err, port.ErrRoomNotFound) {
 		t.Errorf("取消别名后仍能按别名找到房间：%v", err)
 	}
-	if ticketCount(t, pool, id) != 1 {
-		t.Error("只改别名不影响票据")
-	}
-
-	if err := store.UpdateRoomAccess(t.Context(), id, port.AccessChange{Slug: ptr("main"), PasswordHash: ptr("hash")}); err != nil {
+	if err := store.SetRoomSlug(t.Context(), id, "main"); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := store.FindRoom(t.Context(), "main"); got.PasswordHash != "hash" {
-		t.Errorf("设置别名和密码后 = %#v", got)
+	if got, _ := store.FindRoom(t.Context(), "main"); got.Info.ID != id {
+		t.Errorf("设置别名后按别名找到的房间 = %#v", got)
+	}
+	if ticketCount(t, pool, id) != 1 {
+		t.Error("改别名不影响票据")
+	}
+
+	missing := "01a15778-1911-7a28-8b2e-e08c2a25f388"
+	if err := store.SetRoomSlug(t.Context(), missing, "x"); !errors.Is(err, port.ErrRoomNotFound) {
+		t.Errorf("SetRoomSlug(%q) 的错误 = %v，期望 ErrRoomNotFound", missing, err)
+	}
+}
+
+func TestSetRoomPassword(t *testing.T) {
+	store, pool := newStore(t)
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall"})
+	addTicket(t, pool, id)
+
+	if err := store.SetRoomPassword(t.Context(), id, "hash"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := store.FindRoom(t.Context(), id); got.PasswordHash != "hash" || got.Slug != "hall" {
+		t.Errorf("设置密码后 = %#v", got)
 	}
 	if ticketCount(t, pool, id) != 0 {
 		t.Error("设置密码时应删除全部票据")
 	}
 
 	addTicket(t, pool, id)
-	if err := store.UpdateRoomAccess(t.Context(), id, port.AccessChange{PasswordHash: ptr("")}); err != nil {
+	if err := store.SetRoomPassword(t.Context(), id, ""); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := store.FindRoom(t.Context(), id); got.PasswordHash != "" || got.Slug != "main" {
+	if got, _ := store.FindRoom(t.Context(), id); got.PasswordHash != "" || got.Slug != "hall" {
 		t.Errorf("取消密码后 = %#v", got)
 	}
 	if ticketCount(t, pool, id) != 1 {
 		t.Error("取消密码时票据保持有效")
 	}
 
-	for _, missing := range []string{"01a15778-1911-7a28-8b2e-e08c2a25f388", "hall"} {
-		if err := store.UpdateRoomAccess(t.Context(), missing, port.AccessChange{Slug: ptr("x")}); !errors.Is(err, port.ErrRoomNotFound) {
-			t.Errorf("UpdateRoomAccess(%q) 的错误 = %v，期望 ErrRoomNotFound", missing, err)
-		}
-	}
-}
-
-func TestUpdateRoomAccessIsAtomic(t *testing.T) {
-	store, pool := newStore(t)
-	createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall"})
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "二厅", PasswordHash: "old"})
-	addTicket(t, pool, id)
-
-	err := store.UpdateRoomAccess(t.Context(), id, port.AccessChange{Slug: ptr("hall"), PasswordHash: ptr("new")})
-	if !errors.Is(err, port.ErrSlugTaken) {
-		t.Fatalf("错误 = %v，期望 ErrSlugTaken", err)
-	}
-	if got, _ := store.FindRoom(t.Context(), id); got.PasswordHash != "old" {
-		t.Errorf("别名冲突时密码不应改变：%#v", got)
-	}
-	if ticketCount(t, pool, id) != 1 {
-		t.Error("别名冲突时票据不应删除")
+	missing := "01a15778-1911-7a28-8b2e-e08c2a25f388"
+	if err := store.SetRoomPassword(t.Context(), missing, "x"); !errors.Is(err, port.ErrRoomNotFound) {
+		t.Errorf("SetRoomPassword(%q) 的错误 = %v，期望 ErrRoomNotFound", missing, err)
 	}
 }

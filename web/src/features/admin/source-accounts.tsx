@@ -1,7 +1,7 @@
 import type { Credential, Source, SourceId } from './source-credentials'
 import { QrCode } from 'lucide-react'
 import { useId, useState } from 'react'
-import { notificationStore } from '@/shared/ui'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { QrLoginDialog } from './qr-login-dialog'
 import { SectionHead, StatusPill } from './section-head'
 import { afterChinese, sourceAccountView } from './source-account-view'
@@ -12,6 +12,7 @@ function SourceCard({ source, credential: { state, reload } }: { source: Source,
   const titleId = useId()
   const [signingIn, setSigningIn] = useState(false)
   const view = sourceAccountView(state, source.name)
+  const saved = state.status === 'loaded' && state.value.set
   return (
     <article className="admin-card" aria-labelledby={titleId}>
       <div className="admin-card-top">
@@ -20,12 +21,12 @@ function SourceCard({ source, credential: { state, reload } }: { source: Source,
       </div>
       {view.detail && <p className="admin-card-detail">{view.detail}</p>}
       <div className="admin-card-actions">
-        {state instanceof Error
+        {state.status === 'failed'
           ? <button type="button" className="button-secondary" onClick={reload}>重试</button>
           : (
-              <button type="button" className="button-secondary" disabled={state === undefined} onClick={() => setSigningIn(true)}>
-                {!state?.set && <QrCode size={16} aria-hidden="true" />}
-                {state?.set ? '重新登录' : '扫码登录'}
+              <button type="button" className="button-secondary" disabled={state.status === 'loading'} onClick={() => setSigningIn(true)}>
+                {!saved && <QrCode size={16} aria-hidden="true" />}
+                {saved ? '重新登录' : '扫码登录'}
               </button>
             )}
       </div>

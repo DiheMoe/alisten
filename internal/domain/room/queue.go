@@ -60,7 +60,7 @@ func (r *Room) enqueue(b *batch, by member.Member, a Enqueue) (Result, *Error) {
 	if r.queued(a.Track) {
 		return nil, errDuplicatePick
 	}
-	e := r.add(b, a.Track, a.Meta, by, false)
+	e := r.add(b, a.Track, a.Meta, by, a.Requester, false)
 	r.lastPick = b.now
 	b.event(Activity{Kind: ActivityAdded, Member: by, Entry: e})
 	r.advanceIfIdle(b)
@@ -95,9 +95,10 @@ func (r *Room) like(b *batch, by member.Member, a Like) (Result, *Error) {
 	return LikeResult{Likes: e.Likes}, nil
 }
 
-func (r *Room) add(b *batch, t track.Track, m track.Meta, by member.Member, auto bool) Entry {
+func (r *Room) add(b *batch, t track.Track, m track.Meta, by member.Member, onBehalfOf string, auto bool) Entry {
 	r.entrySeq++
-	e := Entry{ID: r.entrySeq, Track: t, Meta: m, By: by, Auto: auto, Round: r.nextRound(by), AddedAt: b.now}
+	e := Entry{ID: r.entrySeq, Track: t, Meta: m, By: by, Requester: onBehalfOf, Auto: auto, AddedAt: b.now}
+	e.Round = r.nextRound(requesterOf(e))
 	r.waiting = append(r.waiting, e)
 	b.prepare(t)
 	return e
@@ -105,9 +106,8 @@ func (r *Room) add(b *batch, t track.Track, m track.Meta, by member.Member, auto
 
 // 轮次在入队时定下，之后不再改变。新歌一般排进还没放完的轮次中最早的一轮。如果点歌人已经有歌在队列里，或者已经有歌开播，就至少排到这些歌里最高一轮的下一轮。
 // 最早的一轮不一定是正在播放的那一轮，因为点赞会让靠后轮次的歌先放。
-// 判断是不是同一个点歌人，要同时看成员 ID 和名字，因为 bot 会用同一个成员替不同的人点歌。
 // AutoDJ 加的歌没有点歌人，都算作同一个点歌人。
-func (r *Room) nextRound(by member.Member) int {
+func (r *Room) nextRound(key requester) int {
 	entries := slices.Clone(r.waiting)
 	if r.pending != nil {
 		entries = append(entries, *r.pending)
@@ -123,21 +123,22 @@ func (r *Room) nextRound(by member.Member) int {
 	round := slices.MinFunc(entries, func(a, b Entry) int { return cmp.Compare(a.Round, b.Round) }).Round
 	// 早于最早一轮的记录不会再影响轮次。bot 代填的点歌人名字不受限制，不删的话 served 会一直增长。
 	maps.DeleteFunc(r.served, func(_ requester, served int) bool { return served < round })
-	key := requesterOf(by)
 	if served, ok := r.served[key]; ok {
 		round = max(round, served+1)
 	}
 	for _, e := range entries {
-		if requesterOf(e.By) == key {
+		if requesterOf(e) == key {
 			round = max(round, e.Round+1)
 		}
 	}
 	return round
 }
 
-type requester struct{ id, name string }
+// 成员自己点的歌只按成员 ID 区分点歌人，这样改名不会让成员多排一个靠前的位置。
+// bot 用同一个成员替不同的人点歌，所以 bot 代点的歌还要看替谁点。
+type requester struct{ member, onBehalfOf string }
 
-func requesterOf(m member.Member) requester { return requester{m.ID, m.Name} }
+func requesterOf(e Entry) requester { return requester{e.By.ID, e.Requester} }
 
 func (r *Room) prepared(b *batch, in Prepared) {
 	e := r.unready(in.Track)
@@ -173,7 +174,7 @@ func (r *Room) recommended(b *batch, in Recommended) {
 	if !r.autoDJReady(b.now) || r.current.Entry.Track == in.Track {
 		return
 	}
-	e := r.add(b, in.Track, in.Meta, member.Member{}, true)
+	e := r.add(b, in.Track, in.Meta, member.Member{}, "", true)
 	b.event(Activity{Kind: ActivityAdded, Entry: e})
 }
 

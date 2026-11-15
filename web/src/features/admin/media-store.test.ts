@@ -1,7 +1,7 @@
 import type { AdminListMediaRequest, AdminRemoveMediaRequest } from '@/core/api'
 import type { StoredMedia } from '@/core/realtime'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { notificationStore } from '@/shared/ui'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { adminStore } from './admin-store'
 import { fallbackPage, MediaStore } from './media-store'
 

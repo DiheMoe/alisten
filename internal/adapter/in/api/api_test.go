@@ -178,7 +178,7 @@ func TestRequestBodyLimit(t *testing.T) {
 func TestPlaylistBatchBodyLimit(t *testing.T) {
 	store := porttest.New()
 	s := services(store, store, "")
-	s.Playlists = playlist.New(store, store, noTracks{}, s.Catalog, nil, nil)
+	s.Playlists = playlist.New(store, noTracks{}, s.Catalog, nil, nil)
 	server, _ := start(t, s)
 	var created protocol.CreateMemberResponse
 	if err := json.Unmarshal([]byte(send(t, server, http.MethodPost, "/api/members", "{}").body), &created); err != nil {
@@ -229,7 +229,7 @@ func TestPlaylistBatchBodyLimit(t *testing.T) {
 
 func TestMalformedPathParametersAreNotFound(t *testing.T) {
 	store := porttest.New()
-	server, logs := start(t, services(store, store, ""))
+	server, logs := start(t, services(store, store, "secret"))
 	if _, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall"}); err != nil {
 		t.Fatal(err)
 	}
@@ -237,15 +237,45 @@ func TestMalformedPathParametersAreNotFound(t *testing.T) {
 	if got := send(t, server, http.MethodGet, "/api/rooms/hall", ""); got.status != http.StatusOK {
 		t.Fatalf("按别名查找 = %#v，期望成功", got)
 	}
-	want := failure(protocol.ErrorCodeNotFound, "房间不存在")
-	for _, path := range []string{"/api/rooms/%FF"} {
-		if got := send(t, server, http.MethodGet, path, ""); got != want {
-			t.Errorf("GET %s = %#v，期望 %#v", path, got, want)
+	member := []string{"Authorization", "Bearer " + memberToken(t, server)}
+	var created protocol.CreateMemberResponse
+	if err := json.Unmarshal([]byte(send(t, server, http.MethodPost, "/api/members", "{}").body), &created); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Register(t.Context(), created.Member.ID, "alice", "hash"); err != nil {
+		t.Fatal(err)
+	}
+	account := []string{"Authorization", "Bearer " + created.MemberToken}
+	admin := []string{"Authorization", "Bearer secret"}
+	tests := []struct {
+		method, path, body string
+		header             []string
+		want               response
+	}{
+		{http.MethodGet, "/api/rooms/%FF", "", nil, failure(protocol.ErrorCodeNotFound, "房间不存在")},
+		{http.MethodPost, "/api/rooms/hall/tickets", "{}", member, failure(protocol.ErrorCodeNotFound, "房间不存在")},
+		{http.MethodGet, "/api/me/playlists/not-a-uuid/items", "", account, failure(protocol.ErrorCodeNotFound, "歌单不存在")},
+		{http.MethodGet, "/api/shared-playlists/not-a-share", "", nil, failure(protocol.ErrorCodeNotFound, "分享已失效")},
+		{http.MethodGet, "/api/admin/accounts/Not%20Valid", "", admin, failure(protocol.ErrorCodeNotFound, "没有这个用户名的账号")},
+	}
+	for _, tt := range tests {
+		if got := send(t, server, tt.method, tt.path, tt.body, tt.header...); got != tt.want {
+			t.Errorf("%s %s = %#v，期望 %#v", tt.method, tt.path, got, tt.want)
 		}
 	}
 	if logs.Len() != 0 {
-		t.Errorf("不存在的房间不是内部错误，不应记录日志：\n%s", logs)
+		t.Errorf("不存在的资源不是内部错误，不应记录日志：\n%s", logs)
 	}
+}
+
+func TestPathParamTypeWithoutNotFoundPanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("路径参数的类型在 paramNotFound 中没有对应的错误，登记接口时应 panic")
+		}
+	}()
+	rt := routes{mux: http.NewServeMux()}
+	rt.register(protocol.Route{Pattern: "GET /api/things/{id}"}, []protocol.PathParam{{Name: "id", Type: "ThingID"}}, nil)
 }
 
 func TestUnknownEndpointsAreJSONNotFound(t *testing.T) {

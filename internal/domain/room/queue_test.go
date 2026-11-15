@@ -87,26 +87,46 @@ func TestRateLimitsByRoomKind(t *testing.T) {
 	}
 }
 
-func TestRotationTellsRequestersApartByIDAndName(t *testing.T) {
+func botPick(requester string, t track.Track) Command {
+	return command(member.Member{ID: "bot", Name: requester + "（bot）"}, Enqueue{Track: t, Meta: track.Meta{Title: t.ID}, Requester: requester})
+}
+
+func TestRotationTellsRequestersApart(t *testing.T) {
+	member8 := member.Member{ID: "m8", Name: "丁"}
+	member9 := member.Member{ID: "m9", Name: "丁"}
 	cases := []struct {
 		name          string
-		first, second member.Member
+		first, second func(track.Track) Command
 	}{
-		{"bot 替不同的人点歌", member.Member{ID: "bot", Name: "张三（bot）"}, member.Member{ID: "bot", Name: "李四（bot）"}},
-		{"同名的不同成员", member.Member{ID: "m8", Name: "丁"}, member.Member{ID: "m9", Name: "丁"}},
+		{"bot 替不同的人点歌", func(t track.Track) Command { return botPick("张三", t) }, func(t track.Track) Command { return botPick("李四", t) }},
+		{"同名的不同成员", func(t track.Track) Command { return enqueue(member8, t) }, func(t track.Track) Command { return enqueue(member9, t) }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newRoom(t, Persistent)
 			r.Handle(at(0), command(alice, SetPlayMode{Mode: Rotation}))
 			playing(t, r, 0, netease("x"), time.Minute)
-			r.Handle(at(time.Second), enqueue(tc.first, netease("a")))
-			r.Handle(at(time.Second), enqueue(tc.first, netease("b")))
-			r.Handle(at(time.Second), enqueue(tc.second, netease("c")))
+			r.Handle(at(time.Second), tc.first(netease("a")))
+			r.Handle(at(time.Second), tc.first(netease("b")))
+			r.Handle(at(time.Second), tc.second(netease("c")))
 			if got := ids(r.waiting); !slices.Equal(got, []EntryID{2, 4, 3}) {
 				t.Fatalf("应算作两个点歌人轮流播放：%v", got)
 			}
 		})
+	}
+}
+
+// 改名不能让成员多排一个靠前的位置，否则每改一次名就能插一次队。
+func TestRotationKeepsARenamedMemberInTheirTurn(t *testing.T) {
+	r := newRoom(t, Persistent)
+	r.Handle(at(0), command(alice, SetPlayMode{Mode: Rotation}))
+	playing(t, r, 0, netease("x"), time.Minute)
+	r.Handle(at(time.Second), enqueue(member.Member{ID: "m8", Name: "丁"}, netease("a")))
+	r.Handle(at(time.Second), enqueue(member.Member{ID: "m8", Name: "丁"}, netease("b")))
+	r.Handle(at(time.Second), enqueue(bob, netease("c")))
+	r.Handle(at(time.Second), enqueue(member.Member{ID: "m8", Name: "丁丁"}, netease("d")))
+	if got := ids(r.waiting); !slices.Equal(got, []EntryID{2, 4, 3, 5}) {
+		t.Fatalf("改名之后仍是同一个点歌人，改名后点的歌排在自己的第二首之后：%v", got)
 	}
 }
 
@@ -144,7 +164,7 @@ func TestRotationForgetsFinishedRounds(t *testing.T) {
 	if got := r.waiting[0].Round; got != 1 {
 		t.Fatalf("第 0 轮放完之后新来的丙应排进第 1 轮：%d", got)
 	}
-	if want := map[requester]int{requesterOf(alice): 1}; !maps.Equal(r.served, want) {
+	if want := map[requester]int{{member: alice.ID}: 1}; !maps.Equal(r.served, want) {
 		t.Fatalf("第 0 轮放完之后只需记着甲在第 1 轮开播：%v", r.served)
 	}
 }

@@ -22,6 +22,9 @@ const (
 	autoDJLimit      = 10
 )
 
+// 只看最近 1000 次播放，这样存储读够这么多行就停，耗时和房间历史的长度无关。
+var autoDJWindow = port.AutoDJWindow{Plays: 1000, Seeds: 32, Exclusions: 128}
+
 var (
 	ErrRateLimited = errors.New("搜索过于频繁，请稍后再试。")
 	ErrNoMatch     = errors.New("没有找到匹配的歌曲。")
@@ -43,10 +46,10 @@ type Service struct {
 	tracks   port.Tracks
 	history  port.PlayHistory
 	rooms    port.RoomDirectory
-	quota    port.RoomQuota
+	quota    port.Quota
 }
 
-func New(netease port.NetEaseSource, qq port.PlaylistSource, bilibili port.BilibiliSource, links port.BilibiliLinks, tracks port.Tracks, history port.PlayHistory, rooms port.RoomDirectory, quota port.RoomQuota) *Service {
+func New(netease port.NetEaseSource, qq port.PlaylistSource, bilibili port.BilibiliSource, links port.BilibiliLinks, tracks port.Tracks, history port.PlayHistory, rooms port.RoomDirectory, quota port.Quota) *Service {
 	return &Service{netease: netease, qq: qq, bilibili: bilibili, links: links, tracks: tracks, history: history, rooms: rooms, quota: quota}
 }
 
@@ -188,11 +191,11 @@ func (s *Service) Recommend(ctx context.Context, roomID string) (track.Track, tr
 func (s *Service) candidates(ctx context.Context, roomID string, includeQueue bool) ([]port.Song, error) {
 	readCtx, cancel := context.WithTimeout(ctx, storeTimeout)
 	defer cancel()
-	seeds, err := s.history.AutoDJSeeds(readCtx, roomID, includeQueue)
+	seeds, err := s.history.AutoDJSeeds(readCtx, roomID, includeQueue, autoDJWindow)
 	if err != nil {
 		return nil, err
 	}
-	excluded, err := s.history.AutoDJExclusions(readCtx, roomID)
+	excluded, err := s.history.AutoDJExclusions(readCtx, roomID, autoDJWindow)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +232,7 @@ func (s *Service) TakePick(ctx context.Context, roomID string) error {
 	if err != nil || !ephemeral {
 		return err
 	}
-	wait, err := s.quota.TakePick(ctx, roomID, room.EphemeralBurst, room.RefillInterval)
+	wait, err := s.quota.Take(ctx, "room:"+roomID+":pick", room.EphemeralBurst, room.RefillInterval)
 	if err != nil {
 		return err
 	}
@@ -245,7 +248,7 @@ func (s *Service) take(ctx context.Context, roomID string) error {
 		return err
 	}
 	for {
-		wait, err := s.quota.TakeSearch(ctx, roomID, searchBurst, searchRefill)
+		wait, err := s.quota.Take(ctx, "room:"+roomID+":search", searchBurst, searchRefill)
 		if err != nil {
 			return err
 		}

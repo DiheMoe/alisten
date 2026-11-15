@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/dihemoe/alisten/internal/app/catalog"
+	"github.com/dihemoe/alisten/internal/app/identity"
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
@@ -23,7 +24,6 @@ const (
 )
 
 var (
-	ErrNotRegistered    = errors.New("注册账号之后才能使用歌单")
 	ErrInvalidName      = errors.New("name：去掉首尾空白后应有 1 到 50 个字符，其中至少一个看得见，不能包含控制字符")
 	ErrTooManyPlaylists = errors.New("最多只能建 50 个歌单")
 	ErrPlaylistFull     = errors.New("一个歌单最多 1000 首歌")
@@ -33,70 +33,51 @@ var (
 
 type Service struct {
 	playlists  port.Playlists
-	members    port.Members
 	tracks     port.TrackLookup
 	catalog    *catalog.Service
-	quota      port.AccountQuota
+	quota      port.Quota
 	shortLinks port.ShortLinks
 }
 
-func New(playlists port.Playlists, members port.Members, tracks port.TrackLookup, catalog *catalog.Service, quota port.AccountQuota, shortLinks port.ShortLinks) *Service {
-	return &Service{playlists: playlists, members: members, tracks: tracks, catalog: catalog, quota: quota, shortLinks: shortLinks}
+func New(playlists port.Playlists, tracks port.TrackLookup, catalog *catalog.Service, quota port.Quota, shortLinks port.ShortLinks) *Service {
+	return &Service{playlists: playlists, tracks: tracks, catalog: catalog, quota: quota, shortLinks: shortLinks}
 }
 
-func (s *Service) List(ctx context.Context, memberID string) ([]port.PlaylistRecord, error) {
-	if err := s.registered(ctx, memberID); err != nil {
-		return nil, err
-	}
-	return s.playlists.MemberPlaylists(ctx, memberID)
+func (s *Service) List(ctx context.Context, owner identity.AccountOwner) ([]port.PlaylistRecord, error) {
+	return s.playlists.MemberPlaylists(ctx, owner.MemberID())
 }
 
-func (s *Service) Create(ctx context.Context, memberID, name string) (port.PlaylistRecord, error) {
-	if err := s.registered(ctx, memberID); err != nil {
-		return port.PlaylistRecord{}, err
-	}
+func (s *Service) Create(ctx context.Context, owner identity.AccountOwner, name string) (port.PlaylistRecord, error) {
 	name, err := validName(name)
 	if err != nil {
 		return port.PlaylistRecord{}, err
 	}
-	p, err := s.playlists.CreatePlaylist(ctx, memberID, name, maxPlaylists)
+	p, err := s.playlists.CreatePlaylist(ctx, owner.MemberID(), name, maxPlaylists)
 	if errors.Is(err, port.ErrPlaylistLimit) {
 		return port.PlaylistRecord{}, ErrTooManyPlaylists
 	}
 	return p, err
 }
 
-func (s *Service) Rename(ctx context.Context, memberID, id, name string) error {
-	if err := s.registered(ctx, memberID); err != nil {
-		return err
-	}
+func (s *Service) Rename(ctx context.Context, owner identity.AccountOwner, id, name string) error {
 	name, err := validName(name)
 	if err != nil {
 		return err
 	}
-	return s.playlists.RenamePlaylist(ctx, memberID, id, name)
+	return s.playlists.RenamePlaylist(ctx, owner.MemberID(), id, name)
 }
 
-func (s *Service) Delete(ctx context.Context, memberID, id string) error {
-	if err := s.registered(ctx, memberID); err != nil {
-		return err
-	}
-	return s.playlists.DeletePlaylist(ctx, memberID, id)
+func (s *Service) Delete(ctx context.Context, owner identity.AccountOwner, id string) error {
+	return s.playlists.DeletePlaylist(ctx, owner.MemberID(), id)
 }
 
-func (s *Service) Items(ctx context.Context, memberID, id string) ([]port.PlaylistItem, error) {
-	if err := s.registered(ctx, memberID); err != nil {
-		return nil, err
-	}
-	return s.playlists.PlaylistItems(ctx, memberID, id)
+func (s *Service) Items(ctx context.Context, owner identity.AccountOwner, id string) ([]port.PlaylistItem, error) {
+	return s.playlists.PlaylistItems(ctx, owner.MemberID(), id)
 }
 
 // 链接曲目的 t.ID 必须已经按 track.LinkID 规范化。
-func (s *Service) Add(ctx context.Context, memberID, id string, t track.Track) (port.PlaylistItem, error) {
-	if err := s.registered(ctx, memberID); err != nil {
-		return port.PlaylistItem{}, err
-	}
-	if err := s.take(ctx, "playlist:member:"+memberID, addBurst, addRefill); err != nil {
+func (s *Service) Add(ctx context.Context, owner identity.AccountOwner, id string, t track.Track) (port.PlaylistItem, error) {
+	if err := s.take(ctx, "playlist:member:"+owner.MemberID(), addBurst, addRefill); err != nil {
 		return port.PlaylistItem{}, err
 	}
 	meta, err := s.meta(ctx, t)
@@ -104,7 +85,7 @@ func (s *Service) Add(ctx context.Context, memberID, id string, t track.Track) (
 		return port.PlaylistItem{}, err
 	}
 	item := port.PlaylistItem{Track: t, Meta: meta}
-	err = s.playlists.AddPlaylistItem(ctx, memberID, id, item, maxItems)
+	err = s.playlists.AddPlaylistItem(ctx, owner.MemberID(), id, item, maxItems)
 	if errors.Is(err, port.ErrPlaylistLimit) {
 		return port.PlaylistItem{}, ErrPlaylistFull
 	}
@@ -114,47 +95,24 @@ func (s *Service) Add(ctx context.Context, memberID, id string, t track.Track) (
 	return item, nil
 }
 
-func (s *Service) Remove(ctx context.Context, memberID, id string, tracks []track.Track) error {
-	if err := s.registered(ctx, memberID); err != nil {
-		return err
-	}
-	return s.playlists.RemovePlaylistItems(ctx, memberID, id, tracks)
+func (s *Service) Remove(ctx context.Context, owner identity.AccountOwner, id string, tracks []track.Track) error {
+	return s.playlists.RemovePlaylistItems(ctx, owner.MemberID(), id, tracks)
 }
 
-func (s *Service) Containing(ctx context.Context, memberID string, t track.Track) ([]string, error) {
-	if err := s.registered(ctx, memberID); err != nil {
-		return nil, err
-	}
-	return s.playlists.TrackPlaylists(ctx, memberID, t)
+func (s *Service) Containing(ctx context.Context, owner identity.AccountOwner, t track.Track) ([]string, error) {
+	return s.playlists.TrackPlaylists(ctx, owner.MemberID(), t)
 }
 
-func (s *Service) Copy(ctx context.Context, memberID, fromID, toID string, tracks []track.Track) (int, error) {
-	if err := s.registered(ctx, memberID); err != nil {
-		return 0, err
-	}
-	n, err := s.playlists.CopyPlaylistItems(ctx, memberID, fromID, toID, tracks, maxItems)
+func (s *Service) Copy(ctx context.Context, owner identity.AccountOwner, fromID, toID string, tracks []track.Track) (int, error) {
+	n, err := s.playlists.CopyPlaylistItems(ctx, owner.MemberID(), fromID, toID, tracks, maxItems)
 	if errors.Is(err, port.ErrPlaylistLimit) {
 		return 0, ErrPlaylistFull
 	}
 	return n, err
 }
 
-func (s *Service) Move(ctx context.Context, memberID, id string, tracks []track.Track, before *track.Track) error {
-	if err := s.registered(ctx, memberID); err != nil {
-		return err
-	}
-	return s.playlists.MovePlaylistItems(ctx, memberID, id, tracks, before)
-}
-
-func (s *Service) registered(ctx context.Context, memberID string) error {
-	profile, err := s.members.AccountProfile(ctx, memberID)
-	if err != nil {
-		return err
-	}
-	if !profile.Registered() {
-		return ErrNotRegistered
-	}
-	return nil
+func (s *Service) Move(ctx context.Context, owner identity.AccountOwner, id string, tracks []track.Track, before *track.Track) error {
+	return s.playlists.MovePlaylistItems(ctx, owner.MemberID(), id, tracks, before)
 }
 
 func (s *Service) take(ctx context.Context, key string, burst int, refill time.Duration) error {

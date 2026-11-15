@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/dihemoe/alisten/internal/app/port"
-	"github.com/dihemoe/alisten/internal/domain/member"
 )
 
 var ErrInvalidPairingCode = errors.New("配对码不对或已经过期")
@@ -28,18 +27,16 @@ type PairingCode struct {
 	ExpiresAt time.Time
 }
 
-// token 是发出请求的会话，配对码属于这个会话。会话被删除（退出登录、修改或重置密码）时，配对码随之作废。
-func (a *Accounts) CreatePairingCode(ctx context.Context, memberID, token string) (PairingCode, error) {
-	if _, registered, err := a.Account(ctx, memberID); err != nil {
+// 配对码属于 caller 这个会话。会话被删除（退出登录、修改或重置密码）时，配对码随之作废。
+func (a *Accounts) CreatePairingCode(ctx context.Context, caller Caller) (PairingCode, error) {
+	if _, err := caller.AccountOwner(); err != nil {
 		return PairingCode{}, err
-	} else if !registered {
-		return PairingCode{}, ErrNotRegistered
 	}
-	if err := a.take(ctx, "pairing:member:"+memberID, pairingCreateBurst, pairingCreateRefill); err != nil {
+	if err := a.take(ctx, "pairing:member:"+caller.Member.ID, pairingCreateBurst, pairingCreateRefill); err != nil {
 		return PairingCode{}, err
 	}
 	expires := time.Now().Add(pairingTTL)
-	p := port.Pairing{MemberID: memberID, SessionTokenHash: hashSecret(token)}
+	p := port.Pairing{MemberID: caller.Member.ID, SessionTokenHash: caller.TokenHash}
 	for range pairingAttempts {
 		code := newPairingCode()
 		created, err := a.pairings.CreatePairing(ctx, hashSecret(code), p, pairingTTL)
@@ -54,8 +51,8 @@ func (a *Accounts) CreatePairingCode(ctx context.Context, memberID, token string
 }
 
 // 兑换配对码就是登录。与 Login 相同，只有游客能兑换，成功后游客的这个会话随即失效。code 已经按协议校验过格式。
-func (a *Accounts) RedeemPairingCode(ctx context.Context, current member.Member, currentToken, clientIP, code string) (Session, Account, error) {
-	if err := a.requireGuest(ctx, current.ID); err != nil {
+func (a *Accounts) RedeemPairingCode(ctx context.Context, caller Caller, clientIP, code string) (Session, Account, error) {
+	if err := requireGuest(caller); err != nil {
 		return Session{}, Account{}, err
 	}
 	if err := a.take(ctx, "pairing:ip:"+QuotaAddr(clientIP), pairingRedeemBurst, pairingRedeemRefill); err != nil {
@@ -74,12 +71,12 @@ func (a *Accounts) RedeemPairingCode(ctx context.Context, current member.Member,
 	if err != nil {
 		return Session{}, Account{}, err
 	}
-	if _, err := a.members.MemberByToken(ctx, pairing.SessionTokenHash); errors.Is(err, port.ErrMemberNotFound) {
+	if _, _, err := a.members.MemberByToken(ctx, pairing.SessionTokenHash); errors.Is(err, port.ErrMemberNotFound) {
 		return Session{}, Account{}, ErrInvalidPairingCode
 	} else if err != nil {
 		return Session{}, Account{}, err
 	}
-	session, err := a.signIn(ctx, currentToken, account)
+	session, err := a.signIn(ctx, caller, account)
 	if errors.Is(err, port.ErrAccountPasswordChanged) {
 		return Session{}, Account{}, ErrInvalidPairingCode
 	}

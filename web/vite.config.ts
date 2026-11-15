@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { navigationAllowlist } from './src/app/page-paths'
 
 const backend = 'http://localhost:8080'
 
@@ -60,9 +61,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // 和 nginx 一样，只有页面路径返回 index.html，/api、/ws 和 /media 照常走网络。
-        // Workbox 拿路径加查询参数来匹配，nginx 只看路径，所以这里的规则末尾允许查询参数。
-        navigateFallbackAllowlist: [/^\/(?:settings(?:\/(?:account|appearance|playback|performance|privacy))?|admin(?:\/(?:site|registration|users|rooms|sources|media))?|history|playlists(?:\/[^/?]+)?)?(?:\?.*)?$/, /^\/r\/[^/?]+(?:\/(?:queue|chat|search|playlists\/[^/?]+\/[^/?]+))?(?:\?.*)?$/, /^\/s\/[^/?]+(?:\?.*)?$/, /^\/(?:pair|auth\/github)(?:\?.*)?$/],
+        navigateFallbackAllowlist: navigationAllowlist,
         importScripts: ['notification-click.js'],
       },
     }),

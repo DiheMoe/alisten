@@ -3,6 +3,7 @@ package loudness
 import (
 	"bytes"
 	"encoding/binary"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -59,6 +60,25 @@ func wavTestdata(t *testing.T, name string) []byte {
 	return data
 }
 
+func decodeAll(t *testing.T, file []byte) (samples []float64, sampleRate, channels int) {
+	t.Helper()
+	dec, err := wav.NewDecoder(bytes.NewReader(file))
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]float64, 8192)
+	for {
+		n, err := dec.Read(buf)
+		samples = append(samples, buf[:n]...)
+		if err == io.EOF {
+			return samples, dec.SampleRate(), dec.Channels()
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestAnalyzeReaderMonoMatchesDualMono(t *testing.T) {
 	const fs = 48000
 	wavFile, _ := pcm16WAV(monoOf(sine(fs, 997, 0.25, 3)), fs, 1)
@@ -71,18 +91,15 @@ func TestAnalyzeReaderMonoMatchesDualMono(t *testing.T) {
 		{"MP3", wavTestdata(t, "sine-mpeg1.mp3")},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := wav.Decode(bytes.NewReader(tt.file))
-			if err != nil {
-				t.Fatal(err)
+			samples, sampleRate, channels := decodeAll(t, tt.file)
+			if channels != 1 {
+				t.Fatalf("解码为 %d 声道，期望单声道", channels)
 			}
-			if a.Channels != 1 {
-				t.Fatalf("解码为 %d 声道，期望单声道", a.Channels)
-			}
-			dual := make([]float64, 0, 2*len(a.Samples))
-			for _, v := range a.Samples {
+			dual := make([]float64, 0, 2*len(samples))
+			for _, v := range samples {
 				dual = append(dual, v, v)
 			}
-			want, err := AnalyzeSamples(dual, a.SampleRate, 2)
+			want, err := AnalyzeSamples(dual, sampleRate, 2)
 			if err != nil {
 				t.Fatal(err)
 			}

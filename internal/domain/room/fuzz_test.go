@@ -166,7 +166,8 @@ func fuzzInput(r *Room, op, arg byte) Input {
 	case 11:
 		return Recommended{Token: r.recommendation, Track: tr}
 	case 12:
-		return UpdateInfo{RequestID: "q", Name: fmt.Sprint("房间", arg%3), Description: "介绍"}
+		name, description := fmt.Sprint("房间", arg%3), "介绍"
+		return UpdateInfo{RequestID: "q", Name: &name, Description: &description}
 	case 13:
 		return MemberUpdated{Member: member.Member{ID: m.ID, Name: fmt.Sprint(m.Name, arg%2)}}
 	case 14:

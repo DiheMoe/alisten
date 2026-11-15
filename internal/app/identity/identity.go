@@ -46,11 +46,11 @@ type Service struct {
 	members port.Members
 	rooms   port.RoomDirectory
 	tickets port.Tickets
-	quota   port.AccountQuota
+	quota   port.Quota
 	gateway *realtime.Gateway
 }
 
-func New(members port.Members, rooms port.RoomDirectory, tickets port.Tickets, quota port.AccountQuota, gateway *realtime.Gateway) *Service {
+func New(members port.Members, rooms port.RoomDirectory, tickets port.Tickets, quota port.Quota, gateway *realtime.Gateway) *Service {
 	return &Service{members: members, rooms: rooms, tickets: tickets, quota: quota, gateway: gateway}
 }
 
@@ -60,7 +60,7 @@ type Session struct {
 }
 
 func (s *Service) CreateMember(ctx context.Context, clientIP string) (Session, error) {
-	if err := s.take(ctx, "member:ip:"+QuotaAddr(clientIP), guestBurst, guestRefill, ErrTooManyGuests); err != nil {
+	if err := takeQuota(ctx, s.quota, "member:ip:"+QuotaAddr(clientIP), guestBurst, guestRefill, ErrTooManyGuests); err != nil {
 		return Session{}, err
 	}
 	token, hash := newSecret()
@@ -71,15 +71,49 @@ func (s *Service) CreateMember(ctx context.Context, clientIP string) (Session, e
 	return Session{MemberToken: token, Member: m}, nil
 }
 
-func (s *Service) Authenticate(ctx context.Context, memberToken string) (member.Member, error) {
+// 发出请求的会话。TokenHash 是这个会话的成员 token 的哈希，用例靠它识别、保留或作废这个会话。
+// 用 API Key 发出的房间请求没有会话，TokenHash 为空。
+type Caller struct {
+	Member    member.Member
+	TokenHash []byte
+	// 成员已经注册时是这个成员的 AccountOwner，否则为零值。只有 Authenticate 填写，所以改动 Member 换不出别人的 AccountOwner。
+	owner AccountOwner
+}
+
+// 已注册的成员。字段不导出，别的包只能造出零值。非零值只能经 Caller.AccountOwner 取得，所以它说明 identity 确认过这个成员已经注册。
+type AccountOwner struct {
+	memberID string
+}
+
+func (o AccountOwner) MemberID() string {
+	return o.memberID
+}
+
+// Caller 不是 Authenticate 返回的，或者成员是游客时，返回 ErrNotRegistered。
+func (c Caller) AccountOwner() (AccountOwner, error) {
+	if c.owner == (AccountOwner{}) {
+		return AccountOwner{}, ErrNotRegistered
+	}
+	return c.owner, nil
+}
+
+func (s *Service) Authenticate(ctx context.Context, memberToken string) (Caller, error) {
 	if memberToken == "" {
-		return member.Member{}, ErrInvalidMemberToken
+		return Caller{}, ErrInvalidMemberToken
 	}
-	m, err := s.members.MemberByToken(ctx, hashSecret(memberToken))
+	hash := hashSecret(memberToken)
+	m, registered, err := s.members.MemberByToken(ctx, hash)
 	if errors.Is(err, port.ErrMemberNotFound) {
-		return member.Member{}, ErrInvalidMemberToken
+		return Caller{}, ErrInvalidMemberToken
 	}
-	return m, err
+	if err != nil {
+		return Caller{}, err
+	}
+	caller := Caller{Member: m, TokenHash: hash}
+	if registered {
+		caller.owner = AccountOwner{memberID: m.ID}
+	}
+	return caller, nil
 }
 
 type Profile struct {
@@ -108,9 +142,9 @@ func (s *Service) UpdateProfile(ctx context.Context, memberID string, p Profile)
 	return m, nil
 }
 
-// memberToken 是发出请求的会话，票据属于这个会话，所以会话删除时票据随之失效。
-func (s *Service) IssueTicket(ctx context.Context, memberID, memberToken, clientIP, roomID, password string) (string, error) {
-	if err := s.take(ctx, "ticket:ip:"+QuotaAddr(clientIP), ticketIPBurst, ticketIPRefill, ErrTooManyAttempts); err != nil {
+// 票据属于 caller 这个会话，所以会话删除时票据随之失效。
+func (s *Service) IssueTicket(ctx context.Context, caller Caller, clientIP, roomID, password string) (string, error) {
+	if err := takeQuota(ctx, s.quota, "ticket:ip:"+QuotaAddr(clientIP), ticketIPBurst, ticketIPRefill, ErrTooManyAttempts); err != nil {
 		return "", err
 	}
 	r, err := s.rooms.FindRoom(ctx, roomID)
@@ -118,7 +152,7 @@ func (s *Service) IssueTicket(ctx context.Context, memberID, memberToken, client
 		return "", err
 	}
 	if r.PasswordHash != "" {
-		if err := s.take(ctx, "ticket:room:"+r.Info.ID, ticketRoomBurst, ticketRoomRefill, ErrTooManyRoomGuesses); err != nil {
+		if err := takeQuota(ctx, s.quota, "ticket:room:"+r.Info.ID, ticketRoomBurst, ticketRoomRefill, ErrTooManyRoomGuesses); err != nil {
 			return "", err
 		}
 		ok, err := checkPassword(ctx, r.PasswordHash, password)
@@ -130,7 +164,7 @@ func (s *Service) IssueTicket(ctx context.Context, memberID, memberToken, client
 		}
 	}
 	ticket, hash := newSecret()
-	err = s.tickets.CreateTicket(ctx, port.NewTicket{TokenHash: hash, RoomID: r.Info.ID, MemberID: memberID, PasswordHash: r.PasswordHash, SessionTokenHash: hashSecret(memberToken)})
+	err = s.tickets.CreateTicket(ctx, port.NewTicket{TokenHash: hash, RoomID: r.Info.ID, MemberID: caller.Member.ID, PasswordHash: r.PasswordHash, SessionTokenHash: caller.TokenHash})
 	if errors.Is(err, port.ErrPasswordChanged) {
 		// 刚才是按旧密码校验的。客户端重新输入密码后，会按新密码校验。
 		return "", ErrWrongPassword
@@ -146,7 +180,7 @@ func (s *Service) IssueTicket(ctx context.Context, memberID, memberToken, client
 }
 
 // 连接在网关中登记的凭证，就是票据在存储中的哈希。网关定期拿凭证到存储中核对，两者不同的话，仍然有效的连接也会被当作已撤销而断开。
-func TicketCredential(ticket string) []byte {
+func ticketCredential(ticket string) []byte {
 	return hashSecret(ticket)
 }
 
@@ -177,20 +211,46 @@ func (s *Service) EnterRoom(ctx context.Context, roomID, ticket string) (*realti
 	if holder.Bot {
 		return nil, ErrBotSession
 	}
-	session, err := s.gateway.Join(logctx.WithMember(logctx.WithRoom(ctx, r.Info.ID), holder.Member.ID), r.Info.ID, holder.Member, holder.SessionTokenHash, TicketCredential(ticket))
+	session, err := s.gateway.Join(logctx.WithMember(logctx.WithRoom(ctx, r.Info.ID), holder.Member.ID), r.Info.ID, holder.Member, holder.SessionTokenHash, ticketCredential(ticket))
 	if err != nil {
 		return nil, err
 	}
-	// 作废票据时先删除票据，再通知断开。通知如果在会话加入网关之前发出，会话就收不到，所以加入之后要再确认一次票据。
-	if _, err := s.VerifyTicket(ctx, ticket); err != nil {
-		s.gateway.Leave(session)
+	if err := s.confirm(ctx, ticket, func() { s.gateway.Leave(session) }); err != nil {
 		return nil, err
 	}
 	return session, nil
 }
 
-func (s *Service) take(ctx context.Context, key string, burst int, refill time.Duration, exhausted error) error {
-	wait, err := s.quota.Take(ctx, key, burst, refill)
+// ObserveRoom 用票据打开房间的事件流。holder 是调用方刚用 VerifyTicket 查到的持有者。结束时必须调用一次网关的 Unobserve。
+func (s *Service) ObserveRoom(ctx context.Context, ticket string, holder port.TicketHolder) (*realtime.Observer, error) {
+	o, err := s.gateway.Observe(ctx, holder.RoomID, holder.Member, holder.SessionTokenHash, holder.Bot, string(ticketCredential(ticket)))
+	if err != nil {
+		return nil, err
+	}
+	if err := s.confirm(ctx, ticket, func() { s.gateway.Unobserve(o) }); err != nil {
+		return nil, err
+	}
+	return o, nil
+}
+
+// 作废票据时先删除票据，再通知断开。通知如果在会话或事件流生效之前发出，它们就收不到，所以生效之后要再确认一次票据。
+// 确认失败或 panic 时调用 abandon。否则会话一直留在房间里，事件流一直占着名额和房间频道。
+func (s *Service) confirm(ctx context.Context, ticket string, abandon func()) error {
+	confirmed := false
+	defer func() {
+		if !confirmed {
+			abandon()
+		}
+	}()
+	if _, err := s.VerifyTicket(ctx, ticket); err != nil {
+		return err
+	}
+	confirmed = true
+	return nil
+}
+
+func takeQuota(ctx context.Context, quota port.Quota, key string, burst int, refill time.Duration, exhausted error) error {
+	wait, err := quota.Take(ctx, key, burst, refill)
 	if err != nil {
 		return err
 	}

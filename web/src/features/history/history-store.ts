@@ -1,36 +1,16 @@
-import type { SearchCategory, SearchRecord, SearchSource } from './records'
 import type { IdentityEvent } from '@/core/api'
-import type { MyListen, Track } from '@/core/realtime'
+import type { MyListen } from '@/core/realtime'
 import { api, identityEvents } from '@/core/api'
 import { errorMessage } from '@/core/errors'
-import { roomStore } from '@/core/room'
+import { playKey, roomStore, sameTrack } from '@/core/room'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { Store } from '@/shared/lib/store'
-import { notificationStore } from '@/shared/ui'
-import { parseSearches, recordSearch } from './records'
 
-export const searchLimits = [5, 10, 20, 50]
-const defaultSearchLimit = 10
-
-const searchesKey = 'alisten.search-history'
-const searchesEnabledKey = 'alisten.search-history.enabled'
-const searchLimitKey = 'alisten.search-history.limit'
-
-export interface SearchSettings {
-  searchesEnabled: boolean
-  searchLimit: number
-}
-
-interface HistoryState extends SearchSettings {
+interface HistoryState {
   // 播放历史保存在服务端，还没有读到时为 null。
   listens: MyListen[] | null
   // 最近一次读取失败的原因，读取成功后为 null。
   error: string | null
-  searches: SearchRecord[]
-}
-
-function loadSearchLimit(): number {
-  const stored = Number(localStorage.getItem(searchLimitKey))
-  return searchLimits.includes(stored) ? stored : defaultSearchLimit
 }
 
 function localDate(date: Date): string {
@@ -38,12 +18,7 @@ function localDate(date: Date): string {
 }
 
 function playingKey(): string {
-  const nowPlaying = roomStore.state.room?.nowPlaying
-  return nowPlaying ? `${nowPlaying.entry.id}@${nowPlaying.startedAtMs}` : ''
-}
-
-function sameTrack(a: Track, b: Track): boolean {
-  return a.source === b.source && a.id === b.id
+  return playKey(roomStore.state.room?.nowPlaying)
 }
 
 class HistoryStore extends Store<HistoryState> {
@@ -54,23 +29,12 @@ class HistoryStore extends Store<HistoryState> {
   #reading = 0
 
   constructor() {
-    super({ listens: null, error: null, searches: [], searchesEnabled: true, searchLimit: defaultSearchLimit })
+    super({ listens: null, error: null })
   }
 
   start(): void {
-    const searchLimit = loadSearchLimit()
-    const storedSearches = localStorage.getItem(searchesKey)
-    const searches = parseSearches(storedSearches, searchLimit)
-    this.setState({
-      searches,
-      searchesEnabled: localStorage.getItem(searchesEnabledKey) !== 'false',
-      searchLimit,
-    })
-    if (storedSearches !== null && JSON.stringify(searches) !== storedSearches)
-      this.#saveSearches(searches)
     this.#playing = playingKey()
     roomStore.addEventListener('change', this.#onRoom)
-    window.addEventListener('storage', this.#onStorage)
     identityEvents.on(this.#onIdentity)
   }
 
@@ -132,24 +96,6 @@ class HistoryStore extends Store<HistoryState> {
     setTimeout(() => URL.revokeObjectURL(url))
   }
 
-  // 只记录用户发起的搜索（提交、点最近搜索、换来源和类别）。翻页、推荐、打开歌单，以及前进、后退还原的搜索都不计入。
-  recordSearch(query: string, source: SearchSource, category: SearchCategory): void {
-    if (this.state.searchesEnabled)
-      this.#saveSearches(recordSearch(this.state.searches, { query, source, category, searchedAtMs: Date.now() }, this.state.searchLimit))
-  }
-
-  clearSearches(): void {
-    this.#saveSearches([])
-  }
-
-  updateSettings({ searchesEnabled, searchLimit }: SearchSettings): void {
-    localStorage.setItem(searchesEnabledKey, String(searchesEnabled))
-    localStorage.setItem(searchLimitKey, String(searchLimit))
-    this.setState({ searchesEnabled, searchLimit })
-    if (this.state.searches.length > searchLimit)
-      this.#saveSearches(this.state.searches.slice(0, searchLimit))
-  }
-
   async #write(request: () => Promise<void>): Promise<boolean> {
     try {
       await request()
@@ -188,17 +134,6 @@ class HistoryStore extends Store<HistoryState> {
     else if (event.kind === 'renewed' && this.#pages > 0) {
       void this.load()
     }
-  }
-
-  // 其他标签页写入搜索记录时，本页跟着更新，这样本页之后的写入才不会覆盖那个标签页写入的记录。
-  #onStorage = (event: StorageEvent): void => {
-    if (event.key === searchesKey)
-      this.setState({ searches: parseSearches(event.newValue, this.state.searchLimit) })
-  }
-
-  #saveSearches(searches: SearchRecord[]): void {
-    localStorage.setItem(searchesKey, JSON.stringify(searches))
-    this.setState({ searches })
   }
 }
 

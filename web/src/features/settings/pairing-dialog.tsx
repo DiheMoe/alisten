@@ -1,56 +1,43 @@
-import type { CreatePairingCodeResponse } from '@/core/api'
 import { useEffect, useState } from 'react'
-import { api, IdentityRenewedError } from '@/core/api'
-import { errorMessage } from '@/core/errors'
-import { Modal, notificationStore } from '@/shared/ui'
-import { countdownText, formatPairingCode, isPairingCode, normalizePairingCode, secondsLeft } from './pairing'
+import { notificationStore } from '@/shared/lib/notification-store'
+import { useResource } from '@/shared/lib/use-resource'
+import { Modal } from '@/shared/ui'
+import { checkPairingCode, createPairingCode, redeemPairingCode } from './account'
+import { countdownText, formatPairingCode, normalizePairingCode, secondsLeft } from './pairing'
 
 // 已登录的设备生成配对码，新设备输入它或者扫描二维码登录同一个账号。
 export function PairingDialog({ onClose }: { onClose: () => void }) {
-  const [pairing, setPairing] = useState<CreatePairingCodeResponse | 'loading' | 'failed'>('loading')
-  const [attempt, setAttempt] = useState(0)
   const [nowMs, setNowMs] = useState(Date.now)
+  const { state: pairing, reload: retry } = useResource(() => createPairingCode().then((created) => {
+    setNowMs(Date.now())
+    return created
+  }))
   useEffect(() => {
-    let active = true
-    api.createPairingCode().then((created) => {
-      if (!active)
-        return
-      setPairing(created)
-      setNowMs(Date.now())
-    }, (error: unknown) => {
-      if (!active)
-        return
-      setPairing('failed')
-      notificationStore.error(error instanceof IdentityRenewedError ? '没有生成配对码，再试一次。' : errorMessage(error))
-    })
+    if (pairing.status === 'failed')
+      notificationStore.error(pairing.error)
+  }, [pairing])
+  useEffect(() => {
     const tick = setInterval(() => setNowMs(Date.now()), 1000)
-    return () => {
-      active = false
-      clearInterval(tick)
-    }
-  }, [attempt])
-  const retry = () => {
-    setPairing('loading')
-    setAttempt(n => n + 1)
-  }
-  const seconds = typeof pairing === 'object' ? secondsLeft(pairing.expiresAtMs, nowMs) : 0
+    return () => clearInterval(tick)
+  }, [])
+  const seconds = pairing.status === 'loaded' ? secondsLeft(pairing.value.expiresAtMs, nowMs) : 0
   return (
     <Modal title="在新设备上登录" onClose={onClose}>
       <div className="settings-pairing">
-        {pairing === 'loading' && <p className="text-ui-base muted">正在生成配对码…</p>}
-        {pairing === 'failed' && <p className="text-ui-base muted">暂时无法生成配对码。</p>}
-        {typeof pairing === 'object' && seconds > 0 && (
+        {pairing.status === 'loading' && <p className="text-ui-base muted">正在生成配对码…</p>}
+        {pairing.status === 'failed' && <p className="text-ui-base muted">暂时无法生成配对码。</p>}
+        {pairing.status === 'loaded' && seconds > 0 && (
           <>
-            <img className="settings-pairing-qr" src={pairing.qrImage} alt="配对二维码" />
+            <img className="settings-pairing-qr" src={pairing.value.qrImage} alt="配对二维码" />
             {/* 读屏软件逐个字符读出配对码，不把可见的 XXXX-XXXX 当作单词来读。 */}
-            <p className="sr-only">{`配对码 ${pairing.code.split('').join(' ')}`}</p>
-            <p className="settings-pairing-code text-ui-xl" aria-hidden="true">{formatPairingCode(pairing.code)}</p>
+            <p className="sr-only">{`配对码 ${pairing.value.code.split('').join(' ')}`}</p>
+            <p className="settings-pairing-code text-ui-xl" aria-hidden="true">{formatPairingCode(pairing.value.code)}</p>
             <p className="text-ui-caption muted">在新设备上扫描二维码，或者打开设置里的“输入配对码”。配对码只能用一次。</p>
             <span className="text-ui-sm muted" role="timer">{`${countdownText(seconds)} 后失效`}</span>
           </>
         )}
-        {typeof pairing === 'object' && seconds === 0 && <p className="text-ui-base muted" role="status">配对码已经失效。</p>}
-        {(pairing === 'failed' || (typeof pairing === 'object' && seconds === 0)) && (
+        {pairing.status === 'loaded' && seconds === 0 && <p className="text-ui-base muted" role="status">配对码已经失效。</p>}
+        {(pairing.status === 'failed' || (pairing.status === 'loaded' && seconds === 0)) && (
           <button type="button" className="button-primary" onClick={retry}>重新生成</button>
         )}
       </div>
@@ -64,19 +51,14 @@ export function PairingCodeForm({ initialCode = '', onSignedIn }: { initialCode?
   const [busy, setBusy] = useState(false)
   const code = normalizePairingCode(input)
   const submit = async () => {
-    if (!isPairingCode(code)) {
-      notificationStore.error('配对码是 8 位字母和数字，不含 0、O、1、I。')
+    if (!checkPairingCode(code))
       return
-    }
     setBusy(true)
-    try {
-      const { memberToken } = await api.redeemPairingCode({ code })
-      onSignedIn(memberToken)
-    }
-    catch (error) {
-      notificationStore.error(error instanceof IdentityRenewedError ? '没有登录，再试一次。' : errorMessage(error, { INVALID_ARGUMENT: '配对码是 8 位字母和数字，不含 0、O、1、I。' }))
+    const memberToken = await redeemPairingCode(code)
+    if (memberToken === null)
       setBusy(false)
-    }
+    else
+      onSignedIn(memberToken)
   }
   return (
     <form

@@ -7,7 +7,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port"
 )
 
-var _ port.AccountQuota = Quota{}
+var _ port.Quota = Quota{}
 
 // 零值的额度总能取到。Exhausted 里的键取不到额度。
 type Quota struct {

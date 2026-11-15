@@ -1,11 +1,11 @@
 import type { MyPlaylistItem, SharedPlaylist, Track } from '@/core/realtime'
 import type { SongAction, SongItem } from '@/shared/ui'
 import { CirclePlus, Link2Off, ListMusic, ListPlus } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { api, ApiError } from '@/core/api'
 import { errorMessage } from '@/core/errors'
-import { roomStore, sameTrack } from '@/core/room'
-import { enqueue, pickButton, sourceName } from '@/features/queue'
+import { enqueue, pickButton, roomStore, sameTrack, sourceName } from '@/core/room'
+import { useResource } from '@/shared/lib/use-resource'
 import { useStore } from '@/shared/lib/use-store'
 import { Avatar, EmptyState, Skeleton, SongList } from '@/shared/ui'
 import { CopySharedPlaylistButton } from './copy-shared-playlist'
@@ -14,9 +14,6 @@ import { trackKey } from './playlists-store'
 import { saveToPlaylistLabel } from './save-label'
 import { SaveToPlaylistDialog } from './save-to-playlist'
 import './playlists.css'
-
-// 结果带上读取时的分享 ID，这样换到另一个分享时，上一个分享的结果不再显示。
-type Result = { shareId: string } & ({ kind: 'loaded', playlist: SharedPlaylist } | { kind: 'gone' } | { kind: 'failed', message: string })
 
 function songItem({ track, meta }: MyPlaylistItem, playing: Track | undefined): SongItem {
   return {
@@ -36,31 +33,30 @@ export function SharedPlaylistPage({ shareId }: { shareId: string }) {
   const connected = useStore(roomStore, s => s.status === 'open')
   const ephemeral = useStore(roomStore, s => s.room?.room.kind === 'ephemeral')
   const playing = useStore(roomStore, s => s.room?.nowPlaying?.entry.track)
-  const [result, setResult] = useState<Result | null>(null)
-  const [attempt, setAttempt] = useState(0)
+  // 分享已失效时读到 null。
+  const shared = useResource((): Promise<SharedPlaylist | null> => api.getSharedPlaylist(shareId).catch((error: unknown) => {
+    if (error instanceof ApiError && error.code === 'NOT_FOUND')
+      return null
+    throw new Error(errorMessage(error))
+  }), shareId)
   const [saving, setSaving] = useState<{ track: Track, title: string } | null>(null)
-  useEffect(() => {
-    let active = true
-    api.getSharedPlaylist(shareId).then((playlist) => {
-      if (active)
-        setResult({ shareId, kind: 'loaded', playlist })
-    }, (error: unknown) => {
-      if (!active)
-        return
-      setResult(error instanceof ApiError && error.code === 'NOT_FOUND'
-        ? { shareId, kind: 'gone' }
-        : { shareId, kind: 'failed', message: errorMessage(error) })
-    })
-    return () => {
-      active = false
-    }
-  }, [shareId, attempt])
 
-  const current = result?.shareId === shareId ? result : null
-  if (!current) {
+  if (shared.state.status === 'loading') {
     return <section className="page-content my-playlist-page"><Skeleton rows={6} /></section>
   }
-  if (current.kind === 'gone') {
+  if (shared.state.status === 'failed') {
+    return (
+      <section className="page-content my-playlist-page">
+        <EmptyState
+          icon={ListMusic}
+          title={shared.state.error}
+          action={<button type="button" className="button-secondary" onClick={shared.reload}>重试</button>}
+        />
+      </section>
+    )
+  }
+  const playlist = shared.state.value
+  if (!playlist) {
     return (
       <section className="page-content my-playlist-page">
         <EmptyState icon={Link2Off} title="分享已失效">
@@ -69,30 +65,7 @@ export function SharedPlaylistPage({ shareId }: { shareId: string }) {
       </section>
     )
   }
-  if (current.kind === 'failed') {
-    return (
-      <section className="page-content my-playlist-page">
-        <EmptyState
-          icon={ListMusic}
-          title={current.message}
-          action={(
-            <button
-              type="button"
-              className="button-secondary"
-              onClick={() => {
-                setResult(null)
-                setAttempt(n => n + 1)
-              }}
-            >
-              重试
-            </button>
-          )}
-        />
-      </section>
-    )
-  }
 
-  const { playlist } = current
   const { items } = playlist
   const actions = (_: SongItem, index: number): SongAction[] => {
     const { track, meta } = items[index]

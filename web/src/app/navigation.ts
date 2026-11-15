@@ -75,14 +75,12 @@ class NavigationStore extends Store<NavigationState> {
   }
 
   // 不在房间里时，房间的页面没有地址，所以改去发现房间。换页面时侧栏保持原样。
-  open(page: 'lobby' | 'admin' | 'settings' | 'history' | 'playlists' | RoomPage): void {
+  open(page: 'lobby' | 'settings' | 'history' | 'playlists' | RoomPage): void {
     const { panel } = this.state.route
     if (page === 'lobby' || page === 'history')
       this.navigate({ name: page, filter: '', panel })
     else if (page === 'settings')
       this.navigate({ name: page, section: null, panel })
-    else if (page === 'admin')
-      this.navigate({ name: page, section: null, panel, q: '', page: 1, sort: 'stored' })
     else if (page === 'playlists')
       this.navigate({ name: page, panel })
     else
@@ -98,11 +96,16 @@ class NavigationStore extends Store<NavigationState> {
     this.navigate({ ...this.state.route, panel })
   }
 
-  // 取消进入房间。leaveRoom 要在 roomEntryStore.reset() 之前调用，因为离开时要靠进房的信息认出这个房间的地址。
+  openAccountSettings(): void {
+    this.navigate({ name: 'settings', section: 'account', panel: this.state.route.panel })
+  }
+
+  // 取消进入房间。roomEntryStore.reset() 放在最后，因为离开时要靠进房的信息认出这个房间的地址，reset() 会清掉这些信息。
   leaveRoom(): void {
     const { ref, room } = roomEntryStore.state
     this.#leaving = new Set([ref, room?.id, room?.slug].filter(value => typeof value === 'string'))
     this.#leaveFrom(this.state.route, this.#leaving)
+    roomEntryStore.reset()
   }
 
   back(): void {

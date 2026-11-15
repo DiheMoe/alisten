@@ -35,10 +35,10 @@ func (s *server) playlistItemDTO(item port.PlaylistItem) protocol.MyPlaylistItem
 	}
 }
 
-func (s *server) listMyPlaylists(ctx context.Context, c call) (any, error) {
-	lists, err := s.Playlists.List(ctx, c.member.ID)
+func (s *server) listMyPlaylists(ctx context.Context, c call) (protocol.ListMyPlaylistsResponse, error) {
+	lists, err := s.Playlists.List(ctx, c.owner)
 	if err != nil {
-		return nil, err
+		return protocol.ListMyPlaylistsResponse{}, err
 	}
 	items := make([]protocol.MyPlaylist, len(lists))
 	for i, p := range lists {
@@ -47,34 +47,26 @@ func (s *server) listMyPlaylists(ctx context.Context, c call) (any, error) {
 	return protocol.ListMyPlaylistsResponse{Items: items}, nil
 }
 
-func (s *server) createMyPlaylist(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeCreateMyPlaylistRequest(c.body)
+func (s *server) createMyPlaylist(ctx context.Context, c call, req protocol.CreateMyPlaylistRequest) (protocol.MyPlaylist, error) {
+	p, err := s.Playlists.Create(ctx, c.owner, req.Name)
 	if err != nil {
-		return nil, err
-	}
-	p, err := s.Playlists.Create(ctx, c.member.ID, req.Name)
-	if err != nil {
-		return nil, err
+		return protocol.MyPlaylist{}, err
 	}
 	return s.playlistDTO(p), nil
 }
 
-func (s *server) renameMyPlaylist(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeRenameMyPlaylistRequest(c.body)
-	if err != nil {
-		return nil, err
-	}
-	return nil, s.Playlists.Rename(ctx, c.member.ID, c.r.PathValue("id"), req.Name)
+func (s *server) renameMyPlaylist(ctx context.Context, c call, req protocol.RenameMyPlaylistRequest) error {
+	return s.Playlists.Rename(ctx, c.owner, c.r.PathValue("id"), req.Name)
 }
 
-func (s *server) deleteMyPlaylist(ctx context.Context, c call) (any, error) {
-	return nil, s.Playlists.Delete(ctx, c.member.ID, c.r.PathValue("id"))
+func (s *server) deleteMyPlaylist(ctx context.Context, c call) error {
+	return s.Playlists.Delete(ctx, c.owner, c.r.PathValue("id"))
 }
 
-func (s *server) listMyPlaylistItems(ctx context.Context, c call) (any, error) {
-	list, err := s.Playlists.Items(ctx, c.member.ID, c.r.PathValue("id"))
+func (s *server) listMyPlaylistItems(ctx context.Context, c call) (protocol.ListMyPlaylistItemsResponse, error) {
+	list, err := s.Playlists.Items(ctx, c.owner, c.r.PathValue("id"))
 	if err != nil {
-		return nil, err
+		return protocol.ListMyPlaylistItemsResponse{}, err
 	}
 	items := make([]protocol.MyPlaylistItem, len(list))
 	for i, item := range list {
@@ -83,14 +75,10 @@ func (s *server) listMyPlaylistItems(ctx context.Context, c call) (any, error) {
 	return protocol.ListMyPlaylistItemsResponse{Items: items}, nil
 }
 
-func (s *server) addMyPlaylistItem(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeAddMyPlaylistItemRequest(c.body)
+func (s *server) addMyPlaylistItem(ctx context.Context, c call, req protocol.AddMyPlaylistItemRequest) (protocol.AddMyPlaylistItemResponse, error) {
+	item, err := s.Playlists.Add(ctx, c.owner, c.r.PathValue("id"), trackOf(req.Track))
 	if err != nil {
-		return nil, err
-	}
-	item, err := s.Playlists.Add(ctx, c.member.ID, c.r.PathValue("id"), trackOf(req.Track))
-	if err != nil {
-		return nil, err
+		return protocol.AddMyPlaylistItemResponse{}, err
 	}
 	return protocol.AddMyPlaylistItemResponse{Item: s.playlistItemDTO(item)}, nil
 }
@@ -103,56 +91,36 @@ func tracksOf(in []protocol.Track) []track.Track {
 	return out
 }
 
-func (s *server) removeMyPlaylistItems(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeRemoveMyPlaylistItemsRequest(c.body)
-	if err != nil {
-		return nil, err
-	}
-	return nil, s.Playlists.Remove(ctx, c.member.ID, c.r.PathValue("id"), tracksOf(req.Tracks))
+func (s *server) removeMyPlaylistItems(ctx context.Context, c call, req protocol.RemoveMyPlaylistItemsRequest) error {
+	return s.Playlists.Remove(ctx, c.owner, c.r.PathValue("id"), tracksOf(req.Tracks))
 }
 
-func (s *server) listMyTrackPlaylists(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeListMyTrackPlaylistsRequest(c.body)
+func (s *server) listMyTrackPlaylists(ctx context.Context, c call, req protocol.ListMyTrackPlaylistsRequest) (protocol.ListMyTrackPlaylistsResponse, error) {
+	ids, err := s.Playlists.Containing(ctx, c.owner, trackOf(req.Track))
 	if err != nil {
-		return nil, err
-	}
-	ids, err := s.Playlists.Containing(ctx, c.member.ID, trackOf(req.Track))
-	if err != nil {
-		return nil, err
+		return protocol.ListMyTrackPlaylistsResponse{}, err
 	}
 	return protocol.ListMyTrackPlaylistsResponse{PlaylistIds: ids}, nil
 }
 
-func (s *server) copyMyPlaylistItems(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeCopyMyPlaylistItemsRequest(c.body)
+func (s *server) copyMyPlaylistItems(ctx context.Context, c call, req protocol.CopyMyPlaylistItemsRequest) (protocol.CopyMyPlaylistItemsResponse, error) {
+	n, err := s.Playlists.Copy(ctx, c.owner, req.From, c.r.PathValue("id"), tracksOf(req.Tracks))
 	if err != nil {
-		return nil, err
-	}
-	n, err := s.Playlists.Copy(ctx, c.member.ID, req.From, c.r.PathValue("id"), tracksOf(req.Tracks))
-	if err != nil {
-		return nil, err
+		return protocol.CopyMyPlaylistItemsResponse{}, err
 	}
 	return protocol.CopyMyPlaylistItemsResponse{Added: int64(n)}, nil
 }
 
-func (s *server) moveMyPlaylistItems(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeMoveMyPlaylistItemsRequest(c.body)
-	if err != nil {
-		return nil, err
-	}
+func (s *server) moveMyPlaylistItems(ctx context.Context, c call, req protocol.MoveMyPlaylistItemsRequest) error {
 	var before *track.Track
 	if req.Before != nil {
 		t := trackOf(*req.Before)
 		before = &t
 	}
-	return nil, s.Playlists.Move(ctx, c.member.ID, c.r.PathValue("id"), tracksOf(req.Tracks), before)
+	return s.Playlists.Move(ctx, c.owner, c.r.PathValue("id"), tracksOf(req.Tracks), before)
 }
 
-func (s *server) importMyPlaylist(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeImportMyPlaylistRequest(c.body)
-	if err != nil {
-		return nil, err
-	}
+func (s *server) importMyPlaylist(ctx context.Context, c call, req protocol.ImportMyPlaylistRequest) (protocol.ImportMyPlaylistResponse, error) {
 	tracks := make([]playlist.ImportedTrack, len(req.Tracks))
 	for i, t := range req.Tracks {
 		tracks[i] = playlist.ImportedTrack{
@@ -165,56 +133,45 @@ func (s *server) importMyPlaylist(ctx context.Context, c call) (any, error) {
 			Duration: time.Duration(t.DurationMs) * time.Millisecond,
 		}
 	}
-	p, n, err := s.Playlists.ImportFile(ctx, c.member.ID, req.Name, tracks)
+	p, n, err := s.Playlists.ImportFile(ctx, c.owner, req.Name, tracks)
 	if err != nil {
-		return nil, err
+		return protocol.ImportMyPlaylistResponse{}, err
 	}
 	return protocol.ImportMyPlaylistResponse{Playlist: s.playlistDTO(p), Imported: int64(n)}, nil
 }
 
-func (s *server) resolveMyPlaylistLink(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeResolveMyPlaylistLinkRequest(c.body)
+func (s *server) resolveMyPlaylistLink(ctx context.Context, c call, req protocol.ResolveMyPlaylistLinkRequest) (protocol.ResolveMyPlaylistLinkResponse, error) {
+	source, id, err := s.Playlists.ResolveLink(ctx, c.owner, req.Link)
 	if err != nil {
-		return nil, err
-	}
-	source, id, err := s.Playlists.ResolveLink(ctx, c.member.ID, req.Link)
-	if err != nil {
-		return nil, err
+		return protocol.ResolveMyPlaylistLinkResponse{}, err
 	}
 	return protocol.ResolveMyPlaylistLinkResponse{Source: protocol.Source(source), PlaylistID: id}, nil
 }
 
-func (s *server) importMyPlatformPlaylist(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeImportMyPlatformPlaylistRequest(c.body)
+func (s *server) importMyPlatformPlaylist(ctx context.Context, c call, req protocol.ImportMyPlatformPlaylistRequest) (protocol.ImportMyPlatformPlaylistResponse, error) {
+	p, n, err := s.Playlists.ImportPlatform(ctx, c.owner, req.Name, track.Source(req.Source), req.PlaylistID)
 	if err != nil {
-		return nil, err
-	}
-	p, n, err := s.Playlists.ImportPlatform(ctx, c.member.ID, req.Name, track.Source(req.Source), req.PlaylistID)
-	if err != nil {
-		return nil, err
+		return protocol.ImportMyPlatformPlaylistResponse{}, err
 	}
 	return protocol.ImportMyPlatformPlaylistResponse{Playlist: s.playlistDTO(p), Imported: int64(n)}, nil
 }
 
-func (s *server) shareMyPlaylist(ctx context.Context, c call) (any, error) {
-	if _, err := protocol.DecodeShareMyPlaylistRequest(c.body); err != nil {
-		return nil, err
-	}
-	shareID, err := s.Playlists.Share(ctx, c.member.ID, c.r.PathValue("id"))
+func (s *server) shareMyPlaylist(ctx context.Context, c call) (protocol.ShareMyPlaylistResponse, error) {
+	shareID, err := s.Playlists.Share(ctx, c.owner, c.r.PathValue("id"))
 	if err != nil {
-		return nil, err
+		return protocol.ShareMyPlaylistResponse{}, err
 	}
 	return protocol.ShareMyPlaylistResponse{ShareID: shareID}, nil
 }
 
-func (s *server) unshareMyPlaylist(ctx context.Context, c call) (any, error) {
-	return nil, s.Playlists.Unshare(ctx, c.member.ID, c.r.PathValue("id"))
+func (s *server) unshareMyPlaylist(ctx context.Context, c call) error {
+	return s.Playlists.Unshare(ctx, c.owner, c.r.PathValue("id"))
 }
 
-func (s *server) getSharedPlaylist(ctx context.Context, c call) (any, error) {
+func (s *server) getSharedPlaylist(ctx context.Context, c call) (protocol.SharedPlaylist, error) {
 	p, err := s.Playlists.Shared(ctx, c.r.PathValue("shareId"))
 	if err != nil {
-		return nil, err
+		return protocol.SharedPlaylist{}, err
 	}
 	items := make([]protocol.MyPlaylistItem, len(p.Items))
 	for i, item := range p.Items {
@@ -229,14 +186,10 @@ func (s *server) getSharedPlaylist(ctx context.Context, c call) (any, error) {
 	}, nil
 }
 
-func (s *server) copySharedPlaylist(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeCopySharedPlaylistRequest(c.body)
+func (s *server) copySharedPlaylist(ctx context.Context, c call, req protocol.CopySharedPlaylistRequest) (protocol.MyPlaylist, error) {
+	p, err := s.Playlists.CopyShared(ctx, c.owner, c.r.PathValue("shareId"), req.Name)
 	if err != nil {
-		return nil, err
-	}
-	p, err := s.Playlists.CopyShared(ctx, c.member.ID, c.r.PathValue("shareId"), req.Name)
-	if err != nil {
-		return nil, err
+		return protocol.MyPlaylist{}, err
 	}
 	return s.playlistDTO(p), nil
 }

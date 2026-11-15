@@ -42,7 +42,7 @@ func TestRestore(t *testing.T) {
 		if !persistsFirst(effects) {
 			t.Fatalf("状态变化时先落盘：%#v", effects)
 		}
-		if plays := find[RecordPlay](effects); len(plays) != 1 || !plays[0].EndedAt.Equal(t0.Add(3*time.Minute)) {
+		if plays := recorded(effects); len(plays) != 1 || !plays[0].EndedAt.Equal(t0.Add(3*time.Minute)) {
 			t.Fatalf("补记已经放完的歌：%#v", effects)
 		}
 		if r.pending == nil || r.pending.ID != 3 {
@@ -59,7 +59,7 @@ func TestRestore(t *testing.T) {
 		}
 
 		effects = r.Handle(at(3*time.Minute), Timer{Token: timers[0].Token})
-		if plays := find[RecordPlay](effects); len(plays) != 1 || !plays[0].EndedAt.Equal(current.EndsAt()) {
+		if plays := recorded(effects); len(plays) != 1 || !plays[0].EndedAt.Equal(current.EndsAt()) {
 			t.Fatalf("到点应结束当前歌并记录：%#v", effects)
 		}
 		if got := events[PlaybackChanged](effects); len(got) != 1 || got[0].Current != nil {

@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { api, saveTicket } from '@/core/api'
 import { errorMessage } from '@/core/errors'
-import { Modal, notificationStore } from '@/shared/ui'
+import { RoomDescriptionLimits, RoomNameLimits } from '@/core/realtime'
+import { notificationStore } from '@/shared/lib/notification-store'
+import { useSubmission } from '@/shared/lib/use-submission'
+import { Modal } from '@/shared/ui'
 import { joinErrorMessage, roomEntryStore } from './room-entry'
 import './rooms.css'
 
@@ -10,10 +13,9 @@ export function CreateRoomDialog({ onCreated, onClose }: { onCreated: (id: strin
   const [description, setDescription] = useState('')
   const [locked, setLocked] = useState(false)
   const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
+  const { busy, submit } = useSubmission()
   const ready = name.trim() !== '' && (!locked || password !== '')
-  const submit = async () => {
-    setBusy(true)
+  const create = async () => {
     const secret = locked ? { password } : {}
     let id: string
     try {
@@ -21,7 +23,6 @@ export function CreateRoomDialog({ onCreated, onClose }: { onCreated: (id: strin
     }
     catch (error) {
       notificationStore.error(errorMessage(error))
-      setBusy(false)
       return
     }
     notificationStore.success('已创建房间')
@@ -41,16 +42,16 @@ export function CreateRoomDialog({ onCreated, onClose }: { onCreated: (id: strin
         className="form-stack join-form"
         onSubmit={(event) => {
           event.preventDefault()
-          void submit()
+          void submit(create)
         }}
       >
         <label>
           房间名称
-          <input data-autofocus value={name} onChange={event => setName(event.target.value)} required maxLength={80} placeholder="给这个房间起个名字" />
+          <input data-autofocus value={name} onChange={event => setName(event.target.value)} required maxLength={RoomNameLimits.maxLength} placeholder="给这个房间起个名字" />
         </label>
         <label>
           房间描述
-          <textarea value={description} onChange={event => setDescription(event.target.value)} maxLength={500} rows={3} placeholder="你想和大家听什么？" />
+          <textarea value={description} onChange={event => setDescription(event.target.value)} maxLength={RoomDescriptionLimits.maxLength} rows={3} placeholder="你想和大家听什么？" />
         </label>
         <label className="checkbox-label">
           <input type="checkbox" checked={locked} onChange={event => setLocked(event.target.checked)} />

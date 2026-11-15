@@ -78,6 +78,23 @@ func bodylessEndpoint(name, method, path string) map[string]any {
 	return map[string]any{"name": name, "method": method, "path": path, "auth": "none", "response": ref("Empty")}
 }
 
+// 把路径中的每个参数都声明为 Slug 类型。
+func declareParams(d, e map[string]any) map[string]any {
+	defs(d)["Slug"] = str("pattern", "^[a-z]+$")
+	params := map[string]any{}
+	for _, p := range pathParams(e["path"].(string)) {
+		params[p] = ref("Slug")
+	}
+	e["params"] = params
+	return e
+}
+
+func paramEndpoint(param map[string]any) map[string]any {
+	e := bodylessEndpoint("getRoom", "GET", "/api/rooms/{ref}")
+	e["params"] = map[string]any{"ref": param}
+	return e
+}
+
 func str(keywords ...any) map[string]any {
 	s := map[string]any{"type": "string"}
 	for i := 0; i+1 < len(keywords); i += 2 {
@@ -198,7 +215,7 @@ func TestParseIDLRejects(t *testing.T) {
 			}}
 		}, "GET 请求没有请求体"},
 		{"只有路径参数名不同的重复路由", func(d map[string]any) {
-			d["x-http"] = []any{bodylessEndpoint("getRoom", "GET", "/api/rooms/{ref}"), bodylessEndpoint("findRoom", "GET", "/api/rooms/{id}")}
+			d["x-http"] = []any{declareParams(d, bodylessEndpoint("getRoom", "GET", "/api/rooms/{ref}")), declareParams(d, bodylessEndpoint("findRoom", "GET", "/api/rooms/{id}"))}
 		}, "GET /api/rooms/{id} 与接口 getRoom 的路由重复"},
 		{"接口放在房间内请求的路径下", func(d map[string]any) {
 			d["x-http"] = []any{bodylessEndpoint("listQueue", "GET", "/api/room/queue")}
@@ -439,13 +456,51 @@ func TestParseIDLRejects(t *testing.T) {
 			d["x-http"] = []any{bodylessEndpoint("getRoom", "GET", "/api/rooms/{send}")}
 		}, "x-http[0]：路径参数 send 重复，或与生成的 TypeScript client 中的标识符重名"},
 		{"同一个路径形状用了不同的参数名", func(d map[string]any) {
-			d["x-http"] = []any{bodylessEndpoint("getRoom", "GET", "/api/rooms/{ref}"), bodylessEndpoint("deleteRoom", "DELETE", "/api/rooms/{id}")}
+			d["x-http"] = []any{declareParams(d, bodylessEndpoint("getRoom", "GET", "/api/rooms/{ref}")), declareParams(d, bodylessEndpoint("deleteRoom", "DELETE", "/api/rooms/{id}"))}
 		}, "x-http[1]：路径 /api/rooms/{id} 与 /api/rooms/{ref} 只有参数名不同"},
+		{"路径参数没有声明类型", func(d map[string]any) {
+			d["x-http"] = []any{bodylessEndpoint("getRoom", "GET", "/api/rooms/{ref}")}
+		}, "x-http[0]：路径参数 ref 要在 params 中声明类型"},
+		{"params 中有路径里没有的参数", func(d map[string]any) {
+			e := declareParams(d, bodylessEndpoint("getRoom", "GET", "/api/rooms/{ref}"))
+			e["params"].(map[string]any)["id"] = ref("Slug")
+			d["x-http"] = []any{e}
+		}, "x-http[0].params.id：路径中没有这个参数"},
+		{"路径参数没有引用类型", func(d map[string]any) {
+			d["x-http"] = []any{paramEndpoint(str("pattern", "^[a-z]+$"))}
+		}, "x-http[0].params.ref：路径参数要用 $ref 引用 $defs 中的类型"},
+		{"路径参数的引用带了其他关键字", func(d map[string]any) {
+			defs(d)["Slug"] = str("pattern", "^[a-z]+$")
+			d["x-http"] = []any{paramEndpoint(map[string]any{"$ref": "#/$defs/Slug", "description": "别名"})}
+		}, "x-http[0].params.ref：这里不支持 description"},
+		{"路径参数引用了不存在的类型", func(d map[string]any) {
+			d["x-http"] = []any{paramEndpoint(ref("Missing"))}
+		}, "x-http[0].params.ref：引用的类型 #/$defs/Missing 不存在"},
+		{"路径参数引用了没有 pattern 的类型", func(d map[string]any) {
+			defs(d)["Name"] = str("minLength", 1)
+			d["x-http"] = []any{paramEndpoint(ref("Name"))}
+		}, "x-http[0].params.ref：#/$defs/Name 应是只有 pattern 一项约束的字符串类型"},
+		{"路径参数引用的类型除了 pattern 还有长度限制", func(d map[string]any) {
+			defs(d)["Slug"] = str("pattern", "^[a-z]+$", "maxLength", 32)
+			d["x-http"] = []any{paramEndpoint(ref("Slug"))}
+		}, "x-http[0].params.ref：#/$defs/Slug 应是只有 pattern 一项约束的字符串类型"},
+		{"路径参数引用了枚举", func(d map[string]any) {
+			withKind(d)
+			d["x-http"] = []any{paramEndpoint(ref("Kind"))}
+		}, "x-http[0].params.ref：#/$defs/Kind 应是只有 pattern 一项约束的字符串类型"},
+		{"路径参数类型的 pattern 与字段的 pattern 重名", func(d map[string]any) {
+			defs(d)["RoomID"] = str("pattern", "^[a-z]+$")
+			defs(d)["Room"] = object(map[string]any{"id": str("pattern", "^[a-z]+$")}, "id")
+			d["x-requests"] = []any{roomRequest(object(map[string]any{"room": ref("Room")}, "room"))}
+			e := bodylessEndpoint("getRoom", "GET", "/api/rooms/{id}")
+			e["params"] = map[string]any{"id": ref("RoomID")}
+			d["x-http"] = []any{e}
+		}, "生成的 Go 标识符 patternRoomID 重复：既是类型 Room 的字段 id 的 pattern，也是路径参数的类型 RoomID 的 pattern"},
 		{"未知的凭证", func(d map[string]any) {
 			e := bodylessEndpoint("listRooms", "GET", "/api/rooms")
 			e["auth"] = "ticket"
 			d["x-http"] = []any{e}
-		}, "x-http[0]：auth 应为 none、member 或 admin"},
+		}, "x-http[0]：auth 应为 none、member、account 或 admin"},
 		{"写明 200 的状态码", func(d map[string]any) {
 			e := bodylessEndpoint("listRooms", "GET", "/api/rooms")
 			e["status"] = 200
@@ -509,6 +564,19 @@ func TestParseIDLRejects(t *testing.T) {
 		{"类型名与 TypeScript 中固定的类型重名", func(d map[string]any) {
 			defs(d)["ServerMessage"] = object(map[string]any{})
 		}, "生成的 TypeScript 标识符 ServerMessage 重复：既是生成器写出的 ServerMessage，也是类型 ServerMessage"},
+		{"类型名与 TypeScript 中导出的常量重名", func(d map[string]any) {
+			defs(d)["Source"] = map[string]any{"type": "string", "enum": []string{"qq"}}
+			defs(d)["SourceValues"] = object(map[string]any{})
+		}, "生成的 TypeScript 标识符 SourceValues 重复：既是类型 Source 的常量，也是类型 SourceValues"},
+		{"具名类型的 pattern 用了 \\s", func(d map[string]any) {
+			defs(d)["Code"] = str("pattern", `^\s*[0-9]+$`)
+		}, `$defs.Code：具名类型的 pattern 会生成网页用的正则，不能用 \s 这类预定义的字符类和单词边界`},
+		{"具名类型的 pattern 用了 \\B", func(d map[string]any) {
+			defs(d)["Code"] = str("pattern", `^a\B$`)
+		}, `$defs.Code：具名类型的 pattern 会生成网页用的正则，不能用 \B 这类预定义的字符类和单词边界`},
+		{"具名类型的 pattern 在字符类之外用了 .", func(d map[string]any) {
+			defs(d)["Code"] = str("pattern", `^[.]\\.$`)
+		}, "$defs.Code：具名类型的 pattern 会生成网页用的正则，字符类之外不能用 ."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -604,6 +672,87 @@ func TestGeneratedNamesAvoidHandwrittenCode(t *testing.T) {
 	}
 }
 
+var goRouteLine = regexp.MustCompile(`(?m)^\tRouteOp = (.*)$`)
+
+func TestGoRoutesBindRequestDecoderAndResponse(t *testing.T) {
+	empty, fields := object(map[string]any{}), object(map[string]any{"name": str()}, "name")
+	tests := []struct {
+		name     string
+		method   string
+		status   int
+		location bool
+		request  map[string]any
+		want     string
+	}{
+		{"GET", "GET", 0, false, nil, "Endpoint[NoRequest, Empty]{Route: Route{Pattern: \"GET /api/ops\", Auth: AuthNone, Status: 200}, decoder: noBody}"},
+		{"请求体是空对象", "POST", 201, false, empty, "Endpoint[NoRequest, Empty]{Route: Route{Pattern: \"POST /api/ops\", Auth: AuthNone, Status: 201}, decoder: discard(decodeOpRequest)}"},
+		{"请求体有字段", "PATCH", 0, false, fields, "Endpoint[OpRequest, Empty]{Route: Route{Pattern: \"PATCH /api/ops\", Auth: AuthNone, Status: 200}, decoder: decodeOpRequest}"},
+		{"带 Location，请求体有字段", "POST", 201, true, fields, "LocatedEndpoint[OpRequest, Empty]{Route: Route{Pattern: \"POST /api/ops\", Auth: AuthNone, Status: 201}, decoder: decodeOpRequest}"},
+		{"带 Location，请求体是空对象", "POST", 201, true, empty, "LocatedEndpoint[NoRequest, Empty]{Route: Route{Pattern: \"POST /api/ops\", Auth: AuthNone, Status: 201}, decoder: discard(decodeOpRequest)}"},
+		{"带 Location 的 DELETE", "DELETE", 201, true, nil, "LocatedEndpoint[NoRequest, Empty]{Route: Route{Pattern: \"DELETE /api/ops\", Auth: AuthNone, Status: 201}, decoder: noBody}"},
+		{"204 的 DELETE", "DELETE", 204, false, nil, "NoContentEndpoint[NoRequest]{Route: Route{Pattern: \"DELETE /api/ops\", Auth: AuthNone, Status: 204}, decoder: noBody}"},
+		{"204，请求体是空对象", "PUT", 204, false, empty, "NoContentEndpoint[NoRequest]{Route: Route{Pattern: \"PUT /api/ops\", Auth: AuthNone, Status: 204}, decoder: discard(decodeOpRequest)}"},
+		{"204，请求体有字段", "POST", 204, false, fields, "NoContentEndpoint[OpRequest]{Route: Route{Pattern: \"POST /api/ops\", Auth: AuthNone, Status: 204}, decoder: decodeOpRequest}"},
+	}
+	for _, tt := range tests {
+		d := parseMinimal(t, func(d map[string]any) {
+			e := bodylessEndpoint("op", tt.method, "/api/ops")
+			if tt.status != 0 {
+				e["status"] = tt.status
+			}
+			if tt.location {
+				e["location"] = true
+			}
+			if tt.status == 204 {
+				delete(e, "response")
+			}
+			if tt.request != nil {
+				e["request"] = tt.request
+			}
+			d["x-http"] = []any{e}
+		})
+		types, err := goTypes(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got string
+		if m := goRouteLine.FindSubmatch(types); m != nil {
+			got = string(m[1])
+		}
+		if got != tt.want {
+			t.Errorf("%s：生成的路由 = %s，期望 %s", tt.name, got, tt.want)
+		}
+	}
+}
+
+// 路径参数的名字由 IDL 作者决定，和关键字只有大小写不同也可以。
+func TestPathParamNamesAreNotKeywords(t *testing.T) {
+	parseMinimal(t, func(d map[string]any) {
+		d["x-http"] = []any{declareParams(d, bodylessEndpoint("getThing", "GET", "/api/things/{minlength}"))}
+	})
+}
+
+func TestPortablePatternAllowsLiteralDotsAndFieldPatterns(t *testing.T) {
+	parseMinimal(t, func(d map[string]any) {
+		defs(d)["Host"] = str("pattern", `^[a-z.]+\.example$`)
+		defs(d)["ErrorInfo"] = object(map[string]any{"message": str("pattern", `^\d.$`)}, "message")
+	})
+}
+
+func TestTSRegExpEscapesSlash(t *testing.T) {
+	tests := map[string]string{
+		`^[2-9A-Z]{8}$`: `/^[2-9A-Z]{8}$/u`,
+		`^a/b$`:         `/^a\/b$/u`,
+		`^a\/b$`:        `/^a\/b$/u`,
+		`^a\\/b$`:       `/^a\\\/b$/u`,
+	}
+	for pattern, want := range tests {
+		if got := tsRegExp(pattern); got != want {
+			t.Errorf("tsRegExp(%q) = %s，期望 %s", pattern, got, want)
+		}
+	}
+}
+
 var tsExport = regexp.MustCompile(`(?m)^export (?:type|interface|const|function) (\w+)`)
 
 func TestTSNamesCoverGeneratedCode(t *testing.T) {
@@ -619,6 +768,7 @@ func TestTSNamesCoverGeneratedCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	constants := d.tsConstants()
 	for _, out := range outputs {
 		if !strings.HasSuffix(out.path, ".ts") {
 			continue
@@ -626,8 +776,9 @@ func TestTSNamesCoverGeneratedCode(t *testing.T) {
 		for _, m := range tsExport.FindAllSubmatch(out.data, -1) {
 			name := string(m[1])
 			validator, ok := strings.CutPrefix(name, "is")
-			if d.named[name] == nil && !slices.Contains(tsFixedNames, name) && (!ok || !slices.Contains(d.urlDefs(), validator)) {
-				t.Errorf("%s 导出的 %s 既不是 IDL 中的类型和带 x-url 的标量类型的校验函数，也不在 tsFixedNames 中", out.path, name)
+			constant := slices.ContainsFunc(constants, func(c tsConstant) bool { return c.name == name })
+			if d.named[name] == nil && !slices.Contains(tsFixedNames, name) && (!ok || !slices.Contains(d.urlDefs(), validator)) && !constant {
+				t.Errorf("%s 导出的 %s 既不是 IDL 中的类型、带 x-url 的标量类型的校验函数和具名类型的常量，也不在 tsFixedNames 中", out.path, name)
 			}
 		}
 	}

@@ -23,7 +23,7 @@ export function InlineTextField({ label, value, onSave, placeholder, maxLength, 
           aria-label={label}
           placeholder={placeholder}
           maxLength={maxLength}
-          aria-invalid={state.status === 'error'}
+          aria-invalid={state.status === 'failed'}
           aria-describedby={state.error ? errorId : undefined}
           aria-busy={state.status === 'saving'}
           onChange={event => edit(event.target.value)}

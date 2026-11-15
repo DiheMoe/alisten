@@ -2,10 +2,10 @@ import type { NowPlaying } from '@/core/realtime'
 import { brandStore } from '@/core/brand'
 import { clock } from '@/core/clock'
 import { reconnectDelay } from '@/core/realtime'
-import { roomStore } from '@/core/room'
+import { playKey, roomStore } from '@/core/room'
 import { Emitter } from '@/shared/lib/emitter'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { Store } from '@/shared/lib/store'
-import { notificationStore } from '@/shared/ui'
 import { documentTitle } from './document-title'
 import { setMediaSessionHandlers, showMediaSession } from './media-session'
 import { driftSeekPosition, startPlan } from './timeline'
@@ -16,10 +16,6 @@ const maxGain = 1.5
 // 音源解析持续失败时，房间里的每个客户端都在请求上游，所以重试要有上限。
 const maxMediaRetries = 5
 const mediaNoticeMs = 8000
-
-function sameTrack(a: NowPlaying, b: NowPlaying): boolean {
-  return a.entry.id === b.entry.id && a.startedAtMs === b.startedAtMs
-}
 
 class PlayerStore extends Store<{ needsGesture: boolean }> {
   // 播放期间每帧发出一次当前位置（毫秒）。
@@ -101,7 +97,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
       this.#start()
     // 恢复播放时重新获取快照。即使快照没有变化，也按应在位置重新定位一次。
     void roomStore.sync().then(() => {
-      if (this.#current && sameTrack(this.#current, current))
+      if (playKey(this.#current) === playKey(current))
         this.#start()
     })
   }
@@ -123,7 +119,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
       this.#stop()
       return
     }
-    if (previous && sameTrack(previous, next)) {
+    if (playKey(previous) === playKey(next)) {
       // 同一首歌的新快照来自重连的握手或 room.sync，说明连接恢复了，所以不等下一次重试。重试用完之后也靠这样的快照恢复。
       if (this.#audio?.error)
         this.#reload(next)

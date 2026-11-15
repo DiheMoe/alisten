@@ -1,11 +1,13 @@
 import type { MyPlaylist } from '@/core/realtime'
 import { useState } from 'react'
 import { isImeKey } from '@/shared/lib/ime'
-import { playlistsStore } from './playlists-store'
+import { useSubmission } from '@/shared/lib/use-submission'
+import { PlaylistNameField } from './playlist-name-field'
+import { isBlankPlaylistName, playlistsStore } from './playlists-store'
 
 export function CreatePlaylistForm({ onCreated, onCancel }: { onCreated: (playlist: MyPlaylist) => void, onCancel: () => void }) {
   const [name, setName] = useState('')
-  const [saving, setSaving] = useState(false)
+  const { busy, submit } = useSubmission()
   return (
     <form
       className="form-stack"
@@ -16,26 +18,20 @@ export function CreatePlaylistForm({ onCreated, onCancel }: { onCreated: (playli
         event.preventDefault()
         onCancel()
       }}
-      onSubmit={async (event) => {
+      onSubmit={(event) => {
         event.preventDefault()
-        if (saving)
-          return
-        setSaving(true)
-        const playlist = await playlistsStore.create(name)
-        if (playlist)
-          onCreated(playlist)
-        else
-          setSaving(false)
+        void submit(async () => {
+          const playlist = await playlistsStore.create(name)
+          if (playlist)
+            onCreated(playlist)
+        })
       }}
     >
-      <label>
-        歌单名
-        {/* 刚打开的 Modal 按 data-autofocus 聚焦。在已经打开的对话框里切换过来时，由 autoFocus 聚焦。 */}
-        <input data-autofocus autoFocus required maxLength={50} value={name} onChange={event => setName(event.target.value)} />
-      </label>
+      {/* 刚打开的 Modal 按 data-autofocus 聚焦。在已经打开的对话框里切换过来时，由 autoFocus 聚焦。 */}
+      <PlaylistNameField data-autofocus autoFocus value={name} onChange={setName} />
       <div className="dialog-actions">
         <button type="button" className="button-secondary" onClick={onCancel}>取消</button>
-        <button type="submit" className="button-primary" disabled={saving || name.trim() === ''}>创建</button>
+        <button type="submit" className="button-primary" disabled={busy || isBlankPlaylistName(name)}>创建</button>
       </div>
     </form>
   )

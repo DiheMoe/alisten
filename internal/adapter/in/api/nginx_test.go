@@ -79,8 +79,8 @@ func TestNginxBodySizesCoverServeLimits(t *testing.T) {
 	}{
 		{"^~ /api/", maxBodyBytes, nil},
 		{`~ ^/api/me/playlists/[^/]+/(removals|copies|moves)$`, maxBatchBodyBytes,
-			[]protocol.Route{protocol.RouteRemoveMyPlaylistItems, protocol.RouteCopyMyPlaylistItems, protocol.RouteMoveMyPlaylistItems}},
-		{"= /api/me/playlists/imports", maxImportBodyBytes, []protocol.Route{protocol.RouteImportMyPlaylist}},
+			[]protocol.Route{protocol.RouteRemoveMyPlaylistItems.Route, protocol.RouteCopyMyPlaylistItems.Route, protocol.RouteMoveMyPlaylistItems.Route}},
+		{"= /api/me/playlists/imports", maxImportBodyBytes, []protocol.Route{protocol.RouteImportMyPlaylist.Route}},
 	}
 	for _, tt := range tests {
 		got, ok := sizes[tt.location]

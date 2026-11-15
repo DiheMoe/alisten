@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -66,16 +65,8 @@ func (s *Store) MemberListens(ctx context.Context, memberID string) ([]port.List
 	listens := make([]port.Listen, len(rows))
 	for i, r := range rows {
 		listens[i] = port.Listen{
-			Track: track.Track{Source: track.Source(r.Source), ID: r.TrackID},
-			Meta: track.Meta{
-				Title:    r.Title,
-				Artist:   orEmpty(r.Artist),
-				Album:    orEmpty(r.Album),
-				CoverURL: orEmpty(r.CoverURL),
-				CoverKey: track.ObjectKey(orEmpty(r.CoverKey)),
-				PageURL:  r.PageURL,
-				Duration: time.Duration(r.DurationMs) * time.Millisecond,
-			},
+			Track:   track.Track{Source: track.Source(r.Source), ID: r.TrackID},
+			Meta:    metaColumns{Title: r.Title, Artist: r.Artist, Album: r.Album, CoverURL: r.CoverURL, CoverKey: r.CoverKey, PageURL: r.PageURL, DurationMs: r.DurationMs}.meta(),
 			HeardAt: r.HeardAt,
 		}
 	}

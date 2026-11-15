@@ -1,16 +1,10 @@
 import type { LucideIcon } from 'lucide-react'
 import type { KeyboardEvent, ReactNode, ToggleEvent } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
+import { rovingIndex } from '@/shared/lib/roving'
 
 const menuGap = 4
 const viewportMargin = 8
-
-const menuKeys: Record<string, (index: number, count: number) => number> = {
-  ArrowDown: (index, count) => (index + 1) % count,
-  ArrowUp: (index, count) => (index - 1 + count) % count,
-  Home: () => 0,
-  End: (_, count) => count - 1,
-}
 
 export interface MenuAction {
   icon: LucideIcon
@@ -83,12 +77,12 @@ export function ActionMenu({ actions, menuLabel, align = 'end', className, label
       event.currentTarget.hidePopover()
       return
     }
-    const move = menuKeys[event.key]
-    if (!move)
+    const list = items()
+    const next = rovingIndex(event.key, list.indexOf(document.activeElement as HTMLElement), list.length, 'vertical')
+    if (next === null)
       return
     event.preventDefault()
-    const list = items()
-    list[move(list.indexOf(document.activeElement as HTMLElement), list.length)]?.focus()
+    list[next].focus()
   }
 
   return (

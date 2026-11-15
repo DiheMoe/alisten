@@ -1,32 +1,20 @@
-import type { PlaylistSort } from './playlist-sort'
 import type { MyPlaylist, Track } from '@/core/realtime'
 import { ListPlus, Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { profileStore } from '@/features/settings'
+import { profileStore } from '@/core/profile'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { useStore } from '@/shared/lib/use-store'
-import { IconButton, Modal, notificationStore, Skeleton } from '@/shared/ui'
+import { IconButton, Modal, Skeleton } from '@/shared/ui'
 import { AccountPrompt } from './account-prompt'
 import { CreatePlaylistForm } from './create-playlist-form'
 import { FavoritesMark, PlaylistCover } from './playlist-cover'
 import { sortPlaylists } from './playlist-sort'
 import { playlistsStore, trackKey } from './playlists-store'
 import { saveToPlaylistLabel } from './save-label'
+import { arrange, byUpdate, savedMessage, saveOutcome } from './save-result'
 import './playlists.css'
 
-const byUpdate: PlaylistSort = { key: 'updatedAt', order: 'desc' }
 const none: ReadonlySet<string> = new Set()
-
-// 保持打开对话框时的先后。保存会更新歌单的更新时间，如果按实时的更新时间排，刚勾选的歌单会跳走。打开之后才出现的歌单排在最后。
-function arrange(playlists: readonly MyPlaylist[], order: readonly string[]): MyPlaylist[] {
-  const rank = new Map(order.map((id, index) => [id, index]))
-  const at = (playlist: MyPlaylist) => rank.get(playlist.id) ?? order.length
-  return sortPlaylists(playlists, byUpdate).sort((a, b) => at(a) - at(b))
-}
-
-function savedMessage(saved: readonly MyPlaylist[], skipped: number): string {
-  const where = saved.length === 1 ? `“${saved[0].name}”` : ` ${saved.length} 个歌单`
-  return `已保存到${where}${skipped > 0 ? `，其中 ${skipped} 首已经在里面` : ''}`
-}
 
 // 一首歌：勾选立即生效。歌单里选中的多首：勾好目标歌单后一起保存，来源歌单不在列表里。
 type SaveToPlaylistProps = { onClose: () => void } & ({ track: Track, title: string } | { from: MyPlaylist, tracks: Track[] })
@@ -94,9 +82,8 @@ export function SaveToPlaylistDialog(props: SaveToPlaylistProps) {
 
   const save = async (source: MyPlaylist, tracks: Track[], targets: MyPlaylist[]) => {
     setSaving(true)
-    const results = await Promise.all(targets.map(target => playlistsStore.copyItems(source, target, tracks)))
-    const saved = targets.filter((_, index) => results[index] !== null)
-    const skipped = results.reduce<number>((sum, added) => added === null ? sum : sum + tracks.length - added, 0)
+    const added = await Promise.all(targets.map(target => playlistsStore.copyItems(source, target, tracks)))
+    const { saved, skipped } = saveOutcome(targets, added, tracks.length)
     if (saved.length > 0)
       notificationStore.success(savedMessage(saved, skipped))
     onClose()

@@ -2,19 +2,19 @@ import type { MyPlaylist } from '@/core/realtime'
 import type { MenuAction } from '@/shared/ui'
 import { Copy, Ellipsis, FileDown, Link2Off, Pencil, RefreshCw, Share2, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { ActionMenu, ConfirmDialog, Modal, notificationStore } from '@/shared/ui'
-import { playlistsStore } from './playlists-store'
+import { copyText } from '@/shared/lib/clipboard'
+import { notificationStore } from '@/shared/lib/notification-store'
+import { useSubmission } from '@/shared/lib/use-submission'
+import { ActionMenu, ConfirmDialog, Modal } from '@/shared/ui'
+import { PlaylistNameField } from './playlist-name-field'
+import { isBlankPlaylistName, playlistsStore } from './playlists-store'
 
 async function copyShareLink(shareId: string, copied: string): Promise<void> {
   const url = `${window.location.origin}/s/${shareId}`
-  try {
-    await navigator.clipboard.writeText(url)
+  if (await copyText(url))
     notificationStore.success(copied)
-  }
-  catch {
-    // 非安全上下文没有剪贴板接口，用户也可能拒绝授权。有的浏览器在请求返回之后已经不算用户操作，也会拒绝写入。
+  else
     notificationStore.info(`请手动复制分享链接：${url}`, 8000)
-  }
 }
 
 async function share(playlist: MyPlaylist, copied: string): Promise<void> {
@@ -111,27 +111,21 @@ export function PlaylistMenu({ playlist, align = 'end', className = '', shareabl
 
 function RenameDialog({ playlist, onClose }: { playlist: MyPlaylist, onClose: () => void }) {
   const [name, setName] = useState(playlist.name)
-  const [saving, setSaving] = useState(false)
+  const { busy, submit } = useSubmission()
   return (
     <Modal title="重命名" onClose={onClose}>
       <form
         className="form-stack"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault()
-          if (saving)
-            return
-          setSaving(true)
-          if (await playlistsStore.rename(playlist, name))
-            onClose()
-          else
-            setSaving(false)
+          void submit(async () => {
+            if (await playlistsStore.rename(playlist, name))
+              onClose()
+          })
         }}
       >
-        <label>
-          歌单名
-          <input data-autofocus required maxLength={50} value={name} onChange={event => setName(event.target.value)} />
-        </label>
-        <button type="submit" className="button-primary" disabled={saving || name.trim() === ''}>保存</button>
+        <PlaylistNameField data-autofocus value={name} onChange={setName} />
+        <button type="submit" className="button-primary" disabled={busy || isBlankPlaylistName(name)}>保存</button>
       </form>
     </Modal>
   )

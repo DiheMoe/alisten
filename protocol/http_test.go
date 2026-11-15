@@ -1,16 +1,25 @@
 package protocol
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
 )
 
+const someUUID = "01a15778-1911-7a28-8b2e-e08c2a25f388"
+
+// 测请求体时用，每个路径参数都取合法的值。
+func validPath(string) string {
+	return someUUID
+}
+
 func TestHTTPRequestValidation(t *testing.T) {
 	decode := map[string]func([]byte) error{
-		"updateMe":    func(b []byte) error { _, err := DecodeUpdateMeRequest(b); return err },
-		"createRoom":  func(b []byte) error { _, err := DecodeCreateRoomRequest(b); return err },
-		"adminCreate": func(b []byte) error { _, err := DecodeAdminCreateRoomRequest(b); return err },
+		"updateMe":    func(b []byte) error { _, err := RouteUpdateMe.Decode(validPath, b); return err },
+		"createRoom":  func(b []byte) error { _, err := RouteCreateRoom.Decode(validPath, b); return err },
+		"adminCreate": func(b []byte) error { _, err := RouteAdminCreateRoom.Decode(validPath, b); return err },
+		"copyItems":   func(b []byte) error { _, err := RouteCopyMyPlaylistItems.Decode(validPath, b); return err },
 	}
 	tests := []struct {
 		name string
@@ -29,6 +38,8 @@ func TestHTTPRequestValidation(t *testing.T) {
 		{"后台建房：别名", "adminCreate", `{"name":"房间","description":"","slug":"lofi-24"}`, ""},
 		{"后台建房：别名不能为空", "adminCreate", `{"name":"房间","description":"","slug":""}`, "slug：格式不正确"},
 		{"后台建房：别名超过 32 个字符", "adminCreate", `{"name":"房间","description":"","slug":"` + strings.Repeat("a", 33) + `"}`, "slug：格式不正确"},
+		{"复制曲目：来源歌单", "copyItems", `{"from":"` + someUUID + `","tracks":[{"source":"qq","id":"1"}]}`, ""},
+		{"复制曲目：来源歌单不是 UUID", "copyItems", `{"from":"not-a-uuid","tracks":[{"source":"qq","id":"1"}]}`, "from：格式不正确"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -36,6 +47,88 @@ func TestHTTPRequestValidation(t *testing.T) {
 				t.Errorf("错误 = %q，期望 %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// 返回的函数把每个路径参数都取为 value，再连同 body 交给 decode。
+func withPath[Req any](decode func(func(string) string, []byte) (Req, error), body string) func(value string) error {
+	return func(value string) error {
+		_, err := decode(func(string) string { return value }, []byte(body))
+		return err
+	}
+}
+
+func TestEndpointPathParams(t *testing.T) {
+	shareID := strings.Repeat("a", 22)
+	getRoom := withPath(RouteGetRoom.Decode, "")
+	createTicket := withPath(RouteCreateTicket.Decode, "{}")
+	deleteRoom := withPath(RouteAdminDeleteRoom.Decode, "")
+	resetKey := withPath(RouteAdminResetRoomApiKey.Decode, "{}")
+	items := withPath(RouteListMyPlaylistItems.Decode, "")
+	shared := withPath(RouteGetSharedPlaylist.Decode, "")
+	copyShared := withPath(RouteCopySharedPlaylist.Decode, `{"name":"抄来的"}`)
+	account := withPath(RouteAdminGetAccount.Decode, "")
+	tests := []struct {
+		name   string
+		decode func(string) error
+		value  string
+		// 为空时期望通过校验。
+		wantType string
+	}{
+		{"房间：小写的 UUID", getRoom, someUUID, ""},
+		{"房间：大写的 UUID", getRoom, strings.ToUpper(someUUID), ""},
+		{"房间：别名", getRoom, "lofi-24", ""},
+		{"房间：32 个字符的别名", getRoom, strings.Repeat("a", 32), ""},
+		{"房间：别名超过 32 个字符", getRoom, strings.Repeat("a", 33), "RoomRef"},
+		{"房间：别名有大写字母", getRoom, "HALL", "RoomRef"},
+		{"房间：U+0000", getRoom, "\x00", "RoomRef"},
+		{"房间：别名后面有 U+0000", getRoom, "hall\x00", "RoomRef"},
+		{"房间：空", getRoom, "", "RoomRef"},
+		{"换票据：UUID", createTicket, someUUID, ""},
+		{"换票据：别名", createTicket, "hall", "RoomID"},
+		{"换票据：UUID 后面有换行", createTicket, someUUID + "\n", "RoomID"},
+		{"删除房间：U+0000", deleteRoom, "\x00", "RoomID"},
+		{"重置 API Key：别名", resetKey, "hall", "RoomID"},
+		{"歌单：UUID", items, someUUID, ""},
+		{"歌单：不是 UUID", items, "not-a-uuid", "MyPlaylistID"},
+		{"分享：22 个 base64url 字符", shared, "AZaz09-_" + shareID[8:], ""},
+		{"分享：空", shared, "", "ShareID"},
+		{"分享：太短", shared, "abc", "ShareID"},
+		{"分享：21 个字符", shared, shareID[1:], "ShareID"},
+		{"分享：23 个字符", shared, shareID + "a", "ShareID"},
+		{"分享：U+0000", shared, shareID[1:] + "\x00", "ShareID"},
+		{"分享：base64 的填充", shared, shareID[1:] + "=", "ShareID"},
+		{"分享：标准 base64 的字符", shared, shareID[1:] + "+", "ShareID"},
+		{"分享：斜杠", shared, shareID[1:] + "/", "ShareID"},
+		{"分享：不是 UTF-8", shared, "\xff" + shareID[1:], "ShareID"},
+		{"复制分享：不是分享 ID", copyShared, "not-a-share", "ShareID"},
+		{"账号：用户名", account, "alice", ""},
+		{"账号：有空格和大写字母", account, "Not Valid", "Username"},
+		{"账号：太短", account, "ab", "Username"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.decode(tt.value)
+			var param *PathParamError
+			switch {
+			case tt.wantType == "" && err != nil:
+				t.Errorf("%q 的错误 = %v，期望通过", tt.value, err)
+			case tt.wantType != "" && (!errors.As(err, &param) || param.Type != tt.wantType):
+				t.Errorf("%q 的错误 = %v，期望 %s 类型的 PathParamError", tt.value, err, tt.wantType)
+			}
+		})
+	}
+}
+
+func TestEndpointDecodesBodyBeforePathParams(t *testing.T) {
+	_, err := RouteRenameMyPlaylist.Decode(func(string) string { return "not-a-uuid" }, []byte("{}"))
+	if got := errText(err); got != "name：缺少必填字段" {
+		t.Errorf("请求体和路径参数都不对时的错误 = %q，期望请求体的错误", got)
+	}
+	_, err = RouteRenameMyPlaylist.Decode(func(string) string { return "not-a-uuid" }, []byte(`{"name":"新名字"}`))
+	var param *PathParamError
+	if !errors.As(err, &param) || *param != (PathParamError{Name: "id", Type: "MyPlaylistID"}) {
+		t.Errorf("只有路径参数不对时的错误 = %#v，期望 id 的 PathParamError", err)
 	}
 }
 

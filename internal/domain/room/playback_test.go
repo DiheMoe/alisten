@@ -47,7 +47,7 @@ func TestSongEndRecordsPlayAndAdvances(t *testing.T) {
 	first := *r.current
 
 	effects := r.Handle(at(3*time.Minute+time.Second), Timer{Token: r.endTimer})
-	plays := find[RecordPlay](effects)
+	plays := recorded(effects)
 	if len(plays) != 1 || plays[0].Entry.ID != first.Entry.ID || !plays[0].EndedAt.Equal(first.EndsAt()) {
 		t.Fatalf("播完应记录播放历史，结束时间为应播完的时间：%#v", effects)
 	}

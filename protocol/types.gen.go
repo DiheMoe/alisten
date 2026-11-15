@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "42749e16714e0d7c"
+const Version = "f653116b60b2c244"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -991,78 +991,78 @@ const (
 )
 
 var (
-	RouteCreateMember                 = Route{Pattern: "POST /api/members", Auth: AuthNone, Status: 201}
-	RouteGetMe                        = Route{Pattern: "GET /api/me", Auth: AuthMember, Status: 200}
-	RouteUpdateMe                     = Route{Pattern: "PATCH /api/me", Auth: AuthMember, Status: 200}
-	RouteRegister                     = Route{Pattern: "POST /api/account", Auth: AuthMember, Status: 201}
-	RouteChangePassword               = Route{Pattern: "PUT /api/account/password", Auth: AuthMember, Status: 204}
-	RouteLogin                        = Route{Pattern: "POST /api/sessions", Auth: AuthMember, Status: 201}
-	RouteLogout                       = Route{Pattern: "DELETE /api/sessions/current", Auth: AuthMember, Status: 204}
-	RouteListMyPlaylists              = Route{Pattern: "GET /api/me/playlists", Auth: AuthMember, Status: 200}
-	RouteCreateMyPlaylist             = Route{Pattern: "POST /api/me/playlists", Auth: AuthMember, Status: 201}
-	RouteRenameMyPlaylist             = Route{Pattern: "PATCH /api/me/playlists/{id}", Auth: AuthMember, Status: 204}
-	RouteDeleteMyPlaylist             = Route{Pattern: "DELETE /api/me/playlists/{id}", Auth: AuthMember, Status: 204}
-	RouteListMyPlaylistItems          = Route{Pattern: "GET /api/me/playlists/{id}/items", Auth: AuthMember, Status: 200}
-	RouteAddMyPlaylistItem            = Route{Pattern: "POST /api/me/playlists/{id}/items", Auth: AuthMember, Status: 201}
-	RouteRemoveMyPlaylistItems        = Route{Pattern: "POST /api/me/playlists/{id}/removals", Auth: AuthMember, Status: 204}
-	RouteCopyMyPlaylistItems          = Route{Pattern: "POST /api/me/playlists/{id}/copies", Auth: AuthMember, Status: 200}
-	RouteMoveMyPlaylistItems          = Route{Pattern: "POST /api/me/playlists/{id}/moves", Auth: AuthMember, Status: 204}
-	RouteListMyTrackPlaylists         = Route{Pattern: "POST /api/me/playlist-memberships", Auth: AuthMember, Status: 200}
-	RouteImportMyPlaylist             = Route{Pattern: "POST /api/me/playlists/imports", Auth: AuthMember, Status: 201}
-	RouteResolveMyPlaylistLink        = Route{Pattern: "POST /api/me/playlist-links", Auth: AuthMember, Status: 200}
-	RouteImportMyPlatformPlaylist     = Route{Pattern: "POST /api/me/playlists/platform-imports", Auth: AuthMember, Status: 201}
-	RouteListRooms                    = Route{Pattern: "GET /api/rooms", Auth: AuthNone, Status: 200}
-	RouteGetRoom                      = Route{Pattern: "GET /api/rooms/{ref}", Auth: AuthNone, Status: 200}
-	RouteCreateRoom                   = Route{Pattern: "POST /api/rooms", Auth: AuthNone, Status: 201, Location: true}
-	RouteCreateTicket                 = Route{Pattern: "POST /api/rooms/{id}/tickets", Auth: AuthMember, Status: 201}
-	RouteGetSite                      = Route{Pattern: "GET /api/site", Auth: AuthNone, Status: 200}
-	RouteAdminListRooms               = Route{Pattern: "GET /api/admin/rooms", Auth: AuthAdmin, Status: 200}
-	RouteAdminCreateRoom              = Route{Pattern: "POST /api/admin/rooms", Auth: AuthAdmin, Status: 201, Location: true}
-	RouteAdminUpdateRoom              = Route{Pattern: "PATCH /api/admin/rooms/{id}", Auth: AuthAdmin, Status: 204}
-	RouteAdminDeleteRoom              = Route{Pattern: "DELETE /api/admin/rooms/{id}", Auth: AuthAdmin, Status: 204}
-	RouteAdminGetRoomApiKey           = Route{Pattern: "GET /api/admin/rooms/{id}/api-key", Auth: AuthAdmin, Status: 200}
-	RouteAdminResetRoomApiKey         = Route{Pattern: "POST /api/admin/rooms/{id}/api-key", Auth: AuthAdmin, Status: 201, Location: true}
-	RouteAdminGetNeteaseCredential    = Route{Pattern: "GET /api/admin/credentials/netease", Auth: AuthAdmin, Status: 200}
-	RouteAdminGetQQCredential         = Route{Pattern: "GET /api/admin/credentials/qq", Auth: AuthAdmin, Status: 200}
-	RouteAdminStartNeteaseLogin       = Route{Pattern: "POST /api/admin/credentials/netease/qr-logins", Auth: AuthAdmin, Status: 201}
-	RouteAdminCheckNeteaseLogin       = Route{Pattern: "POST /api/admin/credentials/netease/qr-logins/status", Auth: AuthAdmin, Status: 200}
-	RouteAdminStartQQLogin            = Route{Pattern: "POST /api/admin/credentials/qq/qr-logins", Auth: AuthAdmin, Status: 201}
-	RouteAdminCheckQQLogin            = Route{Pattern: "POST /api/admin/credentials/qq/qr-logins/status", Auth: AuthAdmin, Status: 200}
-	RouteAdminGetBilibiliCredential   = Route{Pattern: "GET /api/admin/credentials/bilibili", Auth: AuthAdmin, Status: 200}
-	RouteAdminStartBilibiliLogin      = Route{Pattern: "POST /api/admin/credentials/bilibili/qr-logins", Auth: AuthAdmin, Status: 201}
-	RouteAdminCheckBilibiliLogin      = Route{Pattern: "POST /api/admin/credentials/bilibili/qr-logins/status", Auth: AuthAdmin, Status: 200}
-	RouteAdminGetYoutubeCredential    = Route{Pattern: "GET /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 200}
-	RouteAdminSetYoutubeCredential    = Route{Pattern: "PUT /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 204}
-	RouteAdminDeleteYoutubeCredential = Route{Pattern: "DELETE /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 204}
-	RouteAdminGetGithubCredential     = Route{Pattern: "GET /api/admin/credentials/github", Auth: AuthAdmin, Status: 200}
-	RouteAdminSetGithubCredential     = Route{Pattern: "PUT /api/admin/credentials/github", Auth: AuthAdmin, Status: 204}
-	RouteAdminDeleteGithubCredential  = Route{Pattern: "DELETE /api/admin/credentials/github", Auth: AuthAdmin, Status: 204}
-	RouteAdminListMedia               = Route{Pattern: "POST /api/admin/media/queries", Auth: AuthAdmin, Status: 200}
-	RouteAdminRemoveMedia             = Route{Pattern: "POST /api/admin/media/removals", Auth: AuthAdmin, Status: 200}
-	RouteAdminUpdateSite              = Route{Pattern: "PATCH /api/admin/site", Auth: AuthAdmin, Status: 200}
-	RouteAdminOpenRegistration        = Route{Pattern: "PUT /api/admin/registration", Auth: AuthAdmin, Status: 204}
-	RouteAdminCloseRegistration       = Route{Pattern: "DELETE /api/admin/registration", Auth: AuthAdmin, Status: 204}
-	RouteAdminGetAccount              = Route{Pattern: "GET /api/admin/accounts/{username}", Auth: AuthAdmin, Status: 200}
-	RouteAdminResetAccountPassword    = Route{Pattern: "POST /api/admin/accounts/{username}/password", Auth: AuthAdmin, Status: 200}
-	RouteListMyListens                = Route{Pattern: "GET /api/me/listens", Auth: AuthMember, Status: 200}
-	RouteRemoveMyListen               = Route{Pattern: "POST /api/me/listens/removals", Auth: AuthMember, Status: 204}
-	RouteClearMyListens               = Route{Pattern: "DELETE /api/me/listens", Auth: AuthMember, Status: 204}
-	RouteEnableListenRecording        = Route{Pattern: "PUT /api/me/listen-recording", Auth: AuthMember, Status: 204}
-	RouteDisableListenRecording       = Route{Pattern: "DELETE /api/me/listen-recording", Auth: AuthMember, Status: 204}
-	RouteShareMyPlaylist              = Route{Pattern: "POST /api/me/playlists/{id}/share", Auth: AuthMember, Status: 200}
-	RouteUnshareMyPlaylist            = Route{Pattern: "DELETE /api/me/playlists/{id}/share", Auth: AuthMember, Status: 204}
-	RouteGetSharedPlaylist            = Route{Pattern: "GET /api/shared-playlists/{shareId}", Auth: AuthNone, Status: 200}
-	RouteCopySharedPlaylist           = Route{Pattern: "POST /api/shared-playlists/{shareId}/copies", Auth: AuthMember, Status: 201}
-	RouteCreatePairingCode            = Route{Pattern: "POST /api/account/pairing-codes", Auth: AuthMember, Status: 201}
-	RouteRedeemPairingCode            = Route{Pattern: "POST /api/sessions/pairing", Auth: AuthMember, Status: 201}
-	RouteStartGithubLogin             = Route{Pattern: "POST /api/auth/github", Auth: AuthMember, Status: 201}
-	RouteFinishGithubLogin            = Route{Pattern: "POST /api/auth/github/exchange", Auth: AuthMember, Status: 200}
-	RouteUnbindGithub                 = Route{Pattern: "POST /api/account/github/removals", Auth: AuthMember, Status: 204}
+	RouteCreateMember                 = Endpoint[NoRequest, CreateMemberResponse]{Route: Route{Pattern: "POST /api/members", Auth: AuthNone, Status: 201}, decoder: discard(decodeCreateMemberRequest)}
+	RouteGetMe                        = Endpoint[NoRequest, GetMeResponse]{Route: Route{Pattern: "GET /api/me", Auth: AuthMember, Status: 200}, decoder: noBody}
+	RouteUpdateMe                     = Endpoint[UpdateMeRequest, UpdateMeResponse]{Route: Route{Pattern: "PATCH /api/me", Auth: AuthMember, Status: 200}, decoder: decodeUpdateMeRequest}
+	RouteRegister                     = Endpoint[RegisterRequest, RegisterResponse]{Route: Route{Pattern: "POST /api/account", Auth: AuthMember, Status: 201}, decoder: decodeRegisterRequest}
+	RouteChangePassword               = NoContentEndpoint[ChangePasswordRequest]{Route: Route{Pattern: "PUT /api/account/password", Auth: AuthMember, Status: 204}, decoder: decodeChangePasswordRequest}
+	RouteLogin                        = Endpoint[LoginRequest, LoginResponse]{Route: Route{Pattern: "POST /api/sessions", Auth: AuthMember, Status: 201}, decoder: decodeLoginRequest}
+	RouteLogout                       = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/sessions/current", Auth: AuthMember, Status: 204}, decoder: noBody}
+	RouteListMyPlaylists              = Endpoint[NoRequest, ListMyPlaylistsResponse]{Route: Route{Pattern: "GET /api/me/playlists", Auth: AuthAccount, Status: 200}, decoder: noBody}
+	RouteCreateMyPlaylist             = Endpoint[CreateMyPlaylistRequest, MyPlaylist]{Route: Route{Pattern: "POST /api/me/playlists", Auth: AuthAccount, Status: 201}, decoder: decodeCreateMyPlaylistRequest}
+	RouteRenameMyPlaylist             = NoContentEndpoint[RenameMyPlaylistRequest]{Route: Route{Pattern: "PATCH /api/me/playlists/{id}", Auth: AuthAccount, Status: 204}, decoder: decodeRenameMyPlaylistRequest, Params: []PathParam{{Name: "id", Type: "MyPlaylistID", pattern: patternMyPlaylistID}}}
+	RouteDeleteMyPlaylist             = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/me/playlists/{id}", Auth: AuthAccount, Status: 204}, decoder: noBody, Params: []PathParam{{Name: "id", Type: "MyPlaylistID", pattern: patternMyPlaylistID}}}
+	RouteListMyPlaylistItems          = Endpoint[NoRequest, ListMyPlaylistItemsResponse]{Route: Route{Pattern: "GET /api/me/playlists/{id}/items", Auth: AuthAccount, Status: 200}, decoder: noBody, Params: []PathParam{{Name: "id", Type: "MyPlaylistID", pattern: patternMyPlaylistID}}}
+	RouteAddMyPlaylistItem            = Endpoint[AddMyPlaylistItemRequest, AddMyPlaylistItemResponse]{Route: Route{Pattern: "POST /api/me/playlists/{id}/items", Auth: AuthAccount, Status: 201}, decoder: decodeAddMyPlaylistItemRequest, Params: []PathParam{{Name: "id", Type: "MyPlaylistID", pattern: patternMyPlaylistID}}}
+	RouteRemoveMyPlaylistItems        = NoContentEndpoint[RemoveMyPlaylistItemsRequest]{Route: Route{Pattern: "POST /api/me/playlists/{id}/removals", Auth: AuthAccount, Status: 204}, decoder: decodeRemoveMyPlaylistItemsRequest, Params: []PathParam{{Name: "id", Type: "MyPlaylistID", pattern: patternMyPlaylistID}}}
+	RouteCopyMyPlaylistItems          = Endpoint[CopyMyPlaylistItemsRequest, CopyMyPlaylistItemsResponse]{Route: Route{Pattern: "POST /api/me/playlists/{id}/copies", Auth: AuthAccount, Status: 200}, decoder: decodeCopyMyPlaylistItemsRequest, Params: []PathParam{{Name: "id", Type: "MyPlaylistID", pattern: patternMyPlaylistID}}}
+	RouteMoveMyPlaylistItems          = NoContentEndpoint[MoveMyPlaylistItemsRequest]{Route: Route{Pattern: "POST /api/me/playlists/{id}/moves", Auth: AuthAccount, Status: 204}, decoder: decodeMoveMyPlaylistItemsRequest, Params: []PathParam{{Name: "id", Type: "MyPlaylistID", pattern: patternMyPlaylistID}}}
+	RouteListMyTrackPlaylists         = Endpoint[ListMyTrackPlaylistsRequest, ListMyTrackPlaylistsResponse]{Route: Route{Pattern: "POST /api/me/playlist-memberships", Auth: AuthAccount, Status: 200}, decoder: decodeListMyTrackPlaylistsRequest}
+	RouteImportMyPlaylist             = Endpoint[ImportMyPlaylistRequest, ImportMyPlaylistResponse]{Route: Route{Pattern: "POST /api/me/playlists/imports", Auth: AuthAccount, Status: 201}, decoder: decodeImportMyPlaylistRequest}
+	RouteResolveMyPlaylistLink        = Endpoint[ResolveMyPlaylistLinkRequest, ResolveMyPlaylistLinkResponse]{Route: Route{Pattern: "POST /api/me/playlist-links", Auth: AuthAccount, Status: 200}, decoder: decodeResolveMyPlaylistLinkRequest}
+	RouteImportMyPlatformPlaylist     = Endpoint[ImportMyPlatformPlaylistRequest, ImportMyPlatformPlaylistResponse]{Route: Route{Pattern: "POST /api/me/playlists/platform-imports", Auth: AuthAccount, Status: 201}, decoder: decodeImportMyPlatformPlaylistRequest}
+	RouteListRooms                    = Endpoint[NoRequest, ListRoomsResponse]{Route: Route{Pattern: "GET /api/rooms", Auth: AuthNone, Status: 200}, decoder: noBody}
+	RouteGetRoom                      = Endpoint[NoRequest, RoomListing]{Route: Route{Pattern: "GET /api/rooms/{ref}", Auth: AuthNone, Status: 200}, decoder: noBody, Params: []PathParam{{Name: "ref", Type: "RoomRef", pattern: patternRoomRef}}}
+	RouteCreateRoom                   = LocatedEndpoint[CreateRoomRequest, CreateRoomResponse]{Route: Route{Pattern: "POST /api/rooms", Auth: AuthNone, Status: 201}, decoder: decodeCreateRoomRequest}
+	RouteCreateTicket                 = Endpoint[CreateTicketRequest, CreateTicketResponse]{Route: Route{Pattern: "POST /api/rooms/{id}/tickets", Auth: AuthMember, Status: 201}, decoder: decodeCreateTicketRequest, Params: []PathParam{{Name: "id", Type: "RoomID", pattern: patternRoomID}}}
+	RouteGetSite                      = Endpoint[NoRequest, GetSiteResponse]{Route: Route{Pattern: "GET /api/site", Auth: AuthNone, Status: 200}, decoder: noBody}
+	RouteAdminListRooms               = Endpoint[NoRequest, AdminListRoomsResponse]{Route: Route{Pattern: "GET /api/admin/rooms", Auth: AuthAdmin, Status: 200}, decoder: noBody}
+	RouteAdminCreateRoom              = LocatedEndpoint[AdminCreateRoomRequest, AdminCreateRoomResponse]{Route: Route{Pattern: "POST /api/admin/rooms", Auth: AuthAdmin, Status: 201}, decoder: decodeAdminCreateRoomRequest}
+	RouteAdminUpdateRoom              = NoContentEndpoint[AdminUpdateRoomRequest]{Route: Route{Pattern: "PATCH /api/admin/rooms/{id}", Auth: AuthAdmin, Status: 204}, decoder: decodeAdminUpdateRoomRequest, Params: []PathParam{{Name: "id", Type: "RoomID", pattern: patternRoomID}}}
+	RouteAdminDeleteRoom              = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/admin/rooms/{id}", Auth: AuthAdmin, Status: 204}, decoder: noBody, Params: []PathParam{{Name: "id", Type: "RoomID", pattern: patternRoomID}}}
+	RouteAdminGetRoomApiKey           = Endpoint[NoRequest, AdminGetRoomApiKeyResponse]{Route: Route{Pattern: "GET /api/admin/rooms/{id}/api-key", Auth: AuthAdmin, Status: 200}, decoder: noBody, Params: []PathParam{{Name: "id", Type: "RoomID", pattern: patternRoomID}}}
+	RouteAdminResetRoomApiKey         = LocatedEndpoint[NoRequest, APIKey]{Route: Route{Pattern: "POST /api/admin/rooms/{id}/api-key", Auth: AuthAdmin, Status: 201}, decoder: discard(decodeAdminResetRoomApiKeyRequest), Params: []PathParam{{Name: "id", Type: "RoomID", pattern: patternRoomID}}}
+	RouteAdminGetNeteaseCredential    = Endpoint[NoRequest, AdminGetNeteaseCredentialResponse]{Route: Route{Pattern: "GET /api/admin/credentials/netease", Auth: AuthAdmin, Status: 200}, decoder: noBody}
+	RouteAdminGetQQCredential         = Endpoint[NoRequest, AdminGetQQCredentialResponse]{Route: Route{Pattern: "GET /api/admin/credentials/qq", Auth: AuthAdmin, Status: 200}, decoder: noBody}
+	RouteAdminStartNeteaseLogin       = Endpoint[NoRequest, QRLogin]{Route: Route{Pattern: "POST /api/admin/credentials/netease/qr-logins", Auth: AuthAdmin, Status: 201}, decoder: discard(decodeAdminStartNeteaseLoginRequest)}
+	RouteAdminCheckNeteaseLogin       = Endpoint[AdminCheckNeteaseLoginRequest, QRLoginResult]{Route: Route{Pattern: "POST /api/admin/credentials/netease/qr-logins/status", Auth: AuthAdmin, Status: 200}, decoder: decodeAdminCheckNeteaseLoginRequest}
+	RouteAdminStartQQLogin            = Endpoint[AdminStartQQLoginRequest, QRLogin]{Route: Route{Pattern: "POST /api/admin/credentials/qq/qr-logins", Auth: AuthAdmin, Status: 201}, decoder: decodeAdminStartQQLoginRequest}
+	RouteAdminCheckQQLogin            = Endpoint[AdminCheckQQLoginRequest, QRLoginResult]{Route: Route{Pattern: "POST /api/admin/credentials/qq/qr-logins/status", Auth: AuthAdmin, Status: 200}, decoder: decodeAdminCheckQQLoginRequest}
+	RouteAdminGetBilibiliCredential   = Endpoint[NoRequest, AdminGetBilibiliCredentialResponse]{Route: Route{Pattern: "GET /api/admin/credentials/bilibili", Auth: AuthAdmin, Status: 200}, decoder: noBody}
+	RouteAdminStartBilibiliLogin      = Endpoint[NoRequest, QRLogin]{Route: Route{Pattern: "POST /api/admin/credentials/bilibili/qr-logins", Auth: AuthAdmin, Status: 201}, decoder: discard(decodeAdminStartBilibiliLoginRequest)}
+	RouteAdminCheckBilibiliLogin      = Endpoint[AdminCheckBilibiliLoginRequest, QRLoginResult]{Route: Route{Pattern: "POST /api/admin/credentials/bilibili/qr-logins/status", Auth: AuthAdmin, Status: 200}, decoder: decodeAdminCheckBilibiliLoginRequest}
+	RouteAdminGetYoutubeCredential    = Endpoint[NoRequest, AdminGetYoutubeCredentialResponse]{Route: Route{Pattern: "GET /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 200}, decoder: noBody}
+	RouteAdminSetYoutubeCredential    = NoContentEndpoint[AdminSetYoutubeCredentialRequest]{Route: Route{Pattern: "PUT /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 204}, decoder: decodeAdminSetYoutubeCredentialRequest}
+	RouteAdminDeleteYoutubeCredential = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 204}, decoder: noBody}
+	RouteAdminGetGithubCredential     = Endpoint[NoRequest, AdminGetGithubCredentialResponse]{Route: Route{Pattern: "GET /api/admin/credentials/github", Auth: AuthAdmin, Status: 200}, decoder: noBody}
+	RouteAdminSetGithubCredential     = NoContentEndpoint[AdminSetGithubCredentialRequest]{Route: Route{Pattern: "PUT /api/admin/credentials/github", Auth: AuthAdmin, Status: 204}, decoder: decodeAdminSetGithubCredentialRequest}
+	RouteAdminDeleteGithubCredential  = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/admin/credentials/github", Auth: AuthAdmin, Status: 204}, decoder: noBody}
+	RouteAdminListMedia               = Endpoint[AdminListMediaRequest, AdminListMediaResponse]{Route: Route{Pattern: "POST /api/admin/media/queries", Auth: AuthAdmin, Status: 200}, decoder: decodeAdminListMediaRequest}
+	RouteAdminRemoveMedia             = Endpoint[AdminRemoveMediaRequest, AdminRemoveMediaResponse]{Route: Route{Pattern: "POST /api/admin/media/removals", Auth: AuthAdmin, Status: 200}, decoder: decodeAdminRemoveMediaRequest}
+	RouteAdminUpdateSite              = Endpoint[AdminUpdateSiteRequest, AdminUpdateSiteResponse]{Route: Route{Pattern: "PATCH /api/admin/site", Auth: AuthAdmin, Status: 200}, decoder: decodeAdminUpdateSiteRequest}
+	RouteAdminOpenRegistration        = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "PUT /api/admin/registration", Auth: AuthAdmin, Status: 204}, decoder: discard(decodeAdminOpenRegistrationRequest)}
+	RouteAdminCloseRegistration       = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/admin/registration", Auth: AuthAdmin, Status: 204}, decoder: noBody}
+	RouteAdminGetAccount              = Endpoint[NoRequest, AdminAccount]{Route: Route{Pattern: "GET /api/admin/accounts/{username}", Auth: AuthAdmin, Status: 200}, decoder: noBody, Params: []PathParam{{Name: "username", Type: "Username", pattern: patternUsername}}}
+	RouteAdminResetAccountPassword    = Endpoint[NoRequest, AdminResetAccountPasswordResponse]{Route: Route{Pattern: "POST /api/admin/accounts/{username}/password", Auth: AuthAdmin, Status: 200}, decoder: discard(decodeAdminResetAccountPasswordRequest), Params: []PathParam{{Name: "username", Type: "Username", pattern: patternUsername}}}
+	RouteListMyListens                = Endpoint[NoRequest, ListMyListensResponse]{Route: Route{Pattern: "GET /api/me/listens", Auth: AuthMember, Status: 200}, decoder: noBody}
+	RouteRemoveMyListen               = NoContentEndpoint[RemoveMyListenRequest]{Route: Route{Pattern: "POST /api/me/listens/removals", Auth: AuthMember, Status: 204}, decoder: decodeRemoveMyListenRequest}
+	RouteClearMyListens               = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/me/listens", Auth: AuthMember, Status: 204}, decoder: noBody}
+	RouteEnableListenRecording        = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "PUT /api/me/listen-recording", Auth: AuthMember, Status: 204}, decoder: discard(decodeEnableListenRecordingRequest)}
+	RouteDisableListenRecording       = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/me/listen-recording", Auth: AuthMember, Status: 204}, decoder: noBody}
+	RouteShareMyPlaylist              = Endpoint[NoRequest, ShareMyPlaylistResponse]{Route: Route{Pattern: "POST /api/me/playlists/{id}/share", Auth: AuthAccount, Status: 200}, decoder: discard(decodeShareMyPlaylistRequest), Params: []PathParam{{Name: "id", Type: "MyPlaylistID", pattern: patternMyPlaylistID}}}
+	RouteUnshareMyPlaylist            = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/me/playlists/{id}/share", Auth: AuthAccount, Status: 204}, decoder: noBody, Params: []PathParam{{Name: "id", Type: "MyPlaylistID", pattern: patternMyPlaylistID}}}
+	RouteGetSharedPlaylist            = Endpoint[NoRequest, SharedPlaylist]{Route: Route{Pattern: "GET /api/shared-playlists/{shareId}", Auth: AuthNone, Status: 200}, decoder: noBody, Params: []PathParam{{Name: "shareId", Type: "ShareID", pattern: patternShareID}}}
+	RouteCopySharedPlaylist           = Endpoint[CopySharedPlaylistRequest, MyPlaylist]{Route: Route{Pattern: "POST /api/shared-playlists/{shareId}/copies", Auth: AuthAccount, Status: 201}, decoder: decodeCopySharedPlaylistRequest, Params: []PathParam{{Name: "shareId", Type: "ShareID", pattern: patternShareID}}}
+	RouteCreatePairingCode            = Endpoint[NoRequest, CreatePairingCodeResponse]{Route: Route{Pattern: "POST /api/account/pairing-codes", Auth: AuthAccount, Status: 201}, decoder: discard(decodeCreatePairingCodeRequest)}
+	RouteRedeemPairingCode            = Endpoint[RedeemPairingCodeRequest, RedeemPairingCodeResponse]{Route: Route{Pattern: "POST /api/sessions/pairing", Auth: AuthMember, Status: 201}, decoder: decodeRedeemPairingCodeRequest}
+	RouteStartGithubLogin             = Endpoint[StartGithubLoginRequest, StartGithubLoginResponse]{Route: Route{Pattern: "POST /api/auth/github", Auth: AuthMember, Status: 201}, decoder: decodeStartGithubLoginRequest}
+	RouteFinishGithubLogin            = Endpoint[FinishGithubLoginRequest, FinishGithubLoginResponse]{Route: Route{Pattern: "POST /api/auth/github/exchange", Auth: AuthMember, Status: 200}, decoder: decodeFinishGithubLoginRequest}
+	RouteUnbindGithub                 = NoContentEndpoint[UnbindGithubRequest]{Route: Route{Pattern: "POST /api/account/github/removals", Auth: AuthMember, Status: 204}, decoder: decodeUnbindGithubRequest}
 )
 
 var RoomRoutes = []RoomRoute{
 	{Route: Route{Pattern: "GET /api/room", Auth: AuthTicket, Status: 200}, Type: RequestRoomSync},
-	{Route: Route{Pattern: "POST /api/room/queue", Auth: AuthTicket, Status: 201, Location: true}, Type: RequestQueueAdd, body: true},
+	{Route: Route{Pattern: "POST /api/room/queue", Auth: AuthTicket, Status: 201}, Type: RequestQueueAdd, body: true},
 	{Route: Route{Pattern: "DELETE /api/room/queue/{entryId}", Auth: AuthTicket, Status: 204}, Type: RequestQueueRemove, params: []string{"entryId"}},
 	{Route: Route{Pattern: "POST /api/room/queue/{entryId}/likes", Auth: AuthTicket, Status: 200}, Type: RequestQueueLike, params: []string{"entryId"}, body: true},
 	{Route: Route{Pattern: "POST /api/room/skip-votes", Auth: AuthTicket, Status: 200}, Type: RequestPlaybackVoteSkip, body: true},

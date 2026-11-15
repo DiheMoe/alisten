@@ -1,7 +1,7 @@
 import type { ConnectionStatus } from '@/core/realtime'
 import { errorText } from '@/core/errors'
 import { roomStore } from '@/core/room'
-import { notificationStore } from '@/shared/ui'
+import { notificationStore } from '@/shared/lib/notification-store'
 
 // 连接上的 INVALID_ARGUMENT 只可能是前端发出的报文不对，用户能做的只有刷新页面。
 const connectionTexts = { INVALID_ARGUMENT: '连接房间时出错了，请刷新页面再试。' }

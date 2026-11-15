@@ -127,13 +127,13 @@ func (s *Store) CreateMember(_ context.Context, tokenHash []byte, name string) (
 	return m, nil
 }
 
-func (s *Store) MemberByToken(_ context.Context, tokenHash []byte) (member.Member, error) {
+func (s *Store) MemberByToken(_ context.Context, tokenHash []byte) (member.Member, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if m := s.member(s.sessions[string(tokenHash)]); m != nil {
-		return m.member, nil
+		return m.member, m.registered(), nil
 	}
-	return member.Member{}, port.ErrMemberNotFound
+	return member.Member{}, false, port.ErrMemberNotFound
 }
 
 // 调用方持有 s.mu。
@@ -507,38 +507,42 @@ func (s *Store) FindRoom(_ context.Context, ref string) (port.RoomRecord, error)
 	return *r, nil
 }
 
-func (s *Store) UpdateRoomAccess(_ context.Context, id string, c port.AccessChange) error {
+func (s *Store) SetRoomSlug(_ context.Context, id, slug string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r := s.room(id)
 	if r == nil {
 		return port.ErrRoomNotFound
 	}
-	updated := *r
-	if c.Slug != nil {
-		if err := checkText(*c.Slug); err != nil {
-			return err
-		}
-		if owner := s.slugOwner(*c.Slug); *c.Slug != "" && owner != nil && owner.Info.ID != r.Info.ID {
-			return port.ErrSlugTaken
-		}
-		if *c.Slug != "" && r.Info.Kind != room.Persistent {
-			return errors.New("只有常驻房间可以有别名")
-		}
-		updated.Slug = *c.Slug
+	if err := checkText(slug); err != nil {
+		return err
 	}
-	if c.PasswordHash != nil {
-		if err := checkText(*c.PasswordHash); err != nil {
-			return err
-		}
-		updated.PasswordHash = *c.PasswordHash
-		// 取消密码时，已经签发的票据保持有效。
-		if *c.PasswordHash != "" {
-			bot := s.bots[r.Info.ID]
-			maps.DeleteFunc(s.tickets, func(_ string, t storedTicket) bool { return t.roomID == r.Info.ID && t.memberID != bot })
-		}
+	if owner := s.slugOwner(slug); slug != "" && owner != nil && owner.Info.ID != r.Info.ID {
+		return port.ErrSlugTaken
 	}
-	*r = updated
+	if slug != "" && r.Info.Kind != room.Persistent {
+		return errors.New("只有常驻房间可以有别名")
+	}
+	r.Slug = slug
+	return nil
+}
+
+func (s *Store) SetRoomPassword(_ context.Context, id, passwordHash string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r := s.room(id)
+	if r == nil {
+		return port.ErrRoomNotFound
+	}
+	if err := checkText(passwordHash); err != nil {
+		return err
+	}
+	r.PasswordHash = passwordHash
+	// 取消密码时，已经签发的票据保持有效。
+	if passwordHash != "" {
+		bot := s.bots[r.Info.ID]
+		maps.DeleteFunc(s.tickets, func(_ string, t storedTicket) bool { return t.roomID == r.Info.ID && t.memberID != bot })
+	}
 	return nil
 }
 
@@ -846,7 +850,7 @@ func (s *Store) RemovePlaylistItems(_ context.Context, ownerID, id string, track
 func (s *Store) TrackPlaylists(_ context.Context, ownerID string, t track.Track) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ids := []string{}
+	var ids []string
 	for _, p := range s.playlists {
 		if p.owner == ownerID && slices.ContainsFunc(p.items, func(i port.PlaylistItem) bool { return i.Track == t }) {
 			ids = append(ids, p.id)

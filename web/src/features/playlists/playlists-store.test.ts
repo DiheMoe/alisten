@@ -260,7 +260,7 @@ describe('playlistsStore', () => {
   // 同步结束后会重新读取，读到的服务端状态也能把勾选改对。下面几个用例挡住这次读取，只看回滚本身。
   it('第一次请求失败时以服务端为准，提示服务端的文案', async () => {
     const { playlistsStore, included } = await loaded()
-    const { notificationStore } = await import('@/shared/ui')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     failAdd = true
     holdReads = true
     const done = playlistsStore.setMembership(favorites, rain, true)
@@ -380,7 +380,7 @@ describe('playlistsStore', () => {
 
   it('removeItems 失败时提示并返回 false', async () => {
     const { playlistsStore } = await loaded()
-    const { notificationStore } = await import('@/shared/ui')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     failRemove = true
     const done = playlistsStore.removeItems(favorites, [sunny])
     await settle()
@@ -400,7 +400,7 @@ describe('playlistsStore', () => {
 
   it('copyItems 装不下时提示是哪个歌单并返回 null', async () => {
     const { playlistsStore } = await loaded()
-    const { notificationStore } = await import('@/shared/ui')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     failCopy = true
     const done = playlistsStore.copyItems(favorites, commute, [sunny])
     await settle()
@@ -422,7 +422,7 @@ describe('playlistsStore', () => {
 
   it('moveItems 失败时提示并返回 false', async () => {
     const { playlistsStore } = await loaded()
-    const { notificationStore } = await import('@/shared/ui')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     failMove = true
     const done = playlistsStore.moveItems(favorites, [sunny])
     await settle()
@@ -433,7 +433,7 @@ describe('playlistsStore', () => {
   // 详情页的用法：移动经过 TrackEdits 排队。CONFLICT 说明歌单在别处变了，排在后面的移动基于过时的顺序。
   it('排队的移动遇到 CONFLICT：提示服务端的文案，回到这次移动之前，后面的不再发出，结束后重新读取', async () => {
     const { playlistsStore } = await loaded()
-    const { notificationStore } = await import('@/shared/ui')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     const { TrackEdits } = await import('./track-edits')
     let rereads = 0
     const edits = new TrackEdits(() => rereads++)
@@ -464,7 +464,7 @@ describe('playlistsStore', () => {
 
   it('注册之后读取，窗口获得焦点时刷新', async () => {
     const { playlistsStore } = await import('./playlists-store')
-    const { profileStore } = await import('@/features/settings')
+    const { profileStore } = await import('@/core/profile')
     playlistsStore.start()
     await profileStore.registered({ username: 'alice', github: false })
     await flush()
@@ -476,7 +476,7 @@ describe('playlistsStore', () => {
 
   it('只绑定了 GitHub 的账号没有用户名，同样读取歌单', async () => {
     const { playlistsStore } = await import('./playlists-store')
-    const { profileStore } = await import('@/features/settings')
+    const { profileStore } = await import('@/core/profile')
     playlistsStore.start()
     await profileStore.load()
     await flush()
@@ -485,7 +485,7 @@ describe('playlistsStore', () => {
 
   it('换账号之后，上一个账号的读取结果作废', async () => {
     const { playlistsStore } = await import('./playlists-store')
-    const { profileStore } = await import('@/features/settings')
+    const { profileStore } = await import('@/core/profile')
     holdReads = true
     playlistsStore.start()
     await profileStore.registered({ username: 'alice', github: false })
@@ -501,8 +501,8 @@ describe('playlistsStore', () => {
 
   it('换账号之后，上一个账号未完成的保存失败也不提示', async () => {
     const { playlistsStore } = await import('./playlists-store')
-    const { profileStore } = await import('@/features/settings')
-    const { notificationStore } = await import('@/shared/ui')
+    const { profileStore } = await import('@/core/profile')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     playlistsStore.start()
     await profileStore.registered({ username: 'alice', github: false })
     await flush()
@@ -517,7 +517,7 @@ describe('playlistsStore', () => {
 
   it('换账号之后，上一个账号读到的所在歌单作废', async () => {
     const { playlistsStore } = await import('./playlists-store')
-    const { profileStore } = await import('@/features/settings')
+    const { profileStore } = await import('@/core/profile')
     playlistsStore.start()
     await profileStore.registered({ username: 'alice', github: false })
     await flush()
@@ -579,7 +579,7 @@ describe('playlistsStore', () => {
 
   it('importFile 遇到 INVALID_ARGUMENT 时说是文件的问题，不重新读取', async () => {
     const { playlistsStore } = await import('./playlists-store')
-    const { notificationStore } = await import('@/shared/ui')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     importFailure = { status: 400, code: 'INVALID_ARGUMENT', message: 'tracks[0].track.id：不是合法的链接' }
     const done = playlistsStore.importFile('通勤', [fileTrack])
     await settle()
@@ -590,7 +590,7 @@ describe('playlistsStore', () => {
 
   it('importFile 超过歌单数上限时提示服务端的文案', async () => {
     const { playlistsStore } = await import('./playlists-store')
-    const { notificationStore } = await import('@/shared/ui')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     importFailure = { status: 409, code: 'CONFLICT', message: '最多只能建 50 个歌单' }
     const done = playlistsStore.importFile('通勤', [fileTrack])
     await settle()
@@ -610,7 +610,7 @@ describe('playlistsStore', () => {
 
   it('resolveLink 认不出链接时提示服务端的文案', async () => {
     const { playlistsStore } = await import('./playlists-store')
-    const { notificationStore } = await import('@/shared/ui')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     importFailure = { status: 400, code: 'INVALID_ARGUMENT', message: '不是网易云或 QQ 音乐的歌单链接' }
     const done = playlistsStore.resolveLink('https://example.com/')
     await settle()
@@ -620,7 +620,7 @@ describe('playlistsStore', () => {
 
   it('resolveLink 超过 2048 字节的文本不发出', async () => {
     const { playlistsStore } = await import('./playlists-store')
-    const { notificationStore } = await import('@/shared/ui')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     expect(await playlistsStore.resolveLink('歌'.repeat(683))).toBeNull()
     expect(requests).toEqual([])
     expect(notificationStore.state.notifications.map(n => n.message)).toEqual(['文字太长了，只粘贴歌单的链接或分享文字就好。'])
@@ -647,7 +647,7 @@ describe('playlistsStore', () => {
 
   it('importPlatform 歌单名不合法时说明规则，其他错误提示服务端的文案', async () => {
     const { playlistsStore } = await import('./playlists-store')
-    const { notificationStore } = await import('@/shared/ui')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     importFailure = { status: 400, code: 'INVALID_ARGUMENT', message: '歌单名不合法' }
     const first = playlistsStore.importPlatform(' ', 'netease', '3778678')
     await settle()
@@ -700,7 +700,7 @@ describe('playlistsStore', () => {
   it('share 和 unshare 失败时提示服务端的文案，列表不变，不重新读取', async () => {
     serverPlaylists.push(commute)
     const { playlistsStore } = await import('./playlists-store')
-    const { notificationStore } = await import('@/shared/ui')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     await playlistsStore.load()
     requests = []
     shareFailure = { status: 404, code: 'NOT_FOUND', message: '歌单不存在' }
@@ -733,7 +733,7 @@ describe('playlistsStore', () => {
 
   it('copyShared 歌单名不合法时说明规则，其他错误提示服务端的文案', async () => {
     const { playlistsStore } = await import('./playlists-store')
-    const { notificationStore } = await import('@/shared/ui')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     shareFailure = { status: 400, code: 'INVALID_ARGUMENT', message: 'name：去掉首尾空白后应有 1 到 50 个字符' }
     const first = playlistsStore.copyShared('share-1', ' ')
     await settle()

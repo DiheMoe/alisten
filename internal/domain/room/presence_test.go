@@ -44,11 +44,11 @@ func TestEphemeralRoomCloseEndsThePlayingSong(t *testing.T) {
 		t.Fatalf("最后一个会话离开后应开始无人计时：%#v", closing)
 	}
 	effects := r.Handle(at(6*time.Minute), Timer{Token: closing[0].Token})
-	plays := find[RecordPlay](effects)
+	plays := recorded(effects)
 	if len(plays) != 1 || plays[0].Entry.Track != netease("a") || !plays[0].EndedAt.Equal(t0.Add(6*time.Minute)) {
 		t.Fatalf("关闭房间时应记下正在播放的歌：%#v", effects)
 	}
-	recordAt := slices.IndexFunc(effects, func(e Effect) bool { _, ok := e.(RecordPlay); return ok })
+	recordAt := slices.IndexFunc(effects, func(e Effect) bool { p, ok := e.(Persist); return ok && len(p.Plays) > 0 })
 	closeAt := slices.IndexFunc(effects, func(e Effect) bool { _, ok := e.(Close); return ok })
 	if closeAt < recordAt {
 		t.Fatalf("播放记录应在关闭房间之前写入：%#v", effects)
@@ -65,7 +65,7 @@ func TestEphemeralRoomCloseRecordsAnOverdueSongAtItsEnd(t *testing.T) {
 	if len(closing) != 1 {
 		t.Fatalf("最后一个会话离开后应开始无人计时：%#v", closing)
 	}
-	plays := find[RecordPlay](r.Handle(at(6*time.Minute), Timer{Token: closing[0].Token}))
+	plays := recorded(r.Handle(at(6*time.Minute), Timer{Token: closing[0].Token}))
 	if len(plays) != 1 || !plays[0].EndedAt.Equal(ends) {
 		t.Fatalf("已超过原定结束时间的歌应按原定结束时间记录：%#v", plays)
 	}

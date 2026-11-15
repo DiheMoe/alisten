@@ -2,9 +2,11 @@ package port
 
 import (
 	"context"
+	"slices"
 
 	"github.com/dihemoe/alisten/internal/domain/member"
 	"github.com/dihemoe/alisten/internal/domain/room"
+	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
 // owner 按产生的顺序发布，订阅的网关按同样的顺序收到。
@@ -52,22 +54,51 @@ func (OwnerReleased) roomMessage()  {}
 func (TicketsRevoked) roomMessage() {}
 func (APIKeyReset) roomMessage()    {}
 
+// Light 返回 m 跨实例传输时的样子：待播和等待中的条目不带准备结果。收到消息的实例只用正在播放的条目的准备结果，
+// 其他条目如果也带上，队列每次变化都要把整个队列的歌词发给所有实例。Bus 的每个实现发布之前都要这样处理，
+// 否则用内存实现的测试读得到的字段，经过 Redis 之后是空的。
+func Light(m RoomMessage) RoomMessage {
+	switch m := m.(type) {
+	case Emitted:
+		switch e := m.Emit.Event.(type) {
+		case room.QueueChanged:
+			e.Pending, e.Waiting = withoutPrep(e.Pending, e.Waiting)
+			m.Emit.Event = e
+		case room.Activity:
+			e.Entry.Prep = track.Prepared{}
+			m.Emit.Event = e
+		}
+		return m
+	case Replied:
+		if s, ok := m.Reply.Result.(room.SyncResult); ok {
+			s.View.Snapshot.Pending, s.View.Snapshot.Waiting = withoutPrep(s.View.Snapshot.Pending, s.View.Snapshot.Waiting)
+			m.Reply.Result = s
+		}
+		return m
+	}
+	return m
+}
+
+func withoutPrep(pending *room.Entry, waiting []room.Entry) (*room.Entry, []room.Entry) {
+	if pending != nil {
+		p := *pending
+		p.Prep = track.Prepared{}
+		pending = &p
+	}
+	waiting = slices.Clone(waiting)
+	for i := range waiting {
+		waiting[i].Prep = track.Prepared{}
+	}
+	return pending, waiting
+}
+
 type RoomInput struct {
 	Room string
 	// 发出输入的网关的实例 ID，owner 据此记录会话在哪个网关上。
 	Gateway string
-	// Input 与 Patch 恰好有一项不为空。
-	Input room.Input
-	Patch *InfoPatch
+	Input   room.Input
 	// 为真时，如果接收输入的实例上没有运行这个房间，就由这个实例接管。
 	Takeover bool
-}
-
-// nil 表示保持不变。管理接口只修改给出的字段，房间用当前的名称和描述补上没给出的字段，组成 UpdateInfo。
-type InfoPatch struct {
-	RequestID   room.RequestID
-	Name        *string
-	Description *string
 }
 
 type Delivery interface{ delivery() }
@@ -108,6 +139,11 @@ func (PreparedDelivery) delivery()        {}
 func (SessionsRevokedDelivery) delivery() {}
 func (SubscriptionLost) delivery()        {}
 
+type PreparedPublisher interface {
+	// 各实例都会收到，包括发布的实例。
+	PublishPrepared(ctx context.Context, o PrepareOutcome) error
+}
+
 // 实现绑定在本实例上：订阅的是本实例的频道，发出的消息带有本实例的 ID。
 type Bus interface {
 	// 订阅本实例的频道、成员的频道和准备结果的频道，返回时订阅已经生效。
@@ -121,8 +157,7 @@ type Bus interface {
 	PublishMember(ctx context.Context, m member.Member) error
 	// 各实例都会收到，包括发布的实例。
 	PublishSessionsRevoked(ctx context.Context, sessionTokenHashes [][]byte) error
-	// 各实例都会收到，包括发布的实例。
-	PublishPrepared(ctx context.Context, o PrepareOutcome) error
+	PreparedPublisher
 	// 按收到的顺序返回下一条消息，直到 ctx 结束。ctx 结束之后 Bus 不能再使用。Receive 只能由一个 goroutine 调用。
 	Receive(ctx context.Context) (Delivery, error)
 }

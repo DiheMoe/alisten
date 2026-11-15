@@ -3,6 +3,7 @@ import type { Page, Panel, RoomPage, Route } from './route'
 import type { SearchQuery } from '@/features/search'
 import { ChevronLeft, ChevronRight, Headphones, History, House, Library, ListMusic, MessageCircle, MoreHorizontal, Search, Settings, Share2, UserRound, Wifi, WifiOff, X } from 'lucide-react'
 import { Suspense } from 'react'
+import { profileStore } from '@/core/profile'
 import { roomStore } from '@/core/room'
 import { ChatPanel } from '@/features/chat'
 import { HistoryPage } from '@/features/history'
@@ -11,10 +12,11 @@ import { AudioEngine, ManualStartPrompt, PlayerBar, playerStore } from '@/featur
 import { MyPlaylistPage, PlaylistsPage, SharedPlaylistPage } from '@/features/playlists'
 import { QueuePage, voteSkip } from '@/features/queue'
 import { copyInviteLink, EntryDialog, Lobby, roomEntryStore, RoomGate } from '@/features/rooms'
-import { HeaderSearch, PlaylistPage, SearchPage, searchStore } from '@/features/search'
-import { GitHubLoginPage, PairPage, profileStore, SettingsPage } from '@/features/settings'
+import { PlaylistPage, SearchBox, SearchPage, searchStore } from '@/features/search'
+import { GitHubLoginPage, PairPage, SettingsPage } from '@/features/settings'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { useStore } from '@/shared/lib/use-store'
-import { Avatar, IconButton, lazyPage, Notifications, notificationStore, Skeleton } from '@/shared/ui'
+import { Avatar, IconButton, lazyPage, Notifications, Skeleton } from '@/shared/ui'
 import { DetailPanel } from './detail-panel'
 import { ErrorBoundary, RegionFailed } from './error-boundary'
 import { navigationStore } from './navigation'
@@ -164,7 +166,7 @@ function Header({ page }: { page: Page }) {
           aria-current={page === home ? 'page' : undefined}
           onClick={() => navigationStore.open(home)}
         />
-        <HeaderSearch onSearch={search} />
+        <SearchBox className="header-search" recent onSearch={search} />
         <IconButton
           icon={Search}
           label="搜索音乐"
@@ -334,7 +336,7 @@ export function App() {
                   {page === 'playlists' && (
                     <PlaylistsPage
                       onOpen={playlist => navigationStore.navigate({ name: 'my-playlist', id: playlist.id, panel: navigationStore.state.route.panel }, playlist.name)}
-                      onRegister={() => navigationStore.navigate({ name: 'settings', section: 'account', panel: navigationStore.state.route.panel })}
+                      onRegister={() => navigationStore.openAccountSettings()}
                     />
                   )}
                   {page === 'my-playlist' && <RoutedMyPlaylist />}
@@ -397,7 +399,6 @@ export function App() {
         onError={() => {
           // 弹窗已经不显示了，进房流程却还停在等待票据，页面会一直显示骨架屏。所以和关闭弹窗一样，放弃这次进入。
           navigationStore.leaveRoom()
-          roomEntryStore.reset()
           notificationStore.error('加入房间的窗口出错了，没有加入房间，再选一次房间。')
         }}
       >

@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dihemoe/alisten/internal/app/identity"
+	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/realtime"
 	"github.com/dihemoe/alisten/protocol"
 )
@@ -42,7 +42,7 @@ type streamClose struct {
 func (s *server) roomEvents(w http.ResponseWriter, r *http.Request) {
 	// 打开事件流的期限与 WebSocket 的握手相同，打开之后的推送不设期限。
 	setup, cancel := context.WithTimeout(r.Context(), helloTimeout)
-	ctx, opened, err := s.serve(setup, w, r, protocol.AuthTicket, maxBodyBytes, s.observe)
+	ctx, opened, err := s.serve(setup, r, protocol.AuthTicket, s.observe)
 	cancel()
 	if err != nil {
 		s.fail(ctx, w, r, err)
@@ -80,24 +80,8 @@ func (s *server) roomEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// 确认票据失败或 panic 时都要退订，否则事件流的名额和房间频道一直被占着。
 func (s *server) observe(ctx context.Context, c call) (any, error) {
-	o, err := s.Gateway.Observe(ctx, c.roomID, c.member, c.memberSession, c.bot, string(identity.TicketCredential(c.ticket)))
-	if err != nil {
-		return nil, err
-	}
-	confirmed := false
-	defer func() {
-		if !confirmed {
-			s.Gateway.Unobserve(o)
-		}
-	}()
-	// 作废票据时先删除票据，再通知断开。如果通知发出时事件流还没在本实例生效，事件流就收不到，所以生效之后再确认一次票据。
-	if _, err := s.Identity.VerifyTicket(ctx, c.ticket); err != nil {
-		return nil, err
-	}
-	confirmed = true
-	return o, nil
+	return s.Identity.ObserveRoom(ctx, c.ticket, port.TicketHolder{RoomID: c.roomID, Member: c.caller.Member, Bot: c.bot, SessionTokenHash: c.caller.TokenHash})
 }
 
 func (s *server) streamMessage(m realtime.Message) (name, id string, data any) {

@@ -2,20 +2,18 @@ import type { RoomListing } from '@/core/realtime'
 import { Headphones, LockKeyhole, Users } from 'lucide-react'
 import { useState } from 'react'
 import { loadTicket } from '@/core/api'
+import { useSubmission } from '@/shared/lib/use-submission'
 import { Modal } from '@/shared/ui'
 import { roomEntryStore } from './room-entry'
 import './rooms.css'
 
 export function JoinDialog({ room, onJoined, onClose }: { room: RoomListing, onJoined?: () => void, onClose: () => void }) {
   const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
+  const { busy, submit } = useSubmission()
   const needsPassword = room.hasPassword && !loadTicket(room.id)
-  const submit = async () => {
-    setBusy(true)
+  const join = async () => {
     if (await roomEntryStore.join(room, password))
       onJoined?.()
-    else
-      setBusy(false)
   }
   return (
     <Modal title="加入房间" onClose={onClose}>
@@ -23,7 +21,7 @@ export function JoinDialog({ room, onJoined, onClose }: { room: RoomListing, onJ
         className="form-stack join-form"
         onSubmit={(event) => {
           event.preventDefault()
-          void submit()
+          void submit(join)
         }}
       >
         <div className="join-summary">

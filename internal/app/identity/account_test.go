@@ -85,7 +85,7 @@ func sameHashes(got [][]byte, tokens ...string) bool {
 
 func issueTicket(t *testing.T, s *Service, session Session, roomID string) string {
 	t.Helper()
-	ticket, err := s.IssueTicket(t.Context(), session.Member.ID, session.MemberToken, clientIP, roomID, "")
+	ticket, err := s.IssueTicket(t.Context(), callerOf(session), clientIP, roomID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func ticketValid(t *testing.T, s *Service, ticket string) bool {
 // 返回 token 当前所属的成员。token 已经失效时 ok 为 false。
 func tokenOwner(t *testing.T, store *porttest.Store, token string) (m member.Member, ok bool) {
 	t.Helper()
-	m, err := store.MemberByToken(t.Context(), hashSecret(token))
+	m, _, err := store.MemberByToken(t.Context(), hashSecret(token))
 	if errors.Is(err, port.ErrMemberNotFound) {
 		return member.Member{}, false
 	}
@@ -117,7 +117,7 @@ func tokenOwner(t *testing.T, store *porttest.Store, token string) (m member.Mem
 func registerAccount(t *testing.T, a *Accounts, s *Service, username, password string) Session {
 	t.Helper()
 	session := createMember(t, s)
-	if _, err := a.Register(t.Context(), session.Member.ID, session.MemberToken, clientIP, username, password); err != nil {
+	if _, err := a.Register(t.Context(), callerOf(session), clientIP, username, password); err != nil {
 		t.Fatal(err)
 	}
 	return session
@@ -126,7 +126,7 @@ func registerAccount(t *testing.T, a *Accounts, s *Service, username, password s
 func TestRegister(t *testing.T) {
 	a, s, store, q, _ := newAccounts(t)
 	guest := createMember(t, s)
-	account, err := a.Register(t.Context(), guest.Member.ID, guest.MemberToken, clientIP, "alice", "correct horse")
+	account, err := a.Register(t.Context(), callerOf(guest), clientIP, "alice", "correct horse")
 	if err != nil || account != (Account{Username: "alice"}) {
 		t.Fatalf("Register = %#v, %v", account, err)
 	}
@@ -160,7 +160,7 @@ func TestAccountKeepsEmail(t *testing.T) {
 		t.Errorf("保存邮箱之后 Account = %#v, %v, %v", got, ok, err)
 	}
 	other := createMember(t, s)
-	_, account, _, err := a.Login(t.Context(), other.Member, other.MemberToken, clientIP, "alice", "correct horse", "")
+	_, account, _, err := a.Login(t.Context(), callerOf(other), clientIP, "alice", "correct horse", "")
 	if err != nil || account != (Account{Username: "alice", Email: "Alice@Example.COM"}) {
 		t.Errorf("另一台设备登录得到 %#v, %v，期望带邮箱", account, err)
 	}
@@ -190,16 +190,16 @@ func TestRegisterRejected(t *testing.T) {
 	a, s, store, q, _ := newAccounts(t)
 	alice := registerAccount(t, a, s, "alice", "correct horse")
 	other := createMember(t, s)
-	if _, err := a.Register(t.Context(), other.Member.ID, other.MemberToken, clientIP, "alice", "another horse"); !errors.Is(err, port.ErrUsernameTaken) {
+	if _, err := a.Register(t.Context(), callerOf(other), clientIP, "alice", "another horse"); !errors.Is(err, port.ErrUsernameTaken) {
 		t.Errorf("用户名已被占用时 = %v，期望 ErrUsernameTaken", err)
 	}
-	if _, err := a.Register(t.Context(), alice.Member.ID, alice.MemberToken, clientIP, "alice2", "another horse"); !errors.Is(err, port.ErrAlreadyRegistered) {
+	if _, err := a.Register(t.Context(), callerOf(alice), clientIP, "alice2", "another horse"); !errors.Is(err, port.ErrAlreadyRegistered) {
 		t.Errorf("已经注册过时 = %v，期望 ErrAlreadyRegistered", err)
 	}
 
 	guest := createMember(t, s)
 	q.exhausted["register:ip:"+clientIP] = true
-	if _, err := a.Register(t.Context(), guest.Member.ID, guest.MemberToken, clientIP, "bob", "correct horse"); !errors.Is(err, ErrTooManyAttempts) {
+	if _, err := a.Register(t.Context(), callerOf(guest), clientIP, "bob", "correct horse"); !errors.Is(err, ErrTooManyAttempts) {
 		t.Errorf("额度用完时 = %v，期望 ErrTooManyAttempts", err)
 	}
 	if _, ok, _ := a.Account(t.Context(), guest.Member.ID); ok {
@@ -210,7 +210,7 @@ func TestRegisterRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	q.taken = nil
-	if _, err := a.Register(t.Context(), guest.Member.ID, guest.MemberToken, "198.51.100.1", "bob", "correct horse"); !errors.Is(err, ErrRegistrationClosed) {
+	if _, err := a.Register(t.Context(), callerOf(guest), "198.51.100.1", "bob", "correct horse"); !errors.Is(err, ErrRegistrationClosed) {
 		t.Errorf("关闭注册时 = %v，期望 ErrRegistrationClosed", err)
 	}
 	if len(q.taken) != 0 {
@@ -225,7 +225,7 @@ func TestLogin(t *testing.T) {
 	id := createRoom(t, store, "")
 	guestTicket, aliceTicket := issueTicket(t, s, guest, id), issueTicket(t, s, alice, id)
 	q.taken = nil
-	session, account, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", "")
+	session, account, _, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestLoginMovesGuestListensIntoAccount(t *testing.T) {
 	if err := store.RecordListen(t.Context(), []string{guest.Member.ID}, rain); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", ""); err != nil {
+	if _, _, _, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", ""); err != nil {
 		t.Fatal(err)
 	}
 	if listens, err := store.MemberListens(t.Context(), alice.Member.ID); err != nil || !slices.Equal(listens, []port.Listen{rain, sunny}) {
@@ -287,22 +287,22 @@ func TestLoginRejected(t *testing.T) {
 		{"密码错误", "alice", "wrong horse"},
 		{"没有这个用户名", "nobody", "correct horse"},
 	} {
-		if _, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, tc.username, tc.password, ""); !errors.Is(err, ErrInvalidCredentials) {
+		if _, _, _, err := a.Login(t.Context(), callerOf(guest), clientIP, tc.username, tc.password, ""); !errors.Is(err, ErrInvalidCredentials) {
 			t.Errorf("%s：Login = %v，期望 ErrInvalidCredentials", tc.name, err)
 		}
 	}
 	if _, ok := tokenOwner(t, store, guest.MemberToken); !ok {
 		t.Error("登录失败时游客的 token 应仍然有效")
 	}
-	if _, _, _, err := a.Login(t.Context(), alice.Member, alice.MemberToken, clientIP, "alice", "correct horse", ""); !errors.Is(err, ErrAlreadyLoggedIn) {
+	if _, _, _, err := a.Login(t.Context(), registeredCallerOf(alice), clientIP, "alice", "correct horse", ""); !errors.Is(err, ErrAlreadyLoggedIn) {
 		t.Errorf("已注册的成员登录 = %v，期望 ErrAlreadyLoggedIn", err)
 	}
 	q.exhausted["login:user:alice"] = true
-	if _, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, "198.51.100.1", "alice", "correct horse", ""); !errors.Is(err, ErrTooManyAttempts) {
+	if _, _, _, err := a.Login(t.Context(), callerOf(guest), "198.51.100.1", "alice", "correct horse", ""); !errors.Is(err, ErrTooManyAttempts) {
 		t.Errorf("用户名的额度用完时换一个 IP = %v，期望 ErrTooManyAttempts", err)
 	}
 	q.exhausted["login:ip:"+clientIP] = true
-	if _, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "bob", "correct horse", ""); !errors.Is(err, ErrTooManyAttempts) {
+	if _, _, _, err := a.Login(t.Context(), callerOf(guest), clientIP, "bob", "correct horse", ""); !errors.Is(err, ErrTooManyAttempts) {
 		t.Errorf("IP 的额度用完时换一个用户名 = %v，期望 ErrTooManyAttempts", err)
 	}
 }
@@ -359,7 +359,7 @@ func TestLoginIssuesDevice(t *testing.T) {
 	a, s, store, q, devices := newDeviceAccounts(t)
 	alice := registerAccount(t, a, s, "alice", "correct horse")
 	guest := createMember(t, s)
-	_, _, device, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", "")
+	_, _, device, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +373,7 @@ func TestLoginIssuesDevice(t *testing.T) {
 
 	q.taken = nil
 	next := createMember(t, s)
-	session, _, again, err := a.Login(t.Context(), next.Member, next.MemberToken, clientIP, "alice", "correct horse", device)
+	session, _, again, err := a.Login(t.Context(), callerOf(next), clientIP, "alice", "correct horse", device)
 	if err != nil || session.Member != alice.Member {
 		t.Fatalf("带凭证登录 = %#v, %v", session.Member, err)
 	}
@@ -388,7 +388,7 @@ func TestLoginIssuesDevice(t *testing.T) {
 	}
 
 	other := createMember(t, s)
-	if _, _, fresh, err := a.Login(t.Context(), other.Member, other.MemberToken, clientIP, "alice", "correct horse", ""); err != nil || fresh == device || fresh == "" {
+	if _, _, fresh, err := a.Login(t.Context(), callerOf(other), clientIP, "alice", "correct horse", ""); err != nil || fresh == device || fresh == "" {
 		t.Errorf("不带凭证登录返回 %q, %v，期望签发新的凭证", fresh, err)
 	}
 }
@@ -398,16 +398,16 @@ func TestLoginWithDeviceWhileUsernameQuotaExhausted(t *testing.T) {
 	a, s, _, q, _ := newDeviceAccounts(t)
 	alice := registerAccount(t, a, s, "alice", "correct horse")
 	guest := createMember(t, s)
-	_, _, device, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", "")
+	_, _, device, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	q.exhausted["login:user:alice"] = true
 	next := createMember(t, s)
-	if _, _, _, err := a.Login(t.Context(), next.Member, next.MemberToken, clientIP, "alice", "correct horse", ""); !errors.Is(err, ErrTooManyAttempts) {
+	if _, _, _, err := a.Login(t.Context(), callerOf(next), clientIP, "alice", "correct horse", ""); !errors.Is(err, ErrTooManyAttempts) {
 		t.Fatalf("用户名额度用完时不带凭证 = %v，期望 ErrTooManyAttempts", err)
 	}
-	session, _, _, err := a.Login(t.Context(), next.Member, next.MemberToken, clientIP, "alice", "correct horse", device)
+	session, _, _, err := a.Login(t.Context(), callerOf(next), clientIP, "alice", "correct horse", device)
 	if err != nil || session.Member != alice.Member {
 		t.Errorf("用户名额度用完时带凭证 = %#v, %v，期望登录 alice", session.Member, err)
 	}
@@ -419,7 +419,7 @@ func TestLoginWithForeignDeviceUsesUsernameQuota(t *testing.T) {
 	alice := registerAccount(t, a, s, "alice", "correct horse")
 	registerAccount(t, a, s, "bob", "battery staple")
 	guest := createMember(t, s)
-	_, _, bobDevice, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "bob", "battery staple", "")
+	_, _, bobDevice, err := a.Login(t.Context(), callerOf(guest), clientIP, "bob", "battery staple", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -427,7 +427,7 @@ func TestLoginWithForeignDeviceUsesUsernameQuota(t *testing.T) {
 	for _, tc := range []struct{ name, device string }{{"bob 的凭证", bobDevice}, {"未知的凭证", unknown}} {
 		q.taken, devices.saves = nil, nil
 		next := createMember(t, s)
-		session, _, device, err := a.Login(t.Context(), next.Member, next.MemberToken, clientIP, "alice", "correct horse", tc.device)
+		session, _, device, err := a.Login(t.Context(), callerOf(next), clientIP, "alice", "correct horse", tc.device)
 		if err != nil || session.Member != alice.Member {
 			t.Fatalf("%s：Login = %#v, %v，期望登录 alice", tc.name, session.Member, err)
 		}
@@ -444,7 +444,7 @@ func TestLoginWithForeignDeviceUsesUsernameQuota(t *testing.T) {
 
 	q.exhausted["login:user:alice"] = true
 	next := createMember(t, s)
-	if _, _, _, err := a.Login(t.Context(), next.Member, next.MemberToken, clientIP, "alice", "correct horse", bobDevice); !errors.Is(err, ErrTooManyAttempts) {
+	if _, _, _, err := a.Login(t.Context(), callerOf(next), clientIP, "alice", "correct horse", bobDevice); !errors.Is(err, ErrTooManyAttempts) {
 		t.Errorf("用户名额度用完时带 bob 的凭证登录 alice = %v，期望 ErrTooManyAttempts", err)
 	}
 }
@@ -453,14 +453,14 @@ func TestLoginDeviceQuotaExhausted(t *testing.T) {
 	a, s, _, q, _ := newDeviceAccounts(t)
 	registerAccount(t, a, s, "alice", "correct horse")
 	guest := createMember(t, s)
-	_, _, device, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", "")
+	_, _, device, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	q.exhausted[deviceQuota(device)] = true
 	q.taken = nil
 	next := createMember(t, s)
-	if _, _, _, err := a.Login(t.Context(), next.Member, next.MemberToken, clientIP, "alice", "correct horse", device); !errors.Is(err, ErrTooManyAttempts) {
+	if _, _, _, err := a.Login(t.Context(), callerOf(next), clientIP, "alice", "correct horse", device); !errors.Is(err, ErrTooManyAttempts) {
 		t.Errorf("凭证额度用完时 = %v，期望 ErrTooManyAttempts", err)
 	}
 	if want := []string{"login:ip:" + clientIP, deviceQuota(device)}; !slices.Equal(q.taken, want) {
@@ -472,14 +472,14 @@ func TestLoginFailureIssuesNoDevice(t *testing.T) {
 	a, s, _, _, devices := newDeviceAccounts(t)
 	registerAccount(t, a, s, "alice", "correct horse")
 	guest := createMember(t, s)
-	_, _, device, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", "")
+	_, _, device, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	devices.saves = nil
 	next := createMember(t, s)
 	for _, tc := range []struct{ name, username, device string }{{"不带凭证", "nobody", ""}, {"带着凭证", "alice", device}} {
-		if _, _, got, err := a.Login(t.Context(), next.Member, next.MemberToken, clientIP, tc.username, "wrong horse", tc.device); !errors.Is(err, ErrInvalidCredentials) || got != "" {
+		if _, _, got, err := a.Login(t.Context(), callerOf(next), clientIP, tc.username, "wrong horse", tc.device); !errors.Is(err, ErrInvalidCredentials) || got != "" {
 			t.Errorf("%s：密码错误时 Login 返回凭证 %q, %v，期望不返回凭证", tc.name, got, err)
 		}
 	}
@@ -494,14 +494,14 @@ func TestLoginFailsWhenDeviceCannotBeSaved(t *testing.T) {
 	registerAccount(t, a, s, "alice", "correct horse")
 	guest := createMember(t, s)
 	devices.fail = porttest.ErrRedisDown
-	if _, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", ""); !errors.Is(err, porttest.ErrRedisDown) {
+	if _, _, _, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", ""); !errors.Is(err, porttest.ErrRedisDown) {
 		t.Fatalf("凭证存不了时 Login = %v，期望 ErrRedisDown", err)
 	}
 	if m, ok := tokenOwner(t, store, guest.MemberToken); !ok || m != guest.Member {
 		t.Error("凭证存不了时不应签发会话，游客的会话应仍然有效")
 	}
 	devices.fail = nil
-	if _, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", ""); err != nil {
+	if _, _, _, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", ""); err != nil {
 		t.Errorf("恢复之后重试 = %v，期望成功", err)
 	}
 }
@@ -514,7 +514,7 @@ func TestLoginDeviceExpiresWhenPasswordChanges(t *testing.T) {
 		change func(t *testing.T, a *Accounts, alice Session) string
 	}{
 		{"修改密码", func(t *testing.T, a *Accounts, alice Session) string {
-			if err := a.ChangePassword(t.Context(), alice.Member.ID, alice.MemberToken, "correct horse", "new horse"); err != nil {
+			if err := a.ChangePassword(t.Context(), callerOf(alice), "correct horse", "new horse"); err != nil {
 				t.Fatal(err)
 			}
 			return "new horse"
@@ -533,7 +533,7 @@ func TestLoginDeviceExpiresWhenPasswordChanges(t *testing.T) {
 			bob := registerAccount(t, a, s, "bob", "battery staple")
 			login := func(username, password, device string) (Session, string, error) {
 				guest := createMember(t, s)
-				session, _, issued, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, username, password, device)
+				session, _, issued, err := a.Login(t.Context(), callerOf(guest), clientIP, username, password, device)
 				return session, issued, err
 			}
 			var hoarded []string
@@ -604,7 +604,7 @@ func TestAccountQuotaCountsIPv6ByNetwork(t *testing.T) {
 		{"::ffff:203.0.113.7", "login:ip:203.0.113.7", ErrInvalidCredentials},
 	} {
 		q.taken = nil
-		_, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, tc.ip, "nobody", "wrong horse", "")
+		_, _, _, err := a.Login(t.Context(), callerOf(guest), tc.ip, "nobody", "wrong horse", "")
 		if !errors.Is(err, tc.want) {
 			t.Errorf("从 %s 登录 = %v，期望 %v", tc.ip, err, tc.want)
 		}
@@ -614,7 +614,7 @@ func TestAccountQuotaCountsIPv6ByNetwork(t *testing.T) {
 	}
 
 	q.taken = nil
-	if _, err := a.Register(t.Context(), guest.Member.ID, guest.MemberToken, "2001:db8:1:2:aaaa:bbbb:cccc:dddd", "alice", "correct horse"); err != nil {
+	if _, err := a.Register(t.Context(), callerOf(guest), "2001:db8:1:2:aaaa:bbbb:cccc:dddd", "alice", "correct horse"); err != nil {
 		t.Fatal(err)
 	}
 	if want := []string{"register:ip:2001:db8:1:2::/64"}; !slices.Equal(q.taken, want) {
@@ -628,7 +628,7 @@ func TestLogout(t *testing.T) {
 	id := createRoom(t, store, "")
 	aliceTicket := issueTicket(t, s, alice, id)
 	revoked()
-	if err := a.Logout(t.Context(), alice.MemberToken); err != nil {
+	if err := a.Logout(t.Context(), callerOf(alice)); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := tokenOwner(t, store, alice.MemberToken); ok {
@@ -646,7 +646,7 @@ func TestChangePassword(t *testing.T) {
 	a, s, store, q, revoked := newAccounts(t)
 	alice := registerAccount(t, a, s, "alice", "correct horse")
 	guest := createMember(t, s)
-	other, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", "")
+	other, _, _, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -654,10 +654,10 @@ func TestChangePassword(t *testing.T) {
 	aliceTicket, otherTicket := issueTicket(t, s, alice, id), issueTicket(t, s, other, id)
 	revoked()
 	q.taken = nil
-	if err := a.ChangePassword(t.Context(), alice.Member.ID, alice.MemberToken, "wrong horse", "battery staple"); !errors.Is(err, ErrWrongCurrentPassword) {
+	if err := a.ChangePassword(t.Context(), callerOf(alice), "wrong horse", "battery staple"); !errors.Is(err, ErrWrongCurrentPassword) {
 		t.Errorf("当前密码错误时 = %v，期望 ErrWrongCurrentPassword", err)
 	}
-	if err := a.ChangePassword(t.Context(), alice.Member.ID, alice.MemberToken, "correct horse", "battery staple"); err != nil {
+	if err := a.ChangePassword(t.Context(), callerOf(alice), "correct horse", "battery staple"); err != nil {
 		t.Fatal(err)
 	}
 	if want := []string{"password:member:" + alice.Member.ID, "password:member:" + alice.Member.ID}; !slices.Equal(q.taken, want) {
@@ -676,14 +676,14 @@ func TestChangePassword(t *testing.T) {
 		t.Error("修改密码之后只有其他设备的票据失效")
 	}
 	next := createMember(t, s)
-	if _, _, _, err := a.Login(t.Context(), next.Member, next.MemberToken, clientIP, "alice", "correct horse", ""); !errors.Is(err, ErrInvalidCredentials) {
+	if _, _, _, err := a.Login(t.Context(), callerOf(next), clientIP, "alice", "correct horse", ""); !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("用旧密码登录 = %v，期望 ErrInvalidCredentials", err)
 	}
-	if _, _, _, err := a.Login(t.Context(), next.Member, next.MemberToken, clientIP, "alice", "battery staple", ""); err != nil {
+	if _, _, _, err := a.Login(t.Context(), callerOf(next), clientIP, "alice", "battery staple", ""); err != nil {
 		t.Errorf("用新密码登录 = %v", err)
 	}
 	stranger := createMember(t, s)
-	if err := a.ChangePassword(t.Context(), stranger.Member.ID, stranger.MemberToken, "correct horse", "battery staple"); !errors.Is(err, ErrNotRegistered) {
+	if err := a.ChangePassword(t.Context(), callerOf(stranger), "correct horse", "battery staple"); !errors.Is(err, ErrNotRegistered) {
 		t.Errorf("游客修改密码 = %v，期望 ErrNotRegistered", err)
 	}
 }
@@ -692,13 +692,13 @@ func TestResetPassword(t *testing.T) {
 	a, s, store, _, revoked := newAccounts(t)
 	alice := registerAccount(t, a, s, "alice", "correct horse")
 	aliceTicket := issueTicket(t, s, alice, createRoom(t, store, ""))
-	if _, err := a.Find(t.Context(), "nobody"); !errors.Is(err, ErrAccountNotFound) {
+	if _, _, err := a.Find(t.Context(), "nobody"); !errors.Is(err, ErrAccountNotFound) {
 		t.Errorf("Find 不存在的用户名 = %v，期望 ErrAccountNotFound", err)
 	}
 	if _, err := a.ResetPassword(t.Context(), "nobody"); !errors.Is(err, ErrAccountNotFound) {
 		t.Errorf("ResetPassword 不存在的用户名 = %v，期望 ErrAccountNotFound", err)
 	}
-	if found, err := a.Find(t.Context(), "alice"); err != nil || found.Member != alice.Member || found.Username != "alice" {
+	if m, found, err := a.Find(t.Context(), "alice"); err != nil || m != alice.Member || found.Username != "alice" {
 		t.Errorf("Find = %#v, %v", found, err)
 	}
 	password, err := a.ResetPassword(t.Context(), "alice")
@@ -718,7 +718,7 @@ func TestResetPassword(t *testing.T) {
 		t.Error("重置密码之后账号的票据应失效")
 	}
 	guest := createMember(t, s)
-	if _, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", password, ""); err != nil {
+	if _, _, _, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", password, ""); err != nil {
 		t.Errorf("用重置后的密码登录 = %v", err)
 	}
 }
@@ -741,7 +741,7 @@ func TestAccountOperationsSucceedWhenRevocationFails(t *testing.T) {
 	alice := registerAccount(t, a, s, "alice", "correct horse")
 
 	guest := createMember(t, s)
-	other, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", "")
+	other, _, _, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", "")
 	if err != nil {
 		t.Fatalf("广播失败时 Login = %v，期望成功", err)
 	}
@@ -752,7 +752,7 @@ func TestAccountOperationsSucceedWhenRevocationFails(t *testing.T) {
 		t.Error("新会话应已经签发")
 	}
 
-	if err := a.ChangePassword(t.Context(), alice.Member.ID, alice.MemberToken, "correct horse", "battery staple"); err != nil {
+	if err := a.ChangePassword(t.Context(), callerOf(alice), "correct horse", "battery staple"); err != nil {
 		t.Errorf("广播失败时 ChangePassword = %v，期望成功", err)
 	}
 	if _, ok := tokenOwner(t, store, other.MemberToken); ok {
@@ -767,12 +767,12 @@ func TestAccountOperationsSucceedWhenRevocationFails(t *testing.T) {
 		t.Error("重置密码之后账号的所有会话应已经删除")
 	}
 	next := createMember(t, s)
-	session, _, _, err := a.Login(t.Context(), next.Member, next.MemberToken, clientIP, "alice", password, "")
+	session, _, _, err := a.Login(t.Context(), callerOf(next), clientIP, "alice", password, "")
 	if err != nil {
 		t.Fatalf("用返回的新密码登录 = %v", err)
 	}
 
-	if err := a.Logout(t.Context(), session.MemberToken); err != nil {
+	if err := a.Logout(t.Context(), callerOf(session)); err != nil {
 		t.Errorf("广播失败时 Logout = %v，期望成功", err)
 	}
 	if _, ok := tokenOwner(t, store, session.MemberToken); ok {
@@ -799,14 +799,14 @@ func TestLoginRejectedWhenGuestSessionOrPasswordChangesMeanwhile(t *testing.T) {
 	if err := store.DeleteSession(t.Context(), hashSecret(guest.MemberToken)); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", ""); !errors.Is(err, ErrInvalidMemberToken) {
+	if _, _, _, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", ""); !errors.Is(err, ErrInvalidMemberToken) {
 		t.Errorf("游客的会话在校验之后失效，Login = %v，期望 ErrInvalidMemberToken", err)
 	}
 
 	node := porttest.NewRedis().Node("a")
 	changing := NewAccounts(passwordChangedMembers{store}, store, &fakeQuota{exhausted: map[string]bool{}}, porttest.NewCodes(), porttest.NewCodes(), porttest.NewDevices(), newGateway(store, node, node))
 	guest = createMember(t, s)
-	if _, _, _, err := changing.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", ""); !errors.Is(err, ErrInvalidCredentials) {
+	if _, _, _, err := changing.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", ""); !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("密码在校验之后被修改，Login = %v，期望 ErrInvalidCredentials", err)
 	}
 	if _, ok := tokenOwner(t, store, guest.MemberToken); !ok {
@@ -841,25 +841,25 @@ func TestChangePasswordRejectedWhenPasswordChangesMeanwhile(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if err := resetting.ChangePassword(t.Context(), alice.Member.ID, alice.MemberToken, "correct horse", "battery staple"); !errors.Is(err, ErrInvalidMemberToken) {
+	if err := resetting.ChangePassword(t.Context(), callerOf(alice), "correct horse", "battery staple"); !errors.Is(err, ErrInvalidMemberToken) {
 		t.Errorf("校验当前密码之后后台重置了密码，ChangePassword = %v，期望 ErrInvalidMemberToken", err)
 	}
 	guest := createMember(t, s)
-	session, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", reset, "")
+	session, _, _, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", reset, "")
 	if err != nil {
 		t.Fatalf("用重置出来的密码登录 = %v，期望成功", err)
 	}
 
 	changing := racing(func() {
-		if err := a.ChangePassword(t.Context(), session.Member.ID, session.MemberToken, reset, "first change"); err != nil {
+		if err := a.ChangePassword(t.Context(), callerOf(session), reset, "first change"); err != nil {
 			t.Fatal(err)
 		}
 	})
-	if err := changing.ChangePassword(t.Context(), session.Member.ID, session.MemberToken, reset, "second change"); !errors.Is(err, ErrWrongCurrentPassword) {
+	if err := changing.ChangePassword(t.Context(), callerOf(session), reset, "second change"); !errors.Is(err, ErrWrongCurrentPassword) {
 		t.Errorf("校验当前密码之后同一个会话已经改了密码，ChangePassword = %v，期望 ErrWrongCurrentPassword", err)
 	}
 	next := createMember(t, s)
-	if _, _, _, err := a.Login(t.Context(), next.Member, next.MemberToken, clientIP, "alice", "first change", ""); err != nil {
+	if _, _, _, err := a.Login(t.Context(), callerOf(next), clientIP, "alice", "first change", ""); err != nil {
 		t.Errorf("用先完成的那次修改的密码登录 = %v，期望成功", err)
 	}
 }
@@ -876,7 +876,7 @@ func TestLoginDoesPasswordWorkForUnknownUsername(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	for _, username := range []string{"alice", "nobody"} {
-		if _, _, _, err := a.Login(ctx, guest.Member, guest.MemberToken, clientIP, username, "wrong horse", ""); !errors.Is(err, context.Canceled) {
+		if _, _, _, err := a.Login(ctx, callerOf(guest), clientIP, username, "wrong horse", ""); !errors.Is(err, context.Canceled) {
 			t.Errorf("用户名 %s：Login = %v，期望同样等待密码计算的名额", username, err)
 		}
 	}
@@ -898,7 +898,7 @@ func TestGitHubOnlyAccount(t *testing.T) {
 	if got, ok, err := a.Account(t.Context(), gh.Member.ID); err != nil || !ok || got != (Account{GitHub: true}) {
 		t.Errorf("只绑定了 GitHub 的账号 Account = %#v, %v, %v", got, ok, err)
 	}
-	if err := a.ChangePassword(t.Context(), gh.Member.ID, gh.MemberToken, "correct horse", "battery staple"); !errors.Is(err, port.ErrNoPassword) {
+	if err := a.ChangePassword(t.Context(), callerOf(gh), "correct horse", "battery staple"); !errors.Is(err, port.ErrNoPassword) {
 		t.Errorf("没有密码的账号修改密码 = %v，期望 ErrNoPassword", err)
 	}
 }
@@ -922,22 +922,22 @@ func TestGitHubAccountSetsPasswordWhileRegistrationClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	guest := createMember(t, s)
-	if _, err := a.Register(t.Context(), guest.Member.ID, guest.MemberToken, clientIP, "bob", "correct horse"); !errors.Is(err, ErrRegistrationClosed) {
+	if _, err := a.Register(t.Context(), callerOf(guest), clientIP, "bob", "correct horse"); !errors.Is(err, ErrRegistrationClosed) {
 		t.Fatalf("关闭注册时游客注册 = %v，期望 ErrRegistrationClosed", err)
 	}
 	verifiedByGitHub(t, a, gh)
 	q.taken = nil
-	account, err := a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "alice", "correct horse")
+	account, err := a.Register(t.Context(), callerOf(gh), clientIP, "alice", "correct horse")
 	if want := (Account{Username: "alice", Email: "gh@example.com", GitHub: true}); err != nil || account != want {
 		t.Fatalf("Register = %#v, %v，期望 %#v", account, err, want)
 	}
 	if want := []string{"register:ip:" + clientIP}; !slices.Equal(q.taken, want) {
 		t.Errorf("取的额度 = %v，期望 %v", q.taken, want)
 	}
-	if _, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", ""); err != nil {
+	if _, _, _, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", ""); err != nil {
 		t.Errorf("设置密码之后用密码登录 = %v", err)
 	}
-	if _, err := a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "alice2", "correct horse"); !errors.Is(err, port.ErrAlreadyRegistered) {
+	if _, err := a.Register(t.Context(), callerOf(gh), clientIP, "alice2", "correct horse"); !errors.Is(err, port.ErrAlreadyRegistered) {
 		t.Errorf("再设置一次用户名 = %v，期望 ErrAlreadyRegistered", err)
 	}
 }
@@ -948,18 +948,18 @@ func TestGitHubAccountCredentialsNeedGitHubVerification(t *testing.T) {
 	a, s, store, _, revoked := newAccounts(t)
 	gh := githubAccount(t, s, store, 42)
 	mallory := createMember(t, s)
-	stolen, _, err := a.RedeemPairingCode(t.Context(), mallory.Member, mallory.MemberToken, clientIP, createPairingCode(t, a, gh))
+	stolen, _, err := a.RedeemPairingCode(t.Context(), callerOf(mallory), clientIP, createPairingCode(t, a, gh))
 	if err != nil {
 		t.Fatal(err)
 	}
 	stolenTicket := issueTicket(t, s, stolen, createRoom(t, store, ""))
 	revoked()
 
-	if _, err := a.Register(t.Context(), gh.Member.ID, stolen.MemberToken, clientIP, "mallory", "mallory horse"); !errors.Is(err, ErrGitHubUnverified) {
+	if _, err := a.Register(t.Context(), callerOf(stolen), clientIP, "mallory", "mallory horse"); !errors.Is(err, ErrGitHubUnverified) {
 		t.Errorf("没有用 GitHub 确认就补设 = %v，期望 ErrGitHubUnverified", err)
 	}
 	verifiedByGitHub(t, a, gh)
-	if _, err := a.Register(t.Context(), gh.Member.ID, stolen.MemberToken, clientIP, "mallory", "mallory horse"); !errors.Is(err, ErrGitHubUnverified) {
+	if _, err := a.Register(t.Context(), callerOf(stolen), clientIP, "mallory", "mallory horse"); !errors.Is(err, ErrGitHubUnverified) {
 		t.Errorf("用别的会话的确认补设 = %v，期望 ErrGitHubUnverified", err)
 	}
 	if got, _, _ := a.Account(t.Context(), gh.Member.ID); got != (Account{GitHub: true}) {
@@ -967,10 +967,10 @@ func TestGitHubAccountCredentialsNeedGitHubVerification(t *testing.T) {
 	}
 
 	registerAccount(t, a, s, "taken", "correct horse")
-	if _, err := a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "taken", "correct horse"); !errors.Is(err, port.ErrUsernameTaken) {
+	if _, err := a.Register(t.Context(), callerOf(gh), clientIP, "taken", "correct horse"); !errors.Is(err, port.ErrUsernameTaken) {
 		t.Errorf("用户名已被占用时 = %v，期望 ErrUsernameTaken", err)
 	}
-	account, err := a.Register(t.Context(), gh.Member.ID, gh.MemberToken, clientIP, "octocat", "correct horse")
+	account, err := a.Register(t.Context(), callerOf(gh), clientIP, "octocat", "correct horse")
 	if err != nil || account != (Account{Username: "octocat", GitHub: true}) {
 		t.Fatalf("换个用户名再补设 = %#v, %v，期望用户名被占用不消耗确认", account, err)
 	}
@@ -989,7 +989,7 @@ func TestGitHubAccountCredentialsNeedGitHubVerification(t *testing.T) {
 	if ticketValid(t, s, stolenTicket) {
 		t.Error("补设之后其他设备的票据应失效")
 	}
-	if err := a.ChangePassword(t.Context(), gh.Member.ID, gh.MemberToken, "correct horse", "battery staple"); err != nil {
+	if err := a.ChangePassword(t.Context(), callerOf(gh), "correct horse", "battery staple"); err != nil {
 		t.Errorf("本人随后修改密码 = %v", err)
 	}
 }
@@ -1003,11 +1003,11 @@ func TestEmptyPasswordHashIsWrongPassword(t *testing.T) {
 	}
 	guest := createMember(t, s)
 	for _, password := range []string{"", "correct horse"} {
-		if _, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", password, ""); !errors.Is(err, ErrInvalidCredentials) {
+		if _, _, _, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", password, ""); !errors.Is(err, ErrInvalidCredentials) {
 			t.Errorf("密码哈希为空时用 %q 登录 = %v，期望 ErrInvalidCredentials", password, err)
 		}
 	}
-	if err := a.ChangePassword(t.Context(), alice.Member.ID, alice.MemberToken, "correct horse", "battery staple"); !errors.Is(err, ErrWrongCurrentPassword) {
+	if err := a.ChangePassword(t.Context(), callerOf(alice), "correct horse", "battery staple"); !errors.Is(err, ErrWrongCurrentPassword) {
 		t.Errorf("密码哈希为空时修改密码 = %v，期望 ErrWrongCurrentPassword", err)
 	}
 }

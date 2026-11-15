@@ -16,7 +16,6 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/realtime"
 	"github.com/dihemoe/alisten/internal/lib/logctx"
 	"github.com/dihemoe/alisten/protocol"
@@ -132,10 +131,6 @@ func (s *server) hello(ctx context.Context, req protocol.Request) (*realtime.Ses
 	hello := req.Data.(protocol.HelloRequest)
 	if hello.ProtocolVersion != protocol.Version {
 		return nil, errClientOutdated
-	}
-	// 不是 UUID 的值会被当作别名查找。
-	if !uuidPattern.MatchString(hello.RoomID) {
-		return nil, port.ErrRoomNotFound
 	}
 	return s.Identity.EnterRoom(ctx, hello.RoomID, hello.Ticket)
 }

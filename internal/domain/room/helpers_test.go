@@ -46,6 +46,14 @@ func find[T Effect](effects []Effect) []T {
 	return out
 }
 
+func recorded(effects []Effect) []RecordPlay {
+	var out []RecordPlay
+	for _, p := range find[Persist](effects) {
+		out = append(out, p.Plays...)
+	}
+	return out
+}
+
 func events[T Event](effects []Effect) []T {
 	var out []T
 	for _, emit := range find[Emit](effects) {

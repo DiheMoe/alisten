@@ -107,7 +107,7 @@ func (s *Service) UpdateRoom(ctx context.Context, id string, c RoomChange) error
 		hash = &h
 	}
 	if c.Slug != nil {
-		if err := s.rooms.UpdateRoomAccess(ctx, r.Info.ID, port.AccessChange{Slug: c.Slug}); err != nil {
+		if err := s.rooms.SetRoomSlug(ctx, r.Info.ID, *c.Slug); err != nil {
 			return err
 		}
 	}
@@ -119,7 +119,7 @@ func (s *Service) UpdateRoom(ctx context.Context, id string, c RoomChange) error
 	if hash == nil {
 		return nil
 	}
-	if err := s.rooms.UpdateRoomAccess(ctx, r.Info.ID, port.AccessChange{PasswordHash: hash}); err != nil {
+	if err := s.rooms.SetRoomPassword(ctx, r.Info.ID, *hash); err != nil {
 		return err
 	}
 	if *hash == "" {
@@ -177,11 +177,11 @@ func (s *Service) SetYouTubeCookies(ctx context.Context, cookies string) error {
 	if err != nil {
 		return err
 	}
-	return s.youtube.SetCookies(ctx, normalized)
+	return s.youtube.SetYouTubeCookies(ctx, normalized)
 }
 
 func (s *Service) ClearYouTubeCookies(ctx context.Context) error {
-	return s.youtube.SetCookies(ctx, "")
+	return s.youtube.SetYouTubeCookies(ctx, "")
 }
 
 func (s *Service) NeteaseCredentialStatus(ctx context.Context) (port.CredentialStatus, error) {
@@ -276,7 +276,7 @@ func (s *Service) CheckBilibiliQRLogin(ctx context.Context, key string) (port.QR
 }
 
 func (s *Service) YouTubeCookiesStatus(ctx context.Context) (port.YouTubeCookiesStatus, error) {
-	status, err := s.youtube.Status(ctx)
+	status, err := s.youtube.YouTubeCookiesStatus(ctx)
 	if err != nil {
 		return port.YouTubeCookiesStatus{}, fmt.Errorf("查询 YouTube cookies 的状态：%w", err)
 	}

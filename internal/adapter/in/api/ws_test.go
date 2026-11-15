@@ -191,7 +191,11 @@ func (f *wsFixture) enter(t *testing.T, roomID string) (string, member.Member, s
 			t.Fatal(err)
 		}
 	}
-	ticket, err := f.identity.IssueTicket(t.Context(), session.Member.ID, session.MemberToken, "203.0.113.7", roomID, "")
+	caller, err := f.identity.Authenticate(t.Context(), session.MemberToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticket, err := f.identity.IssueTicket(t.Context(), caller, "203.0.113.7", roomID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,6 +342,24 @@ func TestHandshakeTimeoutCancelsLookups(t *testing.T) {
 		}
 		if cancelledFirst.Load() {
 			t.Error("连接以 4408 断开之前，握手中的查询就已经取消了")
+		}
+	})
+}
+
+// 握手时第二次查找票据，是会话加入网关之后的那次确认。这次确认 panic 时，会话不能留在房间里。
+func TestHandshakeLeavesRoomWhenRecheckPanics(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		f := newWSFixtureWithTickets(t, store, &panickingRecheck{Store: store}, store, store)
+		roomID, _, ticket := f.enter(t, "")
+		conn := f.dial(t, nil)
+		writeFrame(t, conn, hello(roomID, ticket))
+		if _, frame, err := conn.Read(t.Context()); err == nil {
+			t.Errorf("握手收到 %s，期望连接断开", frame)
+		}
+		synctest.Wait()
+		if n := f.gateway.Sessions(); n != 0 {
+			t.Errorf("确认票据时 panic 之后还有 %d 个会话，期望会话已经离开房间", n)
 		}
 	})
 }
@@ -506,7 +528,7 @@ func TestHandshakeFailures(t *testing.T) {
 				failure("INVALID_ARGUMENT", "data.protocolVersion：缺少必填字段"), protocol.CloseInvalidArgument},
 			{"协议版本不一致", `{"kind":"request","type":"hello","id":"h1","data":{"roomId":"` + roomID + `","ticket":"` + ticket + `","protocolVersion":"0000000000000000"}}`,
 				failure("CLIENT_OUTDATED", "前端与服务端的协议版本不一致，请刷新页面"), protocol.CloseClientOutdated},
-			{"房间 ID 不是 UUID", hello("hall", ticket), failure("NOT_FOUND", "房间不存在"), protocol.CloseNotFound},
+			{"房间 ID 不是 UUID", hello("hall", ticket), failure("INVALID_ARGUMENT", "data.roomId：格式不正确"), protocol.CloseInvalidArgument},
 			{"房间不存在", hello("01a15778-1911-7a28-8b2e-e08c2a25f388", "不存在"), failure("NOT_FOUND", "房间不存在"), protocol.CloseNotFound},
 			{"票据无效", hello(roomID, "不存在"), failure("UNAUTHORIZED", "票据无效"), protocol.CloseUnauthorized},
 			{"票据不属于这个房间", hello(other, ticket), failure("UNAUTHORIZED", "票据无效"), protocol.CloseUnauthorized},

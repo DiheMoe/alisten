@@ -5,9 +5,10 @@ import type { MyPlaylist } from '@/core/realtime'
 import { ArrowDown, ArrowDownAZ, ArrowDownNarrowWide, ArrowDownWideNarrow, ArrowDownZA, ArrowUp, LayoutGrid, List, Plus, Star } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { errorMessage } from '@/core/errors'
-import { profileStore } from '@/features/settings'
+import { profileStore } from '@/core/profile'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { useStore } from '@/shared/lib/use-store'
-import { EmptyState, IconButton, Modal, notificationStore, Select, Skeleton } from '@/shared/ui'
+import { EmptyState, IconButton, Modal, Select, Skeleton } from '@/shared/ui'
 import { CreatePlaylistForm } from './create-playlist-form'
 import { ImportMenu } from './import-menu'
 import { FavoritesMark, PlaylistCover } from './playlist-cover'
@@ -133,10 +134,7 @@ export function PlaylistsPage({ onOpen, onRegister }: { onOpen: (playlist: MyPla
                   ariaLabel={`排序方式：${sortLabels[sort.key]}`}
                   value={sort.key}
                   options={sortOptions}
-                  onChange={(value) => {
-                    const key = value as SortKey
-                    update({ view, sort: { key, order: key === sort.key ? sort.order : defaultOrder(key) } })
-                  }}
+                  onChange={key => update({ view, sort: { key, order: key === sort.key ? sort.order : defaultOrder(key) } })}
                 />
                 <IconButton
                   className="playlists-sort-order"

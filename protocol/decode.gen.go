@@ -12,12 +12,19 @@ var (
 	patternAdminSetGithubCredentialRequestClientID     = regexp.MustCompile(`^[A-Za-z0-9._-]{1,100}$`)
 	patternAdminSetGithubCredentialRequestClientSecret = regexp.MustCompile(`^[A-Za-z0-9._-]{1,200}$`)
 	patternAdminUpdateRoomRequestSlug                  = regexp.MustCompile(`^[a-z0-9-]{0,32}$`)
+	patternCopyMyPlaylistItemsRequestFrom              = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	patternHelloRequestRoomID                          = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 	patternLoginRequestDevice                          = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
 	patternLoginRequestUsername                        = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
 	patternRedeemPairingCodeRequestCode                = regexp.MustCompile(`^[2-9A-HJ-NP-Z]{8}$`)
 	patternRegisterRequestUsername                     = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
 	patternStoredMediaRefKey                           = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	patternTrackIDWhenBilibili                         = regexp.MustCompile(`^BV[1-9A-HJ-NP-Za-km-z]{10}(?:/([2-9]|[1-9][0-9]{1,3}))?$`)
+	patternMyPlaylistID                                = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	patternRoomID                                      = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	patternRoomRef                                     = regexp.MustCompile(`^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[a-z0-9-]{1,32})$`)
+	patternShareID                                     = regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`)
+	patternUsername                                    = regexp.MustCompile(`^[a-z0-9_-]{3,32}$`)
 )
 
 func decodeConnectionRequest(typ string, raw json.RawMessage, path string) (any, bool, error) {
@@ -69,174 +76,6 @@ func decodeRoomRequest(typ string, raw json.RawMessage, path string) (any, bool,
 		return v, true, err
 	}
 	return nil, false, nil
-}
-
-func DecodeCreateMemberRequest(body []byte) (CreateMemberRequest, error) {
-	return decodeCreateMemberRequest(body, "")
-}
-
-func DecodeUpdateMeRequest(body []byte) (UpdateMeRequest, error) {
-	return decodeUpdateMeRequest(body, "")
-}
-
-func DecodeRegisterRequest(body []byte) (RegisterRequest, error) {
-	return decodeRegisterRequest(body, "")
-}
-
-func DecodeChangePasswordRequest(body []byte) (ChangePasswordRequest, error) {
-	return decodeChangePasswordRequest(body, "")
-}
-
-func DecodeLoginRequest(body []byte) (LoginRequest, error) {
-	return decodeLoginRequest(body, "")
-}
-
-func DecodeCreateMyPlaylistRequest(body []byte) (CreateMyPlaylistRequest, error) {
-	return decodeCreateMyPlaylistRequest(body, "")
-}
-
-func DecodeRenameMyPlaylistRequest(body []byte) (RenameMyPlaylistRequest, error) {
-	return decodeRenameMyPlaylistRequest(body, "")
-}
-
-func DecodeAddMyPlaylistItemRequest(body []byte) (AddMyPlaylistItemRequest, error) {
-	return decodeAddMyPlaylistItemRequest(body, "")
-}
-
-func DecodeRemoveMyPlaylistItemsRequest(body []byte) (RemoveMyPlaylistItemsRequest, error) {
-	return decodeRemoveMyPlaylistItemsRequest(body, "")
-}
-
-func DecodeCopyMyPlaylistItemsRequest(body []byte) (CopyMyPlaylistItemsRequest, error) {
-	return decodeCopyMyPlaylistItemsRequest(body, "")
-}
-
-func DecodeMoveMyPlaylistItemsRequest(body []byte) (MoveMyPlaylistItemsRequest, error) {
-	return decodeMoveMyPlaylistItemsRequest(body, "")
-}
-
-func DecodeListMyTrackPlaylistsRequest(body []byte) (ListMyTrackPlaylistsRequest, error) {
-	return decodeListMyTrackPlaylistsRequest(body, "")
-}
-
-func DecodeImportMyPlaylistRequest(body []byte) (ImportMyPlaylistRequest, error) {
-	return decodeImportMyPlaylistRequest(body, "")
-}
-
-func DecodeResolveMyPlaylistLinkRequest(body []byte) (ResolveMyPlaylistLinkRequest, error) {
-	return decodeResolveMyPlaylistLinkRequest(body, "")
-}
-
-func DecodeImportMyPlatformPlaylistRequest(body []byte) (ImportMyPlatformPlaylistRequest, error) {
-	return decodeImportMyPlatformPlaylistRequest(body, "")
-}
-
-func DecodeCreateRoomRequest(body []byte) (CreateRoomRequest, error) {
-	return decodeCreateRoomRequest(body, "")
-}
-
-func DecodeCreateTicketRequest(body []byte) (CreateTicketRequest, error) {
-	return decodeCreateTicketRequest(body, "")
-}
-
-func DecodeAdminCreateRoomRequest(body []byte) (AdminCreateRoomRequest, error) {
-	return decodeAdminCreateRoomRequest(body, "")
-}
-
-func DecodeAdminUpdateRoomRequest(body []byte) (AdminUpdateRoomRequest, error) {
-	return decodeAdminUpdateRoomRequest(body, "")
-}
-
-func DecodeAdminResetRoomApiKeyRequest(body []byte) (AdminResetRoomApiKeyRequest, error) {
-	return decodeAdminResetRoomApiKeyRequest(body, "")
-}
-
-func DecodeAdminStartNeteaseLoginRequest(body []byte) (AdminStartNeteaseLoginRequest, error) {
-	return decodeAdminStartNeteaseLoginRequest(body, "")
-}
-
-func DecodeAdminCheckNeteaseLoginRequest(body []byte) (AdminCheckNeteaseLoginRequest, error) {
-	return decodeAdminCheckNeteaseLoginRequest(body, "")
-}
-
-func DecodeAdminStartQQLoginRequest(body []byte) (AdminStartQQLoginRequest, error) {
-	return decodeAdminStartQQLoginRequest(body, "")
-}
-
-func DecodeAdminCheckQQLoginRequest(body []byte) (AdminCheckQQLoginRequest, error) {
-	return decodeAdminCheckQQLoginRequest(body, "")
-}
-
-func DecodeAdminStartBilibiliLoginRequest(body []byte) (AdminStartBilibiliLoginRequest, error) {
-	return decodeAdminStartBilibiliLoginRequest(body, "")
-}
-
-func DecodeAdminCheckBilibiliLoginRequest(body []byte) (AdminCheckBilibiliLoginRequest, error) {
-	return decodeAdminCheckBilibiliLoginRequest(body, "")
-}
-
-func DecodeAdminSetYoutubeCredentialRequest(body []byte) (AdminSetYoutubeCredentialRequest, error) {
-	return decodeAdminSetYoutubeCredentialRequest(body, "")
-}
-
-func DecodeAdminSetGithubCredentialRequest(body []byte) (AdminSetGithubCredentialRequest, error) {
-	return decodeAdminSetGithubCredentialRequest(body, "")
-}
-
-func DecodeAdminListMediaRequest(body []byte) (AdminListMediaRequest, error) {
-	return decodeAdminListMediaRequest(body, "")
-}
-
-func DecodeAdminRemoveMediaRequest(body []byte) (AdminRemoveMediaRequest, error) {
-	return decodeAdminRemoveMediaRequest(body, "")
-}
-
-func DecodeAdminUpdateSiteRequest(body []byte) (AdminUpdateSiteRequest, error) {
-	return decodeAdminUpdateSiteRequest(body, "")
-}
-
-func DecodeAdminOpenRegistrationRequest(body []byte) (AdminOpenRegistrationRequest, error) {
-	return decodeAdminOpenRegistrationRequest(body, "")
-}
-
-func DecodeAdminResetAccountPasswordRequest(body []byte) (AdminResetAccountPasswordRequest, error) {
-	return decodeAdminResetAccountPasswordRequest(body, "")
-}
-
-func DecodeRemoveMyListenRequest(body []byte) (RemoveMyListenRequest, error) {
-	return decodeRemoveMyListenRequest(body, "")
-}
-
-func DecodeEnableListenRecordingRequest(body []byte) (EnableListenRecordingRequest, error) {
-	return decodeEnableListenRecordingRequest(body, "")
-}
-
-func DecodeShareMyPlaylistRequest(body []byte) (ShareMyPlaylistRequest, error) {
-	return decodeShareMyPlaylistRequest(body, "")
-}
-
-func DecodeCopySharedPlaylistRequest(body []byte) (CopySharedPlaylistRequest, error) {
-	return decodeCopySharedPlaylistRequest(body, "")
-}
-
-func DecodeCreatePairingCodeRequest(body []byte) (CreatePairingCodeRequest, error) {
-	return decodeCreatePairingCodeRequest(body, "")
-}
-
-func DecodeRedeemPairingCodeRequest(body []byte) (RedeemPairingCodeRequest, error) {
-	return decodeRedeemPairingCodeRequest(body, "")
-}
-
-func DecodeStartGithubLoginRequest(body []byte) (StartGithubLoginRequest, error) {
-	return decodeStartGithubLoginRequest(body, "")
-}
-
-func DecodeFinishGithubLoginRequest(body []byte) (FinishGithubLoginRequest, error) {
-	return decodeFinishGithubLoginRequest(body, "")
-}
-
-func DecodeUnbindGithubRequest(body []byte) (UnbindGithubRequest, error) {
-	return decodeUnbindGithubRequest(body, "")
 }
 
 func decodeAddMyPlaylistItemRequest(raw json.RawMessage, path string) (AddMyPlaylistItemRequest, error) {
@@ -617,6 +456,9 @@ func decodeCopyMyPlaylistItemsRequest(raw json.RawMessage, path string) (CopyMyP
 	if v.From, err = decodeString(m["from"], field(path, "from")); err != nil {
 		return v, err
 	}
+	if err = checkPattern(v.From, field(path, "from"), patternCopyMyPlaylistItemsRequestFrom); err != nil {
+		return v, err
+	}
 	if v.Tracks, err = decodeArray(decodeTrack, 1000)(m["tracks"], field(path, "tracks")); err != nil {
 		return v, err
 	}
@@ -794,6 +636,9 @@ func decodeHelloRequest(raw json.RawMessage, path string) (HelloRequest, error) 
 		return v, err
 	}
 	if v.RoomID, err = decodeString(m["roomId"], field(path, "roomId")); err != nil {
+		return v, err
+	}
+	if err = checkPattern(v.RoomID, field(path, "roomId"), patternHelloRequestRoomID); err != nil {
 		return v, err
 	}
 	if v.Ticket, err = decodeString(m["ticket"], field(path, "ticket")); err != nil {

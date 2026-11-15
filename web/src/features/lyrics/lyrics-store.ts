@@ -1,5 +1,5 @@
 import type { LyricLine } from './lrc'
-import { roomStore } from '@/core/room'
+import { playKey, roomStore } from '@/core/room'
 import { playerStore } from '@/features/playback'
 import { Store } from '@/shared/lib/store'
 import { buildLines, lineIndexAt, lyricLeadMs } from './lrc'
@@ -18,7 +18,7 @@ class LyricsStore extends Store<{ lines: LyricLine[], index: number }> {
 
   #onRoom = (): void => {
     const nowPlaying = roomStore.state.room?.nowPlaying ?? null
-    const track = nowPlaying ? `${nowPlaying.entry.id}@${nowPlaying.startedAtMs}` : ''
+    const track = playKey(nowPlaying)
     if (track === this.#track)
       return
     this.#track = track

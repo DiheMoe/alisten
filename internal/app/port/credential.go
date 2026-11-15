@@ -19,8 +19,8 @@ type CredentialStatus struct {
 
 type YouTubeCookies interface {
 	// cookies 为空字符串时删除已保存的 cookies。
-	SetCookies(context.Context, string) error
-	Status(context.Context) (YouTubeCookiesStatus, error)
+	SetYouTubeCookies(context.Context, string) error
+	YouTubeCookiesStatus(context.Context) (YouTubeCookiesStatus, error)
 }
 
 type YouTubeCookiesStatus struct {

@@ -186,7 +186,7 @@ func (g *Gateway) Do(ctx context.Context, roomID string, m member.Member, a room
 func (g *Gateway) UpdateInfo(ctx context.Context, roomID string, name, description *string) error {
 	id := g.newRequestID()
 	var err error
-	g.request(ctx, roomID, id, envelope{patch: &port.InfoPatch{RequestID: id, Name: name, Description: description}}, true, func(_ room.Result, e error) {
+	g.request(ctx, roomID, id, envelope{input: room.UpdateInfo{RequestID: id, Name: name, Description: description}}, true, func(_ room.Result, e error) {
 		err = e
 	})
 	return failed(id, err)
@@ -245,15 +245,6 @@ func (g *Gateway) MemberUpdated(ctx context.Context, m member.Member) error {
 	return nil
 }
 
-// 广播失败时只记录日志，因为等待的一方会定期按任务 ID 核对。
-func (g *Gateway) PublishPrepared(o port.PrepareOutcome) {
-	ctx, cancel := context.WithTimeout(logctx.WithJob(context.Background(), o.JobID), clusterTimeout)
-	defer cancel()
-	if err := g.bus.PublishPrepared(ctx, o); err != nil {
-		g.logger.WarnContext(ctx, "广播准备结果失败", "source", o.Track.Source, "track_id", o.Track.ID, "error", err)
-	}
-}
-
 func (g *Gateway) Shutdown(ctx context.Context) error {
 	g.mu.Lock()
 	if !g.closing {
@@ -309,13 +300,13 @@ func (g *Gateway) Resolve(ctx context.Context, roomID string, by member.Member, 
 	switch {
 	case p.Keyword != "":
 		t, m, err := g.catalog.FirstMatch(ctx, p.Source, p.Keyword)
-		return room.Enqueue{Track: t, Meta: m}, by, err
+		return room.Enqueue{Track: t, Meta: m, Requester: p.Requester}, by, err
 	case p.Track.Source == track.Link:
 		t, m, err := g.catalog.ResolveLink(ctx, p.Track.ID)
-		return room.Enqueue{Track: t, Meta: m}, by, err
+		return room.Enqueue{Track: t, Meta: m, Requester: p.Requester}, by, err
 	default:
 		m, err := g.catalog.TrackMeta(ctx, p.Track)
-		return room.Enqueue{Track: p.Track, Meta: m}, by, err
+		return room.Enqueue{Track: p.Track, Meta: m, Requester: p.Requester}, by, err
 	}
 }
 
@@ -366,7 +357,7 @@ func (g *Gateway) route(ctx context.Context, roomID string, e envelope, takeover
 			return err
 		default:
 			sendCtx, cancel := context.WithTimeout(ctx, clusterTimeout)
-			delivered, err := g.bus.SendInput(sendCtx, owner, port.RoomInput{Room: roomID, Gateway: g.self, Input: e.input, Patch: e.patch, Takeover: takeover})
+			delivered, err := g.bus.SendInput(sendCtx, owner, port.RoomInput{Room: roomID, Gateway: g.self, Input: e.input, Takeover: takeover})
 			cancel()
 			if err != nil {
 				return unavailable(err)

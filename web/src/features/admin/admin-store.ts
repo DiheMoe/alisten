@@ -1,8 +1,8 @@
 import type { ErrorTexts } from '@/core/errors'
 import { ApiError, deleteAdminToken, loadAdminToken, saveAdminToken } from '@/core/api'
 import { errorMessage } from '@/core/errors'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { Store } from '@/shared/lib/store'
-import { notificationStore } from '@/shared/ui'
 
 // 管理 token 无效、后台没有启用或网址不被服务器接受。
 function rejectsToken(error: unknown): boolean {

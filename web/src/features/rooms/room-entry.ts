@@ -3,8 +3,8 @@ import { api, ApiError, deleteTicket, IdentityRenewedError, loadTicket, saveTick
 import { errorMessage } from '@/core/errors'
 import { CloseCode } from '@/core/realtime'
 import { roomStore } from '@/core/room'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { Store } from '@/shared/lib/store'
-import { notificationStore } from '@/shared/ui'
 import { clearLastRoom, loadLastRoom, saveLastRoom } from './last-room'
 
 export type EntryPhase = 'idle' | 'resolving' | 'needs-ticket' | 'joining' | 'joined' | 'not-found' | 'failed'

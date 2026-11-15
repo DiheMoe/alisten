@@ -2,17 +2,17 @@ import type { Site } from './use-site'
 import type { Account, GitHubIntent, Member } from '@/core/realtime'
 import { ChevronRight, CircleAlert, Pencil } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
-import { api, IdentityRenewedError } from '@/core/api'
-import { errorMessage } from '@/core/errors'
+import { profileStore, switchIdentity } from '@/core/profile'
+import { MemberNameLimits } from '@/core/realtime'
 import { isImeKey } from '@/shared/lib/ime'
 import { useInlineSave } from '@/shared/lib/use-inline-save'
-import { savedNoticeMs } from '@/shared/lib/use-setting-save'
+import { savedNoticeWithFadeMs } from '@/shared/lib/use-setting-save'
 import { useStore } from '@/shared/lib/use-store'
-import { Avatar, ConfirmDialog, EmptyState, InlineTextField, Modal, notificationStore, SaveStatus } from '@/shared/ui'
+import { Avatar, ConfirmDialog, EmptyState, InlineTextField, Modal, SaveStatus } from '@/shared/ui'
+import { goToGitHub, logout, unbindGithub } from './account'
 import { CredentialsDialog, CurrentPasswordDialog, PasswordDialog } from './account-dialogs'
-import { goToGitHub, takeCredentialsPrompt } from './github'
+import { takeCredentialsPrompt } from './github'
 import { PairingCodeForm, PairingDialog } from './pairing-dialog'
-import { profileStore, switchIdentity } from './profile-store'
 
 type Dialog = 'register' | 'login' | 'credentials' | 'password' | 'pairing' | 'redeem' | 'bind' | 'unbind' | 'logout' | null
 
@@ -75,9 +75,9 @@ function NameInput({ name, onDone }: { name: string, onDone: (saved: boolean, re
           className="settings-name-input"
           value={state.draft}
           aria-label="昵称"
-          maxLength={80}
+          maxLength={MemberNameLimits.maxLength}
           autoComplete="nickname"
-          aria-invalid={state.status === 'error'}
+          aria-invalid={state.status === 'failed'}
           aria-describedby={state.error ? errorId : undefined}
           aria-busy={state.status === 'saving'}
           onChange={event => edit(event.target.value)}
@@ -122,7 +122,7 @@ function NameEditor({ name }: { name: string }) {
   useEffect(() => {
     if (!notice)
       return
-    const timer = setTimeout(setNotice, savedNoticeMs, 0)
+    const timer = setTimeout(setNotice, savedNoticeWithFadeMs, 0)
     return () => clearTimeout(timer)
   }, [notice])
 
@@ -197,19 +197,10 @@ export function AccountSettings({ site, onRetrySite }: { site: Site, onRetrySite
       setBusy(false)
   }
   const unbind = async (currentPassword: string): Promise<boolean> => {
-    if (!account)
-      return false
-    try {
-      await api.unbindGithub({ currentPassword })
-      profileStore.updateAccount({ ...account, github: false })
-      notificationStore.success('已解绑 GitHub')
+    const unbound = await unbindGithub(currentPassword)
+    if (unbound)
       close()
-      return true
-    }
-    catch (error) {
-      notificationStore.error(error instanceof IdentityRenewedError ? '没有解绑，再试一次。' : errorMessage(error))
-      return false
-    }
+    return unbound
   }
 
   const loadFailed = (!member && failed) || site.status === 'failed'
@@ -228,7 +219,7 @@ export function AccountSettings({ site, onRetrySite }: { site: Site, onRetrySite
       </EmptyState>
     )
   }
-  else if (!member || site.status !== 'ready') {
+  else if (!member || site.status !== 'loaded') {
     content = <AccountSkeleton />
   }
   else {
@@ -237,9 +228,9 @@ export function AccountSettings({ site, onRetrySite }: { site: Site, onRetrySite
         <IdentityCard member={member} account={account} />
         {!account && (
           <div className="settings-guest-actions">
-            {site.registrationOpen && <button type="button" className="button-primary" onClick={() => setDialog('register')}>注册</button>}
-            <button type="button" className={site.registrationOpen ? 'button-secondary' : 'button-primary'} onClick={() => setDialog('login')}>登录</button>
-            {site.githubLogin && <button type="button" className="button-secondary" disabled={busy} onClick={() => void github('login')}>用 GitHub 登录</button>}
+            {site.value.registrationOpen && <button type="button" className="button-primary" onClick={() => setDialog('register')}>注册</button>}
+            <button type="button" className={site.value.registrationOpen ? 'button-secondary' : 'button-primary'} onClick={() => setDialog('login')}>登录</button>
+            {site.value.githubLogin && <button type="button" className="button-secondary" disabled={busy} onClick={() => void github('login')}>用 GitHub 登录</button>}
             <button type="button" className="button-secondary" onClick={() => setDialog('redeem')}>输入配对码</button>
           </div>
         )}
@@ -268,7 +259,7 @@ export function AccountSettings({ site, onRetrySite }: { site: Site, onRetrySite
                   ? <button type="button" className="button-secondary settings-button" onClick={() => setDialog('password')}>修改</button>
                   : <button type="button" className="button-secondary settings-button" disabled={busy} onClick={() => void github('verify')}>设置</button>}
               </div>
-              {site.githubLogin && (
+              {site.value.githubLogin && (
                 <div className="section-row">
                   <div className="section-row-copy">
                     <span className="section-row-title">GitHub</span>
@@ -333,7 +324,7 @@ export function AccountSettings({ site, onRetrySite }: { site: Site, onRetrySite
           confirmLabel="退出登录"
           danger
           onConfirm={async () => {
-            await profileStore.logout()
+            await logout()
           }}
           onClose={close}
         >

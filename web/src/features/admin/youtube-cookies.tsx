@@ -1,30 +1,24 @@
-import type { YoutubeCredentialState } from './youtube-cookies-view'
-import { useEffect, useId, useState } from 'react'
+import { useId, useState } from 'react'
 import { api } from '@/core/api'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { formatDateTime } from '@/shared/lib/time'
-import { ConfirmDialog, Modal, notificationStore } from '@/shared/ui'
+import { useResource } from '@/shared/lib/use-resource'
+import { useSubmission } from '@/shared/lib/use-submission'
+import { ConfirmDialog, Modal } from '@/shared/ui'
 import { adminStore } from './admin-store'
 import { StatusPill } from './section-head'
 import { canSubmitYoutubeCookies, shouldWarnAboutPlaintext, youtubeCookiesText, youtubeCookiesTooLarge, youtubeCookiesView } from './youtube-cookies-view'
 
 function YouTubeCookiesDialog({ onSaved, onClose }: { onSaved: () => void, onClose: () => void }) {
   const [cookies, setCookies] = useState('')
-  const [busy, setBusy] = useState(false)
+  const { busy, submit } = useSubmission()
   const tooLarge = youtubeCookiesTooLarge(cookies)
   const tooLargeId = useId()
   const save = async () => {
-    if (!canSubmitYoutubeCookies(cookies, busy))
-      return
-    setBusy(true)
-    try {
-      // 空白和超过 64 KiB 的内容不会提交，所以 INVALID_ARGUMENT 只剩认不出格式这一种原因，这时的 message 是写给用户的。
-      const saved = await adminStore.call(() => api.adminSetYoutubeCredential({ cookies }), { INVALID_ARGUMENT: message => message })
-      if (saved !== null)
-        onSaved()
-    }
-    finally {
-      setBusy(false)
-    }
+    // 空白和超过 64 KiB 的内容不会提交，所以 INVALID_ARGUMENT 只剩认不出格式这一种原因，这时的 message 是写给用户的。
+    const saved = await adminStore.call(() => api.adminSetYoutubeCredential({ cookies }), { INVALID_ARGUMENT: message => message })
+    if (saved !== null)
+      onSaved()
   }
   return (
     <Modal title="填写 YouTube cookies" onClose={onClose}>
@@ -32,7 +26,8 @@ function YouTubeCookiesDialog({ onSaved, onClose }: { onSaved: () => void, onClo
         className="form-stack"
         onSubmit={(event) => {
           event.preventDefault()
-          void save()
+          if (canSubmitYoutubeCookies(cookies, busy))
+            void submit(save)
         }}
       >
         {shouldWarnAboutPlaintext(window.location) && <p className="error-text text-ui-sm" role="alert">{youtubeCookiesText.plaintextWarning}</p>}
@@ -67,44 +62,27 @@ function YouTubeCookiesDialog({ onSaved, onClose }: { onSaved: () => void, onClo
 
 export function YouTubeCookies() {
   const titleId = useId()
-  const [credential, setCredential] = useState<YoutubeCredentialState>()
-  const [attempt, setAttempt] = useState(0)
+  const { state: credential, reload: refetch } = useResource(() => adminStore.attempt(() => api.adminGetYoutubeCredential()))
   const [editing, setEditing] = useState(false)
   const [clearing, setClearing] = useState(false)
-  useEffect(() => {
-    let active = true
-    adminStore.attempt(() => api.adminGetYoutubeCredential()).then((result) => {
-      if (active)
-        setCredential(result)
-    }, (error: Error) => {
-      if (active)
-        setCredential(error)
-    })
-    return () => {
-      active = false
-    }
-  }, [attempt])
   const view = youtubeCookiesView(credential)
-  const refetch = () => {
-    setCredential(undefined)
-    setAttempt(n => n + 1)
-  }
+  const configured = credential.status === 'loaded' && credential.value.set
   return (
     <article className="admin-card" aria-labelledby={titleId}>
       <div className="admin-card-top">
         <h3 id={titleId}>YouTube</h3>
         <StatusPill tone="neutral">{view.status}</StatusPill>
       </div>
-      {credential instanceof Error && <p className="admin-card-detail">{credential.message}</p>}
+      {credential.status === 'failed' && <p className="admin-card-detail">{credential.error}</p>}
       {view.updatedAtMs !== null && <p className="admin-card-detail">{`${formatDateTime(view.updatedAtMs)} 更新`}</p>}
       {shouldWarnAboutPlaintext(window.location) && <p className="admin-card-detail error-text" role="alert">{youtubeCookiesText.plaintextWarning}</p>}
       <div className="admin-card-actions">
-        {credential instanceof Error
+        {credential.status === 'failed'
           ? <button type="button" className="button-secondary" onClick={refetch}>重试</button>
           : (
               <>
-                <button type="button" className="button-secondary" disabled={credential === undefined} onClick={() => setEditing(true)}>{credential?.set ? '更新' : '填写 cookies'}</button>
-                {credential?.set && <button type="button" className="button-secondary" onClick={() => setClearing(true)}>清除</button>}
+                <button type="button" className="button-secondary" disabled={credential.status === 'loading'} onClick={() => setEditing(true)}>{configured ? '更新' : '填写 cookies'}</button>
+                {configured && <button type="button" className="button-secondary" onClick={() => setClearing(true)}>清除</button>}
               </>
             )}
       </div>

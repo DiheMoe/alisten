@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dihemoe/alisten/internal/app/identity"
 	"github.com/dihemoe/alisten/internal/app/port"
 	playlistlink "github.com/dihemoe/alisten/internal/domain/playlist"
 	"github.com/dihemoe/alisten/internal/domain/track"
@@ -33,10 +34,7 @@ type ImportedTrack struct {
 }
 
 // 链接曲目的 Track.ID 必须已经按 track.LinkID 规范化。
-func (s *Service) ImportFile(ctx context.Context, memberID, name string, tracks []ImportedTrack) (port.PlaylistRecord, int, error) {
-	if err := s.registered(ctx, memberID); err != nil {
-		return port.PlaylistRecord{}, 0, err
-	}
+func (s *Service) ImportFile(ctx context.Context, owner identity.AccountOwner, name string, tracks []ImportedTrack) (port.PlaylistRecord, int, error) {
 	name, err := validName(name)
 	if err != nil {
 		name = defaultImportName
@@ -58,13 +56,10 @@ func (s *Service) ImportFile(ctx context.Context, memberID, name string, tracks 
 			items = append(items, port.PlaylistItem{Track: t.Track, Meta: fileMeta(t)})
 		}
 	}
-	return s.importItems(ctx, memberID, name, items)
+	return s.importItems(ctx, owner, name, items)
 }
 
-func (s *Service) ResolveLink(ctx context.Context, memberID, raw string) (track.Source, string, error) {
-	if err := s.registered(ctx, memberID); err != nil {
-		return "", "", err
-	}
+func (s *Service) ResolveLink(ctx context.Context, owner identity.AccountOwner, raw string) (track.Source, string, error) {
 	link, ok := playlistlink.ParseLink(raw)
 	if !ok {
 		return "", "", ErrInvalidPlaylistLink
@@ -72,7 +67,7 @@ func (s *Service) ResolveLink(ctx context.Context, memberID, raw string) (track.
 	if !link.Short {
 		return link.Source, link.ID, nil
 	}
-	if err := s.take(ctx, "playlist-link:member:"+memberID, outboundBurst, outboundRefill); err != nil {
+	if err := s.take(ctx, "playlist-link:member:"+owner.MemberID(), outboundBurst, outboundRefill); err != nil {
 		return "", "", err
 	}
 	final, err := s.shortLinks.Resolve(ctx, link.URL)
@@ -89,10 +84,7 @@ func (s *Service) ResolveLink(ctx context.Context, memberID, raw string) (track.
 	return resolved.Source, resolved.ID, nil
 }
 
-func (s *Service) ImportPlatform(ctx context.Context, memberID, name string, source track.Source, playlistID string) (port.PlaylistRecord, int, error) {
-	if err := s.registered(ctx, memberID); err != nil {
-		return port.PlaylistRecord{}, 0, err
-	}
+func (s *Service) ImportPlatform(ctx context.Context, owner identity.AccountOwner, name string, source track.Source, playlistID string) (port.PlaylistRecord, int, error) {
 	name, err := validName(name)
 	if err != nil {
 		return port.PlaylistRecord{}, 0, err
@@ -100,7 +92,7 @@ func (s *Service) ImportPlatform(ctx context.Context, memberID, name string, sou
 	if source != track.NetEase && source != track.QQ {
 		return port.PlaylistRecord{}, 0, ErrUnsupportedPlaylist
 	}
-	if err := s.take(ctx, "playlist-import:member:"+memberID, outboundBurst, outboundRefill); err != nil {
+	if err := s.take(ctx, "playlist-import:member:"+owner.MemberID(), outboundBurst, outboundRefill); err != nil {
 		return port.PlaylistRecord{}, 0, err
 	}
 	songs, err := s.catalog.PlaylistSongs(ctx, source, playlistID)
@@ -112,11 +104,11 @@ func (s *Service) ImportPlatform(ctx context.Context, memberID, name string, sou
 	for i, song := range songs {
 		items[i] = port.PlaylistItem(song)
 	}
-	return s.importItems(ctx, memberID, name, items)
+	return s.importItems(ctx, owner, name, items)
 }
 
-func (s *Service) importItems(ctx context.Context, memberID, name string, items []port.PlaylistItem) (port.PlaylistRecord, int, error) {
-	p, err := s.playlists.ImportPlaylist(ctx, memberID, name, items, maxPlaylists)
+func (s *Service) importItems(ctx context.Context, owner identity.AccountOwner, name string, items []port.PlaylistItem) (port.PlaylistRecord, int, error) {
+	p, err := s.playlists.ImportPlaylist(ctx, owner.MemberID(), name, items, maxPlaylists)
 	if errors.Is(err, port.ErrPlaylistLimit) {
 		return port.PlaylistRecord{}, 0, ErrTooManyPlaylists
 	}

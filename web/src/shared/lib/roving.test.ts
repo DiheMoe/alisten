@@ -16,6 +16,16 @@ describe('rovingIndex', () => {
     expect(rovingIndex('End', 0, 3)).toBe(2)
   })
 
+  it('只认上下键时不处理 ← 和 →，其余按键照常', () => {
+    expect(rovingIndex('ArrowLeft', 1, 3, 'vertical')).toBeNull()
+    expect(rovingIndex('ArrowRight', 1, 3, 'vertical')).toBeNull()
+    expect(rovingIndex('ArrowUp', 0, 3, 'vertical')).toBe(2)
+    expect(rovingIndex('ArrowDown', 2, 3, 'vertical')).toBe(0)
+    expect(rovingIndex('Home', 2, 3, 'vertical')).toBe(0)
+    expect(rovingIndex('End', 0, 3, 'vertical')).toBe(2)
+    expect(rovingIndex('ArrowDown', 0, 0, 'vertical')).toBeNull()
+  })
+
   it('其他按键和空的组不处理', () => {
     expect(rovingIndex('Enter', 1, 3)).toBeNull()
     expect(rovingIndex(' ', 1, 3)).toBeNull()

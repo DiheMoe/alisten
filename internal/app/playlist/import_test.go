@@ -26,7 +26,7 @@ func itemTracks(items []port.PlaylistItem) []track.Track {
 
 func TestImportFileChoosesMeta(t *testing.T) {
 	f := newFixture(t)
-	alice := f.member(t, "alice")
+	alice := f.account(t, "alice")
 	clipMeta := track.Meta{Title: "a.mp3", CoverKey: "link/abc/cover.webp", PageURL: clip.ID, Duration: time.Minute}
 	knownMeta := track.Meta{Title: "已知", PageURL: "https://y.qq.com/n/ryqq/songDetail/known"}
 	f.tracks[sunny] = port.PreparedTrack{Meta: sunnyMeta}
@@ -91,11 +91,11 @@ func TestImportFileChoosesMeta(t *testing.T) {
 			want = append(want, c.in.Track)
 		}
 	}
-	p, n, err := f.svc.ImportFile(t.Context(), alice.ID, "导入", in)
+	p, n, err := f.svc.ImportFile(t.Context(), alice, "导入", in)
 	if err != nil || n != len(want) || p.TrackCount != len(want) {
 		t.Fatalf("ImportFile = %#v, %d, %v，期望导入 %d 首", p, n, err, len(want))
 	}
-	items, err := f.svc.Items(t.Context(), alice.ID, p.ID)
+	items, err := f.svc.Items(t.Context(), alice, p.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,16 +117,16 @@ func TestImportFileChoosesMeta(t *testing.T) {
 
 func TestImportFileTruncatesThenKeepsFirstOccurrences(t *testing.T) {
 	f := newFixture(t)
-	alice := f.member(t, "alice")
+	alice := f.account(t, "alice")
 	in := []ImportedTrack{{Track: netease("b"), Title: "B"}, {Track: netease("a"), Title: "A"}, {Track: netease("b"), Title: "又一个 B"}}
 	for i := range 999 {
 		in = append(in, ImportedTrack{Track: netease(strconv.Itoa(i)), Title: "歌"})
 	}
-	p, n, err := f.svc.ImportFile(t.Context(), alice.ID, "导入", in)
+	p, n, err := f.svc.ImportFile(t.Context(), alice, "导入", in)
 	if err != nil || n != 999 {
 		t.Fatalf("ImportFile = %#v, %d, %v，期望前 1000 首去掉 1 首重复的，导入 999 首", p, n, err)
 	}
-	items, err := f.svc.Items(t.Context(), alice.ID, p.ID)
+	items, err := f.svc.Items(t.Context(), alice, p.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,43 +137,43 @@ func TestImportFileTruncatesThenKeepsFirstOccurrences(t *testing.T) {
 
 func TestImportFileFallsBackToDefaultName(t *testing.T) {
 	f := newFixture(t)
-	alice := f.member(t, "alice")
+	alice := f.account(t, "alice")
 	song := []ImportedTrack{{Track: sunny, Title: "晴天"}}
 	for _, name := range []string{"", "   ", strings.Repeat("歌", 51), "通\n勤", "\u200b"} {
-		if p, _, err := f.svc.ImportFile(t.Context(), alice.ID, name, song); err != nil || p.Name != "导入的歌单" {
+		if p, _, err := f.svc.ImportFile(t.Context(), alice, name, song); err != nil || p.Name != "导入的歌单" {
 			t.Errorf("文件里的名字 %q：%#v, %v，期望改用“导入的歌单”", name, p, err)
 		}
 	}
-	if p, _, err := f.svc.ImportFile(t.Context(), alice.ID, "  通勤  ", song); err != nil || p.Name != "通勤" {
+	if p, _, err := f.svc.ImportFile(t.Context(), alice, "  通勤  ", song); err != nil || p.Name != "通勤" {
 		t.Errorf("合法的名字 = %#v, %v，期望去掉首尾空白后照用", p, err)
 	}
 }
 
 func TestImportFileIsNotRateLimitedButRespectsPlaylistLimit(t *testing.T) {
 	f := newFixture(t)
-	alice := f.member(t, "alice")
+	alice := f.account(t, "alice")
 	f.quota.exhausted = true
 	for i := range 49 {
-		if _, _, err := f.svc.ImportFile(t.Context(), alice.ID, "导入"+strconv.Itoa(i), nil); err != nil {
+		if _, _, err := f.svc.ImportFile(t.Context(), alice, "导入"+strconv.Itoa(i), nil); err != nil {
 			t.Fatalf("第 %d 次导入 = %v", i+1, err)
 		}
 	}
 	if len(f.quota.keys) != 0 {
 		t.Errorf("导入文件不访问外部，不应取额度：%v", f.quota.keys)
 	}
-	if _, _, err := f.svc.ImportFile(t.Context(), alice.ID, "第 51 个", nil); !errors.Is(err, ErrTooManyPlaylists) {
+	if _, _, err := f.svc.ImportFile(t.Context(), alice, "第 51 个", nil); !errors.Is(err, ErrTooManyPlaylists) {
 		t.Errorf("第 51 个歌单 = %v，期望 ErrTooManyPlaylists", err)
 	}
 }
 
 func TestResolveLink(t *testing.T) {
 	f := newFixture(t)
-	alice := f.member(t, "alice")
+	alice := f.account(t, "alice")
 	f.links["https://163cn.tv/abc"] = "https://music.163.com/playlist?id=456&userid=1"
 	f.links["https://163cn.tv/song"] = "https://music.163.com/song?id=1"
 	f.links["https://163cn.tv/stuck"] = "https://163cn.tv/stuck"
 	f.links["https://c6.y.qq.com/base/fcgi-bin/u?__=abc"] = "https://i.y.qq.com/n2/m/share/details/taoge.html?id=789&hosteuin=1"
-	linkQuota := "playlist-link:member:" + alice.ID
+	linkQuota := "playlist-link:member:" + alice.MemberID()
 	cases := []struct {
 		raw    string
 		source track.Source
@@ -193,7 +193,7 @@ func TestResolveLink(t *testing.T) {
 	}
 	for _, c := range cases {
 		before := len(f.quota.keys)
-		source, id, err := f.svc.ResolveLink(t.Context(), alice.ID, c.raw)
+		source, id, err := f.svc.ResolveLink(t.Context(), alice, c.raw)
 		if c.err != nil && !errors.Is(err, c.err) {
 			t.Errorf("ResolveLink(%q) = %v，期望 %v", c.raw, err, c.err)
 		}
@@ -211,37 +211,37 @@ func TestResolveLink(t *testing.T) {
 
 func TestImportPlatform(t *testing.T) {
 	f := newFixture(t)
-	alice := f.member(t, "alice")
+	alice := f.account(t, "alice")
 	sevenMeta := track.Meta{Title: "七里香", Artist: "周杰伦", PageURL: "https://music.163.com/#/song?id=185811", Duration: 299 * time.Second}
 	f.netease.Add("185811", sevenMeta, "", nil)
 	f.netease.AddPlaylist(port.Playlist{ID: "p1", Name: "周杰伦"}, "185811", sunny.ID, "185811")
 
-	p, n, err := f.svc.ImportPlatform(t.Context(), alice.ID, "  周杰伦  ", track.NetEase, "p1")
+	p, n, err := f.svc.ImportPlatform(t.Context(), alice, "  周杰伦  ", track.NetEase, "p1")
 	if err != nil || n != 2 || p.Name != "周杰伦" || p.TrackCount != 2 {
 		t.Fatalf("ImportPlatform = %#v, %d, %v，期望去掉重复的、导入 2 首", p, n, err)
 	}
-	items, err := f.svc.Items(t.Context(), alice.ID, p.ID)
+	items, err := f.svc.Items(t.Context(), alice, p.ID)
 	want := []port.PlaylistItem{{Track: netease("185811"), Meta: sevenMeta}, {Track: sunny, Meta: sunnyMeta}}
 	if err != nil || !slices.Equal(items, want) {
 		t.Errorf("导入的曲目 = %#v, %v\n期望与平台同序、用音源的元数据 %#v", items, err, want)
 	}
-	if want := []string{"playlist-import:member:" + alice.ID}; !slices.Equal(f.quota.keys, want) || f.quota.burst != 10 || f.quota.refill != 6*time.Minute {
+	if want := []string{"playlist-import:member:" + alice.MemberID()}; !slices.Equal(f.quota.keys, want) || f.quota.burst != 10 || f.quota.refill != 6*time.Minute {
 		t.Errorf("额度 = %v（突发 %d，每 %v 恢复 1 次），期望 %v（突发 10，每 6 分钟恢复 1 次）", f.quota.keys, f.quota.burst, f.quota.refill, want)
 	}
 }
 
 func TestImportPlatformFromQQ(t *testing.T) {
 	f := newFixture(t)
-	alice := f.member(t, "alice")
+	alice := f.account(t, "alice")
 	meta := track.Meta{Title: "晴天", Artist: "周杰伦", PageURL: "https://y.qq.com/n/ryqq/songDetail/0039MnYb0qxYhV", Duration: 269 * time.Second}
 	f.qq.Add("0039MnYb0qxYhV", meta, "", nil)
 	f.qq.AddPlaylist(port.Playlist{ID: "789", Name: "周杰伦"}, "0039MnYb0qxYhV")
 
-	p, n, err := f.svc.ImportPlatform(t.Context(), alice.ID, "周杰伦", track.QQ, "789")
+	p, n, err := f.svc.ImportPlatform(t.Context(), alice, "周杰伦", track.QQ, "789")
 	if err != nil || n != 1 {
 		t.Fatalf("ImportPlatform = %#v, %d, %v，期望导入 1 首", p, n, err)
 	}
-	items, err := f.svc.Items(t.Context(), alice.ID, p.ID)
+	items, err := f.svc.Items(t.Context(), alice, p.ID)
 	want := []port.PlaylistItem{{Track: track.Track{Source: track.QQ, ID: "0039MnYb0qxYhV"}, Meta: meta}}
 	if err != nil || !slices.Equal(items, want) {
 		t.Errorf("导入的曲目 = %#v, %v\n期望用 QQ 音乐的元数据 %#v", items, err, want)
@@ -250,7 +250,7 @@ func TestImportPlatformFromQQ(t *testing.T) {
 
 func TestImportPlatformTruncatesThenDedupes(t *testing.T) {
 	f := newFixture(t)
-	alice := f.member(t, "alice")
+	alice := f.account(t, "alice")
 	ids := []string{"0"}
 	for i := range 1001 {
 		id := strconv.Itoa(i)
@@ -258,11 +258,11 @@ func TestImportPlatformTruncatesThenDedupes(t *testing.T) {
 		ids = append(ids, id)
 	}
 	f.netease.AddPlaylist(port.Playlist{ID: "big"}, ids...)
-	p, n, err := f.svc.ImportPlatform(t.Context(), alice.ID, "大歌单", track.NetEase, "big")
+	p, n, err := f.svc.ImportPlatform(t.Context(), alice, "大歌单", track.NetEase, "big")
 	if err != nil || n != 999 {
 		t.Fatalf("ImportPlatform = %#v, %d, %v，期望前 1000 首去掉 1 首重复的，导入 999 首", p, n, err)
 	}
-	items, err := f.svc.Items(t.Context(), alice.ID, p.ID)
+	items, err := f.svc.Items(t.Context(), alice, p.ID)
 	if err != nil || items[0].Track != netease("0") || items[len(items)-1].Track != netease("998") {
 		t.Errorf("导入的曲目 = %d 首, %v，期望从 0 到 998", len(items), err)
 	}
@@ -270,49 +270,49 @@ func TestImportPlatformTruncatesThenDedupes(t *testing.T) {
 
 func TestImportPlatformRejects(t *testing.T) {
 	f := newFixture(t)
-	alice := f.member(t, "alice")
+	alice := f.account(t, "alice")
 	f.netease.AddPlaylist(port.Playlist{ID: "p1"}, sunny.ID)
-	if _, _, err := f.svc.ImportPlatform(t.Context(), alice.ID, "B 站", track.Bilibili, "p1"); !errors.Is(err, ErrUnsupportedPlaylist) {
+	if _, _, err := f.svc.ImportPlatform(t.Context(), alice, "B 站", track.Bilibili, "p1"); !errors.Is(err, ErrUnsupportedPlaylist) {
 		t.Errorf("B 站的歌单 = %v，期望 ErrUnsupportedPlaylist", err)
 	}
-	if _, _, err := f.svc.ImportPlatform(t.Context(), alice.ID, " ", track.NetEase, "p1"); !errors.Is(err, ErrInvalidName) {
+	if _, _, err := f.svc.ImportPlatform(t.Context(), alice, " ", track.NetEase, "p1"); !errors.Is(err, ErrInvalidName) {
 		t.Errorf("空的歌单名 = %v，期望 ErrInvalidName", err)
 	}
 	if len(f.quota.keys) != 0 {
 		t.Errorf("被拒绝的请求不应取额度：%v", f.quota.keys)
 	}
-	if _, _, err := f.svc.ImportPlatform(t.Context(), alice.ID, "不存在", track.NetEase, "missing"); !errors.Is(err, port.ErrProviderFailed) {
+	if _, _, err := f.svc.ImportPlatform(t.Context(), alice, "不存在", track.NetEase, "missing"); !errors.Is(err, port.ErrProviderFailed) {
 		t.Errorf("音源里没有的歌单 = %v，期望 ErrProviderFailed", err)
 	}
 	for i := range 49 {
-		if _, err := f.svc.Create(t.Context(), alice.ID, "歌单"+strconv.Itoa(i)); err != nil {
+		if _, err := f.svc.Create(t.Context(), alice, "歌单"+strconv.Itoa(i)); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, _, err := f.svc.ImportPlatform(t.Context(), alice.ID, "第 51 个", track.NetEase, "p1"); !errors.Is(err, ErrTooManyPlaylists) {
+	if _, _, err := f.svc.ImportPlatform(t.Context(), alice, "第 51 个", track.NetEase, "p1"); !errors.Is(err, ErrTooManyPlaylists) {
 		t.Errorf("第 51 个歌单 = %v，期望 ErrTooManyPlaylists", err)
 	}
 }
 
 func TestPlatformImportsAreRateLimited(t *testing.T) {
 	f := newFixture(t)
-	alice := f.member(t, "alice")
+	alice := f.account(t, "alice")
 	f.netease.AddPlaylist(port.Playlist{ID: "p1"}, sunny.ID)
 	f.links["https://163cn.tv/abc"] = "https://music.163.com/playlist?id=1"
 	f.quota.exhausted = true
-	if source, id, err := f.svc.ResolveLink(t.Context(), alice.ID, "https://music.163.com/playlist?id=1"); err != nil || source != track.NetEase || id != "1" {
+	if source, id, err := f.svc.ResolveLink(t.Context(), alice, "https://music.163.com/playlist?id=1"); err != nil || source != track.NetEase || id != "1" {
 		t.Errorf("额度用完时解析长链接 = %q, %q, %v，期望照常识别", source, id, err)
 	}
-	if _, _, err := f.svc.ResolveLink(t.Context(), alice.ID, "https://163cn.tv/abc"); !errors.Is(err, ErrTooFast) {
+	if _, _, err := f.svc.ResolveLink(t.Context(), alice, "https://163cn.tv/abc"); !errors.Is(err, ErrTooFast) {
 		t.Errorf("额度用完时解析短链接 = %v，期望 ErrTooFast", err)
 	}
-	if _, _, err := f.svc.ImportPlatform(t.Context(), alice.ID, "周杰伦", track.NetEase, "p1"); !errors.Is(err, ErrTooFast) {
+	if _, _, err := f.svc.ImportPlatform(t.Context(), alice, "周杰伦", track.NetEase, "p1"); !errors.Is(err, ErrTooFast) {
 		t.Errorf("额度用完时导入 = %v，期望 ErrTooFast", err)
 	}
-	if want := []string{"playlist-link:member:" + alice.ID, "playlist-import:member:" + alice.ID}; !slices.Equal(f.quota.keys, want) {
+	if want := []string{"playlist-link:member:" + alice.MemberID(), "playlist-import:member:" + alice.MemberID()}; !slices.Equal(f.quota.keys, want) {
 		t.Errorf("取的额度 = %v，期望短链接取链接额度、导入取导入额度 %v", f.quota.keys, want)
 	}
-	if lists, _ := f.svc.List(t.Context(), alice.ID); len(lists) != 1 {
+	if lists, _ := f.svc.List(t.Context(), alice); len(lists) != 1 {
 		t.Errorf("额度用完时不应建歌单：%#v", lists)
 	}
 }

@@ -24,9 +24,6 @@ const (
 )
 
 func (s *Store) TakeRoom(ctx context.Context, id string) (uint32, room.Snapshot, error) {
-	if !isUUID(id) {
-		return 0, room.Snapshot{}, fmt.Errorf("接管房间 %s：%w", id, port.ErrRoomNotFound)
-	}
 	var term uint32
 	var snap room.Snapshot
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -132,28 +129,27 @@ func snapshotOf(row query.Room, entries []query.RoomEntriesRow) room.Snapshot {
 
 func entryOf(r query.RoomEntriesRow) room.Entry {
 	e := room.Entry{
-		ID:    room.EntryID(r.EntryID),
-		Track: track.Track{Source: track.Source(r.Source), ID: r.TrackID},
-		Meta: track.Meta{
-			Title:    r.Title,
-			Artist:   orEmpty(r.Artist),
-			Album:    orEmpty(r.Album),
-			CoverURL: orEmpty(r.CoverURL),
-			CoverKey: track.ObjectKey(orEmpty(r.CoverKey)),
-			PageURL:  r.PageURL,
-			Duration: time.Duration(r.MetaDurationMs) * time.Millisecond,
-		},
-		By:      member.Member{ID: orEmpty(r.ByMemberID), Name: orEmpty(r.ByName), AvatarHash: orEmpty(r.ByAvatarHash)},
-		Auto:    r.Auto,
-		Likes:   int(r.Likes),
-		Round:   int(r.Round),
-		AddedAt: r.AddedAt.UTC(),
+		ID:        room.EntryID(r.EntryID),
+		Track:     track.Track{Source: track.Source(r.Source), ID: r.TrackID},
+		Meta:      metaColumns{Title: r.Title, Artist: r.Artist, Album: r.Album, CoverURL: r.CoverURL, CoverKey: r.CoverKey, PageURL: r.PageURL, DurationMs: r.MetaDurationMs}.meta(),
+		By:        member.Member{ID: orEmpty(r.ByMemberID), Name: orEmpty(r.ByName), AvatarHash: orEmpty(r.ByAvatarHash)},
+		Requester: orEmpty(r.Requester),
+		Auto:      r.Auto,
+		Likes:     int(r.Likes),
+		Round:     int(r.Round),
+		AddedAt:   r.AddedAt.UTC(),
 	}
 	// 曲目表只保存准备成功的结果，有对应的行就是已就绪。元数据也取自曲目表，因为在房间没有 owner 时准备好的歌，
 	// 条目里还是点歌时的元数据，比如链接曲目的标题还是链接本身。
 	if r.DurationMs != nil {
 		e.Ready = true
-		e.Meta, e.Prep = prepared(*r.TrackTitle, orEmpty(r.TrackArtist), orEmpty(r.TrackAlbum), orEmpty(r.TrackCoverURL), orEmpty(r.TrackCoverKey), *r.TrackPageURL, *r.DurationMs, *r.Gain, orEmpty(r.Lyric), orEmpty(r.LyricWords), orEmpty(r.LyricTrans))
+		e.Meta, e.Prep = preparedColumns{
+			metaColumns: metaColumns{Title: *r.TrackTitle, Artist: r.TrackArtist, Album: r.TrackAlbum, CoverURL: r.TrackCoverURL, CoverKey: r.TrackCoverKey, PageURL: *r.TrackPageURL, DurationMs: *r.DurationMs},
+			Gain:        *r.Gain,
+			Lyric:       r.Lyric,
+			LyricWords:  r.LyricWords,
+			LyricTrans:  r.LyricTrans,
+		}.prepared()
 	}
 	return e
 }
@@ -189,6 +185,7 @@ func entryRow(roomID, slot string, e room.Entry, startedAt *time.Time) query.Ins
 		ByMemberID:     memberID(e.By),
 		ByName:         nullable(e.By.Name),
 		ByAvatarHash:   nullable(e.By.AvatarHash),
+		Requester:      nullable(e.Requester),
 		Auto:           e.Auto,
 		Likes:          int32(e.Likes),
 		Round:          int64(e.Round),

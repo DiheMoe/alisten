@@ -51,11 +51,11 @@ func (noTracks) SavePreparedTrack(context.Context, track.Track, port.PreparedTra
 
 type noHistory struct{}
 
-func (noHistory) AutoDJSeeds(context.Context, string, bool) ([]track.Track, error) {
+func (noHistory) AutoDJSeeds(context.Context, string, bool, port.AutoDJWindow) ([]track.Track, error) {
 	return nil, nil
 }
 
-func (noHistory) AutoDJExclusions(context.Context, string) ([]track.Track, error) {
+func (noHistory) AutoDJExclusions(context.Context, string, port.AutoDJWindow) ([]track.Track, error) {
 	return nil, nil
 }
 
@@ -71,7 +71,7 @@ func newSongs() *songs {
 	return newPickingSongs(nil, nil)
 }
 
-func newPickingSongs(rooms port.RoomDirectory, quota port.RoomQuota) *songs {
+func newPickingSongs(rooms port.RoomDirectory, quota port.Quota) *songs {
 	netease, bilibili := porttest.NewSource(track.NetEase), porttest.NewBilibili()
 	music := catalog.New(netease, porttest.NewSource(track.QQ), bilibili, bilibili, noTracks{}, noHistory{}, rooms, quota)
 	return &songs{netease: netease, bilibili: bilibili, music: music, preparer: porttest.NewPreparer()}
@@ -590,7 +590,7 @@ func TestPanickingPrepareFailsThatTrack(t *testing.T) {
 
 type panickingHistory struct{ noHistory }
 
-func (panickingHistory) AutoDJSeeds(context.Context, string, bool) ([]track.Track, error) {
+func (panickingHistory) AutoDJSeeds(context.Context, string, bool, port.AutoDJWindow) ([]track.Track, error) {
 	panic("播放历史坏了")
 }
 
@@ -1225,7 +1225,7 @@ func TestRemoteRequestsAreRejected(t *testing.T) {
 		missing := "01a15778-1911-7a28-8b2e-e08c2a25f388"
 		f.spy.watch(t, missing)
 		f.host.deliver(context.Background(), port.RoomInput{Room: elsewhere, Gateway: "b", Input: command("b/r1", bob, room.Sync{}), Takeover: true})
-		f.host.deliver(context.Background(), port.RoomInput{Room: missing, Gateway: "b", Patch: &port.InfoPatch{RequestID: "b/r2"}, Takeover: true})
+		f.host.deliver(context.Background(), port.RoomInput{Room: missing, Gateway: "b", Input: room.UpdateInfo{RequestID: "b/r2"}, Takeover: true})
 		f.host.deliver(context.Background(), port.RoomInput{Room: missing, Gateway: "b", Input: room.Leave{Session: "b/s1"}})
 		synctest.Wait()
 		// 两个房间的输入各自排队，彼此之间没有先后。

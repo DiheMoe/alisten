@@ -14,8 +14,8 @@ var (
 	_ port.TrackUsage  = (*Store)(nil)
 )
 
-func (s *Store) AutoDJSeeds(ctx context.Context, roomID string, includeQueue bool) ([]track.Track, error) {
-	ids, err := s.q.AutoDJSeeds(ctx, query.AutoDJSeedsParams{RoomID: roomID, IncludeQueue: includeQueue})
+func (s *Store) AutoDJSeeds(ctx context.Context, roomID string, includeQueue bool, w port.AutoDJWindow) ([]track.Track, error) {
+	ids, err := s.q.AutoDJSeeds(ctx, query.AutoDJSeedsParams{RoomID: roomID, IncludeQueue: includeQueue, Plays: int32(w.Plays), Seeds: int32(w.Seeds)})
 	if err != nil {
 		return nil, fmt.Errorf("读取房间 %s 的 AutoDJ 种子：%w", roomID, err)
 	}
@@ -26,8 +26,8 @@ func (s *Store) AutoDJSeeds(ctx context.Context, roomID string, includeQueue boo
 	return seeds, nil
 }
 
-func (s *Store) AutoDJExclusions(ctx context.Context, roomID string) ([]track.Track, error) {
-	rows, err := s.q.AutoDJExclusions(ctx, roomID)
+func (s *Store) AutoDJExclusions(ctx context.Context, roomID string, w port.AutoDJWindow) ([]track.Track, error) {
+	rows, err := s.q.AutoDJExclusions(ctx, query.AutoDJExclusionsParams{RoomID: roomID, Plays: int32(w.Plays), Exclusions: int32(w.Exclusions)})
 	if err != nil {
 		return nil, fmt.Errorf("读取房间 %s 的 AutoDJ 排除项：%w", roomID, err)
 	}

@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "5e495c1e23fa03a5"
+const Version = "73bb0faa1631059c"
 
 type AdminUpdateRoomRequest struct {
 	Homepage *string `json:"homepage,omitempty"`
@@ -165,17 +165,18 @@ const (
 )
 
 var (
-	RouteCreateMember    = Route{Pattern: "POST /api/members", Auth: AuthNone, Status: 201}
-	RouteRemoveTracks    = Route{Pattern: "POST /api/tracks/removals", Auth: AuthNone, Status: 204}
-	RouteGetRoom         = Route{Pattern: "GET /api/rooms/{ref}", Auth: AuthNone, Status: 200}
-	RouteCreateRoom      = Route{Pattern: "POST /api/rooms", Auth: AuthNone, Status: 201, Location: true}
-	RouteGetSeat         = Route{Pattern: "GET /api/rooms/{ref}/seats/{seat}", Auth: AuthMember, Status: 200}
-	RouteAdminUpdateRoom = Route{Pattern: "PATCH /api/admin/rooms/{id}", Auth: AuthAdmin, Status: 204}
+	RouteCreateMember    = Endpoint[NoRequest, CreateMemberResponse]{Route: Route{Pattern: "POST /api/members", Auth: AuthNone, Status: 201}, decoder: discard(decodeCreateMemberRequest)}
+	RouteRemoveTracks    = NoContentEndpoint[RemoveTracksRequest]{Route: Route{Pattern: "POST /api/tracks/removals", Auth: AuthNone, Status: 204}, decoder: decodeRemoveTracksRequest}
+	RouteGetRoom         = Endpoint[NoRequest, Room]{Route: Route{Pattern: "GET /api/rooms/{ref}", Auth: AuthNone, Status: 200}, decoder: noBody, Params: []PathParam{{Name: "ref", Type: "RoomRef", pattern: patternRoomRef}}}
+	RouteCreateRoom      = LocatedEndpoint[CreateRoomRequest, CreateRoomResponse]{Route: Route{Pattern: "POST /api/rooms", Auth: AuthNone, Status: 201}, decoder: decodeCreateRoomRequest}
+	RouteGetSeat         = Endpoint[NoRequest, Member]{Route: Route{Pattern: "GET /api/rooms/{ref}/seats/{seat}", Auth: AuthMember, Status: 200}, decoder: noBody, Params: []PathParam{{Name: "ref", Type: "RoomRef", pattern: patternRoomRef}, {Name: "seat", Type: "Seat", pattern: patternSeat}}}
+	RouteGetMyAccount    = Endpoint[NoRequest, Member]{Route: Route{Pattern: "GET /api/me/account", Auth: AuthAccount, Status: 200}, decoder: noBody}
+	RouteAdminUpdateRoom = NoContentEndpoint[AdminUpdateRoomRequest]{Route: Route{Pattern: "PATCH /api/admin/rooms/{id}", Auth: AuthAdmin, Status: 204}, decoder: decodeAdminUpdateRoomRequest, Params: []PathParam{{Name: "id", Type: "RoomID", pattern: patternRoomID}}}
 )
 
 var RoomRoutes = []RoomRoute{
 	{Route: Route{Pattern: "GET /api/room", Auth: AuthTicket, Status: 200}, Type: RequestRoomSync},
-	{Route: Route{Pattern: "POST /api/room/queue", Auth: AuthTicket, Status: 201, Location: true}, Type: RequestQueueAdd, body: true},
+	{Route: Route{Pattern: "POST /api/room/queue", Auth: AuthTicket, Status: 201}, Type: RequestQueueAdd, body: true},
 	{Route: Route{Pattern: "DELETE /api/room/queue/{entryId}", Auth: AuthTicket, Status: 204}, Type: RequestQueueRemove, params: []string{"entryId"}},
 	{Route: Route{Pattern: "PATCH /api/room/queue/{entryId}", Auth: AuthTicket, Status: 204}, Type: RequestQueueMove, params: []string{"entryId"}, body: true},
 	{Route: Route{Pattern: "GET /api/room/search/tracks", Auth: AuthTicket, Status: 200}, Type: RequestSearchTracks, query: map[string]queryKind{"keyword": queryString, "limit": queryInteger, "source": queryString}},

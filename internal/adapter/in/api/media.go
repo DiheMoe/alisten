@@ -56,11 +56,7 @@ var mediaSorts = map[protocol.MediaSort]port.MediaSort{
 	protocol.MediaSortSize:   port.MediaBySize,
 }
 
-func (s *server) adminListMedia(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeAdminListMediaRequest(c.body)
-	if err != nil {
-		return nil, err
-	}
+func (s *server) adminListMedia(ctx context.Context, _ call, req protocol.AdminListMediaRequest) (protocol.AdminListMediaResponse, error) {
 	q := port.MediaQuery{Page: 1, Sort: port.MediaByStored}
 	if req.Page != nil {
 		q.Page = int(*req.Page)
@@ -73,7 +69,7 @@ func (s *server) adminListMedia(ctx context.Context, c call) (any, error) {
 	}
 	page, err := s.Media.List(ctx, q)
 	if err != nil {
-		return nil, err
+		return protocol.AdminListMediaResponse{}, err
 	}
 	items := make([]protocol.StoredMedia, len(page.Items))
 	for i, m := range page.Items {
@@ -100,18 +96,14 @@ func (s *server) adminListMedia(ctx context.Context, c call) (any, error) {
 	return protocol.AdminListMediaResponse{Items: items, Total: int64(page.Total), TotalBytes: page.TotalBytes, Page: int64(q.Page), PageSize: port.MediaPageSize}, nil
 }
 
-func (s *server) adminRemoveMedia(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeAdminRemoveMediaRequest(c.body)
-	if err != nil {
-		return nil, err
-	}
+func (s *server) adminRemoveMedia(ctx context.Context, _ call, req protocol.AdminRemoveMediaRequest) (protocol.AdminRemoveMediaResponse, error) {
 	keys := make([]string, len(req.Media))
 	for i, m := range req.Media {
 		keys[i] = m.Key
 	}
 	deleted, inUse, err := s.Media.DeleteMany(ctx, keys)
 	if err != nil {
-		return nil, err
+		return protocol.AdminRemoveMediaResponse{}, err
 	}
 	return protocol.AdminRemoveMediaResponse{Deleted: deleted, InUse: inUse}, nil
 }

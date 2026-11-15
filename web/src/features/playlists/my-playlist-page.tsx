@@ -1,33 +1,28 @@
-import type { MovePlan } from './track-order'
 import type { MyPlaylist, MyPlaylistItem, Track } from '@/core/realtime'
 import type { SongAction } from '@/shared/ui'
 import { ArrowLeft, CirclePlus, ListMusic, ListPlus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '@/core/api'
 import { errorMessage } from '@/core/errors'
-import { roomStore } from '@/core/room'
-import { enqueue, pickButton } from '@/features/queue'
+import { enqueue, pickButton, roomStore } from '@/core/room'
 import { bookTitle } from '@/shared/lib/book-title'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { rowAfterRemoval } from '@/shared/lib/removal-focus'
+import { noSelection, selectAll } from '@/shared/lib/selection'
 import { useStore } from '@/shared/lib/use-store'
-import { ConfirmDialog, EmptyState, notificationStore, Skeleton } from '@/shared/ui'
+import { ConfirmDialog, EmptyState, Skeleton } from '@/shared/ui'
 import { FavoritesMark, PlaylistCover } from './playlist-cover'
 import { playlistDates } from './playlist-date'
 import { exportFileName, exportPlaylist } from './playlist-file'
 import { PlaylistMenu } from './playlist-menu'
 import { PlaylistTracks } from './playlist-tracks'
+import { keysOf, PlaylistTracksStore } from './playlist-tracks-store'
 import { playlistsStore, trackKey } from './playlists-store'
 import { saveToPlaylistLabel } from './save-label'
 import { SaveToPlaylistDialog } from './save-to-playlist'
 import { SelectionBar } from './selection-bar'
-import { TrackEdits } from './track-edits'
 import { dropAt } from './track-order'
-import { noSelection, retain, selectAll } from './track-selection'
 import './playlists.css'
-
-function keysOf(items: readonly MyPlaylistItem[]): string[] {
-  return items.map(item => trackKey(item.track))
-}
 
 // 导出服务端的曲目，因为页面上的曲目可能还没读到，或者带着没同步完的移动和移出。
 async function exportToFile(playlist: MyPlaylist): Promise<void> {
@@ -52,10 +47,10 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
   const connected = useStore(roomStore, s => s.status === 'open')
   const ephemeral = useStore(roomStore, s => s.room?.room.kind === 'ephemeral')
   const playing = useStore(roomStore, s => s.room?.nowPlaying?.entry.track)
-  const [items, setItems] = useState<MyPlaylistItem[] | null>(null)
-  const [failed, setFailed] = useState<string | null>(null)
-  const [attempt, setAttempt] = useState(0)
-  const [selection, setSelection] = useState(noSelection)
+  const [store] = useState(() => new PlaylistTracksStore(id))
+  const items = useStore(store, s => s.items)
+  const failed = useStore(store, s => s.failed)
+  const selection = useStore(store, s => s.selection)
   // 点了“选择”之后，没有选中项时也显示勾选框。有选中项时总是处于多选模式。
   const [picking, setPicking] = useState(false)
   const [saving, setSaving] = useState<{ track: Track, title: string } | null>(null)
@@ -64,30 +59,15 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
   // 移出之后焦点要去的那一首（null 表示歌单名）。移出的行、随选择清空而消失的选择栏和确认框都带走了焦点，所以要重新指定焦点。每次换一个新对象，这样同一个目标也能再次触发。
   const [refocus, setRefocus] = useState<{ key: string | null } | null>(null)
   const titleRef = useRef<HTMLHeadingElement>(null)
-  const [edits] = useState(() => new TrackEdits(() => setAttempt(n => n + 1)))
   // 歌单的更新时间变了就重新读取。加入、移出、移动和复制都会推进更新时间，歌曲数不变时，顺序也可能变了。
   useEffect(() => {
-    let active = true
-    const usable = edits.read()
-    api.listMyPlaylistItems(id).then(({ items }) => {
-      if (!active || !usable())
-        return
-      setItems(items)
-      setFailed(null)
-      setSelection(selection => retain(selection, keysOf(items)))
-    }, (error: unknown) => {
-      if (active && usable())
-        setFailed(errorMessage(error))
-    })
-    return () => {
-      active = false
-    }
-  }, [id, attempt, playlist?.updatedAtMs, edits])
+    void store.load()
+  }, [store, playlist?.updatedAtMs])
   useEffect(() => {
-    const refresh = () => setAttempt(n => n + 1)
+    const refresh = () => void store.load()
     window.addEventListener('focus', refresh)
     return () => window.removeEventListener('focus', refresh)
-  }, [])
+  }, [store])
   const selecting = picking || selection.keys.size > 0
   // 焦点在多选时落到勾选框上，平时落到行上，和列表里的方向键一样。
   useEffect(() => {
@@ -104,12 +84,12 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented || (event.target instanceof Element && event.target.closest('dialog, [popover]')))
         return
-      setSelection(noSelection)
+      store.select(noSelection)
       setPicking(false)
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [selecting])
+  }, [selecting, store])
   const now = useStore(playlistsStore, s => s.loadedAt)
   // 读到了自己的歌单列表，里面却没有这个歌单，说明它在别处删掉了，或者现在登录的是另一个账号。
   const gone = listed && !playlist
@@ -117,30 +97,15 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
   const shown = gone || failed ? null : items
 
   const exitSelection = () => {
-    setSelection(noSelection)
+    store.select(noSelection)
     setPicking(false)
   }
 
-  const move = (target: MyPlaylist, current: MyPlaylistItem[], plan: MovePlan<string>) => {
-    const byKey = new Map(current.map(item => [trackKey(item.track), item]))
-    const trackOf = (key: string) => byKey.get(key)!.track
-    const tracks = plan.moved.map(trackOf)
-    const before = plan.before === undefined ? undefined : trackOf(plan.before)
-    setItems(plan.order.map(key => byKey.get(key)!))
-    void edits.run(() => playlistsStore.moveItems(target, tracks, before), () => setItems(current))
-  }
-
   const remove = async (target: MyPlaylist, current: MyPlaylistItem[], tracks: Track[]) => {
-    const gone = new Set(tracks.map(trackKey))
-    const rest = current.filter(item => !gone.has(trackKey(item.track)))
-    const previousSelection = selection
-    setItems(rest)
-    setSelection(retain(selection, keysOf(rest)))
-    setRefocus({ key: rowAfterRemoval(keysOf(current), keysOf(rest), [...gone]) })
-    await edits.run(() => playlistsStore.removeItems(target, tracks), () => {
-      setItems(current)
-      setSelection(previousSelection)
-    })
+    const gone = tracks.map(trackKey)
+    const removing = store.remove(target, tracks)
+    setRefocus({ key: rowAfterRemoval(keysOf(current), keysOf(current).filter(key => !gone.includes(key)), gone) })
+    await removing
   }
 
   let body
@@ -162,10 +127,7 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
           <button
             type="button"
             className="button-secondary"
-            onClick={() => {
-              setFailed(null)
-              setAttempt(n => n + 1)
-            }}
+            onClick={() => store.retry()}
           >
             重试
           </button>
@@ -218,10 +180,10 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
         selection={selection}
         selecting={selecting}
         actions={actions}
-        onSelect={setSelection}
+        onSelect={selection => store.select(selection)}
         onMove={(plan) => {
           if (playlist)
-            move(playlist, items, plan)
+            store.move(playlist, plan)
         }}
       />
     )
@@ -269,12 +231,12 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
           onTop={() => {
             const plan = dropAt(keys, selection.keys, 0)
             if (plan)
-              move(playlist, shown, plan)
+              store.move(playlist, plan)
           }}
           onBottom={() => {
             const plan = dropAt(keys, selection.keys, keys.length)
             if (plan)
-              move(playlist, shown, plan)
+              store.move(playlist, plan)
           }}
           onRemove={() => {
             if (selected.length > 1)
@@ -282,7 +244,7 @@ export function MyPlaylistPage({ id, onBack }: { id: string, onBack: () => void 
             else
               void remove(playlist, shown, selected)
           }}
-          onToggleAll={() => setSelection(selected.length === shown.length ? noSelection : selectAll(keys))}
+          onToggleAll={() => store.select(selected.length === shown.length ? noSelection : selectAll(keys))}
           onClose={exitSelection}
         />
       )}

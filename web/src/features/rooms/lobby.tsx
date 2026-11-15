@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react'
 import { api } from '@/core/api'
 import { brandStore } from '@/core/brand'
 import { errorMessage } from '@/core/errors'
+import { notificationStore } from '@/shared/lib/notification-store'
+import { useResource } from '@/shared/lib/use-resource'
 import { useStore } from '@/shared/lib/use-store'
-import { EmptyState, notificationStore } from '@/shared/ui'
+import { EmptyState } from '@/shared/ui'
 import { CreateRoomDialog } from './create-room-dialog'
 import { JoinDialog } from './join-dialog'
 import { roomEntryStore } from './room-entry'
@@ -17,27 +19,17 @@ function matches(room: RoomListing, query: string): boolean {
 }
 
 export function Lobby({ filter, onFilter, onEntered }: { filter: string, onFilter: (filter: string) => void, onEntered: (ref: string) => void }) {
-  const [rooms, setRooms] = useState<RoomListing[] | null>(null)
-  const [failed, setFailed] = useState(false)
-  const [reload, setReload] = useState(0)
+  const listing = useResource(() => api.listRooms().then(({ items }) => items, (error: unknown) => {
+    throw new Error(errorMessage(error))
+  }))
   const [selected, setSelected] = useState<RoomListing | null>(null)
   const [creating, setCreating] = useState(false)
   const brandName = useStore(brandStore, s => s.name)
   useEffect(() => {
-    let active = true
-    api.listRooms().then(({ items }) => {
-      if (active)
-        setRooms(items)
-    }, (error) => {
-      if (!active)
-        return
-      notificationStore.error(errorMessage(error))
-      setFailed(true)
-    })
-    return () => {
-      active = false
-    }
-  }, [reload])
+    if (listing.state.status === 'failed')
+      notificationStore.error(listing.state.error)
+  }, [listing.state])
+  const rooms = listing.state.status === 'loaded' ? listing.state.value : null
   const visible = rooms?.filter(room => matches(room, filter)) ?? []
   return (
     <div className="page-content room-page">
@@ -60,23 +52,11 @@ export function Lobby({ filter, onFilter, onEntered }: { filter: string, onFilte
         <h2 className="text-ui-lg">正在发生的音乐</h2>
         <span className="muted text-ui-sm">{rooms ? `${visible.length} 个房间` : '正在寻找房间…'}</span>
       </div>
-      {failed
+      {listing.state.status === 'failed'
         ? (
             <EmptyState
               title="暂时无法获取房间"
-              action={(
-                <button
-                  type="button"
-                  className="button-secondary"
-                  onClick={() => {
-                    setFailed(false)
-                    setRooms(null)
-                    setReload(n => n + 1)
-                  }}
-                >
-                  重试
-                </button>
-              )}
+              action={<button type="button" className="button-secondary" onClick={listing.reload}>重试</button>}
             >
               请稍后重试。
             </EmptyState>

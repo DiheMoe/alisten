@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { profileStore } from '@/features/settings'
+import { profileStore } from '@/core/profile'
 import { useStore } from '@/shared/lib/use-store'
 import { Skeleton } from '@/shared/ui'
 import { openAccountSettings } from './account-settings'

@@ -23,6 +23,9 @@
     },
     "Keyword": {"type": "string", "minLength": 1, "maxLength": 500},
     "Limit": {"type": "integer", "description": "条数上限", "minimum": 1, "maximum": 100},
+    "RoomID": {"type": "string", "description": "房间 ID：UUID", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "RoomRef": {"type": "string", "description": "房间 ID 或别名", "pattern": "^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9-]{1,32})$"},
+    "Seat": {"type": "string", "pattern": "^[1-8]$"},
     "Website": {"type": "string", "maxLength": 200, "x-maxBytes": 600, "x-url": true},
     "Member": {
       "type": "object",
@@ -79,7 +82,7 @@
           "additionalProperties": false,
           "properties": {
             "clientTimeMs": {"type": "integer", "minimum": 0},
-            "roomId": {"type": "string"}
+            "roomId": {"$ref": "#/$defs/RoomID"}
           },
           "required": ["clientTimeMs", "roomId"]
         },
@@ -231,6 +234,7 @@
       "name": "getRoom",
       "method": "GET",
       "path": "/api/rooms/{ref}",
+      "params": {"ref": {"$ref": "#/$defs/RoomRef"}},
       "auth": "none",
       "response": {"$ref": "#/$defs/Room"}
     },
@@ -263,13 +267,22 @@
       "description": "座位上的成员，<b>座位号</b> 从 1 开始 & 不超过 8",
       "method": "GET",
       "path": "/api/rooms/{ref}/seats/{seat}",
+      "params": {"seat": {"$ref": "#/$defs/Seat"}, "ref": {"$ref": "#/$defs/RoomRef"}},
       "auth": "member",
+      "response": {"$ref": "#/$defs/Member"}
+    },
+    {
+      "name": "getMyAccount",
+      "method": "GET",
+      "path": "/api/me/account",
+      "auth": "account",
       "response": {"$ref": "#/$defs/Member"}
     },
     {
       "name": "adminUpdateRoom",
       "method": "PATCH",
       "path": "/api/admin/rooms/{id}",
+      "params": {"id": {"$ref": "#/$defs/RoomID"}},
       "auth": "admin",
       "status": 204,
       "request": {

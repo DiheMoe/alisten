@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/signal"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -99,47 +98,29 @@ func runServe(base *slog.Logger) (err error) {
 		Help: "Redis 服务器的时钟减去本实例的时钟，每 30 秒估算一次。",
 	})
 
-	var dependenciesReady, stopping atomic.Bool
-	var starting sync.Mutex
-	ready := func() bool { return dependenciesReady.Load() && !stopping.Load() }
+	life := newLifecycle()
 	// HTTP 服务和 River client 意外停止时，进程以错误退出，交给容器编排重启。
 	fatal := make(chan error, 4)
-	migrated := make(chan struct{})
-	var migratedOnce sync.Once
 	background, stopBackground := context.WithCancel(context.Background())
 	var running sync.WaitGroup
-	running.Go(func() {
-		watchReadiness(background, readinessInterval, func(ctx context.Context) error {
-			if err := postgres.CheckMigrations(ctx, pool); err != nil {
-				return err
-			}
-			migratedOnce.Do(func() { close(migrated) })
-			return pingRedis(ctx, rdb)
-		}, &dependenciesReady, &stopping, logger)
-	})
+	running.Go(func() { life.watch(background, pool, rdb, logger) })
 	// 数据库迁移到二进制要求的版本之后，才开始执行准备任务、运行房间。realtime.Start 会一直重试，直到订阅了本实例的频道。
 	running.Go(func() {
-		select {
-		case <-migrated:
-		case <-background.Done():
-			return
-		}
-		// 开始退出之后不再启动 River client，因为 shutdown 只停止已经启动的 client。
-		// shutdown 之后才启动的 client 会带着运行中的任务随进程退出，这些任务要等 20 分钟才由 River 重新调度。
-		starting.Lock()
-		if stopping.Load() {
-			starting.Unlock()
-			return
-		}
-		stopped, err := p.start()
-		starting.Unlock()
+		var stopped <-chan struct{}
+		started, err := life.startMigrated(background, func() (err error) {
+			stopped, err = p.start()
+			return err
+		})
 		if err != nil {
 			fatal <- err
 			return
 		}
+		if !started {
+			return
+		}
 		go func() {
 			<-stopped
-			if !stopping.Load() {
+			if !life.stopping.Load() {
 				fatal <- errors.New("执行准备任务的 River client 意外停止")
 			}
 		}()
@@ -158,15 +139,7 @@ func runServe(base *slog.Logger) (err error) {
 	metrics.MustRegister(
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-			Name: "alisten_ready",
-			Help: "本实例最近一次就绪检查的结果，1 为就绪，0 为未就绪。",
-		}, func() float64 {
-			if ready() {
-				return 1
-			}
-			return 0
-		}),
+		life.readyGauge(),
 		clockOffset,
 	)
 
@@ -182,7 +155,7 @@ func runServe(base *slog.Logger) (err error) {
 
 	opsLogger := base.With("component", "ops")
 	publicServer := newHTTPServer(p.handler, base.With("component", "http"))
-	opsServer := newHTTPServer(recoverPanics(ops.NewHandler(ready, metrics, version), opsLogger), opsLogger)
+	opsServer := newHTTPServer(recoverPanics(ops.NewHandler(life.ready, metrics, version), opsLogger), opsLogger)
 	go func() { fatal <- fmt.Errorf("HTTP 服务异常退出：%w", publicServer.Serve(publicListener)) }()
 	go func() { fatal <- fmt.Errorf("运维端口异常退出：%w", opsServer.Serve(opsListener)) }()
 	logger.Info("服务已启动", "listen", publicListener.Addr().String(), "ops_listen", opsListener.Addr().String(), "instance", instance)
@@ -194,9 +167,7 @@ func runServe(base *slog.Logger) (err error) {
 	}
 	stopSignals()
 
-	starting.Lock()
-	stopping.Store(true)
-	starting.Unlock()
+	life.stop()
 	// 出错退出时本实例已经无法正常服务，所以不必等入口摘除本实例。房间照样要释放，这样其他实例就不必等租约过期。
 	if failure == nil {
 		logger.Info("收到退出信号，等待入口摘除本实例", "drain", drainDelay.String())

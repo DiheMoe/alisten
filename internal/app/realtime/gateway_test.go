@@ -113,12 +113,8 @@ type quota struct {
 	exhausted atomic.Bool
 }
 
-func (q *quota) TakeSearch(context.Context, string, int, time.Duration) (time.Duration, error) {
-	return 0, nil
-}
-
-func (q *quota) TakePick(context.Context, string, int, time.Duration) (time.Duration, error) {
-	if q.exhausted.Load() {
+func (q *quota) Take(_ context.Context, key string, _ int, _ time.Duration) (time.Duration, error) {
+	if strings.HasSuffix(key, ":pick") && q.exhausted.Load() {
 		return time.Minute, nil
 	}
 	return 0, nil
@@ -435,7 +431,7 @@ func TestOnlyBotsFillInRequester(t *testing.T) {
 		bot := member.Member{ID: "00000000-0000-7000-8000-0000000000b0", Name: "bot"}
 		for requester, want := range map[string]member.Member{"张三": {ID: bot.ID, Name: "张三（bot）"}, "": bot} {
 			got, by, err := f.gateway.Resolve(t.Context(), id, bot, true, Pick{Track: sunny, Requester: requester})
-			if err != nil || got.Track != sunny || by != want {
+			if err != nil || got.Track != sunny || got.Requester != requester || by != want {
 				t.Errorf("bot 点歌时代填 %q = %+v, %+v, %v，期望点歌人 %+v", requester, got, by, err, want)
 			}
 		}

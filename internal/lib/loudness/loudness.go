@@ -74,16 +74,6 @@ func AnalyzeReader(r io.Reader) (*Result, error) {
 	return result, nil
 }
 
-// samples 是按声道交错的 PCM 采样，满刻度为 1，可以超出 [-1, 1]。
-func AnalyzeSamples(samples []float64, sampleRate, channels int) (*Result, error) {
-	if sampleRate <= 0 || channels <= 0 {
-		return nil, errors.New("loudness: 采样率与声道数必须为正")
-	}
-	an := NewAnalyzer(sampleRate, channels)
-	an.Write(samples[:len(samples)/channels*channels])
-	return an.Result()
-}
-
 // blockSegs 是一个 400ms 响度块包含的 100ms 段数（BS.1770：400ms 块，75% 重叠）。
 const blockSegs = 4
 

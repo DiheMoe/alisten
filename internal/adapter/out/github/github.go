@@ -109,7 +109,7 @@ func (o *OAuth) user(ctx context.Context, token string) (int64, error) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	// GitHub 的 REST API 拒绝不带 User-Agent 的请求。
+	// GitHub 要求 REST API 的请求用应用名或用户名作 User-Agent，出问题时好联系到应用。Go 默认的 User-Agent 说明不了是哪个应用。
 	req.Header.Set("User-Agent", "alisten")
 	var body struct {
 		ID int64 `json:"id"`

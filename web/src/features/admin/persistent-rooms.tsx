@@ -1,14 +1,13 @@
 import type { RoomListing } from '@/core/realtime'
 import { DoorOpen, Ellipsis, KeyRound, LockKeyhole, LogIn, Pencil, Plus, Search, SearchX, Share2, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { api } from '@/core/api'
 import { copyInviteLink, roomEntryStore } from '@/features/rooms'
-import { rowAfterRemoval } from '@/shared/lib/removal-focus'
+import { useStore } from '@/shared/lib/use-store'
 import { ActionMenu, ConfirmDialog, EmptyState, Pagination, Skeleton } from '@/shared/ui'
-import { adminStore } from './admin-store'
+import { PersistentRoomsStore } from './persistent-rooms-store'
 import { rowOrHeading } from './removal-focus'
 import { RoomApiKeyDialog } from './room-api-key-dialog'
-import { filterRooms } from './room-filter'
+import { filterRooms, roomAfterRemoval } from './room-filter'
 import { RoomFormDialog } from './room-form-dialog'
 import { LoadFailed, SectionHead, StatusPill } from './section-head'
 
@@ -25,35 +24,18 @@ export function PersistentRooms({ q, page, onFilter, onEntered }: {
   onFilter: (filter: { q: string, page?: number }) => void
   onEntered: (ref: string) => void
 }) {
-  const [rooms, setRooms] = useState<RoomListing[] | null>(null)
-  const [failure, setFailure] = useState<string | null>(null)
-  const [reload, setReload] = useState(0)
+  const [store] = useState(() => new PersistentRoomsStore())
+  const listing = useStore(store.rooms, s => s.current)
   const [editing, setEditing] = useState<RoomListing | 'new' | null>(null)
   const [deleting, setDeleting] = useState<RoomListing | null>(null)
   const [keyOf, setKeyOf] = useState<RoomListing | null>(null)
   // 删掉房间之后焦点要落到的那一行，null 表示落到标题。
   const nextFocusRef = useRef<string | null>(null)
   useEffect(() => {
-    let active = true
-    adminStore.attempt(() => api.adminListRooms()).then((result) => {
-      if (active)
-        setRooms(result.items)
-    }, (error: Error) => {
-      if (active)
-        setFailure(error.message)
-    })
-    return () => {
-      active = false
-    }
-  }, [reload])
-  const refresh = () => {
-    setFailure(null)
-    setReload(n => n + 1)
-  }
-  const retry = () => {
-    setRooms(null)
-    refresh()
-  }
+    store.open()
+    return () => store.close()
+  }, [store])
+  const rooms = listing.status === 'loaded' ? listing.value : null
   const shown = rooms && filterRooms(rooms, q, page)
   // 删掉房间或者打开旧链接时，地址里的页码可能超出范围，改成实际显示的那一页。
   const shownPage = shown?.page
@@ -73,8 +55,8 @@ export function PersistentRooms({ q, page, onFilter, onEntered }: {
           新建房间
         </button>
       </SectionHead>
-      {failure !== null
-        ? <LoadFailed message={`暂时无法获取常驻房间。${failure}`} onRetry={retry} />
+      {listing.status === 'failed'
+        ? <LoadFailed message={`暂时无法获取常驻房间。${listing.error}`} onRetry={() => store.refresh()} />
         : !shown
             ? <Skeleton rows={3} />
             : !shown.items.length
@@ -150,7 +132,7 @@ export function PersistentRooms({ q, page, onFilter, onEntered }: {
           room={editing === 'new' ? null : editing}
           onSaved={() => {
             setEditing(null)
-            refresh()
+            store.refresh()
           }}
           onClose={() => setEditing(null)}
         />
@@ -162,16 +144,10 @@ export function PersistentRooms({ q, page, onFilter, onEntered }: {
           confirmLabel="删除房间"
           danger
           onConfirm={async () => {
-            if (await adminStore.call(() => api.adminDeleteRoom(deleting.id)) === null)
+            if (!await store.remove(deleting.id))
               return
-            // 先在本地去掉这个房间，这样对话框关闭时那一行已经不在了，焦点才能落到下一行。之后再重新读取。
-            const remaining = rooms?.filter(room => room.id !== deleting.id) ?? []
-            const next = filterRooms(remaining, q, page)
-            // 删空了这一页时显示的是上一页，那里没有“下一行”。
-            nextFocusRef.current = rowAfterRemoval(shown?.items.map(room => room.id) ?? [], next.page === shown?.page ? next.items.map(room => room.id) : [], [deleting.id])
-            setRooms(remaining)
+            nextFocusRef.current = rooms && roomAfterRemoval(rooms, deleting.id, q, page)
             setDeleting(null)
-            refresh()
           }}
           onClose={() => setDeleting(null)}
           returnFocus={() => rowOrHeading('admin-rooms-title', nextFocusRef.current)}

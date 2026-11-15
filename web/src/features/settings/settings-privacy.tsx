@@ -1,9 +1,9 @@
 import { ChevronRight } from 'lucide-react'
-import { historyStore, searchLimits } from '@/features/history'
+import { profileStore } from '@/core/profile'
+import { searchHistoryStore, searchLimits } from '@/features/search'
 import { useSettingSave } from '@/shared/lib/use-setting-save'
 import { useStore } from '@/shared/lib/use-store'
 import { SaveStatus, SegmentedControl } from '@/shared/ui'
-import { profileStore } from './profile-store'
 import { SettingRow, SwitchRow } from './setting-row'
 
 function RecordListensRow() {
@@ -32,8 +32,8 @@ function RecordListensRow() {
 }
 
 function SearchLimitRow() {
-  const saved = useStore(historyStore, s => String(s.searchLimit))
-  const setting = useSettingSave(saved, (limit: string) => historyStore.updateSettings({ searchesEnabled: historyStore.state.searchesEnabled, searchLimit: Number(limit) }))
+  const saved = useStore(searchHistoryStore, s => String(s.searchLimit))
+  const setting = useSettingSave(saved, (limit: string) => searchHistoryStore.updateSettings({ searchesEnabled: searchHistoryStore.state.searchesEnabled, searchLimit: Number(limit) }))
   return (
     <SettingRow id="settings-search-limit" title="搜索记录数量" error={setting.state.error} status={<SaveStatus status={setting.state.status} version={setting.savedVersion} />} labelled={false}>
       <SegmentedControl
@@ -47,7 +47,7 @@ function SearchLimitRow() {
 }
 
 export function PrivacySettings({ onOpenHistory }: { onOpenHistory: () => void }) {
-  const searchesEnabled = useStore(historyStore, s => s.searchesEnabled)
+  const searchesEnabled = useStore(searchHistoryStore, s => s.searchesEnabled)
   return (
     <>
       <h2 className="settings-title">隐私与记录</h2>
@@ -64,7 +64,7 @@ export function PrivacySettings({ onOpenHistory }: { onOpenHistory: () => void }
           title="保存搜索记录"
           description="只保存在这台设备上"
           checked={searchesEnabled}
-          onSave={on => historyStore.updateSettings({ searchesEnabled: on, searchLimit: historyStore.state.searchLimit })}
+          onSave={on => searchHistoryStore.updateSettings({ searchesEnabled: on, searchLimit: searchHistoryStore.state.searchLimit })}
         />
         {searchesEnabled && <SearchLimitRow />}
       </div>

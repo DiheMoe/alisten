@@ -335,7 +335,7 @@
   },
   "info": {
     "title": "Sample",
-    "version": "5e495c1e23fa03a5"
+    "version": "73bb0faa1631059c"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -348,6 +348,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "房间 ID：UUID",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
               "type": "string"
             }
           }
@@ -380,6 +382,39 @@
         "security": [
           {
             "adminToken": []
+          }
+        ]
+      }
+    },
+    "/api/me/account": {
+      "get": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
+        "operationId": "getMyAccount",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Member"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "memberToken": []
           }
         ]
       }
@@ -712,6 +747,8 @@
             "name": "ref",
             "required": true,
             "schema": {
+              "description": "房间 ID 或别名",
+              "pattern": "^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9-]{1,32})$",
               "type": "string"
             }
           }
@@ -750,6 +787,8 @@
             "name": "ref",
             "required": true,
             "schema": {
+              "description": "房间 ID 或别名",
+              "pattern": "^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9-]{1,32})$",
               "type": "string"
             }
           },
@@ -758,6 +797,7 @@
             "name": "seat",
             "required": true,
             "schema": {
+              "pattern": "^[1-8]$",
               "type": "string"
             }
           }

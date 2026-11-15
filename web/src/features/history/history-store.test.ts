@@ -61,8 +61,7 @@ beforeEach(() => {
   failReads = false
   rejectedToken = null
   room = Object.assign(new EventTarget(), { state: { room: null } })
-  vi.doMock('@/core/room', () => ({ roomStore: room }))
-  vi.stubGlobal('window', new EventTarget())
+  vi.doMock('@/core/room', async importOriginal => ({ ...await importOriginal<typeof import('@/core/room')>(), roomStore: room }))
   const local = new FakeStorage()
   local.setItem('alisten.member-token', 'token')
   vi.stubGlobal('localStorage', local)

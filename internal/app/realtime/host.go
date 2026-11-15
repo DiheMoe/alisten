@@ -87,7 +87,6 @@ const (
 
 type envelope struct {
 	input   room.Input
-	patch   *port.InfoPatch
 	gateway string
 	ctx     context.Context
 }
@@ -117,7 +116,6 @@ type hostedRoom struct {
 	stopKeeping context.CancelFunc
 	room        *room.Room
 	term        uint32
-	info        room.Info
 	closed      bool
 	timers      map[room.Token]*time.Timer
 }
@@ -360,7 +358,7 @@ func (h *Host) deliver(ctx context.Context, in port.RoomInput) {
 	defer h.mu.Unlock()
 	if h.state == stopped {
 		// Shutdown 已经在等待 work，不能再向其中添加 goroutine。
-		go h.reject(ctx, in.Room, (envelope{input: in.Input, patch: in.Patch}).requestID(), ErrUnavailable)
+		go h.reject(ctx, in.Room, (envelope{input: in.Input}).requestID(), ErrUnavailable)
 		return
 	}
 	item := forwardedInput{RoomInput: in, ctx: ctx, arrived: time.Now()}
@@ -384,7 +382,7 @@ func (h *Host) forward(roomID string, queue *[]forwardedInput) {
 		in := (*queue)[0]
 		*queue = (*queue)[1:]
 		h.mu.Unlock()
-		e := envelope{input: in.Input, patch: in.Patch, gateway: in.Gateway}
+		e := envelope{input: in.Input, gateway: in.Gateway}
 		ctx, cancel := forwardContext(in.ctx, e.requestID(), in.arrived)
 		if err := h.send(ctx, roomID, e, in.Takeover); err != nil {
 			h.reject(ctx, roomID, e.requestID(), err)
@@ -451,7 +449,7 @@ func (h *Host) run(r *hostedRoom) {
 	h.takeoverWarned.Store(nil)
 	var effects []room.Effect
 	r.room, effects = room.Restore(roomEnv(), term, snap)
-	r.term, r.info = term, snap.Info
+	r.term = term
 	h.owned.Add(1)
 	close(r.started)
 	if !h.holding(r.ctx, r) || !h.publish(r.ctx, r, port.OwnerChanged{Term: term}) || !h.execute(r.ctx, r, effects, "") {
@@ -468,12 +466,11 @@ func (h *Host) run(r *hostedRoom) {
 				h.reject(ctx, r.id, e.requestID(), ErrUnavailable)
 				return
 			}
-			in := r.input(e)
-			r.track(in, e.gateway, h.self)
-			if t, ok := in.(room.Timer); ok {
+			r.track(e.input, e.gateway, h.self)
+			if t, ok := e.input.(room.Timer); ok {
 				delete(r.timers, t.Token)
 			}
-			if !h.execute(ctx, r, r.room.Handle(roomEnv(), in), e.requestID()) {
+			if !h.execute(ctx, r, r.room.Handle(roomEnv(), e.input), e.requestID()) {
 				return
 			}
 		}
@@ -575,9 +572,7 @@ func (h *Host) finish(r *hostedRoom) {
 		cancel()
 	}
 	h.mu.Lock()
-	if h.running[r.id] == r {
-		delete(h.running, r.id)
-	}
+	delete(h.running, r.id)
 	h.mu.Unlock()
 	close(r.done)
 }
@@ -591,19 +586,16 @@ func (h *Host) execute(ctx context.Context, r *hostedRoom, effects []room.Effect
 			h.reject(ctx, r.id, request, ErrUnavailable)
 		}
 	}()
-	for i, e := range effects {
+	for _, e := range effects {
 		if !h.holding(ctx, r) {
 			return false
 		}
 		switch e := e.(type) {
 		case room.Persist:
-			if err := h.persist(ctx, r, e.Snapshot, plays(effects[i+1:])); err != nil {
+			if err := h.persist(ctx, r, e.Snapshot, e.Plays); err != nil {
 				h.abandon(ctx, r, "落盘失败，放弃房间", err)
 				return false
 			}
-			r.info = e.Snapshot.Info
-		case room.RecordPlay:
-			// 已经和 Persist 在同一个事务中写入。
 		case room.RecordListen:
 			h.recordListen(ctx, e)
 		case room.Emit:
@@ -673,17 +665,6 @@ func (h *Host) publish(ctx context.Context, r *hostedRoom, m port.RoomMessage) b
 		return false
 	}
 	return true
-}
-
-// 同一批中的 RecordPlay 都排在 Persist 之后，与 Persist 在同一个事务中写入。
-func plays(effects []room.Effect) []room.RecordPlay {
-	var out []room.RecordPlay
-	for _, e := range effects {
-		if p, ok := e.(room.RecordPlay); ok {
-			out = append(out, p)
-		}
-	}
-	return out
 }
 
 // 落盘不随 ctx 取消，因为释放房间时，正在处理的输入要处理完。
@@ -773,20 +754,6 @@ func (r *hostedRoom) post(in room.Input) {
 	}
 }
 
-func (r *hostedRoom) input(e envelope) room.Input {
-	if e.patch == nil {
-		return e.input
-	}
-	in := room.UpdateInfo{RequestID: e.patch.RequestID, Name: r.info.Name, Description: r.info.Description}
-	if e.patch.Name != nil {
-		in.Name = *e.patch.Name
-	}
-	if e.patch.Description != nil {
-		in.Description = *e.patch.Description
-	}
-	return in
-}
-
 func (r *hostedRoom) track(in room.Input, gateway, self string) {
 	if gateway == "" {
 		gateway = self
@@ -817,9 +784,6 @@ func (r *hostedRoom) inputContext(e envelope) context.Context {
 }
 
 func (e envelope) requestID() room.RequestID {
-	if e.patch != nil {
-		return e.patch.RequestID
-	}
 	switch in := e.input.(type) {
 	case room.Command:
 		return in.RequestID

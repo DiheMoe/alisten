@@ -29,7 +29,7 @@ func (r *Room) start(b *batch) {
 	r.pending = nil
 	r.votes = nil
 	r.endTimer = r.schedule(b, r.current.EndsAt())
-	by := requesterOf(r.current.Entry.By)
+	by := requesterOf(r.current.Entry)
 	r.served[by] = max(r.served[by], r.current.Entry.Round)
 	// 推荐基于网易云的相似歌曲。
 	if r.current.Entry.Track.Source == track.NetEase && r.autoDJReady(b.now) {

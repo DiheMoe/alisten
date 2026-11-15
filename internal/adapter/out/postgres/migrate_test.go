@@ -174,14 +174,14 @@ func TestMemberSessionsMigrationKeepsMemberTokens(t *testing.T) {
 	}
 
 	store := New(pool)
-	if m, err := store.MemberByToken(ctx, tokenHash("guest")); err != nil || m.ID != guest {
+	if m, _, err := store.MemberByToken(ctx, tokenHash("guest")); err != nil || m.ID != guest {
 		t.Errorf("迁移之后按原来的 token 找到 %#v, %v，期望成员 %s", m, err, guest)
 	}
 	var sessionCreated time.Time
 	if err := pool.QueryRow(ctx, "SELECT created_at FROM member_sessions WHERE member_id = $1", guest).Scan(&sessionCreated); err != nil || !sessionCreated.Equal(created) {
 		t.Errorf("会话的创建时间 = %v, %v，期望沿用成员的创建时间 %v", sessionCreated, err, created)
 	}
-	if _, err := store.MemberByToken(ctx, tokenHash("bot")); !errors.Is(err, port.ErrMemberNotFound) {
+	if _, _, err := store.MemberByToken(ctx, tokenHash("bot")); !errors.Is(err, port.ErrMemberNotFound) {
 		t.Errorf("bot 成员原来的 token 在迁移之后 = %v，期望不再有效", err)
 	}
 }

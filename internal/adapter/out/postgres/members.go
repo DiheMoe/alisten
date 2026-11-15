@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/dihemoe/alisten/internal/adapter/out/postgres/internal/query"
 	"github.com/dihemoe/alisten/internal/app/port"
@@ -32,15 +31,15 @@ func (s *Store) CreateMember(ctx context.Context, tokenHash []byte, name string)
 	return m, nil
 }
 
-func (s *Store) MemberByToken(ctx context.Context, tokenHash []byte) (member.Member, error) {
+func (s *Store) MemberByToken(ctx context.Context, tokenHash []byte) (member.Member, bool, error) {
 	row, err := s.q.MemberByToken(ctx, tokenHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = port.ErrMemberNotFound
 	}
 	if err != nil {
-		return member.Member{}, fmt.Errorf("按 token 查找成员：%w", err)
+		return member.Member{}, false, fmt.Errorf("按 token 查找成员：%w", err)
 	}
-	return memberOf(row), nil
+	return memberOf(row), port.AccountProfile{Username: orEmpty(row.Username), GitHub: row.GithubID != nil}.Registered(), nil
 }
 
 func (s *Store) UpdateMember(ctx context.Context, id string, name, avatarHash, email *string) (member.Member, error) {
@@ -109,8 +108,7 @@ func (s *Store) AddCredentials(ctx context.Context, memberID, username, password
 }
 
 func usernameError(err error) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation && pgErr.ConstraintName == "members_username_key" {
+	if violates(err, uniqueViolation, "members_username_key") {
 		return port.ErrUsernameTaken
 	}
 	return err
@@ -161,11 +159,10 @@ func (s *Store) BindGitHub(ctx context.Context, memberID string, githubID int64)
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		wasGuest, err := q.BindGitHub(ctx, query.BindGitHubParams{ID: memberID, GithubID: &githubID})
-		var pgErr *pgconn.PgError
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			return port.ErrGitHubAlreadyBound
-		case errors.As(err, &pgErr) && pgErr.Code == uniqueViolation && pgErr.ConstraintName == "members_github_id_key":
+		case violates(err, uniqueViolation, "members_github_id_key"):
 			return port.ErrGitHubTaken
 		case err != nil:
 			return err

@@ -10,8 +10,12 @@ import (
 var (
 	patternAdminUpdateRoomRequestNote = regexp.MustCompile("^[^`]*$")
 	patternAdminUpdateRoomRequestSlug = regexp.MustCompile(`^[a-z0-9-]{0,32}$`)
+	patternHelloRequestRoomID         = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 	patternTrackIDWhenLink            = regexp.MustCompile(`^https?://\S+$`)
 	patternTrackIDWhenNetease         = regexp.MustCompile(`^[0-9]+$`)
+	patternRoomID                     = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	patternRoomRef                    = regexp.MustCompile(`^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9-]{1,32})$`)
+	patternSeat                       = regexp.MustCompile(`^[1-8]$`)
 )
 
 func decodeConnectionRequest(typ string, raw json.RawMessage, path string) (any, bool, error) {
@@ -42,22 +46,6 @@ func decodeRoomRequest(typ string, raw json.RawMessage, path string) (any, bool,
 		return v, true, err
 	}
 	return nil, false, nil
-}
-
-func DecodeCreateMemberRequest(body []byte) (CreateMemberRequest, error) {
-	return decodeCreateMemberRequest(body, "")
-}
-
-func DecodeRemoveTracksRequest(body []byte) (RemoveTracksRequest, error) {
-	return decodeRemoveTracksRequest(body, "")
-}
-
-func DecodeCreateRoomRequest(body []byte) (CreateRoomRequest, error) {
-	return decodeCreateRoomRequest(body, "")
-}
-
-func DecodeAdminUpdateRoomRequest(body []byte) (AdminUpdateRoomRequest, error) {
-	return decodeAdminUpdateRoomRequest(body, "")
 }
 
 func decodeAdminUpdateRoomRequest(raw json.RawMessage, path string) (AdminUpdateRoomRequest, error) {
@@ -171,6 +159,9 @@ func decodeHelloRequest(raw json.RawMessage, path string) (HelloRequest, error) 
 		return v, err
 	}
 	if v.RoomID, err = decodeString(m["roomId"], field(path, "roomId")); err != nil {
+		return v, err
+	}
+	if err = checkPattern(v.RoomID, field(path, "roomId"), patternHelloRequestRoomID); err != nil {
 		return v, err
 	}
 	return v, nil

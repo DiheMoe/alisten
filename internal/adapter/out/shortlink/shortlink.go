@@ -26,12 +26,13 @@ var _ port.ShortLinks = (*Resolver)(nil)
 
 // allowed 检查每一跳（包括起点）的主机。跳转到 done 认得的地址时就停下，不再请求这个地址，
 // 因为网易云的短链接最后一跳是很慢的歌单页面，逐跳请求到底会超过总超时。
-func New(allowed func(host string) bool, done func(link string) bool) *Resolver {
+func New(transport http.RoundTripper, allowed func(host string) bool, done func(link string) bool) *Resolver {
 	return &Resolver{
 		allowed: allowed,
 		done:    done,
 		// 跳转由 Resolve 逐跳处理，这样每一跳的主机都能先检查再发请求。
 		client: &http.Client{
+			Transport:     transport,
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 	}

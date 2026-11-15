@@ -23,24 +23,30 @@ SELECT source, track_id FROM (
             SELECT source, track_id, auto, started_at FROM plays
             WHERE room_id = $1
             ORDER BY started_at DESC
-            LIMIT 1000
+            LIMIT $2
         ) p
         WHERE p.auto
     ) auto_picks
     GROUP BY source, track_id
     ORDER BY max(started_at) DESC
-    LIMIT 128
+    LIMIT $3
 ) recent
 ORDER BY source, track_id
 `
+
+type AutoDJExclusionsParams struct {
+	RoomID     string
+	Plays      int32
+	Exclusions int32
+}
 
 type AutoDJExclusionsRow struct {
 	Source  string
 	TrackID string
 }
 
-func (q *Queries) AutoDJExclusions(ctx context.Context, roomID string) ([]AutoDJExclusionsRow, error) {
-	rows, err := q.db.Query(ctx, autoDJExclusions, roomID)
+func (q *Queries) AutoDJExclusions(ctx context.Context, arg AutoDJExclusionsParams) ([]AutoDJExclusionsRow, error) {
+	rows, err := q.db.Query(ctx, autoDJExclusions, arg.RoomID, arg.Plays, arg.Exclusions)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +83,7 @@ SELECT track_id FROM (
             SELECT track_id, source, auto, started_at FROM plays
             WHERE room_id = $1
             ORDER BY started_at DESC
-            LIMIT 1000
+            LIMIT $3
         ) p
         WHERE p.source = 'netease' AND NOT p.auto
         GROUP BY p.track_id
@@ -85,17 +91,24 @@ SELECT track_id FROM (
     ORDER BY track_id, tier, rank
 ) seeds
 ORDER BY tier, rank
-LIMIT 32
+LIMIT $4
 `
 
 type AutoDJSeedsParams struct {
 	RoomID       string
 	IncludeQueue bool
+	Plays        int32
+	Seeds        int32
 }
 
-// 只看最近 1000 次播放。查询按 plays (room_id, started_at) 的索引倒序读，读到 1000 行就停，所以耗时与历史的长度无关。
+// 只看最近 @plays 次播放。查询按 plays (room_id, started_at) 的索引倒序读，读够这么多行就停，所以耗时与历史的长度无关。
 func (q *Queries) AutoDJSeeds(ctx context.Context, arg AutoDJSeedsParams) ([]string, error) {
-	rows, err := q.db.Query(ctx, autoDJSeeds, arg.RoomID, arg.IncludeQueue)
+	rows, err := q.db.Query(ctx, autoDJSeeds,
+		arg.RoomID,
+		arg.IncludeQueue,
+		arg.Plays,
+		arg.Seeds,
+	)
 	if err != nil {
 		return nil, err
 	}

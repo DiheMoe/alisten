@@ -1,7 +1,8 @@
 import type { AdminListMediaResponse, AdminRemoveMediaResponse } from '@/core/api'
 import type { MediaSort } from '@/core/realtime'
+import type { Selection } from '@/shared/lib/selection'
 import { api } from '@/core/api'
-import { toggleSelection } from '@/shared/lib/range-selection'
+import { noSelection, retain, selectAll, selectRange, toggle } from '@/shared/lib/selection'
 import { Store } from '@/shared/lib/store'
 import { adminStore } from './admin-store'
 
@@ -56,22 +57,30 @@ export class MediaStore extends Store<MediaState> {
   }
 
   toggle(key: string, shift: boolean): void {
-    const keys = this.state.list?.items.map(item => item.key) ?? []
-    const { selected, anchor } = toggleSelection(this.state.selected, keys, key, this.#anchor, shift)
-    this.#anchor = anchor
-    this.setState({ selected })
+    const selection = this.#selection()
+    this.#select(shift ? selectRange(selection, this.#keys(), key) : toggle(selection, key))
   }
 
   toggleAll(): void {
-    const items = this.state.list?.items ?? []
-    const all = items.every(item => this.state.selected.has(item.key))
-    this.#anchor = null
-    this.setState({ selected: new Set(all ? [] : items.map(item => item.key)) })
+    const keys = this.#keys()
+    this.#select(keys.every(key => this.state.selected.has(key)) ? noSelection : selectAll(keys))
   }
 
   clearSelection(): void {
-    this.#anchor = null
-    this.setState({ selected: new Set() })
+    this.#select(noSelection)
+  }
+
+  #keys(): string[] {
+    return this.state.list?.items.map(item => item.key) ?? []
+  }
+
+  #selection(): Selection {
+    return { keys: this.state.selected, anchor: this.#anchor }
+  }
+
+  #select(selection: Selection): void {
+    this.#anchor = selection.anchor
+    this.setState({ selected: selection.keys })
   }
 
   // 失败时原因已经通过通知显示，返回 null。无论成败都重新读取当前页，读完才返回。这样界面不会再显示已经删掉的歌，中途出错时，出错之前删掉的歌也不会再显示。
@@ -90,10 +99,9 @@ export class MediaStore extends Store<MediaState> {
       if (generation !== this.#generation)
         return
       // 删除之后重新读到的这一页上，删掉的歌已经不在了，选择里也去掉。
-      const present = new Set(list.items.map(item => item.key))
-      if (this.#anchor !== null && !present.has(this.#anchor))
-        this.#anchor = null
-      this.setState({ list, loadedAt: Date.now(), loading: false, selected: new Set([...this.state.selected].filter(key => present.has(key))) })
+      const selection = retain(this.#selection(), list.items.map(item => item.key))
+      this.#anchor = selection.anchor
+      this.setState({ list, loadedAt: Date.now(), loading: false, selected: selection.keys })
     }
     catch (error) {
       if (generation === this.#generation)

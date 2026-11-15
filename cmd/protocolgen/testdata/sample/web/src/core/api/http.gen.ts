@@ -51,6 +51,7 @@ export function httpClient(send: HttpSend) {
     getRoom: (ref: string) => send<Room>({ method: 'GET', path: `/api/rooms/${encodeURIComponent(ref)}`, auth: 'none' }),
     createRoom: (body: CreateRoomRequest) => send<CreateRoomResponse>({ method: 'POST', path: '/api/rooms', auth: 'none', body }),
     getSeat: (ref: string, seat: string) => send<Member>({ method: 'GET', path: `/api/rooms/${encodeURIComponent(ref)}/seats/${encodeURIComponent(seat)}`, auth: 'member' }),
+    getMyAccount: () => send<Member>({ method: 'GET', path: '/api/me/account', auth: 'member' }),
     adminUpdateRoom: (id: string, body: AdminUpdateRoomRequest) => send<void>({ method: 'PATCH', path: `/api/admin/rooms/${encodeURIComponent(id)}`, auth: 'admin', body }),
   }
 }

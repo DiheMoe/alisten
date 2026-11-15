@@ -1,5 +1,5 @@
 -- name: AutoDJSeeds :many
--- 只看最近 1000 次播放。查询按 plays (room_id, started_at) 的索引倒序读，读到 1000 行就停，所以耗时与历史的长度无关。
+-- 只看最近 @plays 次播放。查询按 plays (room_id, started_at) 的索引倒序读，读够这么多行就停，所以耗时与历史的长度无关。
 SELECT track_id FROM (
     SELECT DISTINCT ON (track_id) track_id, tier, rank
     FROM (
@@ -17,7 +17,7 @@ SELECT track_id FROM (
             SELECT track_id, source, auto, started_at FROM plays
             WHERE room_id = @room_id
             ORDER BY started_at DESC
-            LIMIT 1000
+            LIMIT sqlc.arg(plays)
         ) p
         WHERE p.source = 'netease' AND NOT p.auto
         GROUP BY p.track_id
@@ -25,7 +25,7 @@ SELECT track_id FROM (
     ORDER BY track_id, tier, rank
 ) seeds
 ORDER BY tier, rank
-LIMIT 32;
+LIMIT sqlc.arg(seeds);
 
 -- name: AutoDJExclusions :many
 SELECT e.source, e.track_id FROM room_entries e
@@ -41,13 +41,13 @@ SELECT source, track_id FROM (
             SELECT source, track_id, auto, started_at FROM plays
             WHERE room_id = @room_id
             ORDER BY started_at DESC
-            LIMIT 1000
+            LIMIT sqlc.arg(plays)
         ) p
         WHERE p.auto
     ) auto_picks
     GROUP BY source, track_id
     ORDER BY max(started_at) DESC
-    LIMIT 128
+    LIMIT sqlc.arg(exclusions)
 ) recent
 ORDER BY source, track_id;
 

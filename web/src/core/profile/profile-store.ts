@@ -2,8 +2,8 @@ import type { IdentityEvent } from '@/core/api'
 import type { Account, Member } from '@/core/realtime'
 import { api, ApiError, deleteAllTickets, deleteMemberToken, followMemberTokenChanges, identityEvents, IdentityRenewedError, saveMemberToken } from '@/core/api'
 import { errorMessage } from '@/core/errors'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { Store } from '@/shared/lib/store'
-import { notificationStore } from '@/shared/ui'
 
 // 游客的邮箱只保存在本机，服务端只保存邮箱的哈希。已注册账号的邮箱保存在账号里。
 const emailKey = 'alisten.email'
@@ -51,24 +51,6 @@ class ProfileStore extends Store<ProfileState> {
   updateAccount(account: Account): void {
     this.#edits += 1
     this.setState({ account })
-  }
-
-  // 返回 false 时，失败原因已经通过通知显示。
-  async logout(): Promise<boolean> {
-    try {
-      await api.logout()
-      switchIdentity(null)
-    }
-    catch (error) {
-      // 账号在这台设备上的会话已经失效，客户端也已经换成新的游客，退出登录的目的已经达到。
-      if (error instanceof IdentityRenewedError) {
-        window.location.reload()
-        return true
-      }
-      notificationStore.error(errorMessage(error))
-      return false
-    }
-    return true
   }
 
   // 一次只改一项，失败时才能说清是哪一项不合格，因为客户端不能按服务端的 message 区分字段。失败时抛出 Error，message 是给用户看的原因。

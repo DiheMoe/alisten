@@ -1,18 +1,18 @@
+import type { SearchCategory } from './records'
 import type { KeywordQuery, SearchQuery } from './search-store'
 import type { PlaylistSummary, TrackSummary } from '@/core/realtime'
-import type { SearchCategory, SearchSource } from '@/features/history'
 import type { SongItem } from '@/shared/ui'
 import { ArrowLeft, ArrowRight, CirclePlus, Clock3, Search, Sparkles } from 'lucide-react'
-import { roomStore, sameTrack } from '@/core/room'
-import { historyStore } from '@/features/history'
+import { enqueue, roomStore, sameTrack } from '@/core/room'
 import { SavePlatformPlaylistButton } from '@/features/playlists'
-import { enqueue } from '@/features/queue'
 import { bookTitle } from '@/shared/lib/book-title'
 import { clampPage } from '@/shared/lib/page-items'
 import { useStore } from '@/shared/lib/use-store'
 import { Artwork, AsyncIconButton, EmptyState, IconButton, PlayingBars, Select, Skeleton, SongArtwork, SongList } from '@/shared/ui'
+import { searchSourceNames, searchSources } from './records'
 import { SearchBox } from './search-box'
-import { keywordSearch, pageSize, recordSearch, searchStore } from './search-store'
+import { searchHistoryStore } from './search-history-store'
+import { keywordSearch, pageSize, searchStore, startSearch } from './search-store'
 import './search.css'
 
 const categories: { view: SearchCategory, label: string }[] = [
@@ -20,8 +20,6 @@ const categories: { view: SearchCategory, label: string }[] = [
   { view: 'tracks', label: '歌曲' },
   { view: 'playlists', label: '歌单' },
 ]
-
-const sourceNames: Record<SearchSource, string> = { netease: '网易云音乐', qq: 'QQ 音乐' }
 
 const previewLimit = 4
 const playlistPreviewLimit = 5
@@ -164,15 +162,15 @@ function Overview({ tracks, playlists, connected, onCategory, onOpenPlaylist }: 
 }
 
 function RecentSearches({ connected, onSearch }: { connected: boolean, onSearch: (query: SearchQuery) => void }) {
-  const searches = useStore(historyStore, s => s.searches)
-  const enabled = useStore(historyStore, s => s.searchesEnabled)
+  const searches = useStore(searchHistoryStore, s => s.searches)
+  const enabled = useStore(searchHistoryStore, s => s.searchesEnabled)
   if (!enabled || !searches.length)
     return <EmptyState icon={Search} title="你想听哪首歌？">搜索歌名、歌手或歌单。</EmptyState>
   return (
     <section aria-label="最近搜索">
       <div className="section-heading">
         <h2 className="text-ui-lg">最近搜索</h2>
-        <button type="button" className="search-section-link text-ui-caption" onClick={() => historyStore.clearSearches()}>清空</button>
+        <button type="button" className="search-section-link text-ui-caption" onClick={() => searchHistoryStore.clearSearches()}>清空</button>
       </div>
       <div className="search-recent-grid">
         {searches.slice(0, recentLimit).map(record => (
@@ -181,16 +179,12 @@ function RecentSearches({ connected, onSearch }: { connected: boolean, onSearch:
             className="search-recent-card"
             key={record.query}
             disabled={!connected}
-            onClick={() => {
-              const query = keywordSearch(record.query, record.source, record.category)
-              recordSearch(query)
-              onSearch(query)
-            }}
+            onClick={() => startSearch(keywordSearch(record.query, record.source, record.category), onSearch)}
           >
             <Clock3 size={20} aria-hidden="true" />
             <span className="song-copy">
               <strong className="text-ui-base truncate">{record.query}</strong>
-              <span className="text-ui-caption muted">{sourceNames[record.source]}</span>
+              <span className="text-ui-caption muted">{searchSourceNames[record.source]}</span>
             </span>
             <ArrowRight size={18} aria-hidden="true" />
           </button>
@@ -230,11 +224,7 @@ function SearchResults({ connected, onSearch, onOpenPlaylist }: { connected: boo
   }
   if (!keyword)
     return <RecentSearches connected={connected} onSearch={onSearch} />
-  const showCategory = (category: SearchCategory) => {
-    const query = keywordSearch(keyword, source, category)
-    recordSearch(query)
-    onSearch(query)
-  }
+  const showCategory = (category: SearchCategory) => startSearch(keywordSearch(keyword, source, category), onSearch)
   if (view === 'all')
     return tracks.length || playlists.length ? <Overview tracks={tracks} playlists={playlists} connected={connected} onCategory={showCategory} onOpenPlaylist={onOpenPlaylist} /> : <NoResults failed={failed} />
   const total = view === 'tracks' ? tracksTotal : playlistsTotal
@@ -270,10 +260,7 @@ export function SearchPage({ inlineSearchClassName, onSearch, onOpenPlaylist }: 
   const connected = useStore(roomStore, s => s.status === 'open')
   const recommending = view === 'recommend'
   const overview = view === 'all'
-  const searchAgain = (query: KeywordQuery) => {
-    recordSearch(query)
-    onSearch(query)
-  }
+  const searchAgain = (query: KeywordQuery) => startSearch(query, onSearch)
   return (
     <div className="page-content search-page">
       <div className="search-filter-bar">
@@ -302,18 +289,15 @@ export function SearchPage({ inlineSearchClassName, onSearch, onOpenPlaylist }: 
             ariaLabel="音乐平台"
             value={source}
             disabled={!connected}
-            onChange={value => searchAgain(keywordSearch(keyword, value === 'qq' ? 'qq' : 'netease', view))}
-            options={[
-              { value: 'qq', label: 'QQ 音乐' },
-              { value: 'netease', label: '网易云音乐' },
-            ]}
+            onChange={value => searchAgain(keywordSearch(keyword, value, view))}
+            options={searchSources.map(value => ({ value, label: searchSourceNames[value] }))}
           />
         )}
       </div>
       <header className="search-page-heading">
         <h1 className="text-ui-xl">{recommending ? '为你推荐' : keyword ? '搜索结果' : '搜索'}</h1>
         <p className="text-ui-caption muted">
-          {recommending ? '发现下一首想听的歌。' : keyword ? `“${keyword}” · ${sourceNames[source]}` : '搜索歌名、歌手或歌单。'}
+          {recommending ? '发现下一首想听的歌。' : keyword ? `“${keyword}” · ${searchSourceNames[source]}` : '搜索歌名、歌手或歌单。'}
         </p>
         {recommending && (
           <p className="search-recommend-hint text-ui-caption muted">

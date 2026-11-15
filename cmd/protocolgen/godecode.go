@@ -22,12 +22,6 @@ func goDecode(d *idl) ([]byte, error) {
 	var g goDecoder
 	g.registry("decodeConnectionRequest", d.WS.Requests)
 	g.registry("decodeRoomRequest", d.Requests)
-	for _, e := range d.HTTP {
-		if e.Request != nil {
-			name := e.Request.name
-			fmt.Fprintf(&g.b, "\nfunc Decode%s(body []byte) (%s, error) {\nreturn decode%s(body, \"\")\n}\n", name, name, name)
-		}
-	}
 	for _, name := range d.typeNames() {
 		if !d.inbound[name] {
 			continue
@@ -37,6 +31,9 @@ func goDecode(d *idl) ([]byte, error) {
 		} else {
 			g.object(name, s)
 		}
+	}
+	for _, name := range d.pathParamTypes() {
+		g.patterns = append(g.patterns, goPattern{name: "pattern" + name, expr: d.Defs[name].Pattern})
 	}
 
 	var b bytes.Buffer

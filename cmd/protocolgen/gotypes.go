@@ -132,16 +132,35 @@ func writeGoRoutes(b *bytes.Buffer, endpoints []*endpoint) {
 	}
 	b.WriteString("\nvar (\n")
 	for _, e := range endpoints {
-		fmt.Fprintf(b, "Route%s = Route{Pattern: %q, Auth: Auth%s, Status: %d%s}\n", pascal(e.Name), e.Method+" "+e.Path, pascal(e.Auth), e.status(), goLocation(e.Location))
+		req, decode := "NoRequest", "noBody"
+		switch {
+		case e.Request == nil:
+		case len(e.Request.Properties) == 0:
+			decode = "discard(decode" + e.Request.name + ")"
+		default:
+			req, decode = e.Request.name, "decode"+e.Request.name
+		}
+		var typ string
+		switch {
+		case e.status() == 204:
+			typ = fmt.Sprintf("NoContentEndpoint[%s]", req)
+		case e.Location:
+			typ = fmt.Sprintf("LocatedEndpoint[%s, %s]", req, e.Response.dataType())
+		default:
+			typ = fmt.Sprintf("Endpoint[%s, %s]", req, e.Response.dataType())
+		}
+		params := ""
+		if names := pathParams(e.Path); len(names) > 0 {
+			list := make([]string, len(names))
+			for i, p := range names {
+				typ := refName(e.Params[p].Ref)
+				list[i] = fmt.Sprintf("{Name: %q, Type: %q, pattern: pattern%s}", p, typ, typ)
+			}
+			params = ", Params: []PathParam{" + strings.Join(list, ", ") + "}"
+		}
+		fmt.Fprintf(b, "Route%s = %s{Route: Route{Pattern: %q, Auth: Auth%s, Status: %d}, decoder: %s%s}\n", pascal(e.Name), typ, e.Method+" "+e.Path, pascal(e.Auth), e.status(), decode, params)
 	}
 	b.WriteString(")\n")
-}
-
-func goLocation(location bool) string {
-	if location {
-		return ", Location: true"
-	}
-	return ""
 }
 
 func writeGoRoomRoutes(b *bytes.Buffer, d *idl) {
@@ -151,12 +170,12 @@ func writeGoRoomRoutes(b *bytes.Buffer, d *idl) {
 	b.WriteString("\nvar RoomRoutes = []RoomRoute{\n")
 	for _, m := range d.Requests {
 		h := m.HTTP
-		fmt.Fprintf(b, "{Route: Route{Pattern: %q, Auth: AuthTicket, Status: %d%s}, Type: Request%s", h.Method+" "+h.Path, h.status(), goLocation(h.Location), pascal(m.Type))
+		fmt.Fprintf(b, "{Route: Route{Pattern: %q, Auth: AuthTicket, Status: %d}, Type: Request%s", h.Method+" "+h.Path, h.status(), pascal(m.Type))
 		params := pathParams(h.Path)
 		if len(params) > 0 {
 			fmt.Fprintf(b, ", params: []string{%s}", goStrings(params))
 		}
-		if h.Method != "GET" && h.Method != "DELETE" {
+		if h.hasBody() {
 			b.WriteString(", body: true")
 		} else if query := d.queryKinds(m.Request, params); len(query) > 0 {
 			fmt.Fprintf(b, ", query: map[string]queryKind{%s}", strings.Join(query, ", "))

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/core/api'
-import { notificationStore } from '@/shared/ui'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { adminStore } from './admin-store'
 
 class FakeStorage {

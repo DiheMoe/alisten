@@ -1,7 +1,7 @@
 import type { AdminGetYoutubeCredentialResponse } from '@/core/api'
+import type { ResourceState } from '@/shared/lib/resource'
 
-// undefined 表示正在查询，Error 表示查询失败，message 是给用户看的原因。
-export type YoutubeCredentialState = AdminGetYoutubeCredentialResponse | Error | undefined
+export type YoutubeCredentialState = ResourceState<AdminGetYoutubeCredentialResponse>
 
 export const youtubeCookiesText = {
   plaintextWarning: '当前连接不是 HTTPS，填写的 cookies 会以明文在网络上传输，只在可信网络中填写。',
@@ -28,11 +28,11 @@ export function shouldWarnAboutPlaintext(location: Pick<Location, 'protocol' | '
 }
 
 export function youtubeCookiesView(state: YoutubeCredentialState): { status: string, updatedAtMs: number | null } {
-  if (state === undefined)
+  if (state.status === 'loading')
     return { status: '正在查询', updatedAtMs: null }
-  if (state instanceof Error)
+  if (state.status === 'failed')
     return { status: '查询失败', updatedAtMs: null }
-  if (!state.set)
+  if (!state.value.set)
     return { status: '未配置', updatedAtMs: null }
-  return { status: '已配置', updatedAtMs: state.updatedAtMs }
+  return { status: '已配置', updatedAtMs: state.value.updatedAtMs }
 }

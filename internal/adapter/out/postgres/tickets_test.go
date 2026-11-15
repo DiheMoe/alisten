@@ -169,7 +169,7 @@ func TestCreateTicketWaitsForPasswordChange(t *testing.T) {
 	alice := createMember(t, store, "alice", "甲")
 	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", PasswordHash: "h1"})
 
-	// 模拟 UpdateRoomAccess 设置密码的事务，先不提交。
+	// 模拟 SetRoomPassword 设置密码的事务，先不提交。
 	tx, err := pool.Begin(t.Context())
 	if err != nil {
 		t.Fatal(err)

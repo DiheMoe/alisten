@@ -1,8 +1,10 @@
 package postgres
 
 import (
+	"errors"
 	"regexp"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/dihemoe/alisten/internal/adapter/out/postgres/internal/query"
@@ -19,7 +21,6 @@ func New(pool *pgxpool.Pool) *Store {
 
 var uuidPattern = regexp.MustCompile(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
-// 房间 ID 可能来自客户端。格式不正确的 uuid 参数会让 PostgreSQL 报错，而这样的房间一定不存在。
 func isUUID(s string) bool {
 	return uuidPattern.MatchString(s)
 }
@@ -36,4 +37,14 @@ func orEmpty(p *string) string {
 		return ""
 	}
 	return *p
+}
+
+const (
+	foreignKeyViolation = "23503"
+	uniqueViolation     = "23505"
+)
+
+func violates(err error, code, constraint string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == code && pgErr.ConstraintName == constraint
 }

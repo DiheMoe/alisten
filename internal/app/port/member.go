@@ -44,7 +44,8 @@ func (p AccountProfile) Registered() bool {
 type Members interface {
 	// 创建游客和它的第一个会话。
 	CreateMember(ctx context.Context, tokenHash []byte, name string) (member.Member, error)
-	MemberByToken(ctx context.Context, tokenHash []byte) (member.Member, error)
+	// registered 的含义与 AccountProfile.Registered 相同。
+	MemberByToken(ctx context.Context, tokenHash []byte) (m member.Member, registered bool, err error)
 	// name、avatarHash 或 email 为 nil 时保持原值，email 为空字符串表示清除。游客的 email 不保存。
 	UpdateMember(ctx context.Context, id string, name, avatarHash, email *string) (member.Member, error)
 	AccountProfile(ctx context.Context, memberID string) (AccountProfile, error)

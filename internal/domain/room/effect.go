@@ -9,8 +9,10 @@ import (
 
 type Effect interface{ effect() }
 
+// Plays 是这一批里结束的播放，和快照在同一个事务中写入。
 type Persist struct {
 	Snapshot Snapshot
+	Plays    []RecordPlay
 }
 
 type Emit struct {
@@ -60,7 +62,6 @@ func (Reply) effect()        {}
 func (Prepare) effect()      {}
 func (Recommend) effect()    {}
 func (Schedule) effect()     {}
-func (RecordPlay) effect()   {}
 func (RecordListen) effect() {}
 func (Close) effect()        {}
 

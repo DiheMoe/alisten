@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"slices"
 	"testing"
 	"time"
@@ -10,6 +11,9 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/room"
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
+
+// 和 catalog 里 AutoDJ 用的窗口相同。
+var window = port.AutoDJWindow{Plays: 1000, Seeds: 32, Exclusions: 128}
 
 func picked(id room.EntryID, t track.Track) room.Entry {
 	return room.Entry{ID: id, Track: t, By: alice, AddedAt: t0}
@@ -58,14 +62,14 @@ func TestAutoDJSeeds(t *testing.T) {
 		played(picked(5, netease("a")), 4),
 	)
 
-	seeds, err := store.AutoDJSeeds(t.Context(), id, false)
+	seeds, err := store.AutoDJSeeds(t.Context(), id, false, window)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, want := trackIDs(seeds), []string{"c", "a", "b"}; !slices.Equal(got, want) {
 		t.Errorf("自动补歌的种子 = %v，期望 %v", got, want)
 	}
-	seeds, err = store.AutoDJSeeds(t.Context(), id, true)
+	seeds, err = store.AutoDJSeeds(t.Context(), id, true, window)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,12 +81,55 @@ func TestAutoDJSeeds(t *testing.T) {
 	snap.Mode = room.Rotation
 	snap.Waiting[1].Round, snap.Waiting[2].Round = 2, 1
 	saveRoom(t, store, term, snap)
-	seeds, err = store.AutoDJSeeds(t.Context(), id, true)
+	seeds, err = store.AutoDJSeeds(t.Context(), id, true, window)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, want := trackIDs(seeds), []string{"c", "p", "w2", "a", "w1", "b"}; !slices.Equal(got, want) {
 		t.Errorf("轮流播放时推荐列表的种子 = %v，期望 %v", got, want)
+	}
+}
+
+// AutoDJSeeds 在 SQL 里按等待队列的排序规则排列队列中的歌，领域里也有一份同样的规则。
+// 随机造出等待队列，核对 SQL 排出的顺序和房间恢复快照之后的顺序一样，这样改了一边的规则，这里就会失败。
+func TestAutoDJSeedsOrderTheQueueLikeTheRoom(t *testing.T) {
+	store, _ := newStore(t)
+	rng := rand.New(rand.NewPCG(1, 2))
+	for _, mode := range []room.PlayMode{room.Sequential, room.Random, room.Rotation} {
+		id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+		term, snap := takeRoom(t, store, id)
+		for range 20 {
+			// 有正在播放和待播的歌，恢复时房间不会从等待队列里挪歌出去，两边看到的队列相同。
+			snap.Mode = mode
+			snap.Current = &room.NowPlaying{Entry: picked(1, netease("c")), StartedAt: t0}
+			snap.Pending = &room.Entry{ID: 2, Track: netease("p"), By: alice, AddedAt: t0}
+			snap.Waiting = nil
+			for i := range 8 {
+				e := picked(room.EntryID(i+3), netease(fmt.Sprint("w", i)))
+				e.Likes, e.Round = rng.IntN(3), rng.IntN(3)
+				snap.Waiting = append(snap.Waiting, e)
+			}
+			rng.Shuffle(len(snap.Waiting), func(i, j int) { snap.Waiting[i], snap.Waiting[j] = snap.Waiting[j], snap.Waiting[i] })
+			snap.EntrySeq = 10
+			saveRoom(t, store, term, snap)
+
+			seeds, err := store.AutoDJSeeds(t.Context(), id, true, window)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r, _ := room.Restore(room.Env{Now: t0}, term, snap)
+			want := []string{"c", "p"}
+			for _, e := range r.Handle(room.Env{Now: t0}, room.Command{RequestID: "q", Member: alice, Action: room.Sync{}}) {
+				if reply, ok := e.(room.Reply); ok {
+					for _, w := range reply.Result.(room.SyncResult).View.Snapshot.Waiting {
+						want = append(want, w.Track.ID)
+					}
+				}
+			}
+			if got := trackIDs(seeds); !slices.Equal(got, want) {
+				t.Fatalf("播放模式 %d 下种子的顺序 = %v，期望和房间的队列一样 %v", mode, got, want)
+			}
+		}
 	}
 }
 
@@ -98,7 +145,7 @@ func TestAutoDJSeedsKeepsMostRecent32(t *testing.T) {
 	snap.Current = &room.NowPlaying{Entry: picked(41, netease("c")), StartedAt: t0.Add(time.Hour)}
 	saveRoom(t, store, term, snap, plays...)
 
-	seeds, err := store.AutoDJSeeds(t.Context(), id, false)
+	seeds, err := store.AutoDJSeeds(t.Context(), id, false, window)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +181,7 @@ func TestAutoDJExclusions(t *testing.T) {
 	snap.Waiting = []room.Entry{picked(134, track.Track{Source: track.QQ, ID: "w"}), autoPicked(135, netease("z"))}
 	saveRoom(t, store, term, snap, plays...)
 
-	excluded, err := store.AutoDJExclusions(t.Context(), id)
+	excluded, err := store.AutoDJExclusions(t.Context(), id, window)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,14 +230,14 @@ func TestAutoDJLooksAtLast1000Plays(t *testing.T) {
 	snap.Current = &room.NowPlaying{Entry: picked(1, netease("c")), StartedAt: t0.Add(2000 * time.Minute)}
 	saveRoom(t, store, term, snap, plays...)
 
-	seeds, err := store.AutoDJSeeds(t.Context(), id, false)
+	seeds, err := store.AutoDJSeeds(t.Context(), id, false, window)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, want := trackIDs(seeds), []string{"c", "inside", "edge"}; !slices.Equal(got, want) {
 		t.Errorf("种子 = %v，期望正在播放的歌加上最近 1000 次播放中成员点的网易云歌曲 %v", got, want)
 	}
-	excluded, err := store.AutoDJExclusions(t.Context(), id)
+	excluded, err := store.AutoDJExclusions(t.Context(), id, window)
 	if err != nil {
 		t.Fatal(err)
 	}

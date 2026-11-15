@@ -39,10 +39,10 @@ const (
 type Service struct {
 	rooms  port.RoomDirectory
 	online port.OnlineCounts
-	quota  port.AccountQuota
+	quota  port.Quota
 }
 
-func New(rooms port.RoomDirectory, online port.OnlineCounts, quota port.AccountQuota) *Service {
+func New(rooms port.RoomDirectory, online port.OnlineCounts, quota port.Quota) *Service {
 	return &Service{rooms: rooms, online: online, quota: quota}
 }
 

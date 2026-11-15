@@ -1,7 +1,7 @@
 import { CircleAlert, CircleCheck, Info, X } from 'lucide-react'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { useStore } from '@/shared/lib/use-store'
 import { IconButton } from './icon-button'
-import { notificationStore } from './notification-store'
 
 const icons = { success: CircleCheck, error: CircleAlert, info: Info }
 

@@ -67,7 +67,7 @@ func TestStaleTimerIsIgnored(t *testing.T) {
 func TestSkipDuringStartLeadRecordsNoNegativeDuration(t *testing.T) {
 	r := newRoom(t, Persistent)
 	playing(t, r, 0, netease("a"), time.Minute)
-	plays := find[RecordPlay](r.Handle(at(0), command(alice, VoteSkip{})))
+	plays := recorded(r.Handle(at(0), command(alice, VoteSkip{})))
 	if len(plays) != 1 || !plays[0].EndedAt.Equal(plays[0].StartedAt) {
 		t.Fatalf("开播前就被切掉时，结束时间等于开始时间：%#v", plays)
 	}

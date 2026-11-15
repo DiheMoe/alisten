@@ -38,7 +38,11 @@ func openAPI(d *idl) ([]byte, error) {
 		if params := pathParams(e.Path); len(params) > 0 {
 			list := make([]any, len(params))
 			for i, p := range params {
-				list[i] = map[string]any{"name": p, "in": "path", "required": true, "schema": map[string]any{"type": "string"}}
+				s, err := openAPISchema(d.Defs[refName(e.Params[p].Ref)])
+				if err != nil {
+					return nil, err
+				}
+				list[i] = map[string]any{"name": p, "in": "path", "required": true, "schema": s}
 			}
 			op["parameters"] = list
 		}
@@ -46,10 +50,13 @@ func openAPI(d *idl) ([]byte, error) {
 			op["requestBody"] = openAPIBody(e.Request)
 		}
 		security := []any{}
-		if scheme := map[string]string{"member": "memberToken", "admin": "adminToken"}[e.Auth]; scheme != "" {
+		if scheme := map[string]string{"member": "memberToken", "admin": "adminToken"}[e.credential()]; scheme != "" {
 			security = append(security, map[string]any{scheme: []any{}})
 		}
 		op["security"] = security
+		if e.Auth == "account" {
+			op["description"] = "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN"
+		}
 		for _, s := range []*schema{e.Request, e.Response} {
 			if err := addInlineComponent(schemas, s); err != nil {
 				return nil, err
@@ -147,7 +154,7 @@ func roomOperation(schemas map[string]any, m *message) (map[string]any, error) {
 		}
 		params = append(params, map[string]any{"name": name, "in": "path", "required": true, "schema": s})
 	}
-	if b.Method == "GET" || b.Method == "DELETE" {
+	if !b.hasBody() {
 		for _, name := range slices.Sorted(maps.Keys(m.Request.Properties)) {
 			if slices.Contains(pathNames, name) {
 				continue

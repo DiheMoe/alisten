@@ -164,8 +164,8 @@ type GitHubResult struct {
 	Account Account
 }
 
-// current 是发出请求的成员，currentToken 是 current 的成员 token。current 必须是发起授权的那个成员。
-func (g *GitHub) Exchange(ctx context.Context, current member.Member, currentToken, code, nonce string) (GitHubResult, error) {
+// caller 是发出请求的会话。caller.Member 必须是发起授权的那个成员。
+func (g *GitHub) Exchange(ctx context.Context, caller Caller, code, nonce string) (GitHubResult, error) {
 	if _, err := g.app(ctx); err != nil {
 		return GitHubResult{}, err
 	}
@@ -176,26 +176,26 @@ func (g *GitHub) Exchange(ctx context.Context, current member.Member, currentTok
 	if err != nil {
 		return GitHubResult{}, err
 	}
-	if grant.Request.MemberID != current.ID || subtle.ConstantTimeCompare(grant.Request.NonceHash, hashSecret(nonce)) != 1 {
+	if grant.Request.MemberID != caller.Member.ID || subtle.ConstantTimeCompare(grant.Request.NonceHash, hashSecret(nonce)) != 1 {
 		return GitHubResult{}, ErrGitHubLoginExpired
 	}
 	switch grant.Request.Intent {
 	case port.GitHubBind:
-		return g.bind(ctx, current, grant.GitHubID)
+		return g.bind(ctx, caller.Member, grant.GitHubID)
 	case port.GitHubVerify:
-		return g.verify(ctx, current, currentToken, grant.GitHubID)
+		return g.verify(ctx, caller, grant.GitHubID)
 	}
-	return g.login(ctx, current, currentToken, grant.GitHubID)
+	return g.login(ctx, caller, grant.GitHubID)
 }
 
-func (g *GitHub) login(ctx context.Context, current member.Member, currentToken string, githubID int64) (GitHubResult, error) {
+func (g *GitHub) login(ctx context.Context, caller Caller, githubID int64) (GitHubResult, error) {
 	a := g.accounts
-	if err := a.requireGuest(ctx, current.ID); err != nil {
+	if err := requireGuest(caller); err != nil {
 		return GitHubResult{}, err
 	}
 	account, err := a.members.AccountByGitHub(ctx, githubID)
 	if err == nil {
-		session, err := a.signIn(ctx, currentToken, account)
+		session, err := a.signIn(ctx, caller, account)
 		// 账号的密码恰好在这时被修改或重置。修改删除了其他会话，这次登录也随之作废，重新登录即可。
 		if errors.Is(err, port.ErrAccountPasswordChanged) {
 			return GitHubResult{}, ErrGitHubLoginExpired
@@ -216,10 +216,10 @@ func (g *GitHub) login(ctx context.Context, current member.Member, currentToken 
 	if !settings.RegistrationOpen {
 		return GitHubResult{}, ErrRegistrationClosed
 	}
-	if err := a.members.BindGitHub(ctx, current.ID, githubID); err != nil {
+	if err := a.members.BindGitHub(ctx, caller.Member.ID, githubID); err != nil {
 		return GitHubResult{}, err
 	}
-	return GitHubResult{Member: current, Account: Account{GitHub: true}}, nil
+	return GitHubResult{Member: caller.Member, Account: Account{GitHub: true}}, nil
 }
 
 func (g *GitHub) bind(ctx context.Context, current member.Member, githubID int64) (GitHubResult, error) {
@@ -233,22 +233,23 @@ func (g *GitHub) bind(ctx context.Context, current member.Member, githubID int64
 	if err := g.accounts.members.BindGitHub(ctx, current.ID, githubID); err != nil {
 		return GitHubResult{}, err
 	}
-	return GitHubResult{Member: current, Account: Account{Username: profile.Username, Email: profile.Email, GitHub: true}}, nil
+	profile.GitHub = true
+	return GitHubResult{Member: current, Account: profile}, nil
 }
 
 // 只确认身份，不修改账号。GitHub 账号必须是这个账号绑定的那个。确认记在发出请求的会话上，Accounts.Register 补设用户名和密码时要用。
-func (g *GitHub) verify(ctx context.Context, current member.Member, currentToken string, githubID int64) (GitHubResult, error) {
-	account, err := g.accounts.members.AccountByID(ctx, current.ID)
+func (g *GitHub) verify(ctx context.Context, caller Caller, githubID int64) (GitHubResult, error) {
+	account, err := g.accounts.members.AccountByID(ctx, caller.Member.ID)
 	if err != nil {
 		return GitHubResult{}, err
 	}
 	if account.GitHubID != githubID {
 		return GitHubResult{}, ErrGitHubMismatch
 	}
-	if err := g.accounts.verifications.SaveVerification(ctx, hashSecret(currentToken), githubVerificationTTL); err != nil {
+	if err := g.accounts.verifications.SaveVerification(ctx, caller.TokenHash, githubVerificationTTL); err != nil {
 		return GitHubResult{}, err
 	}
-	return GitHubResult{Member: current, Account: accountOf(account)}, nil
+	return GitHubResult{Member: caller.Member, Account: accountOf(account)}, nil
 }
 
 // 解绑之后要能用密码登录，所以账号必须设置过密码。

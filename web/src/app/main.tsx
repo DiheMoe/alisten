@@ -1,14 +1,15 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { brandStore } from '@/core/brand'
+import { profileStore } from '@/core/profile'
 import { chatStore } from '@/features/chat'
 import { historyStore } from '@/features/history'
 import { lyricsStore } from '@/features/lyrics'
 import { playerStore, reminderStore, volumeStore } from '@/features/playback'
 import { playlistsStore, setAccountSettingsOpener } from '@/features/playlists'
 import { roomEntryStore } from '@/features/rooms'
-import { searchStore } from '@/features/search'
-import { appearanceStore, performanceStore, profileStore } from '@/features/settings'
+import { searchHistoryStore, searchStore } from '@/features/search'
+import { appearanceStore, performanceStore } from '@/features/settings'
 import { setViewportHeight } from '@/shared/lib/viewport'
 import { App } from './app'
 import { watchConnection } from './connection-notices'
@@ -28,9 +29,10 @@ volumeStore.start()
 brandStore.start()
 profileStore.start()
 playlistsStore.start()
-setAccountSettingsOpener(() => navigationStore.navigate({ name: 'settings', section: 'account', panel: navigationStore.state.route.panel }))
+setAccountSettingsOpener(() => navigationStore.openAccountSettings())
 playerStore.start()
 reminderStore.start()
+searchHistoryStore.start()
 historyStore.start()
 roomEntryStore.start()
 chatStore.start()

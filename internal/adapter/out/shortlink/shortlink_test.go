@@ -43,7 +43,7 @@ func TestResolve(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	r := New(allowLoopback, never)
+	r := New(http.DefaultTransport, allowLoopback, never)
 	ctx := context.Background()
 
 	t.Run("正常跳转且只发 GET", func(t *testing.T) {
@@ -61,7 +61,7 @@ func TestResolve(t *testing.T) {
 	})
 	t.Run("跳到认得的地址时不再请求它", func(t *testing.T) {
 		methods = nil
-		recognized := New(allowLoopback, func(link string) bool { return strings.Contains(link, "/playlist?") })
+		recognized := New(http.DefaultTransport, allowLoopback, func(link string) bool { return strings.Contains(link, "/playlist?") })
 		got, err := recognized.Resolve(ctx, srv.URL+"/short")
 		if err != nil {
 			t.Fatal(err)
@@ -101,14 +101,13 @@ func TestResolve(t *testing.T) {
 		}
 	})
 	t.Run("起点不允许", func(t *testing.T) {
-		if _, err := New(func(string) bool { return false }, never).Resolve(ctx, srv.URL+"/playlist"); err == nil {
+		if _, err := New(http.DefaultTransport, func(string) bool { return false }, never).Resolve(ctx, srv.URL+"/playlist"); err == nil {
 			t.Fatal("want error")
 		}
 	})
 	t.Run("非 http 协议", func(t *testing.T) {
 		upstream := &anyScheme{}
-		other := New(allowLoopback, never)
-		other.client.Transport = upstream
+		other := New(upstream, allowLoopback, never)
 		if _, err := other.Resolve(ctx, "ftp://127.0.0.1/x"); err == nil || upstream.requests != 0 {
 			t.Fatalf("Resolve 的错误 = %v，发出了 %d 个请求，期望不发请求就返回错误", err, upstream.requests)
 		}
@@ -133,8 +132,7 @@ func (hangingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 
 func TestResolveTimesOut(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		r := New(allowLoopback, never)
-		r.client.Transport = hangingTransport{}
+		r := New(hangingTransport{}, allowLoopback, never)
 		start := time.Now()
 		if _, err := r.Resolve(t.Context(), "http://127.0.0.1/slow"); !errors.Is(err, context.DeadlineExceeded) {
 			t.Errorf("上游不响应时的错误 = %v，期望超过期限", err)

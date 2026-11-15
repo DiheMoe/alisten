@@ -11,72 +11,50 @@ import (
 	"github.com/dihemoe/alisten/protocol"
 )
 
-func (s *server) adminStartNeteaseLogin(ctx context.Context, c call) (any, error) {
-	if _, err := protocol.DecodeAdminStartNeteaseLoginRequest(c.body); err != nil {
-		return nil, err
-	}
+func (s *server) adminStartNeteaseLogin(ctx context.Context, _ call) (protocol.QRLogin, error) {
 	session, err := s.Admin.CreateNeteaseQRLogin(ctx)
 	if err != nil {
-		return nil, err
+		return protocol.QRLogin{}, err
 	}
 	return qrLogin(session)
 }
 
-func (s *server) adminCheckNeteaseLogin(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeAdminCheckNeteaseLoginRequest(c.body)
-	if err != nil {
-		return nil, err
-	}
+func (s *server) adminCheckNeteaseLogin(ctx context.Context, _ call, req protocol.AdminCheckNeteaseLoginRequest) (protocol.QRLoginResult, error) {
 	result, err := s.Admin.CheckNeteaseQRLogin(ctx, req.Key)
 	if err != nil {
-		return nil, err
+		return protocol.QRLoginResult{}, err
 	}
 	return qrLoginResult(result), nil
 }
 
-func (s *server) adminStartQQLogin(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeAdminStartQQLoginRequest(c.body)
-	if err != nil {
-		return nil, err
-	}
+func (s *server) adminStartQQLogin(ctx context.Context, _ call, req protocol.AdminStartQQLoginRequest) (protocol.QRLogin, error) {
 	session, err := s.Admin.CreateQQQRLogin(ctx, port.QQLoginType(req.Type))
 	if err != nil {
-		return nil, err
+		return protocol.QRLogin{}, err
 	}
 	return qrLogin(session)
 }
 
-func (s *server) adminCheckQQLogin(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeAdminCheckQQLoginRequest(c.body)
-	if err != nil {
-		return nil, err
-	}
+func (s *server) adminCheckQQLogin(ctx context.Context, _ call, req protocol.AdminCheckQQLoginRequest) (protocol.QRLoginResult, error) {
 	result, err := s.Admin.CheckQQQRLogin(ctx, port.QQLoginType(req.Type), req.Key)
 	if err != nil {
-		return nil, err
+		return protocol.QRLoginResult{}, err
 	}
 	return qrLoginResult(result), nil
 }
 
-func (s *server) adminStartBilibiliLogin(ctx context.Context, c call) (any, error) {
-	if _, err := protocol.DecodeAdminStartBilibiliLoginRequest(c.body); err != nil {
-		return nil, err
-	}
+func (s *server) adminStartBilibiliLogin(ctx context.Context, _ call) (protocol.QRLogin, error) {
 	session, err := s.Admin.CreateBilibiliQRLogin(ctx)
 	if err != nil {
-		return nil, err
+		return protocol.QRLogin{}, err
 	}
 	return qrLogin(session)
 }
 
-func (s *server) adminCheckBilibiliLogin(ctx context.Context, c call) (any, error) {
-	req, err := protocol.DecodeAdminCheckBilibiliLoginRequest(c.body)
-	if err != nil {
-		return nil, err
-	}
+func (s *server) adminCheckBilibiliLogin(ctx context.Context, _ call, req protocol.AdminCheckBilibiliLoginRequest) (protocol.QRLoginResult, error) {
 	result, err := s.Admin.CheckBilibiliQRLogin(ctx, req.Key)
 	if err != nil {
-		return nil, err
+		return protocol.QRLoginResult{}, err
 	}
 	return qrLoginResult(result), nil
 }

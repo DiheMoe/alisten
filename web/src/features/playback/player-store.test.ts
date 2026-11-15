@@ -123,7 +123,7 @@ beforeEach(() => {
   room = fakeRoom()
   frames = []
   vi.doMock('@/core/clock', () => ({ clock }))
-  vi.doMock('@/core/room', () => ({ roomStore: room }))
+  vi.doMock('@/core/room', async importOriginal => ({ ...await importOriginal<typeof import('@/core/room')>(), roomStore: room }))
   vi.stubGlobal('document', { title: '' })
   vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} })
   vi.stubGlobal('requestAnimationFrame', (frame: FrameRequestCallback) => frames.push(frame))
@@ -438,7 +438,7 @@ describe('播放过程中', () => {
 
 describe('音频出错之后', () => {
   async function notices() {
-    const { notificationStore } = await import('@/shared/ui')
+    const { notificationStore } = await import('@/shared/lib/notification-store')
     return () => notificationStore.state.notifications.map(({ tone, message }) => ({ tone, message }))
   }
 

@@ -161,6 +161,8 @@
         "additionalProperties": false,
         "properties": {
           "id": {
+            "description": "房间 ID：UUID，不区分大小写",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
             "type": "string"
           }
         },
@@ -581,6 +583,7 @@
         "properties": {
           "from": {
             "description": "来源歌单的 ID",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
             "type": "string"
           },
           "tracks": {
@@ -713,6 +716,8 @@
         "additionalProperties": false,
         "properties": {
           "id": {
+            "description": "房间 ID：UUID，不区分大小写",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
             "type": "string"
           }
         },
@@ -1137,6 +1142,8 @@
         "properties": {
           "playlistIds": {
             "items": {
+              "description": "歌单 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             },
             "type": "array"
@@ -1328,6 +1335,8 @@
             "type": "boolean"
           },
           "id": {
+            "description": "歌单 ID：UUID，不区分大小写",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
             "type": "string"
           },
           "name": {
@@ -1336,6 +1345,8 @@
           "shareId": {
             "anyOf": [
               {
+                "description": "分享 ID：22 个 base64url 字符",
+                "pattern": "^[A-Za-z0-9_-]{22}$",
                 "type": "string"
               },
               {
@@ -1804,6 +1815,8 @@
             "type": "string"
           },
           "id": {
+            "description": "房间 ID：UUID，不区分大小写",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
             "type": "string"
           },
           "kind": {
@@ -1838,6 +1851,8 @@
             "type": "boolean"
           },
           "id": {
+            "description": "房间 ID：UUID，不区分大小写",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
             "type": "string"
           },
           "kind": {
@@ -2000,6 +2015,8 @@
         "additionalProperties": false,
         "properties": {
           "shareId": {
+            "description": "分享 ID：22 个 base64url 字符",
+            "pattern": "^[A-Za-z0-9_-]{22}$",
             "type": "string"
           }
         },
@@ -2378,7 +2395,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "42749e16714e0d7c"
+    "version": "f653116b60b2c244"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2463,6 +2480,7 @@
     },
     "/api/account/pairing-codes": {
       "post": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "createPairingCode",
         "requestBody": {
           "content": {
@@ -2549,6 +2567,8 @@
             "name": "username",
             "required": true,
             "schema": {
+              "description": "用户名：3 到 32 个小写字母、数字、下划线或连字符",
+              "pattern": "^[a-z0-9_-]{3,32}$",
               "type": "string"
             }
           }
@@ -2592,6 +2612,8 @@
             "name": "username",
             "required": true,
             "schema": {
+              "description": "用户名：3 到 32 个小写字母、数字、下划线或连字符",
+              "pattern": "^[a-z0-9_-]{3,32}$",
               "type": "string"
             }
           }
@@ -3412,6 +3434,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "房间 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -3446,6 +3470,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "房间 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -3492,6 +3518,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "房间 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -3533,6 +3561,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "房间 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -3943,6 +3973,7 @@
     },
     "/api/me/playlist-links": {
       "post": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "resolveMyPlaylistLink",
         "requestBody": {
           "content": {
@@ -3986,6 +4017,7 @@
     },
     "/api/me/playlist-memberships": {
       "post": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "listMyTrackPlaylists",
         "requestBody": {
           "content": {
@@ -4029,6 +4061,7 @@
     },
     "/api/me/playlists": {
       "get": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "listMyPlaylists",
         "responses": {
           "200": {
@@ -4060,6 +4093,7 @@
         "summary": "我的歌单：“我喜欢”在最前，其余按创建的先后排列。只有已注册的账号能使用歌单"
       },
       "post": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "createMyPlaylist",
         "requestBody": {
           "content": {
@@ -4103,6 +4137,7 @@
     },
     "/api/me/playlists/imports": {
       "post": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "importMyPlaylist",
         "requestBody": {
           "content": {
@@ -4146,6 +4181,7 @@
     },
     "/api/me/playlists/platform-imports": {
       "post": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "importMyPlatformPlaylist",
         "requestBody": {
           "content": {
@@ -4189,6 +4225,7 @@
     },
     "/api/me/playlists/{id}": {
       "delete": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "deleteMyPlaylist",
         "parameters": [
           {
@@ -4196,6 +4233,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "歌单 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -4223,6 +4262,7 @@
         "summary": "删除歌单。“我喜欢”不能删除"
       },
       "patch": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "renameMyPlaylist",
         "parameters": [
           {
@@ -4230,6 +4270,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "歌单 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -4269,6 +4311,7 @@
     },
     "/api/me/playlists/{id}/copies": {
       "post": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "copyMyPlaylistItems",
         "parameters": [
           {
@@ -4276,6 +4319,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "歌单 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -4322,6 +4367,7 @@
     },
     "/api/me/playlists/{id}/items": {
       "get": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "listMyPlaylistItems",
         "parameters": [
           {
@@ -4329,6 +4375,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "歌单 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -4363,6 +4411,7 @@
         "summary": "歌单里的歌，按歌单里的顺序排列。新加入的歌排在最前，moveMyPlaylistItems 可以调整顺序"
       },
       "post": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "addMyPlaylistItem",
         "parameters": [
           {
@@ -4370,6 +4419,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "歌单 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -4416,6 +4467,7 @@
     },
     "/api/me/playlists/{id}/moves": {
       "post": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "moveMyPlaylistItems",
         "parameters": [
           {
@@ -4423,6 +4475,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "歌单 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -4462,6 +4516,7 @@
     },
     "/api/me/playlists/{id}/removals": {
       "post": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "removeMyPlaylistItems",
         "parameters": [
           {
@@ -4469,6 +4524,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "歌单 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -4508,6 +4565,7 @@
     },
     "/api/me/playlists/{id}/share": {
       "delete": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "unshareMyPlaylist",
         "parameters": [
           {
@@ -4515,6 +4573,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "歌单 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -4542,6 +4602,7 @@
         "summary": "停止分享，分享链接随即失效。没有分享时也算成功"
       },
       "post": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "shareMyPlaylist",
         "parameters": [
           {
@@ -4549,6 +4610,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "歌单 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -5238,6 +5301,8 @@
             "name": "id",
             "required": true,
             "schema": {
+              "description": "房间 ID：UUID，不区分大小写",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "type": "string"
             }
           }
@@ -5291,6 +5356,8 @@
             "name": "ref",
             "required": true,
             "schema": {
+              "description": "房间 ID 或别名：房间 ID 是 UUID，不区分大小写。别名是 1 到 32 个小写字母、数字或连字符",
+              "pattern": "^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[a-z0-9-]{1,32})$",
               "type": "string"
             }
           }
@@ -5442,6 +5509,8 @@
             "name": "shareId",
             "required": true,
             "schema": {
+              "description": "分享 ID：22 个 base64url 字符",
+              "pattern": "^[A-Za-z0-9_-]{22}$",
               "type": "string"
             }
           }
@@ -5474,6 +5543,7 @@
     },
     "/api/shared-playlists/{shareId}/copies": {
       "post": {
+        "description": "只有已注册的账号能调用，凭证仍是成员 token。游客调用时返回 FORBIDDEN",
         "operationId": "copySharedPlaylist",
         "parameters": [
           {
@@ -5481,6 +5551,8 @@
             "name": "shareId",
             "required": true,
             "schema": {
+              "description": "分享 ID：22 个 base64url 字符",
+              "pattern": "^[A-Za-z0-9_-]{22}$",
               "type": "string"
             }
           }

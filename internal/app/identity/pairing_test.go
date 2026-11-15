@@ -36,7 +36,7 @@ func TestPairingCodeAlphabet(t *testing.T) {
 
 func createPairingCode(t *testing.T, a *Accounts, s Session) string {
 	t.Helper()
-	code, err := a.CreatePairingCode(t.Context(), s.Member.ID, s.MemberToken)
+	code, err := a.CreatePairingCode(t.Context(), registeredCallerOf(s))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestPairDevice(t *testing.T) {
 	guestTicket := issueTicket(t, s, guest, createRoom(t, store, ""))
 	q.taken = nil
 	before := time.Now()
-	code, err := a.CreatePairingCode(t.Context(), alice.Member.ID, alice.MemberToken)
+	code, err := a.CreatePairingCode(t.Context(), registeredCallerOf(alice))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestPairDevice(t *testing.T) {
 		t.Errorf("配对码在 %v 过期，期望 5 分钟之后", code.ExpiresAt.Sub(before))
 	}
 	revoked()
-	session, account, err := a.RedeemPairingCode(t.Context(), guest.Member, guest.MemberToken, clientIP, code.Code)
+	session, account, err := a.RedeemPairingCode(t.Context(), callerOf(guest), clientIP, code.Code)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,10 +82,10 @@ func TestPairDevice(t *testing.T) {
 	}
 
 	other := createMember(t, s)
-	if _, _, err := a.RedeemPairingCode(t.Context(), other.Member, other.MemberToken, clientIP, code.Code); !errors.Is(err, ErrInvalidPairingCode) {
+	if _, _, err := a.RedeemPairingCode(t.Context(), callerOf(other), clientIP, code.Code); !errors.Is(err, ErrInvalidPairingCode) {
 		t.Errorf("同一个配对码再兑换一次 = %v，期望 ErrInvalidPairingCode", err)
 	}
-	if _, _, err := a.RedeemPairingCode(t.Context(), other.Member, other.MemberToken, clientIP, "ABCD2345"); !errors.Is(err, ErrInvalidPairingCode) {
+	if _, _, err := a.RedeemPairingCode(t.Context(), callerOf(other), clientIP, "ABCD2345"); !errors.Is(err, ErrInvalidPairingCode) {
 		t.Errorf("不存在的配对码 = %v，期望 ErrInvalidPairingCode", err)
 	}
 	if _, ok := tokenOwner(t, store, other.MemberToken); !ok {
@@ -107,7 +107,7 @@ func TestPairingMovesGuestListensIntoAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	code := createPairingCode(t, a, alice)
-	if _, _, err := a.RedeemPairingCode(t.Context(), guest.Member, guest.MemberToken, clientIP, code); err != nil {
+	if _, _, err := a.RedeemPairingCode(t.Context(), callerOf(guest), clientIP, code); err != nil {
 		t.Fatal(err)
 	}
 	if listens, err := store.MemberListens(t.Context(), alice.Member.ID); err != nil || !slices.Equal(listens, []port.Listen{rain, sunny}) {
@@ -124,25 +124,25 @@ func TestPairingRejected(t *testing.T) {
 	bob := registerAccount(t, a, s, "bob", "correct horse")
 	guest := createMember(t, s)
 	q.taken = nil
-	if _, err := a.CreatePairingCode(t.Context(), guest.Member.ID, guest.MemberToken); !errors.Is(err, ErrNotRegistered) {
+	if _, err := a.CreatePairingCode(t.Context(), callerOf(guest)); !errors.Is(err, ErrNotRegistered) {
 		t.Errorf("游客生成配对码 = %v，期望 ErrNotRegistered", err)
 	}
 	if len(q.taken) != 0 {
 		t.Errorf("游客不应消耗额度：%v", q.taken)
 	}
 	code := createPairingCode(t, a, alice)
-	if _, _, err := a.RedeemPairingCode(t.Context(), bob.Member, bob.MemberToken, clientIP, code); !errors.Is(err, ErrAlreadyLoggedIn) {
+	if _, _, err := a.RedeemPairingCode(t.Context(), registeredCallerOf(bob), clientIP, code); !errors.Is(err, ErrAlreadyLoggedIn) {
 		t.Errorf("已经登录了账号的设备兑换 = %v，期望 ErrAlreadyLoggedIn", err)
 	}
 	q.exhausted["pairing:ip:"+clientIP] = true
-	if _, _, err := a.RedeemPairingCode(t.Context(), guest.Member, guest.MemberToken, clientIP, code); !errors.Is(err, ErrTooManyAttempts) {
+	if _, _, err := a.RedeemPairingCode(t.Context(), callerOf(guest), clientIP, code); !errors.Is(err, ErrTooManyAttempts) {
 		t.Errorf("额度用完时兑换 = %v，期望 ErrTooManyAttempts", err)
 	}
-	if _, _, err := a.RedeemPairingCode(t.Context(), guest.Member, guest.MemberToken, "198.51.100.1", code); err != nil {
+	if _, _, err := a.RedeemPairingCode(t.Context(), callerOf(guest), "198.51.100.1", code); err != nil {
 		t.Errorf("被拒绝的兑换不应用掉配对码：%v", err)
 	}
 	q.exhausted["pairing:member:"+bob.Member.ID] = true
-	if _, err := a.CreatePairingCode(t.Context(), bob.Member.ID, bob.MemberToken); !errors.Is(err, ErrTooManyAttempts) {
+	if _, err := a.CreatePairingCode(t.Context(), registeredCallerOf(bob)); !errors.Is(err, ErrTooManyAttempts) {
 		t.Errorf("额度用完时生成配对码 = %v，期望 ErrTooManyAttempts", err)
 	}
 }
@@ -154,7 +154,7 @@ func TestPairingCodeDiesWithItsSession(t *testing.T) {
 	login := func() Session {
 		t.Helper()
 		guest := createMember(t, s)
-		session, _, _, err := a.Login(t.Context(), guest.Member, guest.MemberToken, clientIP, "alice", "correct horse", "")
+		session, _, _, err := a.Login(t.Context(), callerOf(guest), clientIP, "alice", "correct horse", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -163,13 +163,13 @@ func TestPairingCodeDiesWithItsSession(t *testing.T) {
 	redeem := func(code string) error {
 		t.Helper()
 		guest := createMember(t, s)
-		_, _, err := a.RedeemPairingCode(t.Context(), guest.Member, guest.MemberToken, clientIP, code)
+		_, _, err := a.RedeemPairingCode(t.Context(), callerOf(guest), clientIP, code)
 		return err
 	}
 
 	other := login()
 	code := createPairingCode(t, a, other)
-	if err := a.Logout(t.Context(), other.MemberToken); err != nil {
+	if err := a.Logout(t.Context(), callerOf(other)); err != nil {
 		t.Fatal(err)
 	}
 	if err := redeem(code); !errors.Is(err, ErrInvalidPairingCode) {
@@ -178,7 +178,7 @@ func TestPairingCodeDiesWithItsSession(t *testing.T) {
 
 	other = login()
 	code = createPairingCode(t, a, other)
-	if err := a.ChangePassword(t.Context(), alice.Member.ID, alice.MemberToken, "correct horse", "correct horse"); err != nil {
+	if err := a.ChangePassword(t.Context(), callerOf(alice), "correct horse", "correct horse"); err != nil {
 		t.Fatal(err)
 	}
 	if err := redeem(code); !errors.Is(err, ErrInvalidPairingCode) {
@@ -186,7 +186,7 @@ func TestPairingCodeDiesWithItsSession(t *testing.T) {
 	}
 
 	code = createPairingCode(t, a, alice)
-	if err := a.ChangePassword(t.Context(), alice.Member.ID, alice.MemberToken, "correct horse", "correct horse"); err != nil {
+	if err := a.ChangePassword(t.Context(), callerOf(alice), "correct horse", "correct horse"); err != nil {
 		t.Fatal(err)
 	}
 	if err := redeem(code); err != nil {
@@ -210,7 +210,7 @@ func TestPairGitHubOnlyAccount(t *testing.T) {
 	gh := githubAccount(t, s, store, 42)
 	code := createPairingCode(t, a, gh)
 	guest := createMember(t, s)
-	session, account, err := a.RedeemPairingCode(t.Context(), guest.Member, guest.MemberToken, clientIP, code)
+	session, account, err := a.RedeemPairingCode(t.Context(), callerOf(guest), clientIP, code)
 	if err != nil || session.Member != gh.Member || account != (Account{GitHub: true}) {
 		t.Errorf("兑换只绑定了 GitHub 的账号的配对码 = %#v, %#v, %v", session.Member, account, err)
 	}
@@ -223,12 +223,12 @@ func TestRedeemRejectedWhenPasswordChangesMeanwhile(t *testing.T) {
 	codes := porttest.NewCodes()
 	node := porttest.NewRedis().Node("a")
 	changing := NewAccounts(passwordChangedMembers{store}, store, &fakeQuota{exhausted: map[string]bool{}}, codes, codes, porttest.NewDevices(), newGateway(store, node, node))
-	code, err := changing.CreatePairingCode(t.Context(), alice.Member.ID, alice.MemberToken)
+	code, err := changing.CreatePairingCode(t.Context(), registeredCallerOf(alice))
 	if err != nil {
 		t.Fatal(err)
 	}
 	guest := createMember(t, s)
-	if _, _, err := changing.RedeemPairingCode(t.Context(), guest.Member, guest.MemberToken, clientIP, code.Code); !errors.Is(err, ErrInvalidPairingCode) {
+	if _, _, err := changing.RedeemPairingCode(t.Context(), callerOf(guest), clientIP, code.Code); !errors.Is(err, ErrInvalidPairingCode) {
 		t.Errorf("密码在兑换期间被修改 = %v，期望 ErrInvalidPairingCode", err)
 	}
 	if _, ok := tokenOwner(t, store, guest.MemberToken); !ok {

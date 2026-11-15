@@ -56,6 +56,7 @@
 .nav-item:hover { background: var(--color-hover); }
 .nav-item.selected { background: var(--color-selected); }
 .header-search-area { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; max-width: 680px; margin: 0 auto; }
+.header-search { max-width: 620px; }
 .header-leading > .icon-button, .header-search-area > .icon-button { --color-hover: var(--color-frame-hover); }
 .home-widget { width: 44px; height: 44px; border-radius: 50%; background: var(--color-frame-surface); }
 .home-widget[aria-current='page'] { color: var(--color-brand); }

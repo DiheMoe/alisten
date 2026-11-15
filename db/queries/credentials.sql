@@ -1,8 +1,8 @@
 -- name: Credential :one
 SELECT value FROM credentials WHERE name = @name;
 
--- name: CredentialWithUpdatedAt :one
-SELECT value, updated_at FROM credentials WHERE name = @name;
+-- name: CredentialUpdatedAt :one
+SELECT updated_at FROM credentials WHERE name = @name;
 
 -- name: SetCredential :exec
 INSERT INTO credentials (name, value) VALUES (@name, @value)

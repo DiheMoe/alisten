@@ -8,30 +8,9 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"time"
 
 	"github.com/mewkiz/flac"
 )
-
-type Audio struct {
-	SampleRate int
-	Channels   int
-	Samples    []float64 // 按声道交错，满刻度为 1，MP3 和浮点 WAV 的采样可以超出 [-1, 1]
-}
-
-func (a *Audio) Frames() int {
-	if a.Channels <= 0 {
-		return 0
-	}
-	return len(a.Samples) / a.Channels
-}
-
-func (a *Audio) Duration() time.Duration {
-	if a.SampleRate <= 0 {
-		return 0
-	}
-	return time.Duration(a.Frames()) * time.Second / time.Duration(a.SampleRate)
-}
 
 const (
 	formatPCM        = 0x0001
@@ -63,34 +42,6 @@ func NewDecoder(r io.Reader) (Decoder, error) {
 	default:
 		return nil, errors.New("wav: 无法识别的音频格式 (支持 WAV/FLAC/MP3)")
 	}
-}
-
-// 大文件建议改用 NewDecoder 流式解码以节约内存。
-func Decode(r io.Reader) (*Audio, error) {
-	dec, err := NewDecoder(r)
-	if err != nil {
-		return nil, err
-	}
-	return drainDecoder(dec)
-}
-
-func drainDecoder(dec Decoder) (*Audio, error) {
-	buf := make([]float64, 8192)
-	samples := make([]float64, 0, 1<<20)
-	for {
-		n, err := dec.Read(buf)
-		samples = append(samples, buf[:n]...)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-	if len(samples) == 0 {
-		return nil, errors.New("wav: 音频流中没有采样数据")
-	}
-	return &Audio{SampleRate: dec.SampleRate(), Channels: dec.Channels(), Samples: samples}, nil
 }
 
 type sampleQueue struct {

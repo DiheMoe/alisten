@@ -268,7 +268,7 @@ func (y *YouTubeCookies) Fail(err error) {
 	y.failure = err
 }
 
-func (y *YouTubeCookies) SetCookies(_ context.Context, cookies string) error {
+func (y *YouTubeCookies) SetYouTubeCookies(_ context.Context, cookies string) error {
 	y.mu.Lock()
 	defer y.mu.Unlock()
 	if y.failure != nil {
@@ -284,7 +284,7 @@ func (y *YouTubeCookies) Cookies() string {
 	return y.cookies
 }
 
-func (y *YouTubeCookies) Status(context.Context) (port.YouTubeCookiesStatus, error) {
+func (y *YouTubeCookies) YouTubeCookiesStatus(context.Context) (port.YouTubeCookiesStatus, error) {
 	y.mu.Lock()
 	defer y.mu.Unlock()
 	if y.failure != nil {

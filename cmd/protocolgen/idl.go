@@ -58,9 +58,18 @@ type endpoint struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	httpBinding
-	Auth     string  `json:"auth"`
-	Request  *schema `json:"request"`
-	Response *schema `json:"response"`
+	Params   map[string]*schema `json:"params"`
+	Auth     string             `json:"auth"`
+	Request  *schema            `json:"request"`
+	Response *schema            `json:"response"`
+}
+
+// account 和 member 带的都是成员 token，区别只在服务端还要求成员已经注册。所以生成 OpenAPI 的安全要求和 TypeScript client 时，account 按 member 处理。
+func (e *endpoint) credential() string {
+	if e.Auth == "account" {
+		return "member"
+	}
+	return e.Auth
 }
 
 type httpBinding struct {
@@ -75,6 +84,10 @@ func (b httpBinding) status() int {
 		return 200
 	}
 	return b.Status
+}
+
+func (b httpBinding) hasBody() bool {
+	return b.Method != "GET" && b.Method != "DELETE"
 }
 
 func (b httpBinding) check(where string) error {
@@ -194,7 +207,7 @@ func checkJSON(dec *json.Decoder, where string, named bool) error {
 }
 
 // 列表中字段的值都是对象，对象的键由 IDL 作者命名（类型名、属性名、错误码）。新增这类字段时要加入这个列表，否则与关键字只有大小写不同的名字会被拒绝。
-var nameKeyed = []string{"$defs", "properties", "x-httpStatus"}
+var nameKeyed = []string{"$defs", "properties", "x-httpStatus", "params"}
 
 var idlKeywords = jsonNames(idl{}, wsSection{}, message{}, event{}, endpoint{}, httpBinding{}, closeCode{}, schema{})
 
@@ -356,6 +369,11 @@ func (d *idl) check() error {
 	for _, name := range d.typeNames() {
 		if slices.Contains(tsFixedNames, name) {
 			return fmt.Errorf("生成的 TypeScript 标识符 %s 重复：既是生成器写出的 %s，也是类型 %s", name, name, name)
+		}
+	}
+	for _, c := range d.tsConstants() {
+		if d.named[c.name] != nil {
+			return fmt.Errorf("生成的 TypeScript 标识符 %s 重复：既是类型 %s 的常量，也是类型 %s", c.name, c.def, c.name)
 		}
 	}
 	return nil
@@ -526,7 +544,36 @@ func checkScalar(where string, s *schema, def bool) error {
 	if err := checkBounds(where, s); err != nil {
 		return err
 	}
-	return checkPattern(where, s.Pattern)
+	if err := checkPattern(where, s.Pattern); err != nil {
+		return err
+	}
+	if def {
+		return checkPortablePattern(where, s.Pattern)
+	}
+	return nil
+}
+
+// 具名类型的 pattern 会生成网页用的正则，字段上的 pattern 不会，所以只检查具名类型。
+// 这里拒绝的写法 Go 和 JavaScript 都接受，匹配的字符却可能不同，而类型检查查不出这种差别。
+// Go 把紧跟在 [ 或 [^ 之后的 ] 当作普通字符，这里把它当成字符类的结尾，所以只会多拒绝。
+func checkPortablePattern(where, pattern string) error {
+	inClass := false
+	for i := 0; i < len(pattern); i++ {
+		switch c := pattern[i]; {
+		case c == '\\' && i+1 < len(pattern):
+			i++
+			if strings.IndexByte(`sSdDwWbB`, pattern[i]) >= 0 {
+				return fmt.Errorf(`%s：具名类型的 pattern 会生成网页用的正则，不能用 \%c 这类预定义的字符类和单词边界，要写成明确的字符类，比如 [0-9]。它们在 Go 和 JavaScript 里的定义不完全一样，比如 \s 在 JavaScript 里还匹配 Unicode 空白`, where, pattern[i])
+			}
+		case c == '[':
+			inClass = true
+		case c == ']':
+			inClass = false
+		case c == '.' && !inClass:
+			return fmt.Errorf(`%s：具名类型的 pattern 会生成网页用的正则，字符类之外不能用 .，要写成明确的字符类。Go 的 . 只不匹配 \n，JavaScript 的 . 还不匹配 \r、U+2028 和 U+2029`, where)
+		}
+	}
+	return nil
 }
 
 func checkBounds(where string, s *schema) error {
@@ -771,7 +818,7 @@ func (d *idl) checkRoomRoute(where string, m *message, names endpointNames) erro
 			return fmt.Errorf("%s：路径参数 %s 应是请求中必填的字符串字段", where, p)
 		}
 	}
-	if b.Method == "GET" || b.Method == "DELETE" {
+	if !b.hasBody() {
 		for _, name := range slices.Sorted(maps.Keys(m.Request.Properties)) {
 			if t := d.jsonType(m.Request.Properties[name]); t != "string" && t != "integer" {
 				return fmt.Errorf("%s：%s 请求的字段 %s 来自路径或查询串，应是字符串、整数或枚举", where, b.Method, name)
@@ -809,13 +856,16 @@ func (d *idl) checkEndpoint(where string, e *endpoint, names endpointNames) erro
 			return fmt.Errorf("%s：路径参数 %s 是 JavaScript 的保留字，不能作为生成的 TypeScript client 中的参数名", where, p)
 		}
 	}
+	if err := d.checkPathParams(where, e, params); err != nil {
+		return err
+	}
 	if err := names.addRoute(where, e.httpBinding, "接口 "+e.Name+" 的路由"); err != nil {
 		return err
 	}
-	if !slices.Contains([]string{"none", "member", "admin"}, e.Auth) {
-		return fmt.Errorf("%s：auth 应为 none、member 或 admin", where)
+	if !slices.Contains([]string{"none", "member", "account", "admin"}, e.Auth) {
+		return fmt.Errorf("%s：auth 应为 none、member、account 或 admin", where)
 	}
-	if e.Method == "GET" || e.Method == "DELETE" {
+	if !e.hasBody() {
 		if e.Request != nil {
 			return fmt.Errorf("%s：%s 请求没有请求体", where, e.Method)
 		}
@@ -834,6 +884,35 @@ func (d *idl) checkEndpoint(where string, e *endpoint, names endpointNames) erro
 		return nil
 	}
 	return d.addData(where+".response", e.Response, pascal(e.Name)+"Response")
+}
+
+func (d *idl) checkPathParams(where string, e *endpoint, params []string) error {
+	for _, p := range params {
+		if e.Params[p] == nil {
+			return fmt.Errorf("%s：路径参数 %s 要在 params 中声明类型", where, p)
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(e.Params)) {
+		w := where + ".params." + name
+		if !slices.Contains(params, name) {
+			return fmt.Errorf("%s：路径中没有这个参数", w)
+		}
+		s := e.Params[name]
+		if s.Ref == "" {
+			return fmt.Errorf("%s：路径参数要用 $ref 引用 $defs 中的类型", w)
+		}
+		if err := allowOnly(w, s, "$ref"); err != nil {
+			return err
+		}
+		def, err := d.resolve(w, s.Ref)
+		if err != nil {
+			return err
+		}
+		if !def.scalar() || def.Type != "string" || def.Pattern == "" || allowOnly(w, def, "type", "description", "pattern") != nil {
+			return fmt.Errorf("%s：%s 应是只有 pattern 一项约束的字符串类型，因为生成的路由只按 pattern 校验路径参数", w, s.Ref)
+		}
+	}
+	return nil
 }
 
 func (d *idl) addData(where string, s *schema, name string) error {
@@ -921,6 +1000,9 @@ func (d *idl) checkGoNames() error {
 			}
 		}
 	}
+	for _, name := range d.pathParamTypes() {
+		declare("pattern"+name, fmt.Sprintf("路径参数的类型 %s 的 pattern", name))
+	}
 	for _, m := range slices.Concat(d.WS.Requests, d.Requests) {
 		declare("Request"+pascal(m.Type), fmt.Sprintf("请求 %s 的常量", m.Type))
 	}
@@ -932,9 +1014,6 @@ func (d *idl) checkGoNames() error {
 	}
 	for _, e := range d.HTTP {
 		declare("Route"+pascal(e.Name), fmt.Sprintf("接口 %s 的常量", e.Name))
-		if e.Request != nil {
-			declare("Decode"+e.Request.name, fmt.Sprintf("接口 %s 的请求体的解码函数", e.Name))
-		}
 	}
 	d.goNames = declared
 	return err
@@ -1020,6 +1099,20 @@ func (d *idl) markInbound(s *schema) error {
 
 func (d *idl) typeNames() []string {
 	return slices.Sorted(maps.Keys(d.named))
+}
+
+// 按名称排序，同一个类型只出现一次。
+func (d *idl) pathParamTypes() []string {
+	var names []string
+	for _, e := range d.HTTP {
+		for _, s := range e.Params {
+			if name := refName(s.Ref); !slices.Contains(names, name) {
+				names = append(names, name)
+			}
+		}
+	}
+	slices.Sort(names)
+	return names
 }
 
 func (d *idl) urlDefs() []string {

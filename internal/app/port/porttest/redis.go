@@ -268,7 +268,7 @@ func (n *Node) Subscribed(roomID string) bool {
 }
 
 func (n *Node) PublishRoom(_ context.Context, roomID string, m port.RoomMessage) error {
-	_, err := n.publish("room:"+roomID, port.RoomDelivery{Room: roomID, Message: m})
+	_, err := n.publish("room:"+roomID, port.RoomDelivery{Room: roomID, Message: port.Light(m)})
 	return err
 }
 

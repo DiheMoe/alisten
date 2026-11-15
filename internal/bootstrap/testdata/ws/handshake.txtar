@@ -1,5 +1,5 @@
 握手：第一帧必须是 hello。失败时先回复错误，再以对应的关闭码断开。先检查房间是否存在，再检查票据。
-hello 里的房间只认 ID。写别名时，即使别名对应的房间存在、票据也是这个房间的，仍按房间不存在处理。
+hello 里的房间只认 ID。写别名时，即使别名对应的房间存在、票据也是这个房间的，也按参数不合法拒绝。
 列表外来源的握手以 HTTP 403 拒绝升级。
 
 -- request --
@@ -90,9 +90,9 @@ hello
 -- send slug --
 {"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "hall", "ticket": "$hallTicket", "protocolVersion": "$protocolVersion"}}
 -- receive slug --
-{"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+{"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "INVALID_ARGUMENT", "message": "data.roomId：格式不正确"}}
 -- closed slug --
-4404
+1008
 
 -- connect missing --
 -- send missing --

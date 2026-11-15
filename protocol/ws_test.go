@@ -66,6 +66,8 @@ func TestRequestValidation(t *testing.T) {
 		{"心跳：时间必须是整数", "ping", `{"clientTimeMs":1.5}`, "data.clientTimeMs：应为整数"},
 		{"播放模式：轮流播放", "settings.setPlayMode", `{"playMode":"rotation"}`, ""},
 		{"播放模式：未知的模式", "settings.setPlayMode", `{"playMode":"shuffle"}`, "data.playMode：取值应为 sequential、random、rotation 之一"},
+		{"握手：房间 ID 是大写的 UUID", "hello", `{"roomId":"01A15778-1911-7A28-8B2E-E08C2A25F388","ticket":"t","protocolVersion":"v"}`, ""},
+		{"握手：房间 ID 是别名", "hello", `{"roomId":"hall","ticket":"t","protocolVersion":"v"}`, "data.roomId：格式不正确"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

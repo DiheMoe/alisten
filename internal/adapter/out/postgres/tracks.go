@@ -26,7 +26,13 @@ func (s *Store) PreparedTrack(ctx context.Context, t track.Track) (port.Prepared
 	if err != nil {
 		return port.PreparedTrack{}, false, fmt.Errorf("读取曲目 %s %s 的准备结果：%w", t.Source, t.ID, err)
 	}
-	meta, result := prepared(row.Title, orEmpty(row.Artist), orEmpty(row.Album), orEmpty(row.CoverURL), orEmpty(row.CoverKey), row.PageURL, row.DurationMs, row.Gain, orEmpty(row.Lyric), orEmpty(row.LyricWords), orEmpty(row.LyricTrans))
+	meta, result := preparedColumns{
+		metaColumns: metaColumns{Title: row.Title, Artist: row.Artist, Album: row.Album, CoverURL: row.CoverURL, CoverKey: row.CoverKey, PageURL: row.PageURL, DurationMs: row.DurationMs},
+		Gain:        row.Gain,
+		Lyric:       row.Lyric,
+		LyricWords:  row.LyricWords,
+		LyricTrans:  row.LyricTrans,
+	}.prepared()
 	return port.PreparedTrack{Meta: meta, Result: result, MediaKey: orEmpty(row.MediaKey), MediaSize: orZero(row.MediaSize)}, true, nil
 }
 
@@ -38,7 +44,7 @@ func (s *Store) TrackMetas(ctx context.Context, ts []track.Track) (map[track.Tra
 	}
 	found := make(map[track.Track]track.Meta, len(rows))
 	for _, r := range rows {
-		found[track.Track{Source: track.Source(r.Source), ID: r.TrackID}] = storedMeta(r.Title, orEmpty(r.Artist), orEmpty(r.Album), orEmpty(r.CoverURL), orEmpty(r.CoverKey), r.PageURL, r.DurationMs)
+		found[track.Track{Source: track.Source(r.Source), ID: r.TrackID}] = metaColumns{Title: r.Title, Artist: r.Artist, Album: r.Album, CoverURL: r.CoverURL, CoverKey: r.CoverKey, PageURL: r.PageURL, DurationMs: r.DurationMs}.meta()
 	}
 	return found, nil
 }
@@ -68,13 +74,41 @@ func (s *Store) SavePreparedTrack(ctx context.Context, t track.Track, p port.Pre
 	return nil
 }
 
-func prepared(title, artist, album, coverURL, coverKey, pageURL string, durationMs int64, gain float64, lyric, lyricWords, lyricTrans string) (track.Meta, track.Prepared) {
-	meta := storedMeta(title, artist, album, coverURL, coverKey, pageURL, durationMs)
-	return meta, track.Prepared{Duration: meta.Duration, Gain: gain, Lyric: lyric, LyricWords: lyricWords, LyricTrans: lyricTrans}
+// 曲目元数据在 tracks、room_entries、listens、playlist_items 四张表里都是这七列。读出的行都经过 meta 换算，
+// 这样空值、对象键和时长的换算只写一处。
+type metaColumns struct {
+	Title      string
+	Artist     *string
+	Album      *string
+	CoverURL   *string
+	CoverKey   *string
+	PageURL    string
+	DurationMs int64
 }
 
-func storedMeta(title, artist, album, coverURL, coverKey, pageURL string, durationMs int64) track.Meta {
-	return track.Meta{Title: title, Artist: artist, Album: album, CoverURL: coverURL, CoverKey: track.ObjectKey(coverKey), PageURL: pageURL, Duration: time.Duration(durationMs) * time.Millisecond}
+func (c metaColumns) meta() track.Meta {
+	return track.Meta{
+		Title:    c.Title,
+		Artist:   orEmpty(c.Artist),
+		Album:    orEmpty(c.Album),
+		CoverURL: orEmpty(c.CoverURL),
+		CoverKey: track.ObjectKey(orEmpty(c.CoverKey)),
+		PageURL:  c.PageURL,
+		Duration: time.Duration(c.DurationMs) * time.Millisecond,
+	}
+}
+
+type preparedColumns struct {
+	metaColumns
+	Gain       float64
+	Lyric      *string
+	LyricWords *string
+	LyricTrans *string
+}
+
+func (c preparedColumns) prepared() (track.Meta, track.Prepared) {
+	meta := c.meta()
+	return meta, track.Prepared{Duration: meta.Duration, Gain: c.Gain, Lyric: orEmpty(c.Lyric), LyricWords: orEmpty(c.LyricWords), LyricTrans: orEmpty(c.LyricTrans)}
 }
 
 func orZero(p *int64) int64 {

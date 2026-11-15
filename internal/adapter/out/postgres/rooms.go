@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/dihemoe/alisten/internal/adapter/out/postgres/internal/query"
 	"github.com/dihemoe/alisten/internal/app/port"
@@ -59,31 +58,27 @@ func (s *Store) FindRoom(ctx context.Context, ref string) (port.RoomRecord, erro
 	return roomRecord(row), nil
 }
 
-func (s *Store) UpdateRoomAccess(ctx context.Context, id string, c port.AccessChange) error {
-	if !isUUID(id) {
-		return fmt.Errorf("修改房间 %s：%w", id, port.ErrRoomNotFound)
+func (s *Store) SetRoomSlug(ctx context.Context, id, slug string) error {
+	if err := affected(s.q.SetRoomSlug(ctx, query.SetRoomSlugParams{ID: id, Slug: slug})); err != nil {
+		return fmt.Errorf("修改房间 %s：%w", id, slugError(err))
 	}
+	return nil
+}
+
+func (s *Store) SetRoomPassword(ctx context.Context, id, passwordHash string) error {
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		if c.Slug != nil {
-			if err := affected(q.SetRoomSlug(ctx, query.SetRoomSlugParams{ID: id, Slug: *c.Slug})); err != nil {
-				return err
-			}
-		}
-		if c.PasswordHash == nil {
-			return nil
-		}
-		if err := affected(q.SetRoomPassword(ctx, query.SetRoomPasswordParams{ID: id, PasswordHash: *c.PasswordHash})); err != nil {
+		if err := affected(q.SetRoomPassword(ctx, query.SetRoomPasswordParams{ID: id, PasswordHash: passwordHash})); err != nil {
 			return err
 		}
 		// 取消密码时，已经签发的票据保持有效。
-		if *c.PasswordHash == "" {
+		if passwordHash == "" {
 			return nil
 		}
 		return q.DeleteRoomTicketsExceptBot(ctx, id)
 	})
 	if err != nil {
-		return fmt.Errorf("修改房间 %s：%w", id, slugError(err))
+		return fmt.Errorf("修改房间 %s：%w", id, err)
 	}
 	return nil
 }
@@ -95,11 +90,8 @@ func affected(rows int64, err error) error {
 	return err
 }
 
-const uniqueViolation = "23505"
-
 func slugError(err error) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation && pgErr.ConstraintName == "rooms_slug_key" {
+	if violates(err, uniqueViolation, "rooms_slug_key") {
 		return port.ErrSlugTaken
 	}
 	return err

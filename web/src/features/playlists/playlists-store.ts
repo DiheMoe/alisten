@@ -3,9 +3,9 @@ import type { ErrorTexts } from '@/core/errors'
 import type { ImportedTrack, MyPlaylist, Source, Track } from '@/core/realtime'
 import { api } from '@/core/api'
 import { errorMessage } from '@/core/errors'
-import { profileStore } from '@/features/settings'
+import { profileStore } from '@/core/profile'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { Store } from '@/shared/lib/store'
-import { notificationStore } from '@/shared/ui'
 
 export function trackKey(track: Track): string {
   return `${track.source}:${track.id}`
@@ -28,7 +28,13 @@ interface PlaylistsState {
 
 const empty: PlaylistsState = { playlists: null, error: null, loadedAt: 0, memberships: new Map() }
 
-const nameTexts = { INVALID_ARGUMENT: '歌单名要 1 到 50 个字。' }
+export const playlistNameMaxLength = 50
+
+export function isBlankPlaylistName(name: string): boolean {
+  return name.trim() === ''
+}
+
+const nameTexts = { INVALID_ARGUMENT: `歌单名要 1 到 ${playlistNameMaxLength} 个字。` }
 const fileTexts = { INVALID_ARGUMENT: '文件里有不符合要求的内容，没有导入。' }
 // 接口只收 1 到 2048 字节的文本。太长的在这里就不发出，对话框也不提交空的，所以 INVALID_ARGUMENT 只剩认不出链接这一种原因，这时的 message 是写给用户的。
 const maxLinkBytes = 2048

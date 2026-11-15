@@ -239,6 +239,7 @@ func (s *server) activity(a room.Activity) protocol.RoomActivityEvent {
 }
 
 // 歌名里已经有书名号时不再加一层，因为 B 站的标题常带《》。
+// 前端的 web/src/shared/lib/book-title.ts 里也有一份 bookTitle，用在前端的提示和按钮文案里。改这条规则时两边要一起改，否则同一首歌在房间动态里和在前端的文案里写法会不一致。
 func bookTitle(title string) string {
 	if strings.ContainsAny(title, "《》") {
 		return title

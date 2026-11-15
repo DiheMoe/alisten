@@ -1,10 +1,13 @@
 import { CopyPlus } from 'lucide-react'
 import { useState } from 'react'
-import { profileStore } from '@/features/settings'
+import { profileStore } from '@/core/profile'
+import { notificationStore } from '@/shared/lib/notification-store'
 import { useStore } from '@/shared/lib/use-store'
-import { Modal, notificationStore } from '@/shared/ui'
+import { useSubmission } from '@/shared/lib/use-submission'
+import { Modal } from '@/shared/ui'
 import { AccountPrompt } from './account-prompt'
-import { playlistsStore } from './playlists-store'
+import { PlaylistNameField } from './playlist-name-field'
+import { isBlankPlaylistName, playlistsStore } from './playlists-store'
 
 export function CopySharedPlaylistButton({ shareId, name }: { shareId: string, name: string }) {
   const [open, setOpen] = useState(false)
@@ -22,34 +25,28 @@ export function CopySharedPlaylistButton({ shareId, name }: { shareId: string, n
 function CopySharedPlaylistDialog({ shareId, name: original, onClose }: { shareId: string, name: string, onClose: () => void }) {
   const account = useStore(profileStore, s => s.account)
   const [name, setName] = useState(original)
-  const [busy, setBusy] = useState(false)
+  const { busy, submit } = useSubmission()
   return (
     <Modal title="复制到我的歌单" onClose={onClose}>
       {account
         ? (
             <form
               className="form-stack"
-              onSubmit={async (event) => {
+              onSubmit={(event) => {
                 event.preventDefault()
-                if (busy)
-                  return
-                setBusy(true)
-                const playlist = await playlistsStore.copyShared(shareId, name)
-                if (!playlist) {
-                  setBusy(false)
-                  return
-                }
-                notificationStore.success(`已复制为“${playlist.name}”，共 ${playlist.trackCount} 首`)
-                onClose()
+                void submit(async () => {
+                  const playlist = await playlistsStore.copyShared(shareId, name)
+                  if (!playlist)
+                    return
+                  notificationStore.success(`已复制为“${playlist.name}”，共 ${playlist.trackCount} 首`)
+                  onClose()
+                })
               }}
             >
-              <label>
-                歌单名
-                <input data-autofocus required maxLength={50} value={name} onChange={event => setName(event.target.value)} />
-              </label>
+              <PlaylistNameField data-autofocus value={name} onChange={setName} />
               <div className="dialog-actions">
                 <button type="button" className="button-secondary" onClick={onClose}>取消</button>
-                <button type="submit" className="button-primary" disabled={busy || name.trim() === ''}>{busy ? '正在复制…' : '复制'}</button>
+                <button type="submit" className="button-primary" disabled={busy || isBlankPlaylistName(name)}>{busy ? '正在复制…' : '复制'}</button>
               </div>
             </form>
           )

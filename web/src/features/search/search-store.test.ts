@@ -1,5 +1,7 @@
+import type { SearchQuery } from './search-store'
 import type { TrackSummary } from '@/core/realtime'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FakeStorage } from '@/core/api/fake-storage'
 import { cachedResult, nextLoad, rememberResult } from './search-store'
 
 describe('nextLoad', () => {
@@ -99,7 +101,7 @@ async function settled(): Promise<void> {
 
 async function load() {
   const search = await import('./search-store')
-  const { notificationStore } = await import('@/shared/ui')
+  const { notificationStore } = await import('@/shared/lib/notification-store')
   search.searchStore.start()
   const ids = () => search.searchStore.state.tracks.map(({ track }) => track.id)
   const tracks = (keyword: string, source: 'qq' | 'netease' = 'qq') => search.keywordSearch(keyword, source, 'tracks')
@@ -322,5 +324,50 @@ describe('搜索请求', () => {
     expect(searchStore.state.text).toBe('c')
     searchStore.show({ view: 'recommend' })
     expect(searchStore.state.text).toBe('')
+  })
+})
+
+describe('用户发起的搜索', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    calls = []
+    room = fakeRoom()
+    vi.doMock('@/core/room', () => ({ roomStore: room }))
+    vi.stubGlobal('localStorage', new FakeStorage())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function started() {
+    const { startSearch, tracks } = await load()
+    const { searchHistoryStore } = await import('./search-history-store')
+    const shown: SearchQuery[] = []
+    const search = (keyword: string) => startSearch(tracks(keyword), query => shown.push(query))
+    const recorded = () => searchHistoryStore.state.searches.map(({ query, source, category }) => ({ query, source, category }))
+    return { search, recorded, shown, tracks }
+  }
+
+  it('记入搜索历史，再交给导航', async () => {
+    const { search, recorded, shown, tracks } = await started()
+    search('晴天')
+    expect(recorded()).toEqual([{ query: '晴天', source: 'qq', category: 'tracks' }])
+    expect(shown).toEqual([tracks('晴天')])
+  })
+
+  it('没有关键词时不记，仍然交给导航', async () => {
+    const { search, recorded, shown, tracks } = await started()
+    search('')
+    expect(recorded()).toEqual([])
+    expect(shown).toEqual([tracks('')])
+  })
+
+  it('不在房间里时不记，仍然交给导航', async () => {
+    const { search, recorded, shown, tracks } = await started()
+    setRoom({ roomId: null })
+    search('晴天')
+    expect(recorded()).toEqual([])
+    expect(shown).toEqual([tracks('晴天')])
   })
 })
