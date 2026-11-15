@@ -526,7 +526,7 @@ func TestWorkerExitsAfterFlushingTraces(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var logs lockedBuffer
+	var logs logBuffer
 	var runErr error
 	finished := make(chan struct{})
 	go func() {
@@ -534,8 +534,8 @@ func TestWorkerExitsAfterFlushingTraces(t *testing.T) {
 		runErr = runWorker(newLogger(&logs, slog.LevelInfo))
 	}()
 	eventually(t, "/readyz 返回 200", finished, func() bool { return readyStatus(opsListen) == http.StatusOK })
-	// 执行任务的 span 是 worker 记下的唯一一个 span。回环地址会被 yt-dlp 的代理拒绝，所以任务执行一次就失败，span 随之结束。
-	// 本机没有 yt-dlp 的话，任务在启动 yt-dlp 这一步就失败。
+	// 执行任务的 span 是 worker 记下的唯一一个 span。回环地址会被 yt-dlp 的代理拒绝，任务随即取消。本机没有 yt-dlp 的话，
+	// 任务在启动 yt-dlp 这一步失败，等待重试。两种情况下任务都执行过一次，span 也随之结束。
 	cfg, err := loadDatabaseConfig()
 	if err != nil {
 		t.Fatal(err)
@@ -548,7 +548,7 @@ func TestWorkerExitsAfterFlushingTraces(t *testing.T) {
 	submitLink(t, "http://127.0.0.1:1/qingtian.mp3")
 	eventually(t, "任务执行过一次", finished, func() bool {
 		var n int
-		if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM river_job WHERE queue = 'ytdlp' AND state IN ('retryable', 'discarded')").Scan(&n); err != nil {
+		if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM river_job WHERE queue = 'ytdlp' AND state IN ('cancelled', 'retryable', 'discarded')").Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n > 0

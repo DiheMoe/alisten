@@ -1,4 +1,4 @@
-没有配置管理 token 时，管理接口一律返回 FORBIDDEN，不看凭证和请求体。
+没有配置管理 token 时，管理接口返回 FORBIDDEN，不看凭证和请求体。这里只列了一部分管理接口。每条管理接口是否都要管理 token，由 internal/adapter/in/api 的 TestAdminRoutesNeedAdminToken 逐条检查。配置 GitHub OAuth App 的请求被拒绝之后，站点说明仍然不提供 GitHub 登录。
 
 -- env --
 ALISTEN_ADMIN_TOKEN=

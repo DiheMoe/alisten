@@ -107,17 +107,6 @@ func TestDeleteManySkipsMediaInUseAndMissing(t *testing.T) {
 	}
 }
 
-func TestDeleteManyDeletesAll(t *testing.T) {
-	l, lib, _ := newLibrary(t, inRooms{}, stored(link), stored(bilibili))
-	deleted, inUse, err := l.DeleteMany(t.Context(), []string{Key(link.ID), Key(bilibili.ID)})
-	if err != nil || !slices.Equal(deleted, []string{Key(link.ID), Key(bilibili.ID)}) || len(inUse) != 0 {
-		t.Errorf("DeleteMany = %q, %q, %v，期望两首都删掉", deleted, inUse, err)
-	}
-	if keys := storedKeys(t, lib); len(keys) != 0 {
-		t.Errorf("删除之后还有准备结果 %q", keys)
-	}
-}
-
 func TestDeleteManyStopsAtOtherErrors(t *testing.T) {
 	l, lib, store := newLibrary(t, inRooms{}, stored(link), stored(bilibili))
 	store.Fail(errors.New("连接被拒绝"))

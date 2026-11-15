@@ -37,8 +37,17 @@ func TestPasswordHash(t *testing.T) {
 }
 
 func TestCheckPasswordRejectsMalformedHash(t *testing.T) {
+	hash, err := HashPassword(t.Context(), "芝麻开门")
+	if err != nil {
+		t.Fatal(err)
+	}
+	salt, key, _ := strings.Cut(strings.TrimPrefix(hash, passwordPrefix), "$")
 	for _, malformed := range []string{
 		"芝麻开门",
+		passwordPrefix + salt + key,
+		passwordPrefix + "不是 base64$" + key,
+		passwordPrefix + salt + "$不是 base64",
+		passwordPrefix + salt + "$" + key[:len(key)-4],
 	} {
 		if _, err := checkPassword(t.Context(), malformed, "芝麻开门"); !errors.Is(err, errMalformedPasswordHash) {
 			t.Errorf("checkPassword(%q) 的错误 = %v，期望 errMalformedPasswordHash", malformed, err)

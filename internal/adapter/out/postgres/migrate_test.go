@@ -119,11 +119,9 @@ func TestMigrationLogsKeepFixedFields(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lines := bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n"))
-	if len(lines) < 2 {
-		t.Fatalf("goose 和 River 都应记录执行的迁移：\n%s", buf.String())
-	}
-	for _, line := range lines {
+	// River 的日志自带 version，放在 river 分组里才不会盖掉固定字段，所以样本里一定要有 River 的日志。
+	var goose, river int
+	for line := range bytes.Lines(bytes.TrimSpace(buf.Bytes())) {
 		var entry map[string]any
 		if err := json.Unmarshal(line, &entry); err != nil {
 			t.Fatalf("日志不是 JSON：%v\n%s", err, line)
@@ -131,6 +129,14 @@ func TestMigrationLogsKeepFixedFields(t *testing.T) {
 		if entry["version"] != "test" {
 			t.Errorf("日志覆盖了固定字段 version：%s", line)
 		}
+		if _, ok := entry["river"]; ok {
+			river++
+		} else {
+			goose++
+		}
+	}
+	if goose == 0 || river == 0 {
+		t.Errorf("goose 记了 %d 条、River 记了 %d 条，两边都应记录执行的迁移：\n%s", goose, river, buf.String())
 	}
 }
 

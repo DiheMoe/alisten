@@ -4,7 +4,6 @@ import { shouldRemind } from './reminder'
 
 const me: Member = { id: 'm1', name: '小明', avatarHash: '' }
 const other: Member = { id: 'm2', name: '阿青', avatarHash: '' }
-const bot: Member = { id: 'm3', name: '点歌机器人', avatarHash: '' }
 
 const live = true
 const snapshot = false
@@ -46,8 +45,8 @@ describe('shouldRemind', () => {
     expect(shouldRemind(playing('1', me), playing('1', me, 1), me.id, live, on, waited)).toBe(false)
   })
 
-  it('别人、机器人和 AutoDJ 点的歌不提醒', () => {
-    for (const by of [other, bot, null])
+  it('别人和 AutoDJ 点的歌不提醒', () => {
+    for (const by of [other, null])
       expect(shouldRemind(null, playing('1', by), me.id, live, on, waited)).toBe(false)
   })
 

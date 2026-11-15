@@ -1,5 +1,6 @@
 import type { IdentityEvent } from './client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FakeStorage } from './fake-storage'
 
 const memberTokenKey = 'alisten.member-token'
 const adminTokenKey = 'alisten.admin-token'
@@ -7,30 +8,6 @@ const member = { id: 'm1', name: 'alice', avatarHash: '' }
 const issued = { id: 'm2', name: 'bob', avatarHash: '' }
 
 type Handler = (token: string | null) => Response | Promise<Response>
-
-class FakeStorage {
-  readonly #items = new Map<string, string>()
-
-  get length(): number {
-    return this.#items.size
-  }
-
-  key(index: number): string | null {
-    return [...this.#items.keys()][index] ?? null
-  }
-
-  getItem(key: string): string | null {
-    return this.#items.get(key) ?? null
-  }
-
-  setItem(key: string, value: string): void {
-    this.#items.set(key, value)
-  }
-
-  removeItem(key: string): void {
-    this.#items.delete(key)
-  }
-}
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status })

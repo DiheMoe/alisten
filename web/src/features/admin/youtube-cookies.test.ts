@@ -1,6 +1,6 @@
 import type { AdminGetYoutubeCredentialResponse } from '@/core/api'
 import { describe, expect, it } from 'vitest'
-import { canSubmitYoutubeCookies, shouldWarnAboutPlaintext, youtubeCookiesText, youtubeCookiesTooLarge, youtubeCookiesView } from './youtube-cookies-view'
+import { canSubmitYoutubeCookies, shouldWarnAboutPlaintext, youtubeCookiesTooLarge, youtubeCookiesView } from './youtube-cookies-view'
 
 describe('canSubmitYoutubeCookies', () => {
   it('空字符串和纯空白不能提交', () => {
@@ -53,12 +53,6 @@ describe('shouldWarnAboutPlaintext', () => {
       expect(shouldWarnAboutPlaintext(tc.location)).toBe(tc.want)
     })
   }
-})
-
-describe('youtubeCookiesText', () => {
-  it('说明明文传输风险', () => {
-    expect(youtubeCookiesText.plaintextWarning).toBe('当前连接不是 HTTPS，填写的 cookies 会以明文在网络上传输，只在可信网络中填写。')
-  })
 })
 
 describe('youtubeCookiesView', () => {

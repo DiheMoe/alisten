@@ -1,5 +1,6 @@
 登录设备凭证：账号密码登录成功时返回这台设备的凭证，退出登录之后设备仍留着这个凭证。按用户名计数的额度 1 分钟内最多 5 次，被别人猜密码用完之后，
 不带凭证的登录被限流，带着这个账号的凭证仍然能登录，拿到同一个凭证。改密码之后，此前签发的凭证不再被认出，同样被限流。
+最后一步换一个来源地址，这样它的 429 只可能来自按用户名计数的额度，不会是按来源计数的额度。
 
 -- request --
 POST /api/members
@@ -148,6 +149,7 @@ POST /api/members
 -- request --
 POST /api/sessions
 Authorization: Bearer $laptop3
+X-Forwarded-For: 198.51.100.9
 
 {"username": "alice", "password": "battery staple", "device": "$device"}
 -- response --

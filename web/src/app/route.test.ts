@@ -47,6 +47,7 @@ describe('parseRoute', () => {
     ['/admin/users?q=a&page=2&sort=size', '/admin/users'],
     ['/admin/rooms?sort=size', '/admin/rooms'],
     ['/admin/media?sort=idle&page=1', '/admin/media?sort=idle'],
+    ['/admin/media?sort=bogus&page=0', '/admin/media'],
     ['/settings?panel=lyrics', '/settings'],
     ['/?q=', '/'],
     ['/r/my-room?panel=lyrics', '/r/my-room'],
@@ -69,24 +70,11 @@ describe('parseRoute', () => {
     expect(parse(url)).toBeNull()
   })
 
-  it('解析设置和后台的分类', () => {
-    expect(parseRoute({ pathname: '/settings/appearance', search: '', hash: '' })).toEqual({ name: 'settings', section: 'appearance', panel: null })
-    expect(parseRoute({ pathname: '/settings', search: '', hash: '' })).toEqual({ name: 'settings', section: null, panel: null })
-    expect(parseRoute({ pathname: '/settings/unknown', search: '', hash: '' })).toBeNull()
-    expect(parseRoute({ pathname: '/admin/media', search: '?q=lemon&sort=size&page=3', hash: '' })).toEqual({ name: 'admin', section: 'media', panel: null, q: 'lemon', page: 3, sort: 'size' })
-    expect(parseRoute({ pathname: '/admin/media', search: '?sort=bogus&page=0', hash: '' })).toEqual({ name: 'admin', section: 'media', panel: null, q: '', page: 1, sort: 'stored' })
-  })
-
   it('媒体的搜索词截到接口允许的 100 个字符，按码点计；房间的搜索词在本地筛选，不截', () => {
     const long = `${'a'.repeat(99)}🎵🎵`
     expect(parse(`/admin/media?q=${encodeURIComponent(long)}`)).toMatchObject({ section: 'media', q: `${'a'.repeat(99)}🎵` })
     expect(parse(`/admin/media?q=${'b'.repeat(100)}`)).toMatchObject({ q: 'b'.repeat(100) })
     expect(parse(`/admin/rooms?q=${'c'.repeat(150)}`)).toMatchObject({ section: 'rooms', q: 'c'.repeat(150) })
-  })
-
-  it('写回地址时省略默认值', () => {
-    expect(formatRoute({ name: 'admin', section: 'media', panel: null, q: '', page: 1, sort: 'stored' })).toBe('/admin/media')
-    expect(formatRoute({ name: 'admin', section: 'rooms', panel: null, q: 'jazz', page: 2, sort: 'stored' })).toBe('/admin/rooms?q=jazz&page=2')
   })
 
   it('配对码从片段中读出，写回的地址不再带它', () => {

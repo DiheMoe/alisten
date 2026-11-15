@@ -1,88 +1,17 @@
+import type { Sent } from './fake-socket'
 import type { HelloResponse, RoomEventMessage } from './protocol.gen'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clock } from '@/core/clock'
 import { Connection, RequestError } from './connection'
+import { FakeSocket, socketAt, sockets, stubBrowser } from './fake-socket'
 import { CloseCode, PROTOCOL_VERSION } from './protocol.gen'
-
-interface Sent {
-  type: string
-  id: string
-  data: Record<string, unknown>
-}
 
 const abnormalClosure = 1006
 const helloResponse = { room: { term: 1, seq: 0 } } as unknown as HelloResponse
 const roomEvent = { kind: 'event', type: 'queue.updated', term: 1, seq: 1, data: { pending: null, items: [] } } as unknown as RoomEventMessage
 
-let sockets: FakeSocket[]
 let page: EventTarget & { visibilityState: string }
 let browser: EventTarget
-
-class FakeSocket extends EventTarget {
-  static readonly CONNECTING = 0
-  static readonly OPEN = 1
-  static readonly CLOSED = 3
-  readyState = FakeSocket.CONNECTING
-  readonly sent: Sent[] = []
-
-  constructor(readonly url: string) {
-    super()
-    sockets.push(this)
-  }
-
-  send(message: string): void {
-    this.sent.push(JSON.parse(message) as Sent)
-  }
-
-  // 浏览器要到之后的任务才派发 close 事件，所以 close() 不派发。测试用 lose() 模拟这个 close 事件。
-  close(): void {
-    this.readyState = FakeSocket.CLOSED
-  }
-
-  open(): void {
-    this.readyState = FakeSocket.OPEN
-    this.dispatchEvent(new Event('open'))
-  }
-
-  receiveRaw(data: string): void {
-    this.dispatchEvent(Object.assign(new Event('message'), { data }))
-  }
-
-  receive(message: unknown): void {
-    this.receiveRaw(JSON.stringify(message))
-  }
-
-  respond(request: Sent, data: unknown = {}): void {
-    this.receive({ kind: 'response', type: request.type, id: request.id, data })
-  }
-
-  reject(request: Sent, code: string, message: string): void {
-    this.receive({ kind: 'response', type: request.type, id: request.id, data: {}, error: { code, message } })
-  }
-
-  lose(code: number): void {
-    this.readyState = FakeSocket.CLOSED
-    this.dispatchEvent(Object.assign(new Event('close'), { code }))
-  }
-
-  last(type: string): Sent {
-    const message = this.sent.filter(sent => sent.type === type).at(-1)
-    if (!message)
-      throw new Error(`没有发出 ${type}`)
-    return message
-  }
-
-  count(type: string): number {
-    return this.sent.filter(sent => sent.type === type).length
-  }
-}
-
-function socketAt(index: number): FakeSocket {
-  const socket = sockets[index]
-  if (!socket)
-    throw new Error(`没有第 ${index} 个连接`)
-  return socket
-}
 
 function start() {
   const handlers = { status: vi.fn(), hello: vi.fn(), event: vi.fn(), error: vi.fn(), stop: vi.fn() }
@@ -108,12 +37,9 @@ async function started() {
 beforeEach(() => {
   vi.useFakeTimers()
   vi.spyOn(Math, 'random').mockReturnValue(0.5)
-  sockets = []
-  page = Object.assign(new EventTarget(), { visibilityState: 'visible' })
-  browser = Object.assign(new EventTarget(), { location: { protocol: 'https:', host: 'alisten.test' } })
-  vi.stubGlobal('WebSocket', FakeSocket)
-  vi.stubGlobal('document', page)
-  vi.stubGlobal('window', browser)
+  const stubs = stubBrowser()
+  page = stubs.page
+  browser = stubs.browser
   clock.reset()
 })
 

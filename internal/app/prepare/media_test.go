@@ -199,7 +199,7 @@ func TestLinkRunnerLogsAudioThatCannotBeDecoded(t *testing.T) {
 		_, err := runWith(track.Meta{Title: "晴天"})
 		var rejected *port.RejectedError
 		if !errors.As(err, &rejected) || err.Error() != "这首歌的音频无法播放" {
-			t.Errorf("错误 = %v，期望不能准备，原因带着解码的错误 %q", err, decodeErr)
+			t.Errorf("错误 = %v，期望不能准备，原因是“这首歌的音频无法播放”", err)
 		}
 	})
 }
@@ -224,10 +224,10 @@ func TestLinkRunnerFailures(t *testing.T) {
 	d = &downloader{meta: track.Meta{Title: "晴天"}, audio: porttest.SilentWAV(time.Second)}
 	tracks, err := runLink(t, d, store, link)
 	if err == nil || errors.As(err, &rejected) {
-		t.Errorf("上传失败时的错误 = %v，期望可以重试的错误", err)
+		t.Errorf("对象存储不可用时的错误 = %v，期望可以重试的错误", err)
 	}
 	if _, ok := tracks.row(link); ok {
-		t.Error("上传失败时不应写入曲目表")
+		t.Error("对象存储不可用时不应写入曲目表")
 	}
 }
 
@@ -409,7 +409,7 @@ func TestLinkRunnerRemovesUploadedObjectsOnFailure(t *testing.T) {
 	cover := media.CoverObject(key, "jpg")
 	tests := map[string]struct {
 		d      *downloader
-		store  func(cancel context.CancelFunc) *checkedStore
+		store  func(t *testing.T, cancel context.CancelFunc) *checkedStore
 		tracks func() port.Tracks
 		check  func(t *testing.T, err error)
 	}{
@@ -433,7 +433,7 @@ func TestLinkRunnerRemovesUploadedObjectsOnFailure(t *testing.T) {
 		},
 		"cover_cannot_be_uploaded": {
 			d: &downloader{meta: track.Meta{Title: "晴天"}, audio: porttest.SilentWAV(time.Second), cover: []byte("jpeg"), coverExt: "jpg"},
-			store: func(context.CancelFunc) *checkedStore {
+			store: func(t *testing.T, _ context.CancelFunc) *checkedStore {
 				s := storeWithOtherObject(t)
 				s.putErr = func(key string) error {
 					if key == cover {
@@ -451,7 +451,7 @@ func TestLinkRunnerRemovesUploadedObjectsOnFailure(t *testing.T) {
 		},
 		"cancelled_while_uploading": {
 			d: &downloader{meta: track.Meta{Title: "晴天"}, audio: porttest.SilentWAV(time.Second), cover: []byte("jpeg"), coverExt: "jpg"},
-			store: func(cancel context.CancelFunc) *checkedStore {
+			store: func(t *testing.T, cancel context.CancelFunc) *checkedStore {
 				s := storeWithOtherObject(t)
 				s.putErr = func(key string) error {
 					if key == cover {
@@ -475,7 +475,7 @@ func TestLinkRunnerRemovesUploadedObjectsOnFailure(t *testing.T) {
 			defer cancel()
 			store := storeWithOtherObject(t)
 			if tt.store != nil {
-				store = tt.store(cancel)
+				store = tt.store(t, cancel)
 			}
 			var tracks port.Tracks = newTracks()
 			if tt.tracks != nil {

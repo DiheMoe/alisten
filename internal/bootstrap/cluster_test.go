@@ -3,11 +3,7 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
-	"io"
-	"net"
 	"net/http"
-	"net/url"
-	"sync"
 	"testing"
 	"time"
 
@@ -16,64 +12,6 @@ import (
 
 	"github.com/dihemoe/alisten/internal/adapter/out/redis"
 )
-
-// cut 之后断开全部连接，也不再接受新连接，模拟实例与 Redis 之间的网络中断。
-type redisProxy struct {
-	listener net.Listener
-	mu       sync.Mutex
-	conns    []net.Conn
-	cut      bool
-}
-
-func startRedisProxy(t *testing.T, target string) (*redisProxy, string) {
-	t.Helper()
-	u, err := url.Parse(target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := &redisProxy{listener: listener}
-	t.Cleanup(p.Cut)
-	upstream := u.Host
-	go func() {
-		for {
-			client, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			server, err := net.Dial("tcp", upstream)
-			if err != nil {
-				_ = client.Close()
-				continue
-			}
-			p.mu.Lock()
-			if p.cut {
-				_ = client.Close()
-				_ = server.Close()
-			} else {
-				p.conns = append(p.conns, client, server)
-				go func() { _, _ = io.Copy(server, client); _ = server.Close() }()
-				go func() { _, _ = io.Copy(client, server); _ = client.Close() }()
-			}
-			p.mu.Unlock()
-		}
-	}()
-	u.Host = listener.Addr().String()
-	return p, u.String()
-}
-
-func (p *redisProxy) Cut() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.cut = true
-	_ = p.listener.Close()
-	for _, c := range p.conns {
-		_ = c.Close()
-	}
-}
 
 func enterRoom(t *testing.T, svc service, roomID string) (string, string) {
 	t.Helper()
@@ -180,9 +118,9 @@ func TestInstancesShareRooms(t *testing.T) {
 	databaseURL, redisURL := startPostgres(t)(t), startValkey(t)(t)
 	contractEnv(t, databaseURL, redisURL)
 	var services []service
-	proxies := map[string]*redisProxy{}
+	proxies := map[string]*tcpProxy{}
 	for range 3 {
-		proxy, proxied := startRedisProxy(t, redisURL)
+		proxy, proxied := startProxy(t, redisURL)
 		connectionEnv(t, proxied)
 		svc := startService(t)
 		services = append(services, svc)
@@ -226,7 +164,7 @@ func TestInstancesShareRooms(t *testing.T) {
 	}
 
 	cut := time.Now()
-	proxies[first.instance].Cut()
+	proxies[first.instance].disconnect()
 	for got := owner(t, observer, hall); got == "" || got == first.instance; got = owner(t, observer, hall) {
 		if time.Since(cut) > 25*time.Second {
 			t.Fatalf("owner 断开 %v 之后仍没有实例接管大厅", time.Since(cut))

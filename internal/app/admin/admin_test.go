@@ -104,6 +104,7 @@ func TestSetYouTubeCookies(t *testing.T) {
 		err := f.admin.SetYouTubeCookies(t.Context(), input)
 		if !errors.Is(err, ErrUnrecognizedCookies) {
 			t.Errorf("保存 %q 的错误 = %v，期望 ErrUnrecognizedCookies", input, err)
+			continue
 		}
 		if strings.Contains(err.Error(), input) && strings.TrimSpace(input) != "" {
 			t.Errorf("错误文本包含输入的值：%v", err)

@@ -580,16 +580,6 @@ func (s *Store) BilibiliCredential(context.Context) (string, error) {
 	return s.cookies["bilibili"], nil
 }
 
-func (s *Store) SetBilibiliCredential(_ context.Context, credential string) error {
-	if err := checkText(credential); err != nil {
-		return err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.cookies["bilibili"] = credential
-	return nil
-}
-
 func (s *Store) GitHubOAuthApp(context.Context) (port.GitHubOAuthApp, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

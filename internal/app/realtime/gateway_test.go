@@ -362,8 +362,8 @@ func TestDeleteFailureAbandonsRoom(t *testing.T) {
 		if a.Context().Err() != nil {
 			t.Error("删除失败时会话不应断开")
 		}
-		if _, err := store.FindRoom(t.Context(), id); err != nil {
-			t.Errorf("删除失败之后房间应仍在：%v", err)
+		if n := f.host.RoomsOwned(); n != 0 {
+			t.Errorf("删除失败之后 RoomsOwned = %d，期望已经放弃房间", n)
 		}
 	})
 }

@@ -7,9 +7,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
 	"net/netip"
 	"slices"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -145,26 +145,7 @@ func (s *dnsServer) reply(query []byte) []byte {
 
 // DNS 重绑定：域名第一次解析给出公网地址，之后的解析给出回环地址。
 func TestDialPublicDoesNotResolveAgain(t *testing.T) {
-	// Cloudflare 的公共 DNS，一直是公网地址。连接成功或失败都能看出连接的是哪个地址。
 	public := netip.MustParseAddr("2606:4700:4700::1111")
-	internal, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = internal.Close() })
-	go func() {
-		for {
-			c, err := internal.Accept()
-			if err != nil {
-				return
-			}
-			_ = c.Close()
-		}
-	}()
-	_, port, err := net.SplitHostPort(internal.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	dns := startDNS(t, func(qtype uint16, n int) []netip.Addr {
 		switch {
 		case qtype == typeAAAA && n == 1:
@@ -177,15 +158,18 @@ func TestDialPublicDoesNotResolveAgain(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
-	conn, err := dialPublic(dns.resolver())(ctx, "tcp", net.JoinHostPort("rebind.test.", port))
-	switch {
-	case conn != nil:
-		defer func() { _ = conn.Close() }()
-		if got := conn.RemoteAddr().(*net.TCPAddr).AddrPort().Addr(); got != public {
-			t.Errorf("连上了 %v，期望连接第一次解析出的 %v", got, public)
-		}
-	case !strings.Contains(err.Error(), "["+public.String()+"]"):
-		t.Errorf("连接失败的错误 %q 没有提到第一次解析出的 %v，期望连接的是它", err, public)
+	// 域名一解析完就取消 ctx，这样测试不会真的去连公网地址。
+	// net.Dialer 拿到已取消的 ctx 不会发起连接，它返回的 *net.OpError 里仍然带着要连接的地址。
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{DNSDone: func(httptrace.DNSDoneInfo) { cancel() }})
+	want := net.JoinHostPort(public.String(), "443")
+	conn, err := dialPublic(dns.resolver())(ctx, "tcp", net.JoinHostPort("rebind.test.", "443"))
+	if conn != nil {
+		_ = conn.Close()
+		t.Fatalf("连上了 %v，期望 ctx 取消后连接失败", conn.RemoteAddr())
+	}
+	var opErr *net.OpError
+	if !errors.As(err, &opErr) || opErr.Addr == nil || opErr.Addr.String() != want {
+		t.Errorf("连接失败的错误是 %q，期望它出自连接第一次解析出的 %s", err, want)
 	}
 	dns.mu.Lock()
 	defer dns.mu.Unlock()

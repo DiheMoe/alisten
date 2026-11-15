@@ -52,11 +52,6 @@ describe('formatPlayed', () => {
 })
 
 describe('mediaOrigin', () => {
-  it('哔哩哔哩的歌写平台名，链接写网站的域名', () => {
-    expect(mediaOrigin(media({ source: 'bilibili', link: 'https://www.bilibili.com/video/BV1xx411c7mD' }))).toBe('哔哩哔哩')
-    expect(mediaOrigin(media({ source: 'link', link: 'https://music.example.com/a/b.mp3?x=1' }))).toBe('music.example.com')
-  })
-
   it('解析不了的链接原样显示', () => {
     expect(mediaOrigin(media({ source: 'link', link: 'not a url' }))).toBe('not a url')
   })

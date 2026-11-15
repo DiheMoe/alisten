@@ -434,12 +434,26 @@ func TestConcurrentCrossCopiesDoNotDeadlock(t *testing.T) {
 	alice := registered(t, store, "alice")
 	a := filled(t, store, alice.ID, "甲", "1", "2")
 	b := filled(t, store, alice.ID, "乙", "3", "4")
+	errs := make(chan error, 40)
 	var wg sync.WaitGroup
 	for range 20 {
-		wg.Go(func() { _, _ = store.CopyPlaylistItems(t.Context(), alice.ID, a, b, trackList("1", "2"), 1000) })
-		wg.Go(func() { _, _ = store.CopyPlaylistItems(t.Context(), alice.ID, b, a, trackList("3", "4"), 1000) })
+		wg.Go(func() {
+			_, err := store.CopyPlaylistItems(t.Context(), alice.ID, a, b, trackList("1", "2"), 1000)
+			errs <- err
+		})
+		wg.Go(func() {
+			_, err := store.CopyPlaylistItems(t.Context(), alice.ID, b, a, trackList("3", "4"), 1000)
+			errs <- err
+		})
 	}
 	wg.Wait()
+	close(errs)
+	// PostgreSQL 发现死锁时只让其中一个事务报错，其余的照样把两个歌单补满，所以只看最后的曲目数发现不了死锁。
+	for err := range errs {
+		if err != nil {
+			t.Errorf("并发互相复制 = %v，期望都成功", err)
+		}
+	}
 	for _, id := range []string{a, b} {
 		if got := displayIDs(t, store, alice.ID, id); len(got) != 4 {
 			t.Errorf("互相复制之后有 %v，期望各 4 首", got)

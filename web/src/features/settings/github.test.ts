@@ -62,14 +62,6 @@ describe('发起授权', () => {
 })
 
 describe('用 GitHub 确认身份之后设置用户名和密码', () => {
-  it('意图和 nonce 一起存在本标签页，落地时一起取出', async () => {
-    const { startGithubLogin, takeGithubLanding } = await import('./github')
-    await startGithubLogin('verify')
-    const nonce = session.getItem('alisten.github-nonce')!
-    expect(takeGithubLanding('code=abc')).toEqual({ kind: 'exchange', code: 'abc', nonce, intent: 'verify' })
-    expect(session.getItem('alisten.github-intent')).toBeNull()
-  })
-
   it('确认成功之后，设置页打开一次设置用户名和密码的对话框', async () => {
     const { finishGithubLogin, takeCredentialsPrompt } = await import('./github')
     expect(takeCredentialsPrompt()).toBe(false)
@@ -98,6 +90,14 @@ describe('落地页', () => {
     expect(session.getItem('alisten.github-nonce')).toBeNull()
     // 同一次落地重复读取（例如开发模式下组件挂载两次）得到同样的结果。
     expect(takeGithubLanding('code=abc')).toEqual({ kind: 'exchange', code: 'abc', nonce, intent: 'login' })
+  })
+
+  it('意图和 nonce 一起存在本标签页，落地时一起取出', async () => {
+    const { startGithubLogin, takeGithubLanding } = await import('./github')
+    await startGithubLogin('verify')
+    const nonce = session.getItem('alisten.github-nonce')!
+    expect(takeGithubLanding('code=abc')).toEqual({ kind: 'exchange', code: 'abc', nonce, intent: 'verify' })
+    expect(session.getItem('alisten.github-intent')).toBeNull()
   })
 
   it('本标签页没有发起过授权时不兑换：别人发来的落地页链接换不到会话', async () => {

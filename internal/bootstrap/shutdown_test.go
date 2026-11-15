@@ -127,31 +127,21 @@ func TestShutdownStopsJobsWhenPublicPortCannotDrain(t *testing.T) {
 	}
 }
 
-// Helm chart 和 compose 设置的退出宽限期都是 30 秒，与 Kubernetes 的默认值相同。
+// Helm chart 和 compose 设置的退出宽限期都是 30 秒，与 Kubernetes 的默认值相同。两个进程退出时最后都要导出剩余的追踪。
 func TestShutdownFitsGracePeriod(t *testing.T) {
-	if total := drainDelay + shutdownTimeout + jobsStopTimeout; total > 30*time.Second {
-		t.Errorf("退出最长要 %v，超过了 30 秒的退出宽限期", total)
+	const grace = 30 * time.Second
+	if total := drainDelay + shutdownTimeout + jobsStopTimeout + flushTimeout; total > grace {
+		t.Errorf("serve 退出最长要 %v，超过了 %v 的退出宽限期", total, grace)
+	}
+	if total := workerStopTimeout + flushTimeout; total > grace {
+		t.Errorf("worker 退出最长要 %v，超过了 %v 的退出宽限期", total, grace)
 	}
 }
 
-type lockedBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-}
-
-func (b *lockedBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Write(p)
-}
-
-func (b *lockedBuffer) messages(t *testing.T) []string {
+func (b *logBuffer) messages(t *testing.T) []string {
 	t.Helper()
-	b.mu.Lock()
-	text := b.buf.String()
-	b.mu.Unlock()
 	var msgs []string
-	for line := range strings.Lines(strings.TrimSpace(text)) {
+	for line := range strings.Lines(strings.TrimSpace(b.String())) {
 		msgs = append(msgs, decodeLine(t, []byte(line))["msg"].(string))
 	}
 	return msgs
@@ -187,7 +177,7 @@ func eventually(t *testing.T, what string, finished <-chan struct{}, cond func()
 		select {
 		case <-finished:
 			if !cond() {
-				t.Fatalf("等待%s时 runServe 已经返回", what)
+				t.Fatalf("等待%s时子命令已经返回", what)
 			}
 		case <-deadline:
 			t.Fatalf("60 秒内没有等到%s", what)
@@ -216,7 +206,7 @@ func TestServeExitsGracefullyOnSIGTERM(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var logs lockedBuffer
+	var logs logBuffer
 	var runErr error
 	var returned time.Time
 	finished := make(chan struct{})
@@ -285,13 +275,17 @@ type tcpProxy struct {
 	conns []net.Conn
 }
 
-func startProxy(t *testing.T, target string) *tcpProxy {
+func startProxy(t *testing.T, connString string) (p *tcpProxy, proxied string) {
 	t.Helper()
+	u, err := url.Parse(connString)
+	if err != nil {
+		t.Fatal(err)
+	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &tcpProxy{listener: listener, target: target}
+	p = &tcpProxy{listener: listener, target: u.Host}
 	t.Cleanup(p.disconnect)
 	go func() {
 		for {
@@ -302,7 +296,8 @@ func startProxy(t *testing.T, target string) *tcpProxy {
 			go p.forward(client)
 		}
 	}()
-	return p
+	u.Host = listener.Addr().String()
+	return p, u.String()
 }
 
 func (p *tcpProxy) forward(client net.Conn) {
@@ -345,18 +340,13 @@ func TestServeLogsNoReadinessDuringExit(t *testing.T) {
 	if err := runMigrate(newLogger(io.Discard, slog.LevelInfo)); err != nil {
 		t.Fatal(err)
 	}
-	u, err := url.Parse(database)
-	if err != nil {
-		t.Fatal(err)
-	}
-	proxy := startProxy(t, u.Host)
-	u.Host = proxy.listener.Addr().String()
-	connectionEnv(t, u.String())
+	proxy, proxied := startProxy(t, database)
+	connectionEnv(t, proxied)
 	listen, opsListen := freeAddr(t), freeAddr(t)
 	t.Setenv("ALISTEN_LISTEN", listen)
 	t.Setenv("ALISTEN_OPS_LISTEN", opsListen)
 
-	var logs lockedBuffer
+	var logs logBuffer
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)

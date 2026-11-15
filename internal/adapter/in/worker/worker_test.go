@@ -118,6 +118,7 @@ func TestWorkerReportsFinalOutcomes(t *testing.T) {
 	}
 	for line := range strings.Lines(strings.TrimSpace(logs.String())) {
 		var entry struct {
+			Level   string
 			Msg     string
 			TrackID string `json:"track_id"`
 			JobID   int64  `json:"job_id"`
@@ -125,14 +126,14 @@ func TestWorkerReportsFinalOutcomes(t *testing.T) {
 		if err := json.Unmarshal([]byte(line), &entry); err != nil {
 			t.Fatalf("日志不是 JSON：%v\n%s", err, line)
 		}
+		if entry.Level == "INFO" && entry.Msg != "执行准备任务" {
+			t.Errorf("River 的 info 日志不应输出：%s", line)
+		}
 		if strings.HasPrefix(entry.Msg, "执行准备任务") || strings.HasPrefix(entry.Msg, "准备任务失败") {
 			if entry.JobID != jobs[entry.TrackID] {
 				t.Errorf("日志 %s 的 job_id = %d，期望 %d", line, entry.JobID, jobs[entry.TrackID])
 			}
 		}
-	}
-	if strings.Contains(logs.String(), "River client started") {
-		t.Errorf("River 的 info 日志不应输出：\n%s", logs.String())
 	}
 	if job, err := client.JobGet(t.Context(), jobs["rejected"]); err != nil || job.State != "cancelled" {
 		t.Errorf("被音源拒绝的任务 = %v, %v，期望直接取消", job, err)

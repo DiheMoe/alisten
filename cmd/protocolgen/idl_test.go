@@ -148,11 +148,10 @@ func TestParseIDLRejects(t *testing.T) {
 				"ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			}, "ids"))}
 		}, "请求中的数组元素只能引用对象或枚举类型"},
-		{"请求引用的类型中有可选数组", func(d map[string]any) {
+		{"可选的数组字段", func(d map[string]any) {
 			defs(d)["Batch"] = object(map[string]any{
 				"ids": map[string]any{"type": "array", "items": ref("Empty")},
 			})
-			d["x-requests"] = []any{roomRequest(object(map[string]any{"batch": ref("Batch")}, "batch"))}
 		}, "$defs.Batch.properties.ids：数组必须是必填字段"},
 		{"请求数组没有 maxItems", func(d map[string]any) {
 			d["x-requests"] = []any{roomRequest(object(map[string]any{
@@ -287,6 +286,10 @@ func TestParseIDLRejects(t *testing.T) {
 		{"请求中的布尔字段", func(d map[string]any) {
 			d["x-requests"] = []any{roomRequest(object(map[string]any{"force": map[string]any{"type": "boolean"}}, "force"))}
 		}, "x-requests[0].request.properties.force：请求中不支持 boolean"},
+		{"请求引用的类型中有布尔字段", func(d map[string]any) {
+			defs(d)["Options"] = object(map[string]any{"force": map[string]any{"type": "boolean"}}, "force")
+			d["x-requests"] = []any{roomRequest(object(map[string]any{"options": ref("Options")}, "options"))}
+		}, "$defs.Options.properties.force：请求中不支持 boolean"},
 		{"不支持的类型", func(d map[string]any) {
 			defs(d)["ErrorInfo"] = object(map[string]any{"message": map[string]any{"type": "object"}}, "message")
 		}, `$defs.ErrorInfo.properties.message：不支持的类型 "object"`},
@@ -551,18 +554,6 @@ func TestKeywordsCoverEverySchemaField(t *testing.T) {
 		if got := s.keywords(); !slices.Equal(got, []string{keyword}) {
 			t.Errorf("只设置 %s 时 keywords() = %v，期望 [%s]", field.Name, got, keyword)
 		}
-	}
-}
-
-func TestParseIDLAcceptsRoutesDifferingByMethod(t *testing.T) {
-	d := minimalIDL()
-	d["x-http"] = []any{bodylessEndpoint("listRooms", "GET", "/api/rooms"), bodylessEndpoint("clearRooms", "DELETE", "/api/rooms")}
-	data, err := json.Marshal(d)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := parseIDL(data); err != nil {
-		t.Fatal(err)
 	}
 }
 

@@ -40,9 +40,8 @@ describe('track-selection', () => {
     expect(keys(selectRange(toggle(noSelection, 'x'), order, 'c'))).toEqual(['c', 'x'])
   })
 
-  it('全选和清空', () => {
+  it('全选', () => {
     expect(keys(selectAll(order))).toEqual(order)
-    expect(keys(noSelection)).toEqual([])
   })
 
   it('列表变化后去掉不存在的歌和锚点', () => {

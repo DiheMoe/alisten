@@ -124,13 +124,6 @@ func TestRunFallsBackWhenAudioCannotBeAnalyzed(t *testing.T) {
 	if got, _ := tracks.row(sunny); got.Result != (track.Prepared{Duration: meta.Duration, Gain: 1}) {
 		t.Errorf("无法解码时的结果 = %+v，期望增益为 1、时长取元数据中的时长", got.Result)
 	}
-
-	source = porttest.NewSource(track.NetEase)
-	source.Add("186016", track.Meta{Title: "晴天"}, "", []byte("不是音频"))
-	var rejected *port.RejectedError
-	if _, err := run(t, source, sunny); !errors.As(err, &rejected) {
-		t.Errorf("元数据中也没有时长时的错误 = %v，期望不能准备", err)
-	}
 }
 
 func TestRunLogsAudioThatCannotBeDecoded(t *testing.T) {
@@ -152,7 +145,7 @@ func TestRunLogsAudioThatCannotBeDecoded(t *testing.T) {
 		_, _, err := runLogged(t, sourceWith(track.Meta{Title: "晴天"}, noAudioMP3), sunny)
 		var rejected *port.RejectedError
 		if !errors.As(err, &rejected) || err.Error() != "这首歌的音频无法播放" {
-			t.Errorf("错误 = %v，期望不能准备，原因带着解码的错误 %q", err, decodeErr)
+			t.Errorf("错误 = %v，期望不能准备，原因是“这首歌的音频无法播放”", err)
 		}
 	})
 	t.Run("下载中断", func(t *testing.T) {

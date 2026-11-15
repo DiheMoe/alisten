@@ -247,7 +247,7 @@ describe('mediaStore 的删除', () => {
     expect(selected(store)).toEqual(['k2'])
   })
 
-  it('当前页删空、又不是第 1 页时，回到上一页', async () => {
+  it('当前页删空、又不是第 1 页时，重新读到空页，fallbackPage 给出最后一页有内容的页码', async () => {
     const store = await opened(2)
     await store.remove(['k51', 'k52', 'k53', 'k54', 'k55'])
     expect(reads.map(read => read.page)).toEqual([2, 2])

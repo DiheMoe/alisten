@@ -78,6 +78,15 @@ Authorization: Bearer admin-secret
 {"kind": "event", "type": "room.updated", "term": 1, "seq": 2, "data": {"name": "新大厅", "description": "常驻"}}
 
 -- request --
+PATCH /api/admin/rooms/hall
+Authorization: Bearer admin-secret
+
+{"name": "别名不是房间 ID"}
+-- response --
+404
+{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}
+
+-- request --
 PATCH /api/admin/rooms/$hall
 Authorization: Bearer admin-secret
 
@@ -115,15 +124,6 @@ PATCH /api/admin/rooms/$hall
 -- response --
 401
 {"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
-
--- request --
-PATCH /api/admin/rooms/hall
-Authorization: Bearer admin-secret
-
-{"name": "别名不是房间 ID"}
--- response --
-404
-{"error": {"code": "NOT_FOUND", "message": "房间不存在"}}
 
 -- request --
 PATCH /api/admin/rooms/$temp

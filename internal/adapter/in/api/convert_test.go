@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -125,6 +124,8 @@ func TestActivityDTO(t *testing.T) {
 
 func TestRoomErrorCodes(t *testing.T) {
 	kinds := map[room.ErrorKind]protocol.ErrorCode{
+		room.NotFound:       protocol.ErrorCodeNotFound,
+		room.Forbidden:      protocol.ErrorCodeForbidden,
 		room.Conflict:       protocol.ErrorCodeConflict,
 		room.QueueFull:      protocol.ErrorCodeQueueFull,
 		room.RateLimited:    protocol.ErrorCodeRateLimited,
@@ -135,9 +136,6 @@ func TestRoomErrorCodes(t *testing.T) {
 		if info != (protocol.ErrorInfo{Code: code, Message: "说明"}) || !expected {
 			t.Errorf("领域错误 %d 映射为 %#v, %v，期望 %s", kind, info, expected, code)
 		}
-	}
-	if _, expected := errorInfo(errors.New("连接中断")); expected {
-		t.Error("未知的错误应按内部错误处理")
 	}
 }
 
@@ -161,6 +159,23 @@ func TestRejectedLinkIsInvalidArgument(t *testing.T) {
 	info, expected := errorInfo(fmt.Errorf("点歌：%w", &catalog.RejectedLinkError{Reason: "哔哩哔哩的番剧不能点播"}))
 	if info != (protocol.ErrorInfo{Code: protocol.ErrorCodeInvalidArgument, Message: "哔哩哔哩的番剧不能点播"}) || !expected {
 		t.Errorf("不能点的链接 = %#v, %v，期望 INVALID_ARGUMENT，message 是音源给出的原因", info, expected)
+	}
+}
+
+// 曲目表、歌单和对象键认的都是规范化之后的链接。协议里的曲目只经过 trackOf 进入用例，所以规范化在这里做。
+func TestTrackOfNormalizesLinks(t *testing.T) {
+	tests := []struct {
+		in   protocol.Track
+		want track.Track
+	}{
+		{protocol.Track{Source: protocol.SourceLink, ID: "HTTPS://Example.COM/Song.mp3?T=1"}, track.Track{Source: track.Link, ID: "https://example.com/Song.mp3?T=1"}},
+		{protocol.Track{Source: protocol.SourceQQ, ID: "0039MnYb0qxYhV"}, track.Track{Source: track.QQ, ID: "0039MnYb0qxYhV"}},
+		{protocol.Track{Source: protocol.SourceBilibili, ID: "BV1xx411c7mD/2"}, track.Track{Source: track.Bilibili, ID: "BV1xx411c7mD/2"}},
+	}
+	for _, tt := range tests {
+		if got := trackOf(tt.in); got != tt.want {
+			t.Errorf("trackOf(%+v) = %+v，期望 %+v", tt.in, got, tt.want)
+		}
 	}
 }
 

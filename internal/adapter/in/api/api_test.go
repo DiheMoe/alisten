@@ -12,6 +12,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -289,6 +291,40 @@ func TestCredentialsAreCheckedFirst(t *testing.T) {
 				t.Errorf("%s %s = %#v，期望 %#v", tt.method, tt.path, got, tt.want)
 			}
 		})
+	}
+}
+
+// 后台接口用什么凭证由 IDL 逐条声明，写错的那一条会对没有管理 token 的人开放。后台接口不像房间内的请求那样有生成出来的列表，
+// 所以从 IDL 里读出 /api/admin/ 下的每一条。
+func TestAdminRoutesNeedAdminToken(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "protocol", "idl.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var idl struct {
+		Routes []struct{ Method, Path string } `json:"x-http"`
+	}
+	if err := json.Unmarshal(data, &idl); err != nil {
+		t.Fatal(err)
+	}
+	store := porttest.New()
+	server, _ := start(t, services(store, store, "secret"))
+	want := failure(protocol.ErrorCodeUnauthorized, "管理 token 无效")
+	checked := 0
+	for _, route := range idl.Routes {
+		if !strings.HasPrefix(route.Path, "/api/admin/") {
+			continue
+		}
+		checked++
+		path := pathParam.ReplaceAllString(route.Path, "1")
+		for _, header := range [][]string{nil, {"Authorization", "Bearer 不存在"}} {
+			if got := send(t, server, route.Method, path, "不是 JSON", header...); got != want {
+				t.Errorf("%s %s，请求头 %q 时 = %#v，期望 %#v", route.Method, path, header, got, want)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("IDL 里没有找到后台接口")
 	}
 }
 

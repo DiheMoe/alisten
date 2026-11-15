@@ -1,4 +1,5 @@
 握手：第一帧必须是 hello。失败时先回复错误，再以对应的关闭码断开。先检查房间是否存在，再检查票据。
+hello 里的房间只认 ID。写别名时，即使别名对应的房间存在、票据也是这个房间的，仍按房间不存在处理。
 列表外来源的握手以 HTTP 403 拒绝升级。
 
 -- request --
@@ -28,6 +29,16 @@ Location: /api/rooms/$other
 {"id": "$other"}
 
 -- request --
+POST /api/admin/rooms
+Authorization: Bearer admin-secret
+
+{"name": "大厅", "description": "", "slug": "hall"}
+-- response --
+201
+Location: /api/rooms/$hall
+{"id": "$hall"}
+
+-- request --
 POST /api/rooms/$room/tickets
 Authorization: Bearer $alice
 
@@ -35,6 +46,15 @@ Authorization: Bearer $alice
 -- response --
 201
 {"ticket": "$ticket"}
+
+-- request --
+POST /api/rooms/$hall/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+201
+{"ticket": "$hallTicket"}
 
 -- connect evil --
 Origin: https://evil.example
@@ -68,7 +88,7 @@ hello
 
 -- connect slug --
 -- send slug --
-{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "hall", "ticket": "$ticket", "protocolVersion": "$protocolVersion"}}
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "hall", "ticket": "$hallTicket", "protocolVersion": "$protocolVersion"}}
 -- receive slug --
 {"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "NOT_FOUND", "message": "房间不存在"}}
 -- closed slug --

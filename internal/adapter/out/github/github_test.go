@@ -54,7 +54,7 @@ func newFake(t *testing.T) (*fakeGitHub, Config) {
 			_, _ = w.Write([]byte(`{"message":"Bad credentials"}`))
 			return
 		}
-		if r.Header.Get("User-Agent") == "" || r.Header.Get("Accept") != "application/vnd.github+json" {
+		if r.Header.Get("User-Agent") != "alisten" || r.Header.Get("Accept") != "application/vnd.github+json" {
 			t.Errorf("用户接口的请求头 User-Agent: %q，Accept: %q", r.Header.Get("User-Agent"), r.Header.Get("Accept"))
 		}
 		w.Header().Set("Content-Type", "application/json")

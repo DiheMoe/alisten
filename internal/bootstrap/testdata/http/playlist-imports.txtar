@@ -1,4 +1,4 @@
-歌单导入：只有已注册的账号能导入。导入文件时，曲目表里已有的歌用服务端的元数据，没有的用文件里的元数据。文件里的封面和页面链接不是平台自己的 https 地址时被丢弃，链接曲目没有封面。重复的歌只留第一次出现的位置，标题为空的跳过，来源中的第一首排在歌单最前。链接可以识别出网易云和 QQ 音乐的歌单，也只能导入这两个平台的歌单。
+歌单导入：只有已注册的账号能导入。导入文件时，曲目表里已有的歌用服务端的元数据，没有的用文件里的元数据。文件里的封面和页面链接不是平台自己的 https 地址时被丢弃，链接曲目没有封面，链接里 scheme 和主机名的大写字母转成小写。重复的歌只留第一次出现的位置，标题为空的跳过，来源中的第一首排在歌单最前。链接可以识别出网易云和 QQ 音乐的歌单，也只能导入这两个平台的歌单。
 
 -- request --
 POST /api/members
@@ -113,7 +113,7 @@ Authorization: Bearer $alice
 {"name": "  文件里的歌单  ", "tracks": [
   {"track": {"source": "netease", "id": "186016"}, "title": "改过的标题", "artist": "改过的歌手", "durationMs": 1000, "coverUrl": "https://evil.example/c.jpg"},
   {"track": {"source": "netease", "id": "999"}, "title": "文件里的歌", "artist": "歌手", "album": "专辑", "durationMs": 61000, "coverUrl": "http://p1.music.126.net/a.jpg", "pageUrl": "https://evil.example/song"},
-  {"track": {"source": "link", "id": "https://example.com/song.mp3"}, "title": "链接曲目", "durationMs": 5000, "coverUrl": "https://p1.music.126.net/b.jpg"},
+  {"track": {"source": "link", "id": "HTTPS://Example.COM/song.mp3"}, "title": "链接曲目", "durationMs": 5000, "coverUrl": "https://p1.music.126.net/b.jpg"},
   {"track": {"source": "netease", "id": "186016"}, "title": "重复", "durationMs": 1},
   {"track": {"source": "netease", "id": "1000"}, "title": "  ", "durationMs": 1}
 ]}
