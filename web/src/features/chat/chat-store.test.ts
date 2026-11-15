@@ -30,6 +30,7 @@ function hello(roomId: string): HelloResponse {
       playMode: 'sequential',
       nowPlaying: null,
       pending: null,
+      next: null,
       items: [],
       members: { sessions: [], onlineCount: 0 },
     },

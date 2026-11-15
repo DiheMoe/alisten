@@ -88,3 +88,108 @@ func TestPrepareFailedWaitingEntryIsRemoved(t *testing.T) {
 		t.Fatalf("准备失败不应影响正在播放的歌：%#v", effects)
 	}
 }
+
+func TestNextIsTheFirstReadyWaitingEntry(t *testing.T) {
+	r := newRoom(t, Persistent)
+	playing(t, r, 0, netease("a"), 3*time.Minute)
+	effects := r.Handle(at(time.Second), enqueue(alice, netease("b")))
+	if got := events[QueueChanged](effects); len(got) != 1 || got[0].Next != 0 {
+		t.Fatalf("准备好之前不应有下一首：%#v", got)
+	}
+	effects = r.Handle(at(2*time.Second), Prepared{Track: netease("b"), Meta: track.Meta{Title: "b"}, Result: ready(time.Minute)})
+	if got := events[QueueChanged](effects); len(got) != 1 || got[0].Next != 2 {
+		t.Fatalf("准备好之后下一首应是 #2：%#v", got)
+	}
+	if v := r.view(); v.Next != 2 {
+		t.Fatalf("快照里的下一首 = %d，期望 2", v.Next)
+	}
+}
+
+func TestNoNextWhenNothingPlays(t *testing.T) {
+	r := newRoom(t, Persistent)
+	effects := r.Handle(at(0), enqueue(alice, netease("a")))
+	if got := events[QueueChanged](effects); len(got) != 1 || got[0].Next != 0 {
+		t.Fatalf("没有歌在播时不应有下一首：%#v", got)
+	}
+}
+
+func TestStartingThePendingTrackAnnouncesTheNext(t *testing.T) {
+	r := newRoom(t, Persistent)
+	r.Handle(at(0), enqueue(alice, netease("a")))
+	pickReady(r, time.Second, bob, "b")
+	effects := r.Handle(at(2*time.Second), Prepared{Track: netease("a"), Meta: track.Meta{Title: "a"}, Result: ready(time.Minute)})
+	if got := events[QueueChanged](effects); len(got) != 1 || got[0].Next != 2 {
+		t.Fatalf("待播开播之后应广播下一首 #2：%#v", effects)
+	}
+}
+
+func TestModeSwitchAnnouncesTheNext(t *testing.T) {
+	r := newRoom(t, Persistent)
+	r.Handle(at(0), command(alice, SetPlayMode{Mode: Random}))
+	playing(t, r, 0, netease("a"), time.Minute)
+	pickReady(r, time.Second, alice, "b")
+	pickReady(r, time.Second, alice, "c")
+	// 让抽中的不是排在第一的 #2，切回顺序模式时下一首才一定会变。这时等待队列和待播都没变，只有单独比较下一首才会广播。
+	r.next = 3
+	effects := r.Handle(at(2*time.Second), command(alice, SetPlayMode{Mode: Sequential}))
+	if q := events[QueueChanged](effects); len(q) != 1 || q[0].Next != 2 {
+		t.Fatalf("下一首从 #3 变成 #2 时应广播：%#v", effects)
+	}
+}
+
+func TestRandomPlaysTheDrawnNext(t *testing.T) {
+	r := newRoom(t, Persistent)
+	r.Handle(at(0), command(alice, SetPlayMode{Mode: Random}))
+	playing(t, r, 0, netease("a"), time.Minute)
+	for _, id := range []string{"b", "c", "d"} {
+		pickReady(r, time.Second, alice, id)
+	}
+	// b 入队时等待队列里只有它，所以抽中的是 #2。切歌时等待队列有 4 首，种子为 0 时当场随机会选到 #4，所以这个用例能区分两种做法。
+	drawn := r.upNext()
+	if drawn == 0 {
+		t.Fatal("随机模式下有歌在播时应抽好下一首")
+	}
+	pickReady(r, 2*time.Second, bob, "e")
+	if got := r.upNext(); got != drawn {
+		t.Fatalf("新点的歌不应改变抽好的下一首：%d，原来 %d", got, drawn)
+	}
+	r.Handle(at(time.Minute+2*time.Second), Timer{Token: r.endTimer})
+	if r.current == nil || r.current.Entry.ID != drawn {
+		t.Fatalf("切歌时应放抽好的 #%d，实际 %#v", drawn, r.current)
+	}
+	if got := r.upNext(); got == 0 || got == drawn {
+		t.Fatalf("开播之后应抽好新的下一首，实际 %d", got)
+	}
+}
+
+func TestRandomRedrawsWhenTheDrawnEntryIsRemoved(t *testing.T) {
+	r := newRoom(t, Persistent)
+	r.Handle(at(0), command(alice, SetPlayMode{Mode: Random}))
+	playing(t, r, 0, netease("a"), time.Minute)
+	pickReady(r, time.Second, alice, "b")
+	pickReady(r, time.Second, alice, "c")
+	drawn := r.upNext()
+	effects := r.Handle(at(2*time.Second), command(alice, Remove{Entry: drawn}))
+	got := r.upNext()
+	if got == 0 || got == drawn {
+		t.Fatalf("抽好的歌被删掉之后应重新抽，实际 %d", got)
+	}
+	if q := events[QueueChanged](effects); len(q) != 1 || q[0].Next != got {
+		t.Fatalf("重新抽签之后应广播新的下一首：%#v", effects)
+	}
+}
+
+func TestOtherModesClearTheDraw(t *testing.T) {
+	r := newRoom(t, Persistent)
+	r.Handle(at(0), command(alice, SetPlayMode{Mode: Random}))
+	playing(t, r, 0, netease("a"), time.Minute)
+	pickReady(r, time.Second, alice, "b")
+	pickReady(r, time.Second, alice, "c")
+	r.Handle(at(2*time.Second), command(alice, SetPlayMode{Mode: Sequential}))
+	if r.next != 0 {
+		t.Fatalf("顺序模式不应留着抽好的下一首：%d", r.next)
+	}
+	if got := r.upNext(); got != r.waiting[0].ID {
+		t.Fatalf("顺序模式的下一首应是第一首 #%d，实际 %d", r.waiting[0].ID, got)
+	}
+}

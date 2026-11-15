@@ -71,7 +71,7 @@ var (
 	linkEntry     = room.Entry{ID: 13, Track: track.Track{Source: track.Link, ID: "https://www.youtube.com/watch?v=x"}, Meta: track.Meta{Title: "https://www.youtube.com/watch?v=x"}, Auto: true, AddedAt: addedAt}
 	nowPlaying    = room.NowPlaying{Entry: preparedEntry, StartedAt: addedAt.Add(time.Minute)}
 	roomView      = room.View{
-		Term: 3, Seq: 128,
+		Term: 3, Seq: 128, Next: 13,
 		Snapshot: room.Snapshot{
 			Info:     room.Info{ID: "01a15778-1911-7a28-8b2e-e08c2a25f388", Name: "大厅", Description: "常驻", Kind: room.Persistent},
 			Mode:     room.Random,
@@ -94,7 +94,7 @@ func roomMessageSamples() []port.RoomMessage {
 	return []port.RoomMessage{
 		port.OwnerChanged{Term: 3},
 		port.Emitted{Emit: room.Emit{Term: 3, Seq: 1, Event: room.PlaybackChanged{Current: &nowPlaying}}},
-		port.Emitted{Emit: room.Emit{Term: 3, Seq: 3, Event: room.QueueChanged{Pending: &sunnyEntry, Waiting: []room.Entry{linkEntry, sunnyEntry}}}},
+		port.Emitted{Emit: room.Emit{Term: 3, Seq: 3, Event: room.QueueChanged{Pending: &sunnyEntry, Waiting: []room.Entry{linkEntry, sunnyEntry}, Next: 13}}},
 		port.Emitted{Emit: room.Emit{Term: 3, Seq: 4, Event: room.MembersChanged{Sessions: roomView.Sessions}}},
 		port.Emitted{Emit: room.Emit{Term: 3, Seq: 5, Event: room.ModeChanged{Mode: room.Random}}},
 		port.Emitted{Emit: room.Emit{Term: 3, Seq: 6, Event: room.InfoChanged{Name: "大厅", Description: "常驻"}}},

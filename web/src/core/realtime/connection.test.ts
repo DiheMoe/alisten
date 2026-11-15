@@ -8,7 +8,7 @@ import { CloseCode, PROTOCOL_VERSION } from './protocol.gen'
 
 const abnormalClosure = 1006
 const helloResponse = { room: { term: 1, seq: 0 } } as unknown as HelloResponse
-const roomEvent = { kind: 'event', type: 'queue.updated', term: 1, seq: 1, data: { pending: null, items: [] } } as unknown as RoomEventMessage
+const roomEvent = { kind: 'event', type: 'queue.updated', term: 1, seq: 1, data: { pending: null, next: null, items: [] } } as unknown as RoomEventMessage
 
 let page: EventTarget & { visibilityState: string }
 let browser: EventTarget

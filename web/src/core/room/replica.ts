@@ -93,7 +93,7 @@ export class RoomReplica {
         this.state = { ...this.state, nowPlaying: event.data.nowPlaying }
         break
       case 'queue.updated':
-        this.state = { ...this.state, pending: event.data.pending, items: event.data.items }
+        this.state = { ...this.state, pending: event.data.pending, next: event.data.next, items: event.data.items }
         break
       case 'members.updated':
         this.state = { ...this.state, members: event.data }

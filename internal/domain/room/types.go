@@ -84,4 +84,6 @@ type View struct {
 	Seq      uint64
 	Snapshot Snapshot
 	Sessions []Session
+	// 下一首的条目 ID，没有时为 0，规则见 upNext。
+	Next EntryID
 }

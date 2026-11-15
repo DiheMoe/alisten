@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "f653116b60b2c244"
+const Version = "10a70c0dce07a9a7"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -544,6 +544,12 @@ type MyPlaylistItem struct {
 	Track Track     `json:"track"`
 }
 
+type NextTrack struct {
+	EntryID      string `json:"entryId"`
+	LoadWithinMs *int64 `json:"loadWithinMs"`
+	MediaURL     string `json:"mediaUrl"`
+}
+
 type NowPlaying struct {
 	DurationMs  int64   `json:"durationMs"`
 	Entry       Entry   `json:"entry"`
@@ -665,8 +671,9 @@ type QueueRemoveRequest struct {
 }
 
 type QueueUpdatedEvent struct {
-	Items   []Entry `json:"items"`
-	Pending *Entry  `json:"pending"`
+	Items   []Entry    `json:"items"`
+	Next    *NextTrack `json:"next"`
+	Pending *Entry     `json:"pending"`
 }
 
 func (v QueueUpdatedEvent) MarshalJSON() ([]byte, error) {
@@ -775,6 +782,7 @@ type RoomListing struct {
 type RoomSnapshot struct {
 	Items      []Entry     `json:"items"`
 	Members    Members     `json:"members"`
+	Next       *NextTrack  `json:"next"`
 	NowPlaying *NowPlaying `json:"nowPlaying"`
 	Pending    *Entry      `json:"pending"`
 	PlayMode   PlayMode    `json:"playMode"`

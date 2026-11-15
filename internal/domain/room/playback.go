@@ -14,7 +14,11 @@ func (r *Room) advanceIfIdle(b *batch) {
 	}
 	i := 0
 	if r.mode == Random {
-		i = b.rand.IntN(len(r.waiting))
+		i = r.waitingIndex(r.next)
+		if i < 0 {
+			i = b.rand.IntN(len(r.waiting))
+		}
+		r.next = 0
 	}
 	next := r.waiting[i]
 	r.waiting = slices.Delete(r.waiting, i, i+1)
@@ -22,6 +26,34 @@ func (r *Room) advanceIfIdle(b *batch) {
 	if next.Ready {
 		r.start(b)
 	}
+}
+
+// 下一首只在有歌在播、并且已经准备好时才有。客户端要在当前这首放完之前加载它的音频，而没准备好的歌可能还没有音频，比如链接和 B 站的歌要先下载进对象存储。
+// 顺序和轮流模式下是排序之后的第一首，随机模式下是 drawNext 抽好的那首。
+func (r *Room) upNext() EntryID {
+	if r.current == nil {
+		return 0
+	}
+	i := 0
+	if r.mode == Random {
+		i = r.waitingIndex(r.next)
+	}
+	if i < 0 || i >= len(r.waiting) || !r.waiting[i].Ready {
+		return 0
+	}
+	return r.waiting[i].ID
+}
+
+// 随机模式在有歌在播时提前抽好下一首，这样客户端能提前加载。抽中的歌一直留作下一首，直到它被选中、离开等待队列，或者房间换成别的模式。它没准备好时 upNext 返回 0，准备好之后才下发。
+func (r *Room) drawNext(b *batch) {
+	if r.mode != Random {
+		r.next = 0
+		return
+	}
+	if r.current == nil || len(r.waiting) == 0 || r.waitingIndex(r.next) >= 0 {
+		return
+	}
+	r.next = r.waiting[b.rand.IntN(len(r.waiting))].ID
 }
 
 func (r *Room) start(b *batch) {

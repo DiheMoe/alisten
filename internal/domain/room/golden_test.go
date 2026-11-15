@@ -253,7 +253,7 @@ func formatEvent(e Event) string {
 		}
 		return "members [" + strings.Join(parts, " ") + "]"
 	case QueueChanged:
-		return fmt.Sprintf("queue pending=%s waiting=%s", formatEntryPtr(e.Pending), formatEntries(e.Waiting))
+		return fmt.Sprintf("queue pending=%s waiting=%s next=%s", formatEntryPtr(e.Pending), formatEntries(e.Waiting), formatID(e.Next))
 	case PlaybackChanged:
 		return "playback " + formatPlaying(e.Current)
 	case ModeChanged:
@@ -293,7 +293,7 @@ func formatResult(r Reply) string {
 		}
 		return s
 	case SyncResult:
-		return fmt.Sprintf("sync term=%d seq=%d sessions=%d", res.View.Term, res.View.Seq, len(res.View.Sessions))
+		return fmt.Sprintf("sync term=%d seq=%d sessions=%d next=%s", res.View.Term, res.View.Seq, len(res.View.Sessions), formatID(res.View.Next))
 	}
 	panic(fmt.Sprintf("未知的回复：%#v", r))
 }
@@ -320,6 +320,13 @@ func formatEntryPtr(e *Entry) string {
 		return "-"
 	}
 	return formatEntry(*e)
+}
+
+func formatID(id EntryID) string {
+	if id == 0 {
+		return "-"
+	}
+	return fmt.Sprintf("#%d", id)
 }
 
 func formatEntries(entries []Entry) string {

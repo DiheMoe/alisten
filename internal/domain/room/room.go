@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	// 开播时间比切歌晚 startLead。客户端收到切歌之后才开始加载音频，留出这段时间，网络正常的客户端加载好时还没到开播时间，就能和其他人同时从头放。
+	// 开播时间比切歌晚 startLead。没预加载上的客户端收到切歌之后才开始加载音频，留出这段时间，网络正常的客户端加载好时还没到开播时间，就能和其他人同时从头放。
 	startLead           = 1500 * time.Millisecond
 	closeDelay          = 5 * time.Minute
 	autoDJQuiet         = 10 * time.Second
@@ -41,6 +41,8 @@ type Room struct {
 	endTimer       Token
 	closeTimer     Token
 	recommendation Token
+	// 随机模式下提前抽好的下一首。它和 served 一样只在内存中，换 owner 之后重新抽。
+	next EntryID
 	// 各点歌人已开播的最高轮次。served 只在内存中，所以换 owner 之后，刚放过歌的点歌人可能提前一轮。已在队列中的歌不受影响。
 	served map[requester]int
 }
@@ -79,6 +81,7 @@ func Restore(env Env, term uint32, s Snapshot) (*Room, []Effect) {
 		r.start(b)
 	}
 	r.advanceIfIdle(b)
+	r.drawNext(b)
 	if r.info.Kind == Ephemeral {
 		r.closeTimer = r.schedule(b, env.Now.Add(closeDelay))
 	}
@@ -123,27 +126,30 @@ func (r *Room) Handle(env Env, in Input) []Effect {
 	}
 	// 入队、点赞和切换播放模式都会改变等待队列的顺序。处理完统一排序，各条规则就不必各自排序。
 	r.sortWaiting()
+	r.drawNext(b)
 	return r.commit(b)
 }
 
 type batch struct {
-	now      time.Time
-	rand     *rand.Rand
-	before   Snapshot
-	sessions []Session
-	events   []Event
-	plays    []RecordPlay
-	closed   bool
-	answer   *Reply
-	tasks    []Effect
+	now        time.Time
+	rand       *rand.Rand
+	before     Snapshot
+	beforeNext EntryID
+	sessions   []Session
+	events     []Event
+	plays      []RecordPlay
+	closed     bool
+	answer     *Reply
+	tasks      []Effect
 }
 
 func (r *Room) begin(env Env) *batch {
 	return &batch{
-		now:      env.Now,
-		rand:     rand.New(rand.NewPCG(env.Seed, 0)),
-		before:   r.snapshot(),
-		sessions: slices.Clone(r.sessions),
+		now:        env.Now,
+		rand:       rand.New(rand.NewPCG(env.Seed, 0)),
+		before:     r.snapshot(),
+		beforeNext: r.upNext(),
+		sessions:   slices.Clone(r.sessions),
 	}
 }
 
@@ -181,11 +187,14 @@ func (r *Room) commit(b *batch) []Effect {
 	if !slices.Equal(b.sessions, r.sessions) {
 		events = append(events, MembersChanged{Sessions: slices.Clone(r.sessions)})
 	}
-	if !samePtr(b.before.Pending, after.Pending) || !slices.Equal(b.before.Waiting, after.Waiting) {
-		events = append(events, QueueChanged{Pending: after.Pending, Waiting: after.Waiting})
-	}
+	next := r.upNext()
+	// 开播变化排在队列变化前面。切歌时客户端先看到开播，才能换上预加载好的那首。先看到队列变化的话，下一首已经换了，预加载的那首会被当成作废的丢掉。
 	if !samePtr(b.before.Current, after.Current) {
 		events = append(events, PlaybackChanged{Current: after.Current})
+	}
+	// 待播开播或者随机模式重新抽签时，等待队列可能没变，下一首却变了，所以要单独比较。
+	if !samePtr(b.before.Pending, after.Pending) || !slices.Equal(b.before.Waiting, after.Waiting) || next != b.beforeNext {
+		events = append(events, QueueChanged{Pending: after.Pending, Waiting: after.Waiting, Next: next})
 	}
 	for _, e := range events {
 		r.seq++
@@ -247,7 +256,7 @@ func (r *Room) snapshot() Snapshot {
 }
 
 func (r *Room) view() View {
-	return View{Term: r.term, Seq: r.seq, Snapshot: r.snapshot(), Sessions: slices.Clone(r.sessions)}
+	return View{Term: r.term, Seq: r.seq, Snapshot: r.snapshot(), Sessions: slices.Clone(r.sessions), Next: r.upNext()}
 }
 
 func (r *Room) issue() Token {

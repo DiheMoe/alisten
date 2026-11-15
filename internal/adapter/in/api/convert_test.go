@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,6 +46,7 @@ func TestSnapshotDTO(t *testing.T) {
 	view := room.View{
 		Term: 3,
 		Seq:  128,
+		Next: 14,
 		Snapshot: room.Snapshot{
 			Info:    room.Info{ID: "0199f1c2-0000-7000-8000-000000000001", Name: "大厅", Description: "常驻", Kind: room.Persistent},
 			Mode:    room.Random,
@@ -56,6 +58,7 @@ func TestSnapshotDTO(t *testing.T) {
 	}
 	want := `{"items":[{"auto":true,"by":null,"id":"14","likes":0,"meta":{"album":"","artist":"","coverUrl":"","durationMs":0,"pageUrl":"","title":"七里香"},"status":"ready","track":{"id":"185811","source":"netease"}}],` +
 		`"members":{"onlineCount":2,"sessions":[{"avatarHash":"c160f8cc69a4f0bf2b0362752353d060","id":"0199f1c2-8a4b-7c3d-9e5f-6a7b8c9d0e1f","name":"alice"},{"avatarHash":"c160f8cc69a4f0bf2b0362752353d060","id":"0199f1c2-8a4b-7c3d-9e5f-6a7b8c9d0e1f","name":"alice"}]},` +
+		`"next":{"entryId":"14","loadWithinMs":60000,"mediaUrl":"/media/netease/185811"},` +
 		`"nowPlaying":{"durationMs":269500,"entry":{"auto":false,"by":{"avatarHash":"c160f8cc69a4f0bf2b0362752353d060","id":"0199f1c2-8a4b-7c3d-9e5f-6a7b8c9d0e1f","name":"alice"},"id":"12","likes":2,"meta":{"album":"叶惠美","artist":"周杰伦","coverUrl":"https://p1.music.126.net/example.jpg","durationMs":269000,"pageUrl":"https://music.163.com/#/song?id=186016","title":"晴天"},"status":"ready","track":{"id":"186016","source":"netease"}},"gain":0.75,"lyric":"[00:01.00]故事的小黄花","mediaUrl":"/media/netease/186016","startedAtMs":1760000000123},` +
 		`"pending":{"auto":false,"by":{"avatarHash":"c160f8cc69a4f0bf2b0362752353d060","id":"0199f1c2-8a4b-7c3d-9e5f-6a7b8c9d0e1f","name":"alice"},"id":"13","likes":0,"meta":{"album":"","artist":"","coverUrl":"","durationMs":0,"pageUrl":"https://www.youtube.com/watch?v=x","title":"https://www.youtube.com/watch?v=x"},"status":"preparing","track":{"id":"https://www.youtube.com/watch?v=x","source":"link"}},` +
 		`"playMode":"random","room":{"description":"常驻","id":"0199f1c2-0000-7000-8000-000000000001","kind":"persistent","name":"大厅"},"seq":128,"term":3}`
@@ -64,7 +67,7 @@ func TestSnapshotDTO(t *testing.T) {
 	}
 
 	empty := room.View{Term: 1, Snapshot: room.Snapshot{Info: room.Info{ID: "r", Kind: room.Ephemeral}, Mode: room.Sequential}}
-	wantEmpty := `{"items":[],"members":{"onlineCount":0,"sessions":[]},"nowPlaying":null,"pending":null,"playMode":"sequential","room":{"description":"","id":"r","kind":"ephemeral","name":""},"seq":0,"term":1}`
+	wantEmpty := `{"items":[],"members":{"onlineCount":0,"sessions":[]},"next":null,"nowPlaying":null,"pending":null,"playMode":"sequential","room":{"description":"","id":"r","kind":"ephemeral","name":""},"seq":0,"term":1}`
 	if got := jsonOf(t, s.snapshot(empty)); got != wantEmpty {
 		t.Errorf("空房间的快照编码为\n%s\n期望\n%s", got, wantEmpty)
 	}
@@ -180,6 +183,23 @@ func TestTrackOfNormalizesLinks(t *testing.T) {
 		if got := trackOf(tt.in); got != tt.want {
 			t.Errorf("trackOf(%+v) = %+v，期望 %+v", tt.in, got, tt.want)
 		}
+	}
+}
+
+func TestNextTrackDTO(t *testing.T) {
+	s := &server{Services: Services{StorageURL: "https://alisten.example/storage/alisten"}}
+	link := room.Entry{ID: 21, Track: linkTrack, Meta: track.Meta{Title: linkTrack.ID}, Ready: true}
+	stored := s.next(21, []room.Entry{sunnyEntry, link})
+	want := `{"entryId":"21","loadWithinMs":null,"mediaUrl":"https://alisten.example/storage/alisten/link/` + media.Key(linkTrack.ID) + `/audio.mp3"}`
+	if got := jsonOf(t, stored); got != want {
+		t.Errorf("对象存储里的下一首编码为 %s，期望 %s", got, want)
+	}
+	if got := s.next(0, []room.Entry{sunnyEntry}); got != nil {
+		t.Errorf("没有下一首时应为 nil，实际 %s", jsonOf(t, got))
+	}
+	typ, data := s.event(room.QueueChanged{Waiting: []room.Entry{sunnyEntry}, Next: 12})
+	if got := jsonOf(t, data); typ != protocol.EventQueueUpdated || !strings.Contains(got, `"next":{"entryId":"12","loadWithinMs":60000,"mediaUrl":"/media/netease/186016"}`) {
+		t.Errorf("队列事件编码为 %s %s", typ, got)
 	}
 }
 

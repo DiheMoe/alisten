@@ -17,15 +17,15 @@ emit 1.4 members [s1=m1 s2=m2 s3=m3 s4=m3]
 > 1s enqueue m1 netease:a
 persist mode=sequential entrySeq=1 current=- pending=#1(netease:a) waiting=[]
 emit 1.5 activity added m1 #1(netease:a)
-emit 1.6 queue pending=#1(netease:a) waiting=[]
+emit 1.6 queue pending=#1(netease:a) waiting=[] next=-
 reply q06 enqueued #1(netease:a)
 prepare netease:a
 -- 07 --
 > 1s prepared netease:a 3m
 persist mode=sequential entrySeq=1 current=#1(netease:a,ready)@2.5s pending=- waiting=[]
 listen [m1 m2 m3] #1(netease:a,ready)@2.5s
-emit 1.7 queue pending=- waiting=[]
-emit 1.8 playback #1(netease:a,ready)@2.5s
+emit 1.7 playback #1(netease:a,ready)@2.5s
+emit 1.8 queue pending=- waiting=[] next=-
 schedule 1 3m2.5s
 -- 08 --
 > 10s vote m1

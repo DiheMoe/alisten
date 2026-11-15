@@ -19,8 +19,8 @@ import (
 
 const (
 	resolveTimeout = 30 * time.Second
-	// 各平台播放地址的有效期未知，1 分钟是保守的取值。
-	reuseWindow = time.Minute
+	// 各平台播放地址的有效期未知，1 分钟是保守的取值。同一个实例在这段时间里复用解析到的地址，客户端也只在切歌前这么久之内预加载下一首。
+	URLLifetime = time.Minute
 	reuseLimit  = 4096
 )
 
@@ -111,7 +111,7 @@ func (p *Playback) remember(t track.Track, target string, now time.Time) {
 	if _, ok := p.resolved[t]; !ok && len(p.resolved) >= reuseLimit {
 		return
 	}
-	p.resolved[t] = resolvedURL{url: target, expires: now.Add(reuseWindow)}
+	p.resolved[t] = resolvedURL{url: target, expires: now.Add(URLLifetime)}
 }
 
 type panicError struct {

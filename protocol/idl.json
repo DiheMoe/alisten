@@ -243,13 +243,24 @@
       },
       "required": ["id", "track", "meta", "by", "auto", "likes", "status"]
     },
+    "NextTrack": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "下一首。客户端可以在当前这首放完之前提前加载它的音频，这样切歌时不用再等加载",
+      "properties": {
+        "entryId": {"type": "string", "description": "等待队列里这首歌的条目 ID"},
+        "mediaUrl": {"type": "string", "description": "播放地址，和这首歌开播之后 nowPlaying.mediaUrl 的值相同"},
+        "loadWithinMs": {"anyOf": [{"type": "integer"}, {"type": "null"}], "description": "播放地址有时效时，只能在当前这首结束前这么多毫秒之内开始加载，也就是从 nowPlaying.startedAtMs + nowPlaying.durationMs - loadWithinMs 开始。为 null 时地址长期有效，随时可以加载"}
+      },
+      "required": ["entryId", "mediaUrl", "loadWithinMs"]
+    },
     "NowPlaying": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "entry": {"$ref": "#/$defs/Entry"},
         "mediaUrl": {"type": "string"},
-        "startedAtMs": {"type": "integer"},
+        "startedAtMs": {"type": "integer", "description": "开播时间，Unix 毫秒。切歌时会比当前时间晚一点，留给客户端加载音频。还没到这个时间时，先加载、停在开头，到时间再从 0 开始放。已经过了这个时间时，从“当前时间减 startedAtMs”的位置开始放。当前时间指服务端的时间，用 hello 响应的 serverTimeMs 和 ping 估计的时钟偏移换算"},
         "durationMs": {"type": "integer", "description": "准备结果中的时长"},
         "gain": {"type": "number", "description": "线性增益系数"},
         "lyric": {"type": "string"},
@@ -289,10 +300,11 @@
         "playMode": {"$ref": "#/$defs/PlayMode"},
         "nowPlaying": {"anyOf": [{"$ref": "#/$defs/NowPlaying"}, {"type": "null"}]},
         "pending": {"anyOf": [{"$ref": "#/$defs/Entry"}, {"type": "null"}]},
+        "next": {"anyOf": [{"$ref": "#/$defs/NextTrack"}, {"type": "null"}], "description": "下一首。顺序和轮流模式下是等待队列的第一首，随机模式下是服务端提前抽好的那首。没有歌在播放，或者下一首还没准备好时为 null"},
         "items": {"type": "array", "items": {"$ref": "#/$defs/Entry"}, "description": "等待队列"},
         "members": {"$ref": "#/$defs/Members"}
       },
-      "required": ["term", "seq", "room", "playMode", "nowPlaying", "pending", "items", "members"]
+      "required": ["term", "seq", "room", "playMode", "nowPlaying", "pending", "next", "items", "members"]
     },
     "RoomListing": {
       "type": "object",
@@ -703,7 +715,7 @@
   "x-events": [
     {
       "type": "playback.updated",
-      "description": "没有正在播放的歌时 nowPlaying 为 null，包括待播仍在准备中的时候",
+      "description": "没有正在播放的歌时 nowPlaying 为 null，包括待播仍在准备中的时候。切歌时它先于同一批的 queue.updated 发出，所以收到它时，刚开播的条目可能还留在 items 或 pending 里",
       "data": {
         "type": "object",
         "additionalProperties": false,
@@ -715,15 +727,16 @@
     },
     {
       "type": "queue.updated",
-      "description": "待播和等待队列的完整快照",
+      "description": "待播、等待队列和下一首的完整快照。只有下一首变了时也会发出",
       "data": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "pending": {"anyOf": [{"$ref": "#/$defs/Entry"}, {"type": "null"}]},
+          "next": {"anyOf": [{"$ref": "#/$defs/NextTrack"}, {"type": "null"}], "description": "下一首。顺序和轮流模式下是等待队列的第一首，随机模式下是服务端提前抽好的那首。没有歌在播放，或者下一首还没准备好时为 null"},
           "items": {"type": "array", "items": {"$ref": "#/$defs/Entry"}}
         },
-        "required": ["pending", "items"]
+        "required": ["pending", "next", "items"]
       }
     },
     {

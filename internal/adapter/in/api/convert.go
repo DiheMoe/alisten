@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -83,7 +84,7 @@ func (s *server) event(e room.Event) (string, any) {
 	case room.PlaybackChanged:
 		return protocol.EventPlaybackUpdated, protocol.PlaybackUpdatedEvent{NowPlaying: s.nowPlaying(e.Current)}
 	case room.QueueChanged:
-		return protocol.EventQueueUpdated, protocol.QueueUpdatedEvent{Pending: s.entryPtr(e.Pending), Items: s.entries(e.Waiting)}
+		return protocol.EventQueueUpdated, protocol.QueueUpdatedEvent{Pending: s.entryPtr(e.Pending), Items: s.entries(e.Waiting), Next: s.next(e.Next, e.Waiting)}
 	case room.MembersChanged:
 		return protocol.EventMembersUpdated, members(e.Sessions)
 	case room.ModeChanged:
@@ -106,6 +107,7 @@ func (s *server) snapshot(v room.View) protocol.RoomSnapshot {
 		PlayMode:   playMode(v.Snapshot.Mode),
 		NowPlaying: s.nowPlaying(v.Snapshot.Current),
 		Pending:    s.entryPtr(v.Snapshot.Pending),
+		Next:       s.next(v.Next, v.Snapshot.Waiting),
 		Items:      s.entries(v.Snapshot.Waiting),
 		Members:    members(v.Sessions),
 	}
@@ -125,6 +127,21 @@ func (s *server) nowPlaying(p *room.NowPlaying) *protocol.NowPlaying {
 		LyricWords:  optional(p.Entry.Prep.LyricWords),
 		LyricTrans:  optional(p.Entry.Prep.LyricTrans),
 	}
+}
+
+// id 为 0 表示没有下一首。不为 0 时领域保证它在 waiting 里，所以不再检查找没找到。
+func (s *server) next(id room.EntryID, waiting []room.Entry) *protocol.NextTrack {
+	if id == 0 {
+		return nil
+	}
+	t := waiting[slices.IndexFunc(waiting, func(e room.Entry) bool { return e.ID == id })].Track
+	d := &protocol.NextTrack{EntryID: strconv.FormatUint(uint64(id), 10), MediaURL: s.mediaURL(t)}
+	// 对象存储的地址长期有效。网易云和 QQ 经 /media 跳到的地址有时效，只能在切歌前 URLLifetime 之内加载。
+	if !media.Stored(t.Source) {
+		within := media.URLLifetime.Milliseconds()
+		d.LoadWithinMs = &within
+	}
+	return d
 }
 
 func optional(s string) *string {

@@ -232,8 +232,8 @@ func TestEffectsRunInOrder(t *testing.T) {
 			"1/2 room.Activity",
 			"1/3 room.QueueChanged",
 			"reply r1 room.EnqueueResult",
-			"1/4 room.QueueChanged",
-			"1/5 room.PlaybackChanged",
+			"1/4 room.PlaybackChanged",
+			"1/5 room.QueueChanged",
 		)
 
 		time.Sleep(sunnyP.Duration + 1500*time.Millisecond)
@@ -373,8 +373,8 @@ func TestListensAreWrittenBeforeTheBroadcast(t *testing.T) {
 			"1/3 room.QueueChanged",
 			"reply r1 room.EnqueueResult",
 			"listen 1 186016",
-			"1/4 room.QueueChanged",
-			"1/5 room.PlaybackChanged",
+			"1/4 room.PlaybackChanged",
+			"1/5 room.QueueChanged",
 		)
 		f.send(t, id, room.Join{Session: "s2", Member: b})
 		checkLog(t, listens.messages(), "listen 1 186016", "1/6 room.MembersChanged")
@@ -398,7 +398,7 @@ func TestListenFailureKeepsRoomRunning(t *testing.T) {
 
 		f.send(t, id, room.Join{Session: "s1", Member: a})
 		f.send(t, id, command("r1", a, room.Enqueue{Track: sunny, Meta: sunnyM}))
-		if got := listens.messages(); !slices.Contains(got, "1/5 room.PlaybackChanged") {
+		if got := listens.messages(); !slices.Contains(got, "1/4 room.PlaybackChanged") {
 			t.Errorf("写入失败之后的房间消息 = %v，期望照常广播开播", got)
 		}
 		if owner := f.owner(t, id); owner != "a" {
@@ -481,7 +481,7 @@ func TestPrepareOfAbandonedRunIsDiscarded(t *testing.T) {
 		checkMessages(t, f.spy.take())
 		close(preparer.fresh)
 		synctest.Wait()
-		checkMessages(t, f.spy.take(), "2/1 room.QueueChanged", "2/2 room.PlaybackChanged")
+		checkMessages(t, f.spy.take(), "2/1 room.PlaybackChanged", "2/2 room.QueueChanged")
 	})
 }
 

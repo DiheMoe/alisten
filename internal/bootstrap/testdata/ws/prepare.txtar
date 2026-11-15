@@ -35,7 +35,7 @@ Authorization: Bearer $alice
   "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
   "serverTimeMs": 1,
   "room": {"term": 1, "seq": 1, "room": {"id": "$room", "name": "大厅", "description": "", "kind": "persistent"},
-    "playMode": "sequential", "nowPlaying": null, "pending": null, "items": [],
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
 
 -- send alice --
@@ -47,7 +47,7 @@ Authorization: Bearer $alice
   "message": "点了《不能播放的歌》"}}
 -- receive alice --
 {"kind": "event", "type": "queue.updated", "term": 1, "seq": 3, "data": {"items": [],
-  "pending": {"id": "1", "track": {"source": "netease", "id": "404"}, "meta": {"title": "不能播放的歌", "artist": "无名", "album": "", "coverUrl": "", "pageUrl": "https://music.163.com/#/song?id=404", "durationMs": 60000},
+  "next": null, "pending": {"id": "1", "track": {"source": "netease", "id": "404"}, "meta": {"title": "不能播放的歌", "artist": "无名", "album": "", "coverUrl": "", "pageUrl": "https://music.163.com/#/song?id=404", "durationMs": 60000},
     "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}}
 -- receive alice --
 {"kind": "response", "type": "queue.add", "id": "a1", "data": {"entry": {"id": "1", "track": {"source": "netease", "id": "404"},
@@ -59,4 +59,4 @@ Authorization: Bearer $alice
     "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"},
   "message": "《不能播放的歌》没能准备好：网易云没有提供这首歌的播放地址"}}
 -- receive alice --
-{"kind": "event", "type": "queue.updated", "term": 1, "seq": 5, "data": {"pending": null, "items": []}}
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 5, "data": {"next": null, "pending": null, "items": []}}

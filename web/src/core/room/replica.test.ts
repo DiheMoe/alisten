@@ -12,6 +12,7 @@ function snapshot(term: number, seq: number, patch: Partial<RoomSnapshot> = {}):
     playMode: 'sequential',
     nowPlaying: null,
     pending: null,
+    next: null,
     items: [],
     members: { sessions: [], onlineCount: 0 },
     ...patch,
@@ -31,7 +32,7 @@ function entry(id: string): Entry {
 }
 
 function queued(term: number, seq: number, ids: string[]): RoomEventMessage {
-  return { kind: 'event', type: 'queue.updated', term, seq, data: { pending: null, items: ids.map(entry) } }
+  return { kind: 'event', type: 'queue.updated', term, seq, data: { pending: null, next: null, items: ids.map(entry) } }
 }
 
 function chat(term: number, seq: number, content: string): RoomEventMessage {
@@ -41,6 +42,14 @@ function chat(term: number, seq: number, content: string): RoomEventMessage {
 const nothing = { changed: false, notice: null, sync: false }
 
 describe('roomReplica', () => {
+  it('队列事件和快照都带着下一首', () => {
+    const next = { entryId: 'b', mediaUrl: '/media/netease/b', loadWithinMs: 60000 }
+    const replica = new RoomReplica(snapshot(3, 10, { next }))
+    expect(replica.state.next).toEqual(next)
+    replica.receive({ kind: 'event', type: 'queue.updated', term: 3, seq: 11, data: { pending: null, next: null, items: [entry('a')] } })
+    expect(replica.state.next).toBeNull()
+  })
+
   it('依次应用连续的事件', () => {
     const replica = new RoomReplica(snapshot(3, 10))
     expect(replica.receive(queued(3, 11, ['a']))).toEqual({ changed: true, notice: null, sync: false })

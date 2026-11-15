@@ -65,10 +65,10 @@ func TestCommandsReachOwnerOnAnotherInstance(t *testing.T) {
 			"1/3 room.Activity",
 			"1/4 room.QueueChanged",
 			"reply c1 room.EnqueueResult",
-			"1/5 room.QueueChanged",
-			"1/6 room.PlaybackChanged",
+			"1/5 room.PlaybackChanged",
+			"1/6 room.QueueChanged",
 		)
-		checkReceived(t, onA, "1/3 room.Activity", "1/4 room.QueueChanged", "1/5 room.QueueChanged", "1/6 room.PlaybackChanged")
+		checkReceived(t, onA, "1/3 room.Activity", "1/4 room.QueueChanged", "1/5 room.PlaybackChanged", "1/6 room.QueueChanged")
 		if owner := f.b.owner(t, f.room); owner != "a" {
 			t.Errorf("房间的 owner 是 %q，期望一直是 a", owner)
 		}

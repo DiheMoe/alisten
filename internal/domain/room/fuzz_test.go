@@ -54,6 +54,7 @@ func FuzzInvariants(f *testing.F) {
 			now += time.Duration(arg%16) * time.Second
 			env := Env{Now: t0.Add(now), Seed: uint64(i)}
 			before := r.snapshot()
+			beforeDrawn, beforeNext := r.next, r.upNext()
 			var effects []Effect
 			switch op % fuzzOps {
 			case fuzzRestore:
@@ -79,11 +80,57 @@ func FuzzInvariants(f *testing.F) {
 			// 房间关闭后就被丢弃，不会再收到输入。关闭时结束了正在播放的歌，但不再开播下一首。
 			closed := len(find[Close](effects)) != 0
 			checkInvariants(t, r, before, effects, term, &seq, closed)
+			checkNext(t, r, before, beforeDrawn, beforeNext, op%fuzzOps == fuzzRestore, effects)
 			if closed {
 				return
 			}
 		}
 	})
+}
+
+// 下一首要么没有，要么是有歌在播时等待队列里已准备好的歌。随机模式切歌时选中的是上一批抽好的那首，下一首变了要广播。
+// 恢复时抽签只在内存中，换了新的 Room，所以不检查和上一批的关系。
+func checkNext(t *testing.T, r *Room, before Snapshot, drawn, beforeNext EntryID, restored bool, effects []Effect) {
+	t.Helper()
+	next := r.upNext()
+	if next != 0 {
+		i := r.waitingIndex(next)
+		if r.current == nil || i < 0 || !r.waiting[i].Ready {
+			t.Fatalf("下一首 #%d 应是有歌在播时等待队列里已准备好的歌：current=%#v waiting=%#v", next, r.current, r.waiting)
+		}
+	}
+	if r.mode != Random && r.next != 0 {
+		t.Fatalf("非随机模式不应留着抽好的下一首：%d", r.next)
+	}
+	if r.mode == Random && r.current != nil && len(r.waiting) > 0 && r.waitingIndex(r.next) < 0 {
+		t.Fatalf("随机模式有歌在播时应抽好下一首：next=%d waiting=%#v", r.next, r.waiting)
+	}
+	if restored {
+		return
+	}
+	if before.Mode == Random && drawn != 0 {
+		if selected, ok := selectedFrom(before.Waiting, r); ok && selected != drawn && r.waitingIndex(drawn) >= 0 {
+			t.Fatalf("随机模式切歌选中了 #%d，抽好的 #%d 还在等待队列里", selected, drawn)
+		}
+	}
+	if next != beforeNext {
+		q := events[QueueChanged](effects)
+		if len(q) == 0 || q[len(q)-1].Next != next {
+			t.Fatalf("下一首从 #%d 变成 #%d，没有广播：%#v", beforeNext, next, effects)
+		}
+	}
+}
+
+// 这一批从等待队列里选中的歌，开播了或者成为待播。
+func selectedFrom(waiting []Entry, r *Room) (EntryID, bool) {
+	was := func(id EntryID) bool { return slices.ContainsFunc(waiting, func(e Entry) bool { return e.ID == id }) }
+	if r.current != nil && was(r.current.Entry.ID) {
+		return r.current.Entry.ID, true
+	}
+	if r.pending != nil && was(r.pending.ID) {
+		return r.pending.ID, true
+	}
+	return 0, false
 }
 
 func fuzzTrack(arg byte) track.Track {

@@ -568,7 +568,7 @@ func TestSessionRequests(t *testing.T) {
 		writeFrame(t, conn, hello(roomID, ticket))
 		self := `{"avatarHash":"","id":"` + m.ID + `","name":"` + m.Name + `"}`
 		snapshot := func(seq int) string {
-			return fmt.Sprintf(`{"term":1,"seq":%d,"room":{"id":"%s","name":"临时","description":"","kind":"ephemeral"},"playMode":"sequential","nowPlaying":null,"pending":null,"items":[],"members":{"sessions":[%s],"onlineCount":1}}`, seq, roomID, self)
+			return fmt.Sprintf(`{"term":1,"seq":%d,"room":{"id":"%s","name":"临时","description":"","kind":"ephemeral"},"playMode":"sequential","nowPlaying":null,"pending":null,"next":null,"items":[],"members":{"sessions":[%s],"onlineCount":1}}`, seq, roomID, self)
 		}
 		// 加入时的在线列表事件已经包含在快照中，不再单独发送。
 		checkMessage(t, conn, `{"kind":"response","type":"hello","id":"h1","data":{"member":`+self+`,"serverTimeMs":1,"room":`+snapshot(1)+`}}`)

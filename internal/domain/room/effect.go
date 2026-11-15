@@ -74,6 +74,8 @@ type PlaybackChanged struct {
 type QueueChanged struct {
 	Pending *Entry
 	Waiting []Entry
+	// 下一首的条目 ID，没有时为 0，规则见 upNext。
+	Next EntryID
 }
 
 type MembersChanged struct {

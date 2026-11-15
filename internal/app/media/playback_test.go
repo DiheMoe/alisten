@@ -216,7 +216,7 @@ func TestPlaybackCoalescesConcurrentRequests(t *testing.T) {
 		if n := urls.count(); n != 1 {
 			t.Errorf("同时到达的 3 个请求解析了 %d 次，期望 1 次", n)
 		}
-		if _, err := p.URL(t.Context(), sunny, t0.Add(reuseWindow)); err != nil || urls.count() != 2 {
+		if _, err := p.URL(t.Context(), sunny, t0.Add(URLLifetime)); err != nil || urls.count() != 2 {
 			t.Errorf("1 分钟之后的请求 = %v，解析了 %d 次，期望重新解析", err, urls.count())
 		}
 	})
