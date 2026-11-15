@@ -8,7 +8,7 @@ import { notificationStore } from '@/shared/lib/notification-store'
 import { Store } from '@/shared/lib/store'
 import { documentTitle } from './document-title'
 import { setMediaSessionHandlers, showMediaSession } from './media-session'
-import { driftSeekPosition, startPlan } from './timeline'
+import { driftSeekPosition, startLag, startPlan } from './timeline'
 import { volumeStore } from './volume-store'
 
 const driftCheckIntervalMs = 2000
@@ -24,6 +24,8 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
   #current: NowPlaying | null = null
   #load = 0
   #failures = 0
+  // 这首歌比房间落后的毫秒数，第一次开始播放时由 startLag 决定。之后恢复播放、出错重载和校正漂移都沿用这个值，否则开播几秒内的恢复会让这首歌从头再放一遍。
+  #lagMs: number | null = null
   #awaitingClock = false
   #startTimer: ReturnType<typeof setTimeout> | undefined
   #retryTimer: ReturnType<typeof setTimeout> | undefined
@@ -128,6 +130,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
     clearTimeout(this.#startTimer)
     clearTimeout(this.#retryTimer)
     this.#failures = 0
+    this.#lagMs = null
     this.#loadSource(next.mediaUrl, ++this.#load)
   }
 
@@ -165,7 +168,9 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
       return
     }
     this.#awaitingClock = false
-    const plan = startPlan(now - current.startedAtMs, current.durationMs)
+    const elapsed = now - current.startedAtMs
+    this.#lagMs ??= startLag(elapsed)
+    const plan = startPlan(elapsed - this.#lagMs, current.durationMs)
     switch (plan.kind) {
       case 'wait':
         audio.currentTime = 0
@@ -242,7 +247,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
     const now = clock.serverNow()
     if (!audio || !current || now === null)
       return
-    const expected = now - current.startedAtMs
+    const expected = now - current.startedAtMs - (this.#lagMs ?? 0)
     if (expected >= current.durationMs)
       return
     const positionMs = driftSeekPosition({
