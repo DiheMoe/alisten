@@ -599,7 +599,7 @@ func (h *Host) execute(ctx context.Context, r *hostedRoom, effects []room.Effect
 		case room.RecordListen:
 			h.recordListen(ctx, e)
 		case room.Emit:
-			if m, ok := e.Event.(room.MembersChanged); ok && !h.setOnline(ctx, r, len(m.Sessions)) {
+			if m, ok := e.Event.(room.MembersChanged); ok && !h.setOnline(ctx, r, room.Headcount(m.Sessions)) {
 				return false
 			}
 			if !h.publish(ctx, r, port.Emitted{Emit: e}) {

@@ -46,10 +46,11 @@ func TestOnlineCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 同一个成员的两个会话算两个在线。
+	// 同一个成员的两个会话只算一个人。
 	alice := member.Member{ID: "00000000-0000-7000-8000-00000000000a", Name: "alice"}
-	for range 2 {
-		session, err := gateway.Join(t.Context(), busy, alice, nil, nil)
+	bob := member.Member{ID: "00000000-0000-7000-8000-00000000000b", Name: "bob"}
+	for _, m := range []member.Member{alice, alice, bob} {
+		session, err := gateway.Join(t.Context(), busy, m, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

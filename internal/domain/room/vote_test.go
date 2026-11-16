@@ -4,30 +4,56 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/dihemoe/alisten/internal/domain/member"
 )
 
 func TestVoteSkipThreshold(t *testing.T) {
-	cases := []struct{ sessions, required int }{{0, 1}, {3, 1}, {4, 2}, {6, 2}, {7, 3}}
+	cases := []struct{ people, required int }{{0, 1}, {3, 1}, {4, 2}, {6, 2}, {7, 3}}
 	for _, tc := range cases {
-		t.Run(fmt.Sprintf("%d 个会话", tc.sessions), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d 个人", tc.people), func(t *testing.T) {
 			r := newRoom(t, Persistent)
-			for i := range tc.sessions {
-				r.Handle(at(0), Join{Session: SessionID(fmt.Sprint("s", i)), Member: alice})
+			for i := range tc.people {
+				r.Handle(at(0), Join{Session: SessionID(fmt.Sprint("s", i)), Member: member.Member{ID: fmt.Sprint("listener-", i)}})
 			}
 			playing(t, r, 0, netease("a"), time.Minute)
 
 			want := VoteResult{Votes: 1, Required: tc.required, Skipped: tc.required == 1}
 			if res, ok := reply(t, r.Handle(at(time.Second), command(bob, VoteSkip{}))).Result.(VoteResult); !ok || res != want {
-				t.Fatalf("%d 个会话的投票结果 = %#v，期望 %#v", tc.sessions, res, want)
+				t.Fatalf("%d 个人的投票结果 = %#v，期望 %#v", tc.people, res, want)
 			}
 		})
 	}
 }
 
+func TestVoteSkipCountsPeopleNotConnections(t *testing.T) {
+	r := newRoom(t, Persistent)
+	for i := range 4 {
+		r.Handle(at(0), Join{Session: SessionID(fmt.Sprint("a", i)), Member: alice})
+	}
+	r.Handle(at(0), Join{Session: "c", Member: carol})
+	playing(t, r, 0, netease("a"), time.Minute)
+
+	want := VoteResult{Votes: 1, Required: 1, Skipped: true}
+	if res, ok := reply(t, r.Handle(at(time.Second), command(alice, VoteSkip{}))).Result.(VoteResult); !ok || res != want {
+		t.Fatalf("两个人、其中一人开了 4 个连接时的投票结果 = %#v，期望 %#v", res, want)
+	}
+}
+
+func TestHeadcountCountsEachMemberOnce(t *testing.T) {
+	sessions := []Session{{ID: "a1", Member: alice}, {ID: "a2", Member: alice}, {ID: "b1", Member: bob}}
+	if got := Headcount(sessions); got != 2 {
+		t.Fatalf("Headcount = %d，期望 2", got)
+	}
+	if got := Headcount(nil); got != 0 {
+		t.Fatalf("没有会话时 Headcount = %d，期望 0", got)
+	}
+}
+
 func TestVotesResetForNextSong(t *testing.T) {
 	r := newRoom(t, Persistent)
-	for _, s := range []SessionID{"s1", "s2", "s3", "s4"} {
-		r.Handle(at(0), Join{Session: s, Member: alice})
+	for i, m := range []member.Member{alice, bob, carol, dave} {
+		r.Handle(at(0), Join{Session: SessionID(fmt.Sprint("s", i)), Member: m})
 	}
 	playing(t, r, 0, netease("a"), time.Minute)
 	r.Handle(at(0), enqueue(alice, netease("b")))

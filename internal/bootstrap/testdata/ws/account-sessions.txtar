@@ -82,10 +82,10 @@ Authorization: Bearer $alice2
   "serverTimeMs": 1,
   "room": {"term": 1, "seq": 2, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
     "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
-    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 2}}}}
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
 -- receive a --
 {"kind": "event", "type": "members.updated", "term": 1, "seq": 2, "data": {
-  "sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 2}}
+  "sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}
 
 -- stream b --
 Authorization: Bearer $ticketB
@@ -93,7 +93,7 @@ Authorization: Bearer $ticketB
 event: snapshot
 data: {"room": {"term": 1, "seq": 2, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
   "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
-  "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 2}}}
+  "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}
 
 -- request --
 PUT /api/account/password

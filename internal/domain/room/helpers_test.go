@@ -14,6 +14,7 @@ var (
 	alice = member.Member{ID: "m1", Name: "甲"}
 	bob   = member.Member{ID: "m2", Name: "乙"}
 	carol = member.Member{ID: "m3", Name: "丙"}
+	dave  = member.Member{ID: "m4", Name: "丁"}
 )
 
 func at(d time.Duration) Env { return Env{Now: t0.Add(d)} }

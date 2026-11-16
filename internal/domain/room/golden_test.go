@@ -19,7 +19,7 @@ import (
 
 var update = flag.Bool("update", false, "用实际输出重写 testdata 中的期望")
 
-var goldenMembers = map[string]member.Member{"m1": alice, "m2": bob, "m3": carol}
+var goldenMembers = map[string]member.Member{"m1": alice, "m2": bob, "m3": carol, "m4": dave}
 
 func TestGolden(t *testing.T) {
 	files, err := filepath.Glob("testdata/*.txtar")

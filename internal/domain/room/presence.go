@@ -21,6 +21,15 @@ func (r *Room) leave(b *batch, in Leave) {
 	}
 }
 
+// Headcount 是在线的人数。同一成员可能同时开着多个标签页或客户端，每个连接是一个会话，但只算一个人。
+func Headcount(sessions []Session) int {
+	people := map[string]bool{}
+	for _, s := range sessions {
+		people[s.Member.ID] = true
+	}
+	return len(people)
+}
+
 func (r *Room) memberUpdated(in MemberUpdated) {
 	for i := range r.sessions {
 		if r.sessions[i].Member.ID == in.Member.ID {

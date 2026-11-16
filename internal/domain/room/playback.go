@@ -107,7 +107,8 @@ func (r *Room) voteSkip(b *batch, by member.Member) (Result, *Error) {
 		return nil, errDuplicateVote
 	}
 	r.votes = append(r.votes, by.ID)
-	votes, required := len(r.votes), max((len(r.sessions)+2)/3, 1)
+	// 一人一票，所以门槛也按人数算，否则开着多个连接的成员会让票数永远凑不够。
+	votes, required := len(r.votes), max((Headcount(r.sessions)+2)/3, 1)
 	entry := r.current.Entry
 	if votes < required {
 		b.event(Activity{Kind: ActivityVoted, Member: by, Entry: entry, Votes: votes, Required: required})

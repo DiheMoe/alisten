@@ -229,7 +229,7 @@ func members(sessions []room.Session) protocol.Members {
 	for i, s := range sessions {
 		list[i] = memberDTO(s.Member)
 	}
-	return protocol.Members{Sessions: list, OnlineCount: int64(len(sessions))}
+	return protocol.Members{Sessions: list, OnlineCount: int64(room.Headcount(sessions))}
 }
 
 var activityKinds = map[room.ActivityKind]protocol.ActivityKind{

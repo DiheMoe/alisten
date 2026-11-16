@@ -627,6 +627,20 @@ func (failingDeleteStore) DeleteRoom(context.Context, string, uint32) error {
 	return errors.New("连接中断")
 }
 
+func TestOnlineCountCountsPeopleNotConnections(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		f := newHostFixture(t, store, store)
+		id := f.createRoom(t, room.Persistent)
+		f.send(t, id, room.Join{Session: "s1", Member: alice})
+		f.send(t, id, room.Join{Session: "s2", Member: alice})
+		f.send(t, id, room.Join{Session: "s3", Member: bob})
+		if n := f.online(t, id); n != 2 {
+			t.Errorf("两个人开了三个连接时在线人数 = %d，期望 2", n)
+		}
+	})
+}
+
 func TestEphemeralRoomClosesFiveMinutesAfterLastLeave(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()
