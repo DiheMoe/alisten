@@ -31,6 +31,7 @@
 .member:hover { background: var(--color-hover); }
 .member .avatar { width: 28px; }
 .member > span { min-width: 0; }
+.member-devices { flex-shrink: 0; margin-left: auto; }
 :root[data-performance='low'] .member-popover { animation: fade-in 160ms ease both; }
 @media (max-width: 767px) {
   .chat-heading { padding: 12px 16px; }

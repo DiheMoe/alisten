@@ -8,6 +8,7 @@ import { formatClock } from '@/shared/lib/time'
 import { useStore } from '@/shared/lib/use-store'
 import { Avatar, EmptyState, IconButton } from '@/shared/ui'
 import { chatStore } from './chat-store'
+import { groupSessions } from './members'
 import './chat.css'
 
 const batchSize = 80
@@ -38,8 +39,7 @@ function OnlineMembers() {
       document.removeEventListener('keydown', escape)
     }
   }, [open])
-  // 一个成员可以同时有多个会话，在线列表中每个会话占一项。
-  const occurrences = new Map<string, number>()
+  const people = groupSessions(sessions)
   return (
     <div className="member-popover-anchor" ref={anchorRef}>
       <button
@@ -61,16 +61,13 @@ function OnlineMembers() {
             <span className="text-ui-xs muted">{`${onlineCount} 人`}</span>
           </div>
           <div className="member-popover-list">
-            {sessions.map((member) => {
-              const occurrence = (occurrences.get(member.id) ?? 0) + 1
-              occurrences.set(member.id, occurrence)
-              return (
-                <div className="member text-ui-sm" key={`${member.id}:${occurrence}`}>
-                  <Avatar hash={member.avatarHash} name={member.name} className="text-ui-xs" />
-                  <span className="truncate">{member.name}</span>
-                </div>
-              )
-            })}
+            {people.map(({ member, devices }) => (
+              <div className="member text-ui-sm" key={member.id}>
+                <Avatar hash={member.avatarHash} name={member.name} className="text-ui-xs" />
+                <span className="truncate">{member.name}</span>
+                {devices > 1 && <span className="member-devices text-ui-xs muted">{`${devices} 台设备`}</span>}
+              </div>
+            ))}
             {!sessions.length && <p className="muted text-ui-sm">连上房间之后显示在线成员。</p>}
           </div>
         </div>
