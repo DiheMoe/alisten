@@ -117,6 +117,9 @@ func (r *Room) Handle(env Env, in Input) []Effect {
 		if in.Description != nil {
 			r.info.Description = *in.Description
 		}
+		if in.Capacity != nil {
+			r.info.Capacity = *in.Capacity
+		}
 		b.respond(in.RequestID, Done{}, nil)
 	case Delete:
 		r.stopPlayback(b)
@@ -196,7 +199,7 @@ func (r *Room) commit(b *batch) []Effect {
 	}
 	events := b.events
 	if after.Info != b.before.Info {
-		events = append(events, InfoChanged{Name: after.Info.Name, Description: after.Info.Description})
+		events = append(events, InfoChanged{Name: after.Info.Name, Description: after.Info.Description, Capacity: after.Info.Capacity})
 	}
 	if after.Mode != b.before.Mode {
 		events = append(events, ModeChanged{Mode: after.Mode})

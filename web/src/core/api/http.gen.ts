@@ -24,6 +24,7 @@ export interface AdminCheckQQLoginRequest {
 }
 
 export interface AdminCreateRoomRequest {
+  capacity?: number
   description: string
   name: string
   password?: string
@@ -80,6 +81,7 @@ export interface AdminListMediaResponse {
 }
 
 export interface AdminListRoomsResponse {
+  defaultCapacity: number
   items: RoomListing[]
 }
 
@@ -102,6 +104,10 @@ export interface AdminResetAccountPasswordResponse {
 
 export type AdminResetRoomApiKeyRequest = Record<string, never>
 
+export interface AdminSetEphemeralRoomCapacityRequest {
+  capacity: number
+}
+
 export interface AdminSetGithubCredentialRequest {
   clientId: string
   clientSecret: string
@@ -120,6 +126,7 @@ export interface AdminStartQQLoginRequest {
 }
 
 export interface AdminUpdateRoomRequest {
+  capacity?: number
   description?: string
   name?: string
   password?: string
@@ -210,6 +217,7 @@ export interface GetMeResponse {
 
 export interface GetSiteResponse {
   brandName: string
+  ephemeralRoomCapacity: number
   githubLogin: boolean
   registrationOpen: boolean
 }
@@ -415,6 +423,7 @@ export function httpClient(send: HttpSend) {
     adminUpdateSite: (body: AdminUpdateSiteRequest) => send<AdminUpdateSiteResponse>({ method: 'PATCH', path: '/api/admin/site', auth: 'admin', body }),
     adminOpenRegistration: () => send<void>({ method: 'PUT', path: '/api/admin/registration', auth: 'admin', body: {} }),
     adminCloseRegistration: () => send<void>({ method: 'DELETE', path: '/api/admin/registration', auth: 'admin' }),
+    adminSetEphemeralRoomCapacity: (body: AdminSetEphemeralRoomCapacityRequest) => send<void>({ method: 'PUT', path: '/api/admin/ephemeral-room-capacity', auth: 'admin', body }),
     adminGetAccount: (username: string) => send<AdminAccount>({ method: 'GET', path: `/api/admin/accounts/${encodeURIComponent(username)}`, auth: 'admin' }),
     adminResetAccountPassword: (username: string) => send<AdminResetAccountPasswordResponse>({ method: 'POST', path: `/api/admin/accounts/${encodeURIComponent(username)}/password`, auth: 'admin', body: {} }),
     listMyListens: () => send<ListMyListensResponse>({ method: 'GET', path: '/api/me/listens', auth: 'member' }),

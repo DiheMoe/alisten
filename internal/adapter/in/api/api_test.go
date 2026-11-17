@@ -42,7 +42,8 @@ func services(store *porttest.Store, rooms port.RoomDirectory, adminToken string
 	music := newCatalog(rooms, 10)
 	node := porttest.NewRedis().Node("a")
 	_, gateway := realtime.New(store, rooms, store, store, music, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
-	l := lobby.New(rooms, store, node, porttest.Quota{})
+	siteService := site.New(store)
+	l := lobby.New(rooms, siteService, node, porttest.Quota{})
 	accounts := identity.NewAccounts(store, store, nil, nil, nil, nil, gateway)
 	return Services{
 		Identity: identity.New(store, rooms, store, porttest.Quota{}, gateway),
@@ -51,7 +52,7 @@ func services(store *porttest.Store, rooms port.RoomDirectory, adminToken string
 		Admin:    admin.New(adminToken, l, rooms, store, store, porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), gateway),
 		Gateway:  gateway,
 		Catalog:  music,
-		Site:     site.New(store),
+		Site:     siteService,
 		// 这些测试不发起 GitHub 授权，只读取后台是否配置了 OAuth App。
 		GitHub: identity.NewGitHub(accounts, store, nil, nil),
 	}

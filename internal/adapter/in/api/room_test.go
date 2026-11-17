@@ -25,6 +25,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/port/porttest"
 	"github.com/dihemoe/alisten/internal/app/realtime"
+	"github.com/dihemoe/alisten/internal/app/site"
 	"github.com/dihemoe/alisten/internal/domain/member"
 	"github.com/dihemoe/alisten/internal/domain/room"
 	"github.com/dihemoe/alisten/internal/domain/track"
@@ -59,7 +60,7 @@ func newRoomFixture(t *testing.T) roomFixture {
 		stop()
 		wait()
 	})
-	l := lobby.New(store, store, node, porttest.Quota{})
+	l := lobby.New(store, site.New(store), node, porttest.Quota{})
 	server, _ := start(t, Services{
 		Identity:   identity.New(store, store, store, porttest.Quota{}, gateway),
 		Lobby:      l,

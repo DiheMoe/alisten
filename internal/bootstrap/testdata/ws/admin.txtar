@@ -63,7 +63,7 @@ Authorization: Bearer $alice
 {"kind": "response", "type": "hello", "id": "h1", "data": {
   "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
   "serverTimeMs": 1,
-  "room": {"term": 1, "seq": 1, "room": {"id": "$hall", "name": "大厅", "description": "常驻", "kind": "persistent"},
+  "room": {"term": 1, "seq": 1, "room": {"id": "$hall", "name": "大厅", "description": "常驻", "kind": "persistent", "capacity": 64},
     "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
 
@@ -75,7 +75,7 @@ Authorization: Bearer admin-secret
 -- response --
 204
 -- receive alice --
-{"kind": "event", "type": "room.updated", "term": 1, "seq": 2, "data": {"name": "新大厅", "description": "常驻"}}
+{"kind": "event", "type": "room.updated", "term": 1, "seq": 2, "data": {"name": "新大厅", "description": "常驻", "capacity": 64}}
 
 -- request --
 PATCH /api/admin/rooms/hall
@@ -94,7 +94,7 @@ Authorization: Bearer admin-secret
 -- response --
 204
 -- receive alice --
-{"kind": "event", "type": "room.updated", "term": 1, "seq": 3, "data": {"name": "新大厅", "description": "换了描述"}}
+{"kind": "event", "type": "room.updated", "term": 1, "seq": 3, "data": {"name": "新大厅", "description": "换了描述", "capacity": 64}}
 
 -- request --
 GET /api/rooms/hall
@@ -106,7 +106,7 @@ GET /api/rooms/hall
 GET /api/rooms/$hall
 -- response --
 200
-{"id": "$hall", "slug": null, "name": "新大厅", "description": "换了描述", "kind": "persistent", "hasPassword": false, "onlineCount": 1}
+{"id": "$hall", "slug": null, "name": "新大厅", "description": "换了描述", "kind": "persistent", "hasPassword": false, "onlineCount": 1, "capacity": 64}
 
 -- request --
 PATCH /api/admin/rooms/$hall
@@ -166,7 +166,7 @@ Authorization: Bearer admin-secret
 {"kind": "response", "type": "hello", "id": "h1", "data": {
   "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
   "serverTimeMs": 1,
-  "room": {"term": 1, "seq": 1, "room": {"id": "$lounge", "name": "二厅", "description": "", "kind": "persistent"},
+  "room": {"term": 1, "seq": 1, "room": {"id": "$lounge", "name": "二厅", "description": "", "kind": "persistent", "capacity": 64},
     "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
 

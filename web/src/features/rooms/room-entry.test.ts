@@ -11,7 +11,7 @@ const member = { id: 'm1', name: 'alice', avatarHash: '' }
 const snapshot: RoomSnapshot = {
   term: 1,
   seq: 0,
-  room: { id: 'r1', name: '房间', description: '', kind: 'persistent' },
+  room: { id: 'r1', name: '房间', description: '', kind: 'persistent', capacity: 64 },
   playMode: 'sequential',
   nowPlaying: null,
   pending: null,
@@ -27,7 +27,7 @@ function acceptHello(socket: FakeSocket): void {
 }
 
 function listing(patch: Partial<RoomListing> = {}): RoomListing {
-  return { id: 'r1', slug: null, name: '房间', description: '', kind: 'persistent', hasPassword: false, onlineCount: 0, ...patch }
+  return { id: 'r1', slug: null, name: '房间', description: '', kind: 'persistent', hasPassword: false, onlineCount: 0, capacity: 64, ...patch }
 }
 
 function json(status: number, body: unknown): Response {

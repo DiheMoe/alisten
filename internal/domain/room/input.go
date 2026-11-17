@@ -24,11 +24,13 @@ type MemberUpdated struct {
 	Member member.Member
 }
 
-// Name 和 Description 为 nil 表示保持不变，因为管理接口只修改给出的字段。
+// Name、Description 和 Capacity 为 nil 表示保持不变，因为管理接口只修改给出的字段。
+// Capacity 必须已经校验过在 2 到 128 之间。房间自己不检查，越界的值要到落盘时才被存储拒绝。
 type UpdateInfo struct {
 	RequestID   RequestID
 	Name        *string
 	Description *string
+	Capacity    *int
 }
 
 type Delete struct {

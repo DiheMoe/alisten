@@ -66,7 +66,7 @@ Authorization: Bearer $alice
 Authorization: Bearer $ticket
 -- event alice --
 event: snapshot
-data: {"room": {"term": 1, "seq": 0, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
+data: {"room": {"term": 1, "seq": 0, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral", "capacity": 16},
   "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
   "members": {"sessions": [], "onlineCount": 0}}}
 

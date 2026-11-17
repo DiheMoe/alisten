@@ -12,7 +12,7 @@ function snapshot(term: number, seq: number, name: string): RoomSnapshot {
   return {
     term,
     seq,
-    room: { id: 'r1', name, description: '', kind: 'persistent' },
+    room: { id: 'r1', name, description: '', kind: 'persistent', capacity: 64 },
     playMode: 'sequential',
     nowPlaying: null,
     pending: null,
@@ -23,7 +23,7 @@ function snapshot(term: number, seq: number, name: string): RoomSnapshot {
 }
 
 function renamed(term: number, seq: number, name: string): RoomEventMessage {
-  return { kind: 'event', type: 'room.updated', term, seq, data: { name, description: '' } }
+  return { kind: 'event', type: 'room.updated', term, seq, data: { name, description: '', capacity: 64 } }
 }
 
 function chat(term: number, seq: number, content: string): RoomEventMessage {

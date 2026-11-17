@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { filterRooms, roomAfterRemoval } from './room-filter'
 
 function room(id: string, name: string, slug: string | null = null): RoomListing {
-  return { id, name, slug, description: '', hasPassword: false, kind: 'persistent', onlineCount: 0 }
+  return { id, name, slug, description: '', hasPassword: false, kind: 'persistent', onlineCount: 0, capacity: 64 }
 }
 
 function rooms(count: number): RoomListing[] {

@@ -10,7 +10,7 @@ const hello: HelloResponse = {
   room: {
     term: 1,
     seq: 0,
-    room: { id: 'r1', name: '房间', description: '', kind: 'persistent' },
+    room: { id: 'r1', name: '房间', description: '', kind: 'persistent', capacity: 64 },
     playMode: 'sequential',
     nowPlaying: null,
     pending: null,

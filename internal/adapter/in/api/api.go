@@ -172,6 +172,7 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	handle(rt, protocol.RouteAdminUpdateSite, srv.adminUpdateSite)
 	handleNoContentNoRequest(rt, protocol.RouteAdminOpenRegistration, srv.adminOpenRegistration)
 	handleNoContentNoRequest(rt, protocol.RouteAdminCloseRegistration, srv.adminCloseRegistration)
+	handleNoContent(rt, protocol.RouteAdminSetEphemeralRoomCapacity, srv.adminSetEphemeralRoomCapacity)
 	handleNoRequest(rt, protocol.RouteAdminGetAccount, srv.adminGetAccount)
 	handleNoRequest(rt, protocol.RouteAdminResetAccountPassword, srv.adminResetAccountPassword)
 	handleNoRequest(rt, protocol.RouteListMyListens, srv.listMyListens)

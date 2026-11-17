@@ -190,10 +190,10 @@ func (g *Gateway) Do(ctx context.Context, roomID string, m member.Member, a room
 }
 
 // 参数为 nil 表示保持不变。房间落盘之后才返回。
-func (g *Gateway) UpdateInfo(ctx context.Context, roomID string, name, description *string) error {
+func (g *Gateway) UpdateInfo(ctx context.Context, roomID string, name, description *string, capacity *int) error {
 	id := g.newRequestID()
 	var err error
-	g.request(ctx, roomID, id, envelope{input: room.UpdateInfo{RequestID: id, Name: name, Description: description}}, true, func(_ room.Result, e error) {
+	g.request(ctx, roomID, id, envelope{input: room.UpdateInfo{RequestID: id, Name: name, Description: description, Capacity: capacity}}, true, func(_ room.Result, e error) {
 		err = e
 	})
 	return failed(id, err)

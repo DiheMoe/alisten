@@ -132,6 +132,12 @@
       "AdminCreateRoomRequest": {
         "additionalProperties": false,
         "properties": {
+          "capacity": {
+            "description": "房间最多能进多少人，按成员去重计算。不填时是 adminListRooms 返回的 defaultCapacity",
+            "maximum": 128,
+            "minimum": 2,
+            "type": "integer"
+          },
           "description": {
             "description": "房间描述",
             "maxLength": 500,
@@ -366,6 +372,12 @@
       "AdminListRoomsResponse": {
         "additionalProperties": false,
         "properties": {
+          "defaultCapacity": {
+            "description": "adminCreateRoom 不填 capacity 时的人数上限",
+            "maximum": 128,
+            "minimum": 2,
+            "type": "integer"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/RoomListing"
@@ -374,7 +386,8 @@
           }
         },
         "required": [
-          "items"
+          "items",
+          "defaultCapacity"
         ],
         "type": "object"
       },
@@ -443,6 +456,21 @@
         "additionalProperties": false,
         "type": "object"
       },
+      "AdminSetEphemeralRoomCapacityRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "capacity": {
+            "description": "房间最多能进多少人，按成员去重计算",
+            "maximum": 128,
+            "minimum": 2,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "capacity"
+        ],
+        "type": "object"
+      },
       "AdminSetGithubCredentialRequest": {
         "additionalProperties": false,
         "properties": {
@@ -499,6 +527,12 @@
       "AdminUpdateRoomRequest": {
         "additionalProperties": false,
         "properties": {
+          "capacity": {
+            "description": "房间最多能进多少人，按成员去重计算。改了立即生效，调到比当前人数还低时不踢人，新的成员要等人数降到上限以下才进得来",
+            "maximum": 128,
+            "minimum": 2,
+            "type": "integer"
+          },
           "description": {
             "description": "房间描述",
             "maxLength": 500,
@@ -934,6 +968,12 @@
           "brandName": {
             "type": "string"
           },
+          "ephemeralRoomCapacity": {
+            "description": "新建临时房间时的人数上限，没设置过时是 16",
+            "maximum": 128,
+            "minimum": 2,
+            "type": "integer"
+          },
           "githubLogin": {
             "description": "后台是否配置了 GitHub OAuth App。为 false 时，GitHub 相关的接口返回 NOT_FOUND",
             "type": "boolean"
@@ -945,7 +985,8 @@
         "required": [
           "brandName",
           "registrationOpen",
-          "githubLogin"
+          "githubLogin",
+          "ephemeralRoomCapacity"
         ],
         "type": "object"
       },
@@ -1845,6 +1886,12 @@
       "RoomInfo": {
         "additionalProperties": false,
         "properties": {
+          "capacity": {
+            "description": "房间最多能进多少人，按成员去重计算",
+            "maximum": 128,
+            "minimum": 2,
+            "type": "integer"
+          },
           "description": {
             "type": "string"
           },
@@ -1864,7 +1911,8 @@
           "id",
           "name",
           "description",
-          "kind"
+          "kind",
+          "capacity"
         ],
         "type": "object"
       },
@@ -1878,6 +1926,12 @@
       "RoomListing": {
         "additionalProperties": false,
         "properties": {
+          "capacity": {
+            "description": "房间最多能进多少人，按成员去重计算。onlineCount 达到它时新的成员进不来",
+            "maximum": 128,
+            "minimum": 2,
+            "type": "integer"
+          },
           "description": {
             "type": "string"
           },
@@ -1917,7 +1971,8 @@
           "description",
           "kind",
           "hasPassword",
-          "onlineCount"
+          "onlineCount",
+          "capacity"
         ],
         "type": "object"
       },
@@ -2442,7 +2497,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "0d8804003399cf37"
+    "version": "8f6287a7575762d0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3244,6 +3299,42 @@
         "summary": "写入或覆盖 YouTube cookies，不返回 cookies"
       }
     },
+    "/api/admin/ephemeral-room-capacity": {
+      "put": {
+        "operationId": "adminSetEphemeralRoomCapacity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminSetEphemeralRoomCapacityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "成功"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "失败"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "summary": "修改新建临时房间时的人数上限。只影响之后创建的临时房间，已经创建的临时房间保持原来的上限"
+      }
+    },
     "/api/admin/media/queries": {
       "post": {
         "operationId": "adminListMedia",
@@ -3420,7 +3511,7 @@
             "adminToken": []
           }
         ],
-        "summary": "全部常驻房间"
+        "summary": "全部常驻房间，以及新建常驻房间时默认的人数上限"
       },
       "post": {
         "operationId": "adminCreateRoom",
@@ -5670,7 +5761,7 @@
           }
         },
         "security": [],
-        "summary": "品牌名、是否开放注册和是否提供 GitHub 登录。没有设置过品牌名时，品牌名是 Alisten"
+        "summary": "品牌名、是否开放注册、是否提供 GitHub 登录和新建临时房间时的人数上限。没有设置过品牌名时，品牌名是 Alisten"
       }
     }
   }

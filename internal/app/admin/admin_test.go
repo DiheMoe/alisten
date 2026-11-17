@@ -15,6 +15,8 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/port/porttest"
 	"github.com/dihemoe/alisten/internal/app/realtime"
+	"github.com/dihemoe/alisten/internal/app/site"
+	"github.com/dihemoe/alisten/internal/domain/member"
 	"github.com/dihemoe/alisten/internal/domain/room"
 )
 
@@ -50,7 +52,7 @@ func newService(t *testing.T, token string) fixture {
 		stop()
 		wait()
 	})
-	l := lobby.New(store, store, node, porttest.Quota{})
+	l := lobby.New(store, site.New(store), node, porttest.Quota{})
 	netease, qq, bilibili, youtube := porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies()
 	return fixture{admin: New(token, l, store, store, store, netease, qq, bilibili, youtube, gateway), store: store, youtube: youtube, netease: netease, qq: qq, bilibili: bilibili, node: node, host: host, gateway: gateway}
 }
@@ -208,6 +210,39 @@ func TestCreateRoomCapacity(t *testing.T) {
 	}
 	if r, err := f.store.FindRoom(t.Context(), id); err != nil || r.Info.Capacity != 64 {
 		t.Errorf("新建的常驻房间 = %+v, %v，期望人数上限 64，不受临时房间最多人数影响", r.Info, err)
+	}
+	id, err = f.admin.CreateRoom(t.Context(), NewRoom{Name: "二厅", Capacity: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, err := f.store.FindRoom(t.Context(), id); err != nil || r.Info.Capacity != 100 {
+		t.Errorf("创建时给出人数上限 100 之后 = %+v, %v，期望人数上限 100", r.Info, err)
+	}
+}
+
+func TestUpdateRoomCapacity(t *testing.T) {
+	f := newService(t, "secret")
+	id, err := f.admin.CreateRoom(t.Context(), NewRoom{Name: "大厅", Description: "常驻", Capacity: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"alice", "bob", "carol"} {
+		f.enter(t, id, name)
+	}
+
+	capacity := 2
+	if err := f.admin.UpdateRoom(t.Context(), id, RoomChange{Capacity: &capacity}); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := f.store.FindRoom(t.Context(), id); r.Info.Capacity != 2 || r.Info.Name != "大厅" || r.Info.Description != "常驻" {
+		t.Errorf("UpdateRoom 返回时存下的房间 = %+v，期望人数上限已经是 2，名称和描述不变", r.Info)
+	}
+	res, err := f.gateway.Do(t.Context(), id, member.Member{ID: "observer"}, room.Sync{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view := res.(room.SyncResult).View; view.Snapshot.Info.Capacity != 2 || room.Headcount(view.Sessions) != 3 {
+		t.Errorf("上限调到 2 之后，房间的上限 = %d，在线 %d 人，期望上限 2、3 个人都还在", view.Snapshot.Info.Capacity, room.Headcount(view.Sessions))
 	}
 }
 

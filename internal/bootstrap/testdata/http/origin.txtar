@@ -51,7 +51,7 @@ Origin: https://alisten.example
 -- response --
 200
 {"items": [
-  {"id": "$sameOrigin", "slug": null, "name": "同源", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0},
-  {"id": "$local", "slug": null, "name": "本机", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0},
-  {"id": "$bot", "slug": null, "name": "bot", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0}
+  {"id": "$sameOrigin", "slug": null, "name": "同源", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0, "capacity": 16},
+  {"id": "$local", "slug": null, "name": "本机", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0, "capacity": 16},
+  {"id": "$bot", "slug": null, "name": "bot", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0, "capacity": 16}
 ]}

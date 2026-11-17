@@ -76,6 +76,7 @@
     "MemberName": {"type": "string", "description": "昵称", "minLength": 1, "maxLength": 80},
     "RoomName": {"type": "string", "description": "房间名称", "minLength": 1, "maxLength": 80},
     "RoomDescription": {"type": "string", "description": "房间描述", "maxLength": 500},
+    "RoomCapacity": {"type": "integer", "description": "房间最多能进多少人，按成员去重计算", "minimum": 2, "maximum": 128},
     "Link": {"type": "string", "description": "http 或 https 的绝对地址，scheme 不区分大小写，按 UTF-8 编码不超过 2048 字节", "x-url": true, "x-maxBytes": 2048},
     "Track": {
       "type": "object",
@@ -288,9 +289,10 @@
         "id": {"$ref": "#/$defs/RoomID"},
         "name": {"type": "string"},
         "description": {"type": "string"},
-        "kind": {"$ref": "#/$defs/RoomKind"}
+        "kind": {"$ref": "#/$defs/RoomKind"},
+        "capacity": {"$ref": "#/$defs/RoomCapacity"}
       },
-      "required": ["id", "name", "description", "kind"]
+      "required": ["id", "name", "description", "kind", "capacity"]
     },
     "RoomSnapshot": {
       "type": "object",
@@ -318,9 +320,10 @@
         "description": {"type": "string"},
         "kind": {"$ref": "#/$defs/RoomKind"},
         "hasPassword": {"type": "boolean"},
-        "onlineCount": {"type": "integer"}
+        "onlineCount": {"type": "integer"},
+        "capacity": {"$ref": "#/$defs/RoomCapacity", "description": "房间最多能进多少人，按成员去重计算。onlineCount 达到它时新的成员进不来"}
       },
-      "required": ["id", "slug", "name", "description", "kind", "hasPassword", "onlineCount"]
+      "required": ["id", "slug", "name", "description", "kind", "hasPassword", "onlineCount", "capacity"]
     },
     "APIKey": {
       "type": "object",
@@ -760,14 +763,16 @@
     },
     {
       "type": "room.updated",
+      "description": "后台修改房间的名称、描述或人数上限时发出",
       "data": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "name": {"type": "string"},
-          "description": {"type": "string"}
+          "description": {"type": "string"},
+          "capacity": {"$ref": "#/$defs/RoomCapacity"}
         },
-        "required": ["name", "description"]
+        "required": ["name", "description", "capacity"]
       }
     },
     {
@@ -1275,7 +1280,7 @@
     },
     {
       "name": "getSite",
-      "description": "品牌名、是否开放注册和是否提供 GitHub 登录。没有设置过品牌名时，品牌名是 Alisten",
+      "description": "品牌名、是否开放注册、是否提供 GitHub 登录和新建临时房间时的人数上限。没有设置过品牌名时，品牌名是 Alisten",
       "method": "GET",
       "path": "/api/site",
       "auth": "none",
@@ -1285,14 +1290,15 @@
         "properties": {
           "brandName": {"type": "string"},
           "registrationOpen": {"type": "boolean"},
-          "githubLogin": {"type": "boolean", "description": "后台是否配置了 GitHub OAuth App。为 false 时，GitHub 相关的接口返回 NOT_FOUND"}
+          "githubLogin": {"type": "boolean", "description": "后台是否配置了 GitHub OAuth App。为 false 时，GitHub 相关的接口返回 NOT_FOUND"},
+          "ephemeralRoomCapacity": {"$ref": "#/$defs/RoomCapacity", "description": "新建临时房间时的人数上限，没设置过时是 16"}
         },
-        "required": ["brandName", "registrationOpen", "githubLogin"]
+        "required": ["brandName", "registrationOpen", "githubLogin", "ephemeralRoomCapacity"]
       }
     },
     {
       "name": "adminListRooms",
-      "description": "全部常驻房间",
+      "description": "全部常驻房间，以及新建常驻房间时默认的人数上限",
       "method": "GET",
       "path": "/api/admin/rooms",
       "auth": "admin",
@@ -1300,9 +1306,10 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "items": {"type": "array", "items": {"$ref": "#/$defs/RoomListing"}}
+          "items": {"type": "array", "items": {"$ref": "#/$defs/RoomListing"}},
+          "defaultCapacity": {"$ref": "#/$defs/RoomCapacity", "description": "adminCreateRoom 不填 capacity 时的人数上限"}
         },
-        "required": ["items"]
+        "required": ["items", "defaultCapacity"]
       }
     },
     {
@@ -1320,7 +1327,8 @@
           "name": {"$ref": "#/$defs/RoomName"},
           "description": {"$ref": "#/$defs/RoomDescription"},
           "slug": {"type": "string", "pattern": "^[a-z0-9-]{1,32}$"},
-          "password": {"type": "string"}
+          "password": {"type": "string"},
+          "capacity": {"$ref": "#/$defs/RoomCapacity", "description": "房间最多能进多少人，按成员去重计算。不填时是 adminListRooms 返回的 defaultCapacity"}
         },
         "required": ["name", "description"]
       },
@@ -1348,7 +1356,8 @@
           "name": {"$ref": "#/$defs/RoomName"},
           "description": {"$ref": "#/$defs/RoomDescription"},
           "slug": {"type": "string", "pattern": "^[a-z0-9-]{0,32}$"},
-          "password": {"type": "string"}
+          "password": {"type": "string"},
+          "capacity": {"$ref": "#/$defs/RoomCapacity", "description": "房间最多能进多少人，按成员去重计算。改了立即生效，调到比当前人数还低时不踢人，新的成员要等人数降到上限以下才进得来"}
         }
       }
     },
@@ -1701,6 +1710,22 @@
       "path": "/api/admin/registration",
       "auth": "admin",
       "status": 204
+    },
+    {
+      "name": "adminSetEphemeralRoomCapacity",
+      "description": "修改新建临时房间时的人数上限。只影响之后创建的临时房间，已经创建的临时房间保持原来的上限",
+      "method": "PUT",
+      "path": "/api/admin/ephemeral-room-capacity",
+      "auth": "admin",
+      "status": 204,
+      "request": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "capacity": {"$ref": "#/$defs/RoomCapacity"}
+        },
+        "required": ["capacity"]
+      }
     },
     {
       "name": "adminGetAccount",

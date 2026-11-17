@@ -116,7 +116,7 @@ func TestFailedRequestsCarryTheRequestIDOfTheOwnerLogs(t *testing.T) {
 		commandErr := f.gateway.Command(t.Context(), a, "c1", room.SetPlayMode{Mode: room.Random})
 		synctest.Wait()
 		name := "新名字"
-		updateErr := f.gateway.UpdateInfo(t.Context(), id, &name, nil)
+		updateErr := f.gateway.UpdateInfo(t.Context(), id, &name, nil, nil)
 		synctest.Wait()
 
 		entries := logs.entries(t, "落盘失败，放弃房间")

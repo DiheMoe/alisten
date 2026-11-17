@@ -81,7 +81,8 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 	runtimeLogger := base.With("component", "realtime")
 	host, gateway := realtime.New(measure(media.NewSnapshots(store, objects, runtimeLogger), metrics), store, store, store, music, preparer, cluster, runtimeLogger)
 	registerRuntimeMetrics(metrics, host, gateway)
-	rooms := lobby.New(store, store, leases, quota)
+	siteService := site.New(store)
+	rooms := lobby.New(store, siteService, leases, quota)
 	codes := redis.NewCodes(rdb)
 	accounts := identity.NewAccounts(store, store, quota, codes, codes, redis.NewDevices(rdb), gateway)
 	// 每个请求的期限由 GitHub 适配器设置。
@@ -96,7 +97,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 		Catalog:   music,
 		Media:     media.NewLibrary(store, store, objects),
 		Playback:  media.NewPlayback(src.playback, store),
-		Site:      site.New(store),
+		Site:      siteService,
 		Listens:   listen.New(store),
 		GitHub:    identity.NewGitHub(accounts, store, oauth, codes),
 

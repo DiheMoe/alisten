@@ -1,10 +1,11 @@
-站点：品牌名默认是 Alisten，默认开放注册。后台修改品牌名时返回存下的名字，首尾的空白已经去掉，之后读到的也是这个名字。空的、超过 20 个字符的和看不见的名字不能保存。后台可以关闭和重新开放注册，关闭之后游客不能注册。修改站点设置要管理 token。
+站点：品牌名默认是 Alisten，默认开放注册。后台修改品牌名时返回存下的名字，首尾的空白已经去掉，之后读到的也是这个名字。空的、超过 20 个字符的和看不见的名字不能保存。后台可以关闭和重新开放注册，关闭之后游客不能注册。
+后台可以设置临时房间最多人数，只能在 2 到 128 之间，没设置过时是 16。设置之后新建的临时房间带着这个上限，之前建的临时房间不变。修改站点设置要管理 token。
 
 -- request --
 GET /api/site
 -- response --
 200
-{"brandName": "Alisten", "registrationOpen": true, "githubLogin": false}
+{"brandName": "Alisten", "registrationOpen": true, "githubLogin": false, "ephemeralRoomCapacity": 16}
 
 -- request --
 PATCH /api/admin/site
@@ -19,7 +20,7 @@ Authorization: Bearer admin-secret
 GET /api/site
 -- response --
 200
-{"brandName": "周末听歌会", "registrationOpen": true, "githubLogin": false}
+{"brandName": "周末听歌会", "registrationOpen": true, "githubLogin": false, "ephemeralRoomCapacity": 16}
 
 -- request --
 PATCH /api/admin/site
@@ -72,7 +73,7 @@ Authorization: Bearer admin-secret
 GET /api/site
 -- response --
 200
-{"brandName": "周末听歌会", "registrationOpen": false, "githubLogin": false}
+{"brandName": "周末听歌会", "registrationOpen": false, "githubLogin": false, "ephemeralRoomCapacity": 16}
 
 -- request --
 POST /api/members
@@ -107,3 +108,73 @@ Authorization: Bearer $guest
 -- response --
 201
 {"account": {"username": "guest", "github": false}}
+
+-- request --
+PUT /api/admin/ephemeral-room-capacity
+
+{"capacity": 2}
+-- response --
+401
+{"error": {"code": "UNAUTHORIZED", "message": "管理 token 无效"}}
+
+-- request --
+PUT /api/admin/ephemeral-room-capacity
+Authorization: Bearer admin-secret
+
+{"capacity": 1}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "capacity：不能小于 2"}}
+
+-- request --
+PUT /api/admin/ephemeral-room-capacity
+Authorization: Bearer admin-secret
+
+{"capacity": 129}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "capacity：不能大于 128"}}
+
+-- request --
+POST /api/rooms
+
+{"name": "之前", "description": ""}
+-- response --
+201
+Location: /api/rooms/$before
+{"id": "$before"}
+
+-- request --
+PUT /api/admin/ephemeral-room-capacity
+Authorization: Bearer admin-secret
+
+{"capacity": 2}
+-- response --
+204
+
+-- request --
+GET /api/site
+-- response --
+200
+{"brandName": "周末听歌会", "registrationOpen": true, "githubLogin": false, "ephemeralRoomCapacity": 2}
+
+-- request --
+POST /api/rooms
+
+{"name": "之后", "description": ""}
+-- response --
+201
+Location: /api/rooms/$after
+{"id": "$after"}
+
+-- request --
+GET /api/rooms/$after
+-- response --
+200
+{"id": "$after", "slug": null, "name": "之后", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0, "capacity": 2}
+
+-- request --
+GET /api/rooms/$before
+-- response --
+200
+{"id": "$before", "slug": null, "name": "之前", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0, "capacity": 16}

@@ -81,16 +81,20 @@ func (s *server) adminListRooms(ctx context.Context, _ call) (protocol.AdminList
 	if err != nil {
 		return protocol.AdminListRoomsResponse{}, err
 	}
-	return protocol.AdminListRoomsResponse{Items: listings(rooms)}, nil
+	return protocol.AdminListRoomsResponse{Items: listings(rooms), DefaultCapacity: admin.DefaultRoomCapacity}, nil
 }
 
 func (s *server) adminCreateRoom(ctx context.Context, _ call, req protocol.AdminCreateRoomRequest) (protocol.AdminCreateRoomResponse, string, error) {
-	id, err := s.Admin.CreateRoom(ctx, admin.NewRoom{
+	r := admin.NewRoom{
 		Name:        req.Name,
 		Description: req.Description,
 		Slug:        deref(req.Slug),
 		Password:    deref(req.Password),
-	})
+	}
+	if req.Capacity != nil {
+		r.Capacity = int(*req.Capacity)
+	}
+	id, err := s.Admin.CreateRoom(ctx, r)
 	if err != nil {
 		return protocol.AdminCreateRoomResponse{}, "", err
 	}
@@ -161,6 +165,7 @@ func listing(r lobby.Room) protocol.RoomListing {
 		Kind:        roomKind(r.Info.Kind),
 		HasPassword: r.HasPassword,
 		OnlineCount: int64(r.Online),
+		Capacity:    int64(r.Info.Capacity),
 	}
 	if r.Slug != "" {
 		l.Slug = &r.Slug

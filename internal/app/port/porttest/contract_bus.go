@@ -73,7 +73,7 @@ var (
 	roomView      = room.View{
 		Term: 3, Seq: 128, Next: 13,
 		Snapshot: room.Snapshot{
-			Info:     room.Info{ID: "01a15778-1911-7a28-8b2e-e08c2a25f388", Name: "大厅", Description: "常驻", Kind: room.Persistent},
+			Info:     room.Info{ID: "01a15778-1911-7a28-8b2e-e08c2a25f388", Name: "大厅", Description: "常驻", Kind: room.Persistent, Capacity: 64},
 			Mode:     room.Random,
 			EntrySeq: 13,
 			Waiting:  []room.Entry{linkEntry},
@@ -97,7 +97,7 @@ func roomMessageSamples() []port.RoomMessage {
 		port.Emitted{Emit: room.Emit{Term: 3, Seq: 3, Event: room.QueueChanged{Pending: &sunnyEntry, Waiting: []room.Entry{linkEntry, sunnyEntry}, Next: 13}}},
 		port.Emitted{Emit: room.Emit{Term: 3, Seq: 4, Event: room.MembersChanged{Sessions: roomView.Sessions}}},
 		port.Emitted{Emit: room.Emit{Term: 3, Seq: 5, Event: room.ModeChanged{Mode: room.Random}}},
-		port.Emitted{Emit: room.Emit{Term: 3, Seq: 6, Event: room.InfoChanged{Name: "大厅", Description: "常驻"}}},
+		port.Emitted{Emit: room.Emit{Term: 3, Seq: 6, Event: room.InfoChanged{Name: "大厅", Description: "常驻", Capacity: 64}}},
 		port.Emitted{Emit: room.Emit{Term: 3, Seq: 7, Event: room.ChatPosted{Member: alice, Text: "你好", SentAt: addedAt}}},
 		port.Emitted{Emit: room.Emit{Term: 3, Seq: 1 << 40, Event: room.Activity{Kind: room.ActivityVoted, Member: alice, Entry: sunnyEntry, Votes: 1, Required: 2, Reason: "原因"}}},
 		port.Replied{Reply: room.Reply{RequestID: "a/r1", Result: room.Done{}}},
@@ -116,7 +116,7 @@ func roomMessageSamples() []port.RoomMessage {
 
 // 样例要包含每一种跨实例的输入和动作，因为经过 Redis 时每一种都要编码再解码。
 func inputSamples(roomID, gateway string) []port.RoomInput {
-	name := "新大厅"
+	name, capacity := "新大厅", 2
 	samples := []port.RoomInput{
 		{Room: roomID, Gateway: gateway, Input: room.Join{RequestID: "a/r1", Session: "a/s1", Member: alice}, Takeover: true},
 		{Room: roomID, Gateway: gateway, Input: room.Join{Session: "a/s2", Member: alice, Rejoin: true}},
@@ -128,7 +128,7 @@ func inputSamples(roomID, gateway string) []port.RoomInput {
 		port.RoomInput{Room: roomID, Gateway: "g", Input: room.Leave{Session: "a/s1"}},
 		port.RoomInput{Room: roomID, Gateway: "g", Input: room.MemberUpdated{Member: alice}},
 		port.RoomInput{Room: roomID, Gateway: "g", Input: room.Delete{RequestID: "g/r2"}, Takeover: true},
-		port.RoomInput{Room: roomID, Gateway: "g", Input: room.UpdateInfo{RequestID: "g/r3", Name: &name}, Takeover: true},
+		port.RoomInput{Room: roomID, Gateway: "g", Input: room.UpdateInfo{RequestID: "g/r3", Name: &name, Capacity: &capacity}, Takeover: true},
 	)
 }
 

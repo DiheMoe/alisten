@@ -109,7 +109,7 @@ func runStep(r *Room, step, line string) (*Room, []Effect, error) {
 
 var inputArity = map[string]int{
 	"join": 2, "rejoin": 2, "leave": 1, "enqueue": 2, "remove": 2, "like": 2, "vote": 1, "mode": 2,
-	"chat": 1, "sync": 1, "prepared": 2, "failed": 1, "recommended": 2, "timer": 1,
+	"chat": 1, "sync": 1, "prepared": 2, "failed": 1, "recommended": 2, "timer": 1, "capacity": 1,
 }
 
 var playModes = map[string]PlayMode{"sequential": Sequential, "random": Random, "rotation": Rotation}
@@ -139,6 +139,12 @@ func parseInput(id RequestID, f []string) (Input, error) {
 		return Join{Session: SessionID(args[0]), Member: m, Rejoin: true}, err
 	case "leave":
 		return Leave{Session: SessionID(args[0])}, nil
+	case "capacity":
+		capacity, err := strconv.Atoi(args[0])
+		if err != nil {
+			return nil, fmt.Errorf("上限不是数字：%q", args[0])
+		}
+		return UpdateInfo{RequestID: id, Capacity: &capacity}, nil
 	case "enqueue":
 		tr, err := parseTrack(args[1])
 		if err != nil {
@@ -268,7 +274,7 @@ func formatEvent(e Event) string {
 	case ModeChanged:
 		return "mode " + modeNames[e.Mode]
 	case InfoChanged:
-		return fmt.Sprintf("info %s | %s", e.Name, e.Description)
+		return fmt.Sprintf("info %s | %s capacity=%d", e.Name, e.Description, e.Capacity)
 	case ChatPosted:
 		return fmt.Sprintf("chat %s %s", e.Member.ID, e.Text)
 	case Activity:

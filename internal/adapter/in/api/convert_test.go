@@ -48,7 +48,7 @@ func TestSnapshotDTO(t *testing.T) {
 		Seq:  128,
 		Next: 14,
 		Snapshot: room.Snapshot{
-			Info:    room.Info{ID: "0199f1c2-0000-7000-8000-000000000001", Name: "大厅", Description: "常驻", Kind: room.Persistent},
+			Info:    room.Info{ID: "0199f1c2-0000-7000-8000-000000000001", Name: "大厅", Description: "常驻", Kind: room.Persistent, Capacity: 64},
 			Mode:    room.Random,
 			Waiting: []room.Entry{auto},
 			Pending: &pending,
@@ -61,13 +61,13 @@ func TestSnapshotDTO(t *testing.T) {
 		`"next":{"entryId":"14","loadWithinMs":60000,"mediaUrl":"/media/netease/185811"},` +
 		`"nowPlaying":{"durationMs":269500,"entry":{"auto":false,"by":{"avatarHash":"c160f8cc69a4f0bf2b0362752353d060","id":"0199f1c2-8a4b-7c3d-9e5f-6a7b8c9d0e1f","name":"alice"},"id":"12","likes":2,"meta":{"album":"叶惠美","artist":"周杰伦","coverUrl":"https://p1.music.126.net/example.jpg","durationMs":269000,"pageUrl":"https://music.163.com/#/song?id=186016","title":"晴天"},"status":"ready","track":{"id":"186016","source":"netease"}},"gain":0.75,"lyric":"[00:01.00]故事的小黄花","mediaUrl":"/media/netease/186016","startedAtMs":1760000000123},` +
 		`"pending":{"auto":false,"by":{"avatarHash":"c160f8cc69a4f0bf2b0362752353d060","id":"0199f1c2-8a4b-7c3d-9e5f-6a7b8c9d0e1f","name":"alice"},"id":"13","likes":0,"meta":{"album":"","artist":"","coverUrl":"","durationMs":0,"pageUrl":"https://www.youtube.com/watch?v=x","title":"https://www.youtube.com/watch?v=x"},"status":"preparing","track":{"id":"https://www.youtube.com/watch?v=x","source":"link"}},` +
-		`"playMode":"random","room":{"description":"常驻","id":"0199f1c2-0000-7000-8000-000000000001","kind":"persistent","name":"大厅"},"seq":128,"term":3}`
+		`"playMode":"random","room":{"capacity":64,"description":"常驻","id":"0199f1c2-0000-7000-8000-000000000001","kind":"persistent","name":"大厅"},"seq":128,"term":3}`
 	if got := jsonOf(t, s.snapshot(view)); got != want {
 		t.Errorf("快照编码为\n%s\n期望\n%s", got, want)
 	}
 
-	empty := room.View{Term: 1, Snapshot: room.Snapshot{Info: room.Info{ID: "r", Kind: room.Ephemeral}, Mode: room.Sequential}}
-	wantEmpty := `{"items":[],"members":{"onlineCount":0,"sessions":[]},"next":null,"nowPlaying":null,"pending":null,"playMode":"sequential","room":{"description":"","id":"r","kind":"ephemeral","name":""},"seq":0,"term":1}`
+	empty := room.View{Term: 1, Snapshot: room.Snapshot{Info: room.Info{ID: "r", Kind: room.Ephemeral, Capacity: 16}, Mode: room.Sequential}}
+	wantEmpty := `{"items":[],"members":{"onlineCount":0,"sessions":[]},"next":null,"nowPlaying":null,"pending":null,"playMode":"sequential","room":{"capacity":16,"description":"","id":"r","kind":"ephemeral","name":""},"seq":0,"term":1}`
 	if got := jsonOf(t, s.snapshot(empty)); got != wantEmpty {
 		t.Errorf("空房间的快照编码为\n%s\n期望\n%s", got, wantEmpty)
 	}
@@ -92,6 +92,7 @@ func TestEventDTO(t *testing.T) {
 		data  string
 	}{
 		{room.ChatPosted{Member: alice, Text: "你好", SentAt: sentAt}, "chat.message", `{"content":"你好","member":{"avatarHash":"c160f8cc69a4f0bf2b0362752353d060","id":"0199f1c2-8a4b-7c3d-9e5f-6a7b8c9d0e1f","name":"alice"},"sentAtMs":1760000000456}`},
+		{room.InfoChanged{Name: "大厅", Description: "常驻", Capacity: 2}, "room.updated", `{"capacity":2,"description":"常驻","name":"大厅"}`},
 	}
 	for _, tt := range tests {
 		typ, data := s.event(tt.event)

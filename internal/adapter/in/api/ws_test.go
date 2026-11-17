@@ -31,6 +31,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/port/porttest"
 	"github.com/dihemoe/alisten/internal/app/realtime"
+	"github.com/dihemoe/alisten/internal/app/site"
 	"github.com/dihemoe/alisten/internal/domain/member"
 	"github.com/dihemoe/alisten/internal/domain/room"
 	"github.com/dihemoe/alisten/internal/lib/logctx"
@@ -146,7 +147,7 @@ func newWSFixtureWithTickets(t *testing.T, store *porttest.Store, tickets port.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	l := lobby.New(directory, store, node, porttest.Quota{})
+	l := lobby.New(directory, site.New(store), node, porttest.Quota{})
 	f := &wsFixture{
 		identity: identity.New(store, directory, tickets, porttest.Quota{}, gateway),
 		lobby:    l,
@@ -602,7 +603,7 @@ func TestSessionRequests(t *testing.T) {
 		writeFrame(t, conn, hello(roomID, ticket))
 		self := `{"avatarHash":"","id":"` + m.ID + `","name":"` + m.Name + `"}`
 		snapshot := func(seq int) string {
-			return fmt.Sprintf(`{"term":1,"seq":%d,"room":{"id":"%s","name":"临时","description":"","kind":"ephemeral"},"playMode":"sequential","nowPlaying":null,"pending":null,"next":null,"items":[],"members":{"sessions":[%s],"onlineCount":1}}`, seq, roomID, self)
+			return fmt.Sprintf(`{"term":1,"seq":%d,"room":{"id":"%s","name":"临时","description":"","kind":"ephemeral","capacity":16},"playMode":"sequential","nowPlaying":null,"pending":null,"next":null,"items":[],"members":{"sessions":[%s],"onlineCount":1}}`, seq, roomID, self)
 		}
 		// 加入时的在线列表事件已经包含在快照中，不再单独发送。
 		checkMessage(t, conn, `{"kind":"response","type":"hello","id":"h1","data":{"member":`+self+`,"serverTimeMs":1,"room":`+snapshot(1)+`}}`)

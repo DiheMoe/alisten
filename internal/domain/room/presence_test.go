@@ -177,6 +177,32 @@ func TestPeopleOverCapacityStayButNewMembersAreRefused(t *testing.T) {
 	}
 }
 
+func TestLoweringCapacityKeepsPeopleAndRefusesNewMembers(t *testing.T) {
+	r := newRoom(t, Persistent)
+	joinAs(t, r, "a1", alice)
+	joinAs(t, r, "b1", bob)
+	joinAs(t, r, "c1", carol)
+
+	capacity := 2
+	effects := r.Handle(at(time.Second), UpdateInfo{RequestID: "q", Capacity: &capacity})
+	if !persistsFirst(effects) || find[Persist](effects)[0].Snapshot.Info.Capacity != 2 {
+		t.Fatalf("修改上限之后应先落盘新的上限：%#v", effects)
+	}
+	if got := events[InfoChanged](effects); !slices.Equal(got, []InfoChanged{{Name: "房间", Capacity: 2}}) {
+		t.Fatalf("修改上限之后广播的房间信息 = %+v，期望带上新的上限", got)
+	}
+	if len(events[MembersChanged](effects)) != 0 || !slices.Equal(sessionIDs(r), []SessionID{"a1", "b1", "c1"}) {
+		t.Fatalf("上限调到比当前人数还低时不踢人，在线列表 = %v", sessionIDs(r))
+	}
+
+	wantRefused(t, r.Handle(at(2*time.Second), Join{RequestID: "q", Session: "d1", Member: dave}), RoomFull, "房间已满，最多 2 人。")
+	joinAs(t, r, "a2", alice)
+	r.Handle(at(3*time.Second), Leave{Session: "c1"})
+	wantRefused(t, r.Handle(at(3*time.Second), Join{RequestID: "q", Session: "d1", Member: dave}), RoomFull, "房间已满，最多 2 人。")
+	r.Handle(at(4*time.Second), Leave{Session: "b1"})
+	joinAs(t, r, "d1", dave)
+}
+
 func TestRejoinIsNotCheckedOrAnswered(t *testing.T) {
 	r := newRoomWithCapacity(t, Ephemeral, 2)
 	joinAs(t, r, "a1", alice)

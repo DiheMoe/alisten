@@ -26,7 +26,7 @@ function hello(roomId: string): HelloResponse {
     room: {
       term,
       seq,
-      room: { id: roomId, name: '房间', description: '', kind: 'persistent' },
+      room: { id: roomId, name: '房间', description: '', kind: 'persistent', capacity: 64 },
       playMode: 'sequential',
       nowPlaying: null,
       pending: null,

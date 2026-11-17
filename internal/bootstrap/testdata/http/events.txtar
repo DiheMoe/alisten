@@ -43,7 +43,7 @@ Location: /api/admin/rooms/$hall/api-key
 Authorization: Bearer $key
 -- event bot --
 event: snapshot
-data: {"room": {"term": 1, "seq": 0, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent"},
+data: {"room": {"term": 1, "seq": 0, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent", "capacity": 64},
   "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
   "members": {"sessions": [], "onlineCount": 0}}}
 
@@ -87,7 +87,7 @@ data: {"kind": "event", "type": "queue.updated", "term": 1, "seq": 4, "data": {"
 Authorization: Bearer $ticket
 -- event alice --
 event: snapshot
-data: {"room": {"term": 1, "seq": 4, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent"},
+data: {"room": {"term": 1, "seq": 4, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent", "capacity": 64},
   "playMode": "sequential",
   "nowPlaying": {
     "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500},

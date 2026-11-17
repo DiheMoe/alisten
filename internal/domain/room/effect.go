@@ -89,6 +89,7 @@ type ModeChanged struct {
 type InfoChanged struct {
 	Name        string
 	Description string
+	Capacity    int
 }
 
 type ChatPosted struct {

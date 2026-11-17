@@ -124,7 +124,7 @@ func TestRoomEvents(t *testing.T) {
 			}
 		}
 		r := bufio.NewReader(resp.Body)
-		checkEvent(t, r, "event: snapshot", `data: {"room":{"term":1,"seq":0,"room":{"id":"`+hall+`","name":"大厅","description":"","kind":"persistent"},"playMode":"sequential","nowPlaying":null,"pending":null,"next":null,"items":[],"members":{"sessions":[],"onlineCount":0}}}`)
+		checkEvent(t, r, "event: snapshot", `data: {"room":{"term":1,"seq":0,"room":{"id":"`+hall+`","name":"大厅","description":"","kind":"persistent","capacity":64},"playMode":"sequential","nowPlaying":null,"pending":null,"next":null,"items":[],"members":{"sessions":[],"onlineCount":0}}}`)
 
 		_, m, ticket := f.enter(t, hall)
 		conn := f.join(t, hall, ticket)

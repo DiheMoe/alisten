@@ -33,7 +33,7 @@ GET /api/room
 Authorization: Bearer $ticket
 -- response --
 200
-{"room": {"term": 1, "seq": 0, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
+{"room": {"term": 1, "seq": 0, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral", "capacity": 16},
   "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
   "members": {"sessions": [], "onlineCount": 0}}}
 
@@ -55,7 +55,7 @@ Authorization: Bearer $ticket
 Authorization: Bearer $ticket
 -- event bot --
 event: snapshot
-data: {"room": {"term": 1, "seq": 0, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
+data: {"room": {"term": 1, "seq": 0, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral", "capacity": 16},
   "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
   "members": {"sessions": [], "onlineCount": 0}}}
 

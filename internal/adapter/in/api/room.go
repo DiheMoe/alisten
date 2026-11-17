@@ -46,6 +46,10 @@ func (s *server) roomRequest(route protocol.RoomRoute) handlerFunc {
 
 func (s *server) adminUpdateRoom(ctx context.Context, c call, req protocol.AdminUpdateRoomRequest) error {
 	change := admin.RoomChange{Name: req.Name, Description: req.Description, Slug: req.Slug, Password: req.Password}
+	if req.Capacity != nil {
+		capacity := int(*req.Capacity)
+		change.Capacity = &capacity
+	}
 	return s.Admin.UpdateRoom(ctx, c.r.PathValue("id"), change)
 }
 

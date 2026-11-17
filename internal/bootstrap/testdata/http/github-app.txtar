@@ -92,7 +92,7 @@ Authorization: Bearer admin-secret
 GET /api/site
 -- response --
 200
-{"brandName": "Alisten", "registrationOpen": true, "githubLogin": true}
+{"brandName": "Alisten", "registrationOpen": true, "githubLogin": true, "ephemeralRoomCapacity": 16}
 
 -- request --
 PUT /api/admin/credentials/github
@@ -126,7 +126,7 @@ Authorization: Bearer admin-secret
 GET /api/site
 -- response --
 200
-{"brandName": "Alisten", "registrationOpen": true, "githubLogin": false}
+{"brandName": "Alisten", "registrationOpen": true, "githubLogin": false, "ephemeralRoomCapacity": 16}
 
 -- request --
 DELETE /api/admin/credentials/github

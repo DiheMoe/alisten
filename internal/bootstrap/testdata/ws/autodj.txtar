@@ -36,7 +36,7 @@ Authorization: Bearer $alice
 {"kind": "response", "type": "hello", "id": "h1", "data": {
   "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
   "serverTimeMs": 1,
-  "room": {"term": 1, "seq": 1, "room": {"id": "$room", "name": "大厅", "description": "", "kind": "persistent"},
+  "room": {"term": 1, "seq": 1, "room": {"id": "$room", "name": "大厅", "description": "", "kind": "persistent", "capacity": 64},
     "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
 

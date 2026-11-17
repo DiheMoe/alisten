@@ -69,15 +69,16 @@ func TestInputsWithTokenZeroAreDropped(t *testing.T) {
 }
 
 func TestUpdateInfoKeepsFieldsNotGiven(t *testing.T) {
-	r, _ := Restore(at(0), 1, Snapshot{Info: Info{ID: "r1", Name: "房间", Description: "介绍", Kind: Persistent}, Mode: Sequential})
-	name, description := "新名字", "新介绍"
+	r, _ := Restore(at(0), 1, Snapshot{Info: Info{ID: "r1", Name: "房间", Description: "介绍", Kind: Persistent, Capacity: 64}, Mode: Sequential})
+	name, description, capacity := "新名字", "新介绍", 2
 	tests := []struct {
 		in   UpdateInfo
 		want []InfoChanged
 	}{
-		{UpdateInfo{RequestID: "q1", Name: &name}, []InfoChanged{{Name: "新名字", Description: "介绍"}}},
-		{UpdateInfo{RequestID: "q2", Description: &description}, []InfoChanged{{Name: "新名字", Description: "新介绍"}}},
-		{UpdateInfo{RequestID: "q3"}, nil},
+		{UpdateInfo{RequestID: "q1", Name: &name}, []InfoChanged{{Name: "新名字", Description: "介绍", Capacity: 64}}},
+		{UpdateInfo{RequestID: "q2", Description: &description}, []InfoChanged{{Name: "新名字", Description: "新介绍", Capacity: 64}}},
+		{UpdateInfo{RequestID: "q3", Capacity: &capacity}, []InfoChanged{{Name: "新名字", Description: "新介绍", Capacity: 2}}},
+		{UpdateInfo{RequestID: "q4"}, nil},
 	}
 	for _, tt := range tests {
 		effects := r.Handle(at(0), tt.in)

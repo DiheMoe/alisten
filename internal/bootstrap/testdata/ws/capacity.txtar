@@ -1,0 +1,177 @@
+人数上限：后台创建常驻房间时可以给出人数上限，房间列表和快照里都带着它。后台修改上限之后，房间里的客户端收到带新上限的 room.updated。
+房间满了之后，新的成员握手被拒，先收到 ROOM_FULL，再以 4403 断开。已经在房间里的成员还能再开连接，但每人最多 4 个连接。第 5 个先收到 TOO_MANY_CONNECTIONS，再以 1013 断开，客户端稍后会自动重连。
+上限只能在 2 到 128 之间。
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$alice", "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$bob", "member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""}}
+
+-- request --
+POST /api/members
+
+{}
+-- response --
+201
+{"memberToken": "$carol", "member": {"id": "$carolId", "name": "$carolName", "avatarHash": ""}}
+
+-- request --
+POST /api/admin/rooms
+Authorization: Bearer admin-secret
+
+{"name": "大厅", "description": "", "capacity": 1}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "capacity：不能小于 2"}}
+
+-- request --
+POST /api/admin/rooms
+Authorization: Bearer admin-secret
+
+{"name": "大厅", "description": "", "capacity": 3}
+-- response --
+201
+Location: /api/rooms/$hall
+{"id": "$hall"}
+
+-- request --
+GET /api/rooms/$hall
+-- response --
+200
+{"id": "$hall", "slug": null, "name": "大厅", "description": "", "kind": "persistent", "hasPassword": false, "onlineCount": 0, "capacity": 3}
+
+-- request --
+POST /api/rooms/$hall/tickets
+Authorization: Bearer $alice
+
+{}
+-- response --
+201
+{"ticket": "$aliceTicket"}
+
+-- request --
+POST /api/rooms/$hall/tickets
+Authorization: Bearer $bob
+
+{}
+-- response --
+201
+{"ticket": "$bobTicket"}
+
+-- request --
+POST /api/rooms/$hall/tickets
+Authorization: Bearer $carol
+
+{}
+-- response --
+201
+{"ticket": "$carolTicket"}
+
+-- connect alice --
+-- send alice --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$hall", "ticket": "$aliceTicket", "protocolVersion": "$protocolVersion"}}
+-- receive alice --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 1, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent", "capacity": 3},
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
+
+-- request --
+PATCH /api/admin/rooms/$hall
+Authorization: Bearer admin-secret
+
+{"capacity": 129}
+-- response --
+400
+{"error": {"code": "INVALID_ARGUMENT", "message": "capacity：不能大于 128"}}
+
+-- request --
+PATCH /api/admin/rooms/$hall
+Authorization: Bearer admin-secret
+
+{"capacity": 2}
+-- response --
+204
+-- receive alice --
+{"kind": "event", "type": "room.updated", "term": 1, "seq": 2, "data": {"name": "大厅", "description": "", "capacity": 2}}
+
+-- connect bob --
+-- send bob --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$hall", "ticket": "$bobTicket", "protocolVersion": "$protocolVersion"}}
+-- receive bob --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 3, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent", "capacity": 2},
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}], "onlineCount": 2}}}}
+-- receive alice --
+{"kind": "event", "type": "members.updated", "term": 1, "seq": 3, "data": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}], "onlineCount": 2}}
+
+-- connect carol --
+-- send carol --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$hall", "ticket": "$carolTicket", "protocolVersion": "$protocolVersion"}}
+-- receive carol --
+{"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "ROOM_FULL", "message": "房间已满，最多 2 人。"}}
+-- closed carol --
+4403
+
+-- connect alice2 --
+-- send alice2 --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$hall", "ticket": "$aliceTicket", "protocolVersion": "$protocolVersion"}}
+-- receive alice2 --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 4, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent", "capacity": 2},
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 2}}}}
+
+-- connect alice3 --
+-- send alice3 --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$hall", "ticket": "$aliceTicket", "protocolVersion": "$protocolVersion"}}
+-- receive alice3 --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 5, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent", "capacity": 2},
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 2}}}}
+
+-- connect alice4 --
+-- send alice4 --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$hall", "ticket": "$aliceTicket", "protocolVersion": "$protocolVersion"}}
+-- receive alice4 --
+{"kind": "response", "type": "hello", "id": "h1", "data": {
+  "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
+  "serverTimeMs": 1,
+  "room": {"term": 1, "seq": 6, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent", "capacity": 2},
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
+    "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 2}}}}
+
+-- connect alice5 --
+-- send alice5 --
+{"kind": "request", "type": "hello", "id": "h1", "data": {"roomId": "$hall", "ticket": "$aliceTicket", "protocolVersion": "$protocolVersion"}}
+-- receive alice5 --
+{"kind": "response", "type": "hello", "id": "h1", "data": {}, "error": {"code": "TOO_MANY_CONNECTIONS", "message": "你在这个房间已经开了 4 个连接。关掉一个，这里就会自动连上。"}}
+-- closed alice5 --
+1013
+
+-- request --
+GET /api/rooms/$hall
+-- response --
+200
+{"id": "$hall", "slug": null, "name": "大厅", "description": "", "kind": "persistent", "hasPassword": false, "onlineCount": 2, "capacity": 2}

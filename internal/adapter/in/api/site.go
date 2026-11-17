@@ -15,7 +15,12 @@ func (s *server) getSite(ctx context.Context, _ call) (protocol.GetSiteResponse,
 	if err != nil {
 		return protocol.GetSiteResponse{}, err
 	}
-	return protocol.GetSiteResponse{BrandName: settings.BrandName, RegistrationOpen: settings.RegistrationOpen, GithubLogin: githubClientID != ""}, nil
+	return protocol.GetSiteResponse{
+		BrandName:             settings.BrandName,
+		RegistrationOpen:      settings.RegistrationOpen,
+		GithubLogin:           githubClientID != "",
+		EphemeralRoomCapacity: int64(settings.EphemeralRoomCapacity),
+	}, nil
 }
 
 func (s *server) adminUpdateSite(ctx context.Context, _ call, req protocol.AdminUpdateSiteRequest) (protocol.AdminUpdateSiteResponse, error) {
@@ -32,4 +37,8 @@ func (s *server) adminOpenRegistration(ctx context.Context, _ call) error {
 
 func (s *server) adminCloseRegistration(ctx context.Context, _ call) error {
 	return s.Site.SetRegistrationOpen(ctx, false)
+}
+
+func (s *server) adminSetEphemeralRoomCapacity(ctx context.Context, _ call, req protocol.AdminSetEphemeralRoomCapacityRequest) error {
+	return s.Site.SetEphemeralRoomCapacity(ctx, int(req.Capacity))
 }

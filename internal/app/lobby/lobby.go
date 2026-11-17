@@ -9,6 +9,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/identity"
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/realtime"
+	"github.com/dihemoe/alisten/internal/app/site"
 	"github.com/dihemoe/alisten/internal/domain/room"
 )
 
@@ -36,17 +37,15 @@ const (
 	roomRefill = 10 * time.Minute
 )
 
-const defaultEphemeralRoomCapacity = 16
-
 type Service struct {
 	rooms  port.RoomDirectory
-	site   port.Site
+	site   *site.Service
 	online port.OnlineCounts
 	quota  port.Quota
 }
 
-func New(rooms port.RoomDirectory, site port.Site, online port.OnlineCounts, quota port.Quota) *Service {
-	return &Service{rooms: rooms, site: site, online: online, quota: quota}
+func New(rooms port.RoomDirectory, siteService *site.Service, online port.OnlineCounts, quota port.Quota) *Service {
+	return &Service{rooms: rooms, site: siteService, online: online, quota: quota}
 }
 
 func (s *Service) ListRooms(ctx context.Context) ([]Room, error) {
@@ -71,20 +70,17 @@ func (s *Service) FindRoom(ctx context.Context, ref string) (Room, error) {
 }
 
 func (s *Service) CreateRoom(ctx context.Context, clientIP string, r NewRoom) (string, error) {
+	// 先读全站设置再扣额度，这样读不出设置时不会白扣。
+	settings, err := s.site.Settings(ctx)
+	if err != nil {
+		return "", err
+	}
 	wait, err := s.quota.Take(ctx, "room:ip:"+identity.QuotaAddr(clientIP), roomBurst, roomRefill)
 	if err != nil {
 		return "", err
 	}
 	if wait > 0 {
 		return "", ErrTooManyRooms
-	}
-	settings, err := s.site.Settings(ctx)
-	if err != nil {
-		return "", err
-	}
-	capacity := settings.EphemeralRoomCapacity
-	if capacity == 0 {
-		capacity = defaultEphemeralRoomCapacity
 	}
 	hash, err := identity.HashPassword(ctx, r.Password)
 	if err != nil {
@@ -95,7 +91,7 @@ func (s *Service) CreateRoom(ctx context.Context, clientIP string, r NewRoom) (s
 		Name:         r.Name,
 		Description:  r.Description,
 		PasswordHash: hash,
-		Capacity:     capacity,
+		Capacity:     settings.EphemeralRoomCapacity,
 	})
 }
 

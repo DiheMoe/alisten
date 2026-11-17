@@ -6,7 +6,7 @@ import { adminStore } from './admin-store'
 import { PersistentRoomsStore } from './persistent-rooms-store'
 
 function room(n: number): RoomListing {
-  return { id: `r${n}`, slug: null, name: `房间 ${n}`, description: '', kind: 'persistent', hasPassword: false, onlineCount: 0 }
+  return { id: `r${n}`, slug: null, name: `房间 ${n}`, description: '', kind: 'persistent', hasPassword: false, onlineCount: 0, capacity: 64 }
 }
 
 let server: RoomListing[]

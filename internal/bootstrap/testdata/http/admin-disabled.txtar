@@ -128,4 +128,4 @@ Authorization: Bearer admin-secret
 GET /api/site
 -- response --
 200
-{"brandName": "Alisten", "registrationOpen": true, "githubLogin": false}
+{"brandName": "Alisten", "registrationOpen": true, "githubLogin": false, "ephemeralRoomCapacity": 16}

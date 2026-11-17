@@ -69,7 +69,7 @@ Authorization: Bearer $alice2
 {"kind": "response", "type": "hello", "id": "h1", "data": {
   "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
   "serverTimeMs": 1,
-  "room": {"term": 1, "seq": 1, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
+  "room": {"term": 1, "seq": 1, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral", "capacity": 16},
     "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
 
@@ -80,7 +80,7 @@ Authorization: Bearer $alice2
 {"kind": "response", "type": "hello", "id": "h1", "data": {
   "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
   "serverTimeMs": 1,
-  "room": {"term": 1, "seq": 2, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
+  "room": {"term": 1, "seq": 2, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral", "capacity": 16},
     "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
 -- receive a --
@@ -91,7 +91,7 @@ Authorization: Bearer $alice2
 Authorization: Bearer $ticketB
 -- event b --
 event: snapshot
-data: {"room": {"term": 1, "seq": 2, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral"},
+data: {"room": {"term": 1, "seq": 2, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral", "capacity": 16},
   "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
   "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}
 

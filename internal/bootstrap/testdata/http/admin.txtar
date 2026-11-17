@@ -18,7 +18,7 @@ GET /api/admin/rooms
 Authorization: Bearer admin-secret
 -- response --
 200
-{"items": []}
+{"items": [], "defaultCapacity": 64}
 
 -- request --
 POST /api/admin/rooms
@@ -73,25 +73,25 @@ Authorization: Bearer admin-secret
 -- response --
 200
 {"items": [
-  {"id": "$hall", "slug": "hall", "name": "大厅", "description": "常驻", "kind": "persistent", "hasPassword": true, "onlineCount": 0},
-  {"id": "$second", "slug": null, "name": "二厅", "description": "", "kind": "persistent", "hasPassword": false, "onlineCount": 0}
-]}
+  {"id": "$hall", "slug": "hall", "name": "大厅", "description": "常驻", "kind": "persistent", "hasPassword": true, "onlineCount": 0, "capacity": 64},
+  {"id": "$second", "slug": null, "name": "二厅", "description": "", "kind": "persistent", "hasPassword": false, "onlineCount": 0, "capacity": 64}
+], "defaultCapacity": 64}
 
 -- request --
 GET /api/rooms
 -- response --
 200
 {"items": [
-  {"id": "$hall", "slug": "hall", "name": "大厅", "description": "常驻", "kind": "persistent", "hasPassword": true, "onlineCount": 0},
-  {"id": "$second", "slug": null, "name": "二厅", "description": "", "kind": "persistent", "hasPassword": false, "onlineCount": 0},
-  {"id": "$open", "slug": null, "name": "临时", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0}
+  {"id": "$hall", "slug": "hall", "name": "大厅", "description": "常驻", "kind": "persistent", "hasPassword": true, "onlineCount": 0, "capacity": 64},
+  {"id": "$second", "slug": null, "name": "二厅", "description": "", "kind": "persistent", "hasPassword": false, "onlineCount": 0, "capacity": 64},
+  {"id": "$open", "slug": null, "name": "临时", "description": "", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0, "capacity": 16}
 ]}
 
 -- request --
 GET /api/rooms/hall
 -- response --
 200
-{"id": "$hall", "slug": "hall", "name": "大厅", "description": "常驻", "kind": "persistent", "hasPassword": true, "onlineCount": 0}
+{"id": "$hall", "slug": "hall", "name": "大厅", "description": "常驻", "kind": "persistent", "hasPassword": true, "onlineCount": 0, "capacity": 64}
 
 -- request --
 GET /api/rooms/HALL

@@ -152,12 +152,25 @@ func decodeAdminCheckQQLoginRequest(raw json.RawMessage, path string) (AdminChec
 
 func decodeAdminCreateRoomRequest(raw json.RawMessage, path string) (AdminCreateRoomRequest, error) {
 	var v AdminCreateRoomRequest
-	m, err := decodeObject(raw, path, "description", "name", "password", "slug")
+	m, err := decodeObject(raw, path, "capacity", "description", "name", "password", "slug")
 	if err != nil {
 		return v, err
 	}
 	if err = requireFields(m, path, "description", "name"); err != nil {
 		return v, err
+	}
+	if r, ok := m["capacity"]; ok {
+		x, err := decodeInteger(r, field(path, "capacity"))
+		if err != nil {
+			return v, err
+		}
+		if err = checkMinimum(x, field(path, "capacity"), 2); err != nil {
+			return v, err
+		}
+		if err = checkMaximum(x, field(path, "capacity"), 128); err != nil {
+			return v, err
+		}
+		v.Capacity = &x
 	}
 	if v.Description, err = decodeString(m["description"], field(path, "description")); err != nil {
 		return v, err
@@ -266,6 +279,27 @@ func decodeAdminResetRoomApiKeyRequest(raw json.RawMessage, path string) (AdminR
 	return v, err
 }
 
+func decodeAdminSetEphemeralRoomCapacityRequest(raw json.RawMessage, path string) (AdminSetEphemeralRoomCapacityRequest, error) {
+	var v AdminSetEphemeralRoomCapacityRequest
+	m, err := decodeObject(raw, path, "capacity")
+	if err != nil {
+		return v, err
+	}
+	if err = requireFields(m, path, "capacity"); err != nil {
+		return v, err
+	}
+	if v.Capacity, err = decodeInteger(m["capacity"], field(path, "capacity")); err != nil {
+		return v, err
+	}
+	if err = checkMinimum(v.Capacity, field(path, "capacity"), 2); err != nil {
+		return v, err
+	}
+	if err = checkMaximum(v.Capacity, field(path, "capacity"), 128); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
 func decodeAdminSetGithubCredentialRequest(raw json.RawMessage, path string) (AdminSetGithubCredentialRequest, error) {
 	var v AdminSetGithubCredentialRequest
 	m, err := decodeObject(raw, path, "clientId", "clientSecret")
@@ -337,9 +371,22 @@ func decodeAdminStartQQLoginRequest(raw json.RawMessage, path string) (AdminStar
 
 func decodeAdminUpdateRoomRequest(raw json.RawMessage, path string) (AdminUpdateRoomRequest, error) {
 	var v AdminUpdateRoomRequest
-	m, err := decodeObject(raw, path, "description", "name", "password", "slug")
+	m, err := decodeObject(raw, path, "capacity", "description", "name", "password", "slug")
 	if err != nil {
 		return v, err
+	}
+	if r, ok := m["capacity"]; ok {
+		x, err := decodeInteger(r, field(path, "capacity"))
+		if err != nil {
+			return v, err
+		}
+		if err = checkMinimum(x, field(path, "capacity"), 2); err != nil {
+			return v, err
+		}
+		if err = checkMaximum(x, field(path, "capacity"), 128); err != nil {
+			return v, err
+		}
+		v.Capacity = &x
 	}
 	if r, ok := m["description"]; ok {
 		x, err := decodeString(r, field(path, "description"))

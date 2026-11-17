@@ -92,7 +92,7 @@ func (s *server) event(e room.Event) (string, any) {
 	case room.ModeChanged:
 		return protocol.EventSettingsUpdated, protocol.SettingsUpdatedEvent{PlayMode: playMode(e.Mode)}
 	case room.InfoChanged:
-		return protocol.EventRoomUpdated, protocol.RoomUpdatedEvent{Name: e.Name, Description: e.Description}
+		return protocol.EventRoomUpdated, protocol.RoomUpdatedEvent{Name: e.Name, Description: e.Description, Capacity: int64(e.Capacity)}
 	case room.ChatPosted:
 		return protocol.EventChatMessage, protocol.ChatMessageEvent{Member: memberDTO(e.Member), Content: e.Text, SentAtMs: e.SentAt.UnixMilli()}
 	case room.Activity:
@@ -105,7 +105,7 @@ func (s *server) snapshot(v room.View) protocol.RoomSnapshot {
 	return protocol.RoomSnapshot{
 		Term:       int64(v.Term),
 		Seq:        int64(v.Seq),
-		Room:       protocol.RoomInfo{ID: v.Snapshot.Info.ID, Name: v.Snapshot.Info.Name, Description: v.Snapshot.Info.Description, Kind: roomKind(v.Snapshot.Info.Kind)},
+		Room:       protocol.RoomInfo{ID: v.Snapshot.Info.ID, Name: v.Snapshot.Info.Name, Description: v.Snapshot.Info.Description, Kind: roomKind(v.Snapshot.Info.Kind), Capacity: int64(v.Snapshot.Info.Capacity)},
 		PlayMode:   playMode(v.Snapshot.Mode),
 		NowPlaying: s.nowPlaying(v.Snapshot.Current),
 		Pending:    s.entryPtr(v.Snapshot.Pending),

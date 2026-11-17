@@ -65,14 +65,20 @@ type NewRoom struct {
 	// 空字符串表示没有别名。别名必须已经按格式校验过，因为存储按格式区分 UUID 和别名，自己不做检查。
 	Slug     string
 	Password string
+	// 为 0 时是 DefaultRoomCapacity。
+	Capacity int
 }
 
-const defaultRoomCapacity = 64
+const DefaultRoomCapacity = 64
 
 func (s *Service) CreateRoom(ctx context.Context, r NewRoom) (string, error) {
 	hash, err := identity.HashPassword(ctx, r.Password)
 	if err != nil {
 		return "", err
+	}
+	capacity := r.Capacity
+	if capacity == 0 {
+		capacity = DefaultRoomCapacity
 	}
 	return s.rooms.CreateRoom(ctx, port.NewRoom{
 		Kind:         room.Persistent,
@@ -80,7 +86,7 @@ func (s *Service) CreateRoom(ctx context.Context, r NewRoom) (string, error) {
 		Description:  r.Description,
 		Slug:         r.Slug,
 		PasswordHash: hash,
-		Capacity:     defaultRoomCapacity,
+		Capacity:     capacity,
 	})
 }
 
@@ -91,11 +97,13 @@ type RoomChange struct {
 	// 别名必须已经按格式校验过，因为存储按格式区分 UUID 和别名，自己不做检查。
 	Slug     *string
 	Password *string
+	Capacity *int
 }
 
-// id 必须是 UUID。名称和描述由房间修改，房间落盘之后才返回。设置或修改密码会作废房间成员的票据，并断开会话和成员的事件流。
+// id 必须是 UUID。名称、描述和人数上限由房间修改，房间落盘之后才返回。上限调到比当前人数还低时不踢人。
+// 设置或修改密码会作废房间成员的票据，并断开会话和成员的事件流。
 // 这一步无法撤销，所以放在最后。这样前面任何一步失败时票据都还有效，重试时也不会把重新签发的票据再作废一次。
-// 别名在名称和描述之前修改，别名已被占用时不做任何修改。取消密码不影响已有的票据。
+// 别名在名称、描述和人数上限之前修改，别名已被占用时不做任何修改。取消密码不影响已有的票据。
 func (s *Service) UpdateRoom(ctx context.Context, id string, c RoomChange) error {
 	r, err := s.persistentRoom(ctx, id)
 	if err != nil {
@@ -114,8 +122,8 @@ func (s *Service) UpdateRoom(ctx context.Context, id string, c RoomChange) error
 			return err
 		}
 	}
-	if c.Name != nil || c.Description != nil {
-		if err := s.gateway.UpdateInfo(ctx, r.Info.ID, c.Name, c.Description); err != nil {
+	if c.Name != nil || c.Description != nil || c.Capacity != nil {
+		if err := s.gateway.UpdateInfo(ctx, r.Info.ID, c.Name, c.Description, c.Capacity); err != nil {
 			return err
 		}
 	}

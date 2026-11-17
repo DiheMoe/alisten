@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	defaultBrandName   = "Alisten"
-	maxBrandNameLength = 20
+	defaultBrandName             = "Alisten"
+	maxBrandNameLength           = 20
+	defaultEphemeralRoomCapacity = 16
 )
 
 var ErrInvalidBrandName = errors.New("brandName：去掉首尾空白后应有 1 到 20 个字符，其中至少一个看得见，不能包含控制字符")
@@ -26,8 +27,9 @@ func New(site port.Site) *Service {
 }
 
 type Settings struct {
-	BrandName        string
-	RegistrationOpen bool
+	BrandName             string
+	RegistrationOpen      bool
+	EphemeralRoomCapacity int
 }
 
 func (s *Service) Settings(ctx context.Context) (Settings, error) {
@@ -39,11 +41,20 @@ func (s *Service) Settings(ctx context.Context) (Settings, error) {
 	if name == "" {
 		name = defaultBrandName
 	}
-	return Settings{BrandName: name, RegistrationOpen: settings.RegistrationOpen}, nil
+	capacity := settings.EphemeralRoomCapacity
+	if capacity == 0 {
+		capacity = defaultEphemeralRoomCapacity
+	}
+	return Settings{BrandName: name, RegistrationOpen: settings.RegistrationOpen, EphemeralRoomCapacity: capacity}, nil
 }
 
 func (s *Service) SetRegistrationOpen(ctx context.Context, open bool) error {
 	return s.site.SetRegistrationOpen(ctx, open)
+}
+
+// 只影响之后创建的临时房间，已经创建的临时房间保持原来的上限。
+func (s *Service) SetEphemeralRoomCapacity(ctx context.Context, capacity int) error {
+	return s.site.SetEphemeralRoomCapacity(ctx, capacity)
 }
 
 func (s *Service) SetBrandName(ctx context.Context, name string) (string, error) {

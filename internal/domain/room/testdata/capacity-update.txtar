@@ -1,0 +1,55 @@
+后台修改人数上限：上限变了才落盘并广播新的房间信息。上限调到比当前人数还低时不踢人，已经在房间里的成员还能再开连接，新的成员要等人数降到新的上限以下才进得来。调高上限之后，新的成员立即进得来。
+-- 01 --
+> restore persistent
+-- 02 --
+> 0s join s1 m1
+emit 1.1 members [s1=m1]
+reply q02 done
+-- 03 --
+> 0s join s2 m2
+emit 1.2 members [s1=m1 s2=m2]
+reply q03 done
+-- 04 --
+> 0s join s3 m3
+emit 1.3 members [s1=m1 s2=m2 s3=m3]
+reply q04 done
+-- 05 --
+> 1s capacity 2
+persist mode=sequential entrySeq=0 current=- pending=- waiting=[]
+emit 1.4 info 房间 |  capacity=2
+reply q05 done
+-- 06 --
+> 2s join s4 m4
+reply q06 error room-full 房间已满，最多 2 人。
+-- 07 --
+> 2s join s5 m1
+emit 1.5 members [s1=m1 s2=m2 s3=m3 s5=m1]
+reply q07 done
+-- 08 --
+> 3s leave s3
+emit 1.6 members [s1=m1 s2=m2 s5=m1]
+-- 09 --
+> 3s join s4 m4
+reply q09 error room-full 房间已满，最多 2 人。
+-- 10 --
+> 4s leave s2
+emit 1.7 members [s1=m1 s5=m1]
+-- 11 --
+> 4s join s4 m4
+emit 1.8 members [s1=m1 s5=m1 s4=m4]
+reply q11 done
+-- 12 --
+> 5s capacity 2
+reply q12 done
+-- 13 --
+> 6s capacity 3
+persist mode=sequential entrySeq=0 current=- pending=- waiting=[]
+emit 1.9 info 房间 |  capacity=3
+reply q13 done
+-- 14 --
+> 6s join s6 m2
+emit 1.10 members [s1=m1 s5=m1 s4=m4 s6=m2]
+reply q14 done
+-- 15 --
+> 6s join s7 m3
+reply q15 error room-full 房间已满，最多 3 人。

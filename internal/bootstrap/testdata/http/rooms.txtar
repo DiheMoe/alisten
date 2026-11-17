@@ -29,15 +29,15 @@ GET /api/rooms
 -- response --
 200
 {"items": [
-  {"id": "$open", "slug": null, "name": "临时", "description": "随便听听", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0},
-  {"id": "$locked", "slug": null, "name": "上锁", "description": "", "kind": "ephemeral", "hasPassword": true, "onlineCount": 0}
+  {"id": "$open", "slug": null, "name": "临时", "description": "随便听听", "kind": "ephemeral", "hasPassword": false, "onlineCount": 0, "capacity": 16},
+  {"id": "$locked", "slug": null, "name": "上锁", "description": "", "kind": "ephemeral", "hasPassword": true, "onlineCount": 0, "capacity": 16}
 ]}
 
 -- request --
 GET /api/rooms/$locked
 -- response --
 200
-{"id": "$locked", "slug": null, "name": "上锁", "description": "", "kind": "ephemeral", "hasPassword": true, "onlineCount": 0}
+{"id": "$locked", "slug": null, "name": "上锁", "description": "", "kind": "ephemeral", "hasPassword": true, "onlineCount": 0, "capacity": 16}
 
 -- request --
 GET /api/rooms/01a15778-1911-7a28-8b2e-e08c2a25f388
