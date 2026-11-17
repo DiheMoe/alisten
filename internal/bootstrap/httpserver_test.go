@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"io"
@@ -9,7 +10,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"go.opentelemetry.io/otel/codes"
@@ -126,4 +129,72 @@ func TestHTTPServerLimitsHeaderSize(t *testing.T) {
 			t.Errorf("%d 字节的查询串 = %d，期望 %d", tt.size, resp.StatusCode, tt.want)
 		}
 	}
+}
+
+// 内存里的监听器，只交出一条连接。synctest 的时钟只在 bubble 内的全部 goroutine 都持久阻塞时才前进，而阻塞在真实网络连接上不算持久阻塞。
+type pipeListener struct {
+	conns  chan net.Conn
+	closed chan struct{}
+	once   sync.Once
+}
+
+func listenPipe(conn net.Conn) *pipeListener {
+	l := &pipeListener{conns: make(chan net.Conn, 1), closed: make(chan struct{})}
+	l.conns <- conn
+	return l
+}
+
+func (l *pipeListener) Accept() (net.Conn, error) {
+	select {
+	case c := <-l.conns:
+		return c, nil
+	case <-l.closed:
+		return nil, net.ErrClosed
+	}
+}
+
+func (l *pipeListener) Close() error {
+	l.once.Do(func() { close(l.closed) })
+	return nil
+}
+
+func (l *pipeListener) Addr() net.Addr { return &net.TCPAddr{} }
+
+func TestHTTPServerClosesIdleConnections(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// 响应的耗时比空闲期限还长，这样能看出正在响应的连接不会因为空闲期限被断开。
+		srv := newHTTPServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			time.Sleep(3 * time.Minute)
+			_, _ = w.Write([]byte("ok"))
+		}), newLogger(io.Discard, slog.LevelInfo))
+		server, client := net.Pipe()
+		go func() { _ = srv.Serve(listenPipe(server)) }()
+		t.Cleanup(func() {
+			_ = srv.Close()
+			_ = client.Close()
+		})
+
+		req, err := http.NewRequest(http.MethodGet, "http://alisten.test/", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := req.Write(client); err != nil {
+			t.Fatal(err)
+		}
+		resp, err := http.ReadResponse(bufio.NewReader(client), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(resp.Body)
+		if err != nil || string(body) != "ok" {
+			t.Fatalf("响应体 = %q, %v，期望 ok", body, err)
+		}
+		idle := time.Now()
+		if _, err := client.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
+			t.Errorf("在空闲的连接上读到 %v，期望服务端关闭连接", err)
+		}
+		if elapsed := time.Since(idle); elapsed != 2*time.Minute {
+			t.Errorf("连接空闲 %v 之后被关闭，期望 2 分钟", elapsed)
+		}
+	})
 }
