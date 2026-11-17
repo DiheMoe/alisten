@@ -78,6 +78,8 @@ helm upgrade alisten \
   --timeout 6m
 ```
 
+serve 和 worker 使用 `Recreate` 策略更新，不支持滚动发布，因为实例之间的消息按构建版本过滤，不同版本的实例无法协作。更新时旧 Pod 会先全部停止，所有房间的连接随之断开，新 Pod 就绪后客户端会自动重连。房间状态保存在数据库中，不会丢失。中断时长取决于新 Pod 拉取镜像和就绪所需的时间。
+
 ## 开放 API
 
 常驻房间支持生成 API Key，供第三方应用（如 IM 平台机器人）调用本项目的开放接口。调用时须通过 `Authorization: Bearer <API Key>` 请求头进行身份鉴权。API Key 仅在生成或重置时返回一次，请妥善保管。
