@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -12,7 +13,10 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/member"
 )
 
-var _ port.Members = (*Store)(nil)
+var (
+	_ port.Members    = (*Store)(nil)
+	_ port.IdleGuests = (*Store)(nil)
+)
 
 func (s *Store) CreateMember(ctx context.Context, tokenHash []byte, name string) (member.Member, error) {
 	var m member.Member
@@ -279,4 +283,22 @@ func setPassword(ctx context.Context, q *query.Queries, memberID, passwordHash s
 		return nil, port.ErrMemberNotFound
 	}
 	return q.DeleteMemberSessions(ctx, query.DeleteMemberSessionsParams{MemberID: memberID, Keep: keepTokenHash})
+}
+
+// 两条语句在同一个事务里执行。第二条能看到第一条删掉的会话，所以刚失去最后一个会话的游客这一次就能删掉。
+// 写成一条带 CTE 的语句做不到这一点，因为同一条语句里的子语句看不到彼此删掉的行。出错时两条一起回滚，所以返回的数量总和实际删除的一致。
+func (s *Store) DeleteIdleGuests(ctx context.Context, idleBefore, createdBefore time.Time) (sessions, members int64, err error) {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		var err error
+		if sessions, err = q.DeleteIdleGuestSessions(ctx, idleBefore); err != nil {
+			return err
+		}
+		members, err = q.DeleteSessionlessGuests(ctx, createdBefore)
+		return err
+	})
+	if err != nil {
+		return 0, 0, fmt.Errorf("清理闲置的游客：%w", err)
+	}
+	return sessions, members, nil
 }

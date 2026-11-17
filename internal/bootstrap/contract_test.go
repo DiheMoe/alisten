@@ -201,12 +201,6 @@ func (b *logBuffer) Write(p []byte) (int, error) {
 	return b.buf.Write(p)
 }
 
-func (b *logBuffer) Len() int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Len()
-}
-
 func (b *logBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -341,9 +335,25 @@ func runContract(t *testing.T, sections []txtar.File, databaseURL, redisURL stri
 			t.Fatalf("第 %d 节 %q 不是认识的格式", i+1, sections[i].Name)
 		}
 	}
-	if svc.logs.Len() != 0 {
-		t.Errorf("这些场景都不应产生日志：\n%s", svc.logs.String())
+	if logs := scenarioLogs(t, svc.logs.String()); logs != "" {
+		t.Errorf("这些场景都不应产生日志：\n%s", logs)
 	}
+}
+
+// 服务启动时会清理一次闲置的游客，这条日志和场景无关，不算在内。
+func scenarioLogs(t *testing.T, logs string) string {
+	t.Helper()
+	var kept strings.Builder
+	for line := range strings.Lines(logs) {
+		var entry struct{ Level, Msg string }
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("日志不是 JSON：%v\n%s", err, line)
+		}
+		if entry.Level != "INFO" || entry.Msg != "已清理闲置的游客" {
+			kept.WriteString(line)
+		}
+	}
+	return kept.String()
 }
 
 func contractEnv(t *testing.T, databaseURL, redisURL string) {

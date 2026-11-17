@@ -33,9 +33,15 @@ func (q *Queries) CreateTicket(ctx context.Context, arg CreateTicketParams) erro
 }
 
 const existingTickets = `-- name: ExistingTickets :many
+WITH used AS (
+    UPDATE member_sessions s SET last_used_at = now()
+    FROM room_tickets t
+    WHERE t.token_hash = ANY($1::bytea[]) AND s.token_hash = t.session_token_hash AND s.last_used_at < now() - interval '24 hours'
+)
 SELECT token_hash FROM room_tickets WHERE token_hash = ANY($1::bytea[])
 `
 
+// 顺带记录这些票据所属会话的使用时间，规则和 MemberByToken 相同。
 func (q *Queries) ExistingTickets(ctx context.Context, tokenHashes [][]byte) ([][]byte, error) {
 	rows, err := q.db.Query(ctx, existingTickets, tokenHashes)
 	if err != nil {
@@ -69,6 +75,11 @@ func (q *Queries) LockRoomPassword(ctx context.Context, id string) (string, erro
 }
 
 const ticketHolder = `-- name: TicketHolder :one
+WITH used AS (
+    UPDATE member_sessions s SET last_used_at = now()
+    FROM room_tickets t
+    WHERE t.token_hash = $1 AND s.token_hash = t.session_token_hash AND s.last_used_at < now() - interval '24 hours'
+)
 SELECT t.room_id, m.id, m.name, m.avatar_hash, r.bot_member_id IS NOT DISTINCT FROM m.id AS bot, t.session_token_hash
 FROM room_tickets t
 JOIN members m ON m.id = t.member_id
@@ -85,6 +96,7 @@ type TicketHolderRow struct {
 	SessionTokenHash []byte
 }
 
+// 顺带记录票据所属会话的使用时间，规则和 MemberByToken 相同。API Key 没有会话，不记录。
 func (q *Queries) TicketHolder(ctx context.Context, tokenHash []byte) (TicketHolderRow, error) {
 	row := q.db.QueryRow(ctx, ticketHolder, tokenHash)
 	var i TicketHolderRow

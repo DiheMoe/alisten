@@ -7,6 +7,7 @@ package query
 
 import (
 	"context"
+	"time"
 )
 
 const accountByGitHub = `-- name: AccountByGitHub :one
@@ -147,6 +148,21 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 	return err
 }
 
+const deleteIdleGuestSessions = `-- name: DeleteIdleGuestSessions :execrows
+DELETE FROM member_sessions s
+USING members m
+WHERE m.id = s.member_id AND m.username IS NULL AND m.github_id IS NULL AND s.last_used_at < $1
+`
+
+// 只删游客的会话，账号的会话一律保留。会话的票据由外键级联删除。
+func (q *Queries) DeleteIdleGuestSessions(ctx context.Context, idleBefore time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteIdleGuestSessions, idleBefore)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteMemberSessions = `-- name: DeleteMemberSessions :many
 DELETE FROM member_sessions WHERE member_id = $1 AND token_hash IS DISTINCT FROM $2::bytea
 RETURNING token_hash
@@ -184,6 +200,24 @@ DELETE FROM member_sessions WHERE token_hash = $1
 
 func (q *Queries) DeleteSession(ctx context.Context, tokenHash []byte) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteSession, tokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteSessionlessGuests = `-- name: DeleteSessionlessGuests :execrows
+DELETE FROM members m
+WHERE m.username IS NULL AND m.github_id IS NULL AND m.created_at < $1
+    AND NOT EXISTS (SELECT FROM member_sessions s WHERE s.member_id = m.id)
+    AND NOT EXISTS (SELECT FROM rooms r WHERE r.bot_member_id = m.id)
+    AND NOT EXISTS (SELECT FROM room_tickets t WHERE t.member_id = m.id)
+`
+
+// 引用 members 的外键中，member_sessions、listens 和 playlists 级联删除，rooms.bot_member_id 和 room_tickets.member_id 不级联。
+// 所以 bot 成员和仍被票据引用的成员要排除，否则整条语句会因为违反外键而失败。
+func (q *Queries) DeleteSessionlessGuests(ctx context.Context, createdBefore time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSessionlessGuests, createdBefore)
 	if err != nil {
 		return 0, err
 	}
@@ -233,9 +267,14 @@ func (q *Queries) MemberAccountProfile(ctx context.Context, id string) (MemberAc
 }
 
 const memberByToken = `-- name: MemberByToken :one
-SELECT id, name, avatar_hash, created_at, username, password_hash, email, record_listens, github_id FROM members WHERE id = (SELECT member_id FROM member_sessions WHERE token_hash = $1)
+WITH used AS (
+    UPDATE member_sessions s SET last_used_at = now()
+    WHERE s.token_hash = $1 AND s.last_used_at < now() - interval '24 hours'
+)
+SELECT id, name, avatar_hash, created_at, username, password_hash, email, record_listens, github_id FROM members WHERE id = (SELECT s.member_id FROM member_sessions s WHERE s.token_hash = $1)
 `
 
+// 顺带记录会话的使用时间。上次记录不到 24 小时就不写，所以大多数请求的 UPDATE 不影响任何行。
 func (q *Queries) MemberByToken(ctx context.Context, tokenHash []byte) (Member, error) {
 	row := q.db.QueryRow(ctx, memberByToken, tokenHash)
 	var i Member

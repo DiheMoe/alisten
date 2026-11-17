@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 	"unicode/utf8"
 
@@ -25,8 +26,8 @@ type Store struct {
 	mu      sync.Mutex
 	ids     int
 	members []storedMember
-	// 会话的 token 哈希到成员 ID。
-	sessions map[string]string
+	// 键是会话的 token 哈希。
+	sessions map[string]storedSession
 	rooms    []port.RoomRecord
 	states   map[string]*roomState
 	tickets  map[string]storedTicket
@@ -50,6 +51,12 @@ type storedMember struct {
 	githubID     int64
 	// 零值表示记录播放历史，与 members.record_listens 的默认值一致。
 	listensOff bool
+	created    time.Time
+}
+
+type storedSession struct {
+	memberID string
+	lastUsed time.Time
 }
 
 func (m *storedMember) registered() bool {
@@ -75,6 +82,7 @@ type storedTicket struct {
 
 var (
 	_ port.Members         = (*Store)(nil)
+	_ port.IdleGuests      = (*Store)(nil)
 	_ port.Tickets         = (*Store)(nil)
 	_ port.ExistingTickets = (*Store)(nil)
 	_ port.RoomDirectory   = (*Store)(nil)
@@ -88,7 +96,7 @@ var (
 func New() *Store {
 	return &Store{
 		states:   map[string]*roomState{},
-		sessions: map[string]string{},
+		sessions: map[string]storedSession{},
 		tickets:  map[string]storedTicket{},
 		bots:     map[string]string{},
 		cookies:  map[string]string{},
@@ -130,19 +138,30 @@ func (s *Store) CreateMember(_ context.Context, tokenHash []byte, name string) (
 	if _, ok := s.sessions[string(tokenHash)]; ok {
 		return member.Member{}, errors.New("token 哈希重复")
 	}
+	now := time.Now()
 	m := member.Member{ID: s.newID(), Name: name}
-	s.members = append(s.members, storedMember{member: m})
-	s.sessions[string(tokenHash)] = m.ID
+	s.members = append(s.members, storedMember{member: m, created: now})
+	s.sessions[string(tokenHash)] = storedSession{memberID: m.ID, lastUsed: now}
 	return m, nil
 }
 
 func (s *Store) MemberByToken(_ context.Context, tokenHash []byte) (member.Member, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if m := s.member(s.sessions[string(tokenHash)]); m != nil {
+	if m := s.member(s.sessions[string(tokenHash)].memberID); m != nil {
+		s.useSession(string(tokenHash))
 		return m.member, m.registered(), nil
 	}
 	return member.Member{}, false, port.ErrMemberNotFound
+}
+
+// 与 PostgreSQL 一致，上次记录不到 24 小时就不更新。调用方持有 s.mu。
+func (s *Store) useSession(hash string) {
+	session, ok := s.sessions[hash]
+	if now := time.Now(); ok && session.lastUsed.Before(now.Add(-24*time.Hour)) {
+		session.lastUsed = now
+		s.sessions[hash] = session
+	}
 }
 
 // 调用方持有 s.mu。
@@ -302,7 +321,7 @@ func (s *Store) ReplaceSession(_ context.Context, oldTokenHash []byte, memberID 
 	if m.passwordHash != passwordHash {
 		return port.ErrAccountPasswordChanged
 	}
-	previous, ok := s.sessions[string(oldTokenHash)]
+	old, ok := s.sessions[string(oldTokenHash)]
 	if !ok {
 		return port.ErrSessionNotFound
 	}
@@ -310,8 +329,8 @@ func (s *Store) ReplaceSession(_ context.Context, oldTokenHash []byte, memberID 
 		return errors.New("token 哈希重复")
 	}
 	s.deleteSession(string(oldTokenHash))
-	s.sessions[string(newTokenHash)] = memberID
-	if previous != memberID {
+	s.sessions[string(newTokenHash)] = storedSession{memberID: memberID, lastUsed: time.Now()}
+	if previous := old.memberID; previous != memberID {
 		moved := s.listens[previous]
 		delete(s.listens, previous)
 		if !m.listensOff {
@@ -348,7 +367,7 @@ func (s *Store) ChangePassword(_ context.Context, memberID, currentPasswordHash,
 	if m == nil || m.username == "" {
 		return nil, port.ErrMemberNotFound
 	}
-	if owner, ok := s.sessions[string(keepTokenHash)]; !ok || owner != memberID {
+	if kept, ok := s.sessions[string(keepTokenHash)]; !ok || kept.memberID != memberID {
 		return nil, port.ErrSessionNotFound
 	}
 	if m.passwordHash != currentPasswordHash {
@@ -361,8 +380,8 @@ func (s *Store) ChangePassword(_ context.Context, memberID, currentPasswordHash,
 // 调用方持有 s.mu。
 func (s *Store) deleteSessions(memberID string, keepTokenHash []byte) [][]byte {
 	var deleted [][]byte
-	for hash, id := range s.sessions {
-		if id == memberID && (keepTokenHash == nil || hash != string(keepTokenHash)) {
+	for hash, session := range s.sessions {
+		if session.memberID == memberID && (keepTokenHash == nil || hash != string(keepTokenHash)) {
 			deleted = append(deleted, []byte(hash))
 		}
 	}
@@ -376,6 +395,80 @@ func (s *Store) deleteSessions(memberID string, keepTokenHash []byte) [][]byte {
 func (s *Store) deleteSession(hash string) {
 	delete(s.sessions, hash)
 	maps.DeleteFunc(s.tickets, func(_ string, t storedTicket) bool { return t.session == hash })
+}
+
+func (s *Store) DeleteIdleGuests(_ context.Context, idleBefore, createdBefore time.Time) (sessions, members int64, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for hash, session := range s.sessions {
+		if m := s.member(session.memberID); m != nil && !m.registered() && session.lastUsed.Before(idleBefore) {
+			s.deleteSession(hash)
+			sessions++
+		}
+	}
+	var deleted []string
+	s.members = slices.DeleteFunc(s.members, func(m storedMember) bool {
+		id := m.member.ID
+		if m.registered() || !m.created.Before(createdBefore) || s.isBot(id) || s.referenced(id) {
+			return false
+		}
+		deleted = append(deleted, id)
+		return true
+	})
+	// 与 postgres 的外键一致，播放历史和歌单随成员一起删除。
+	for _, id := range deleted {
+		delete(s.listens, id)
+		s.playlists = slices.DeleteFunc(s.playlists, func(p *storedPlaylist) bool { return p.owner == id })
+	}
+	return sessions, int64(len(deleted)), nil
+}
+
+// 删除房间时 s.bots 里的记录不删，所以要确认房间还在，这样才和 rooms.bot_member_id 一致。调用方持有 s.mu。
+func (s *Store) isBot(memberID string) bool {
+	for roomID, bot := range s.bots {
+		if bot == memberID && s.room(roomID) != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// 调用方持有 s.mu。
+func (s *Store) referenced(memberID string) bool {
+	for _, session := range s.sessions {
+		if session.memberID == memberID {
+			return true
+		}
+	}
+	for _, t := range s.tickets {
+		if t.memberID == memberID {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Store) BackdateSession(t testing.TB, tokenHash []byte, at time.Time) {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.sessions[string(tokenHash)]
+	if !ok {
+		t.Fatalf("会话 %x 不存在", tokenHash)
+	}
+	session.lastUsed = at
+	s.sessions[string(tokenHash)] = session
+}
+
+func (s *Store) BackdateMember(t testing.TB, memberID string, at time.Time) {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.member(memberID)
+	if m == nil {
+		t.Fatalf("成员 %s 不存在", memberID)
+	}
+	m.created = at
 }
 
 func (s *Store) CreateTicket(_ context.Context, t port.NewTicket) error {
@@ -413,6 +506,7 @@ func (s *Store) TicketHolder(_ context.Context, tokenHash []byte) (port.TicketHo
 			holder := port.TicketHolder{RoomID: t.roomID, Member: m.member, Bot: s.bots[t.roomID] == t.memberID}
 			if t.session != "" {
 				holder.SessionTokenHash = []byte(t.session)
+				s.useSession(t.session)
 			}
 			return holder, nil
 		}
@@ -424,9 +518,10 @@ func (s *Store) ExistingTickets(_ context.Context, tokenHashes [][]byte) ([][]by
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var existing [][]byte
-	for hash := range s.tickets {
+	for hash, t := range s.tickets {
 		if slices.ContainsFunc(tokenHashes, func(h []byte) bool { return string(h) == hash }) {
 			existing = append(existing, []byte(hash))
+			s.useSession(t.session)
 		}
 	}
 	return existing, nil
@@ -464,7 +559,7 @@ func (s *Store) ResetRoomAPIKey(_ context.Context, roomID string, k port.NewAPIK
 		maps.DeleteFunc(s.tickets, func(_ string, t storedTicket) bool { return t.roomID == r.Info.ID && t.memberID == bot })
 	} else {
 		bot = s.newID()
-		s.members = append(s.members, storedMember{member: member.Member{ID: bot, Name: "bot"}})
+		s.members = append(s.members, storedMember{member: member.Member{ID: bot, Name: "bot"}, created: time.Now()})
 		s.bots[r.Info.ID] = bot
 	}
 	s.tickets[string(k.TokenHash)] = storedTicket{roomID: r.Info.ID, memberID: bot, createdAt: time.Now()}

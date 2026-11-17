@@ -3,6 +3,7 @@ package port
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/dihemoe/alisten/internal/domain/member"
 )
@@ -44,7 +45,7 @@ func (p AccountProfile) Registered() bool {
 type Members interface {
 	// 创建游客和它的第一个会话。
 	CreateMember(ctx context.Context, tokenHash []byte, name string) (member.Member, error)
-	// registered 的含义与 AccountProfile.Registered 相同。
+	// registered 的含义与 AccountProfile.Registered 相同。顺带记录会话的使用时间。
 	MemberByToken(ctx context.Context, tokenHash []byte) (m member.Member, registered bool, err error)
 	// name、avatarHash 或 email 为 nil 时保持原值，email 为空字符串表示清除。游客的 email 不保存。
 	UpdateMember(ctx context.Context, id string, name, avatarHash, email *string) (member.Member, error)
@@ -77,4 +78,13 @@ type Members interface {
 	// 与 SetPassword 相同，但保留发出请求的 keepTokenHash 的会话。这个会话已经不存在时返回 ErrSessionNotFound。密码哈希已经不是
 	// 校验当前密码时读到的 currentPasswordHash 时返回 ErrAccountPasswordChanged，说明密码在校验之后被修改或重置过。两种情况都不做任何修改。
 	ChangePassword(ctx context.Context, memberID, currentPasswordHash, passwordHash string, keepTokenHash []byte) ([][]byte, error)
+}
+
+// 游客是没有设置用户名、也没有绑定 GitHub 的成员。房间的 bot 成员也没有账号，但不算游客。
+// 会话的使用时间由 Members.MemberByToken、Tickets.TicketHolder 和 ExistingTickets 顺带记录。上次记录不到 24 小时就不再记录，
+// 这样大多数请求不用写存储。所以记下的时间可能比会话最近一次被用到的时间早将近 24 小时。
+type IdleGuests interface {
+	// 先删除最近一次使用早于 idleBefore 的游客会话，票据随会话删除。再删除创建早于 createdBefore、已经没有会话、也没有票据的游客，
+	// 播放历史随成员删除。账号和账号的会话都不删。返回删除的会话数和成员数。出错时什么也不删。
+	DeleteIdleGuests(ctx context.Context, idleBefore, createdBefore time.Time) (sessions, members int64, err error)
 }

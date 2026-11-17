@@ -279,3 +279,48 @@ func TestRoomCapacityMigrationSetsCapacityByKind(t *testing.T) {
 		t.Errorf("不写 capacity 新建的房间 = %d, %v，期望取默认值 64", capacity, err)
 	}
 }
+
+func TestSessionLastUsedMigrationStartsFromMigration(t *testing.T) {
+	ctx := t.Context()
+	name := fmt.Sprintf("test_%d", databases.Add(1))
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
+		t.Fatal(err)
+	}
+	cfg := server.Copy()
+	cfg.ConnConfig.Database = name
+	pool := connect(t, cfg)
+	db := stdlib.OpenDBFromPool(pool)
+	t.Cleanup(func() { _ = db.Close() })
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 9); err != nil {
+		t.Fatal(err)
+	}
+	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	var guest string
+	if err := pool.QueryRow(ctx, "INSERT INTO members (name, created_at) VALUES ('游客-1a2b', $1) RETURNING id", created).Scan(&guest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO member_sessions (token_hash, member_id, created_at) VALUES ($1, $2, $3)", tokenHash("guest"), guest, created); err != nil {
+		t.Fatal(err)
+	}
+	var before, after, used time.Time
+	if err := pool.QueryRow(ctx, "SELECT now()").Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, "SELECT now()").Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := pool.QueryRow(ctx, "SELECT last_used_at FROM member_sessions WHERE token_hash = $1", tokenHash("guest")).Scan(&used); err != nil {
+		t.Fatal(err)
+	}
+	if used.Before(before) || used.After(after) {
+		t.Errorf("迁移之后已有会话的 last_used_at = %v，期望是迁移时刻，在 %v 和 %v 之间", used, before, after)
+	}
+}

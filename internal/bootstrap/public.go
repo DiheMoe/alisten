@@ -64,7 +64,8 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 	objects := traceObjects(storage.New(cfg.storage), tracer)
 	logger := base.With("component", "prepare")
 	runner := prepare.NewRunner(map[track.Source]port.Source{track.NetEase: src.netease, track.QQ: src.qq}, store, logger)
-	jobs, err := worker.NewClient(pool, runner.Run, insertsInTraces{tracer}, logger)
+	guests := identity.NewGuestCleanup(store, base.With("component", "cleanup"))
+	jobs, err := worker.NewClient(pool, runner.Run, guests.Run, insertsInTraces{tracer}, logger)
 	if err != nil {
 		return public{}, fmt.Errorf("创建 River client：%w", err)
 	}

@@ -2,23 +2,33 @@ package porttest
 
 import (
 	"testing"
+	"time"
 
 	"github.com/dihemoe/alisten/internal/app/port"
 )
 
 type ContractStore interface {
 	port.Members
+	port.IdleGuests
+	port.Tickets
+	port.ExistingTickets
+	port.APIKeys
 	port.Playlists
 	port.Listens
 	port.ListenRecorder
 	port.RoomDirectory
 	port.RoomSnapshots
 	port.Site
+	// 把会话最近一次使用的时间改成 at，模拟会话闲置了一段时间。
+	BackdateSession(t testing.TB, tokenHash []byte, at time.Time)
+	// 把成员的创建时间改成 at。
+	BackdateMember(t testing.TB, memberID string, at time.Time)
 }
 
 // 每个子测试都会调用一次 open。open 返回的存储必须是空的，因为子测试之间会重复使用 alice 这样的 token 和用户名。
 func RunStoreContract(t *testing.T, open func(t *testing.T) ContractStore) {
 	runMembersContract(t, open)
+	runGuestsContract(t, open)
 	runPlaylistsContract(t, open)
 	runListensContract(t, open)
 	runRoomsContract(t, open)

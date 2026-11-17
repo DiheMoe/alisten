@@ -36,12 +36,14 @@ type Tickets interface {
 	// 房间的密码哈希已经不是 t.PasswordHash 时返回 ErrPasswordChanged。这说明密码在校验之后被修改过。
 	// 设置或修改密码时作废票据的那一步已经执行过，如果这时签发票据，这张票据就不会被作废。t.SessionTokenHash 的会话已经不存在时返回 ErrSessionNotFound。
 	CreateTicket(ctx context.Context, t NewTicket) error
+	// 顺带记录票据所属会话的使用时间。
 	TicketHolder(ctx context.Context, tokenHash []byte) (TicketHolder, error)
 }
 
 // 网关定期用 ExistingTickets 核对连接所用的凭证。凭证不在存储中，就当作已撤销，断开连接。所以票据只在作废时删除。
 // 如果按时间清理过期的票据，仍在使用这些票据的连接也会被断开。
 type ExistingTickets interface {
-	// 返回 tokenHashes 中仍然存在的票据（包括 API Key），每个只出现一次，顺序不定。
+	// 返回 tokenHashes 中仍然存在的票据（包括 API Key），每个只出现一次，顺序不定。顺带记录这些票据所属会话的使用时间，
+	// 这样一直连着房间、不再换票据的会话也不会被当作闲置的会话清理掉。
 	ExistingTickets(ctx context.Context, tokenHashes [][]byte) ([][]byte, error)
 }

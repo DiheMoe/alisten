@@ -6,7 +6,12 @@ RETURNING *;
 INSERT INTO member_sessions (token_hash, member_id) VALUES (@token_hash, @member_id);
 
 -- name: MemberByToken :one
-SELECT * FROM members WHERE id = (SELECT member_id FROM member_sessions WHERE token_hash = @token_hash);
+-- 顺带记录会话的使用时间。上次记录不到 24 小时就不写，所以大多数请求的 UPDATE 不影响任何行。
+WITH used AS (
+    UPDATE member_sessions s SET last_used_at = now()
+    WHERE s.token_hash = @token_hash AND s.last_used_at < now() - interval '24 hours'
+)
+SELECT * FROM members WHERE id = (SELECT s.member_id FROM member_sessions s WHERE s.token_hash = @token_hash);
 
 -- name: UpdateMember :one
 -- 只覆盖传入的列，所以分别修改昵称和头像的两个并发请求不会互相还原。头像哈希和邮箱传入空串表示清除。游客的邮箱总是 NULL。
@@ -74,3 +79,18 @@ DELETE FROM member_sessions WHERE token_hash = @token_hash RETURNING member_id;
 -- keep 为 NULL 时删除这个成员的全部会话。
 DELETE FROM member_sessions WHERE member_id = @member_id AND token_hash IS DISTINCT FROM sqlc.narg(keep)::bytea
 RETURNING token_hash;
+
+-- name: DeleteIdleGuestSessions :execrows
+-- 只删游客的会话，账号的会话一律保留。会话的票据由外键级联删除。
+DELETE FROM member_sessions s
+USING members m
+WHERE m.id = s.member_id AND m.username IS NULL AND m.github_id IS NULL AND s.last_used_at < @idle_before;
+
+-- name: DeleteSessionlessGuests :execrows
+-- 引用 members 的外键中，member_sessions、listens 和 playlists 级联删除，rooms.bot_member_id 和 room_tickets.member_id 不级联。
+-- 所以 bot 成员和仍被票据引用的成员要排除，否则整条语句会因为违反外键而失败。
+DELETE FROM members m
+WHERE m.username IS NULL AND m.github_id IS NULL AND m.created_at < @created_before
+    AND NOT EXISTS (SELECT FROM member_sessions s WHERE s.member_id = m.id)
+    AND NOT EXISTS (SELECT FROM rooms r WHERE r.bot_member_id = m.id)
+    AND NOT EXISTS (SELECT FROM room_tickets t WHERE t.member_id = m.id);
