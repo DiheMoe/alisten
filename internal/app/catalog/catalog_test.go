@@ -400,11 +400,15 @@ func (s *similarCalls) SimilarTracks(ctx context.Context, id string) ([]port.Son
 }
 
 func TestRecommendLimits(t *testing.T) {
+	// 推荐列表只取前 10 首，凑够 10 首就不再获取下一个种子的相似歌曲，不够时才继续。
 	for _, tt := range []struct {
 		candidates int
 		seeds      []string
+		last       string
 	}{
-		{26, []string{"s1"}},
+		{26, []string{"s1"}, "J"},
+		{10, []string{"s1"}, "J"},
+		{9, []string{"s1", "s2"}, "late"},
 	} {
 		f := newFixture(t, history{seeds: []track.Track{netease("s1"), netease("s2")}})
 		var similar []string
@@ -423,8 +427,8 @@ func TestRecommendLimits(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(list) != 10 || list[0].Track.ID != "A" || list[9].Track.ID != "J" {
-			t.Errorf("%d 首候选的推荐列表 = %v，期望前 10 首候选", tt.candidates, list)
+		if len(list) != 10 || list[0].Track.ID != "A" || list[9].Track.ID != tt.last {
+			t.Errorf("%d 首候选的推荐列表 = %v，期望 10 首，从 A 开始，最后一首是 %s", tt.candidates, list, tt.last)
 		}
 		if !slices.Equal(calls.seeds, tt.seeds) {
 			t.Errorf("%d 首候选之后获取了 %v 的相似歌曲，期望 %v", tt.candidates, calls.seeds, tt.seeds)

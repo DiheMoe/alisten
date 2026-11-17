@@ -16,10 +16,9 @@ const (
 	searchBurst  = 10
 	searchRefill = time.Minute
 	// 最长等待加上上游接口 30 秒的超时，不超过客户端 60 秒的请求超时。
-	maxSearchWait    = 30 * time.Second
-	storeTimeout     = 10 * time.Second
-	autoDJCandidates = 25
-	autoDJLimit      = 10
+	maxSearchWait = 30 * time.Second
+	storeTimeout  = 10 * time.Second
+	autoDJLimit   = 10
 )
 
 // 只看最近 1000 次播放，这样存储读够这么多行就停，耗时和房间历史的长度无关。
@@ -208,7 +207,7 @@ func (s *Service) candidates(ctx context.Context, roomID string, includeQueue bo
 	}
 	var picks []port.Song
 	for _, seed := range seeds {
-		if len(picks) > autoDJCandidates {
+		if len(picks) >= autoDJLimit {
 			break
 		}
 		similar, err := s.netease.SimilarTracks(ctx, seed.ID)
