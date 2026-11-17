@@ -40,12 +40,13 @@ type streamClose struct {
 // 结束之前发 close，code 沿用 WebSocket 的关闭码，被同一凭证的新事件流顶替时是 4409。每次连接都从新快照开始，
 // 不按 Last-Event-ID 补发断开期间的事件。
 func (s *server) roomEvents(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	// 打开事件流的期限与 WebSocket 的握手相同，打开之后的推送不设期限。
 	setup, cancel := context.WithTimeout(r.Context(), helloTimeout)
 	ctx, opened, err := s.serve(setup, r, protocol.AuthTicket, s.observe)
 	cancel()
 	if err != nil {
-		s.fail(ctx, w, r, err)
+		s.fail(ctx, w, r, start, err)
 		return
 	}
 	o := opened.(*realtime.Observer)

@@ -273,6 +273,7 @@ func (rt routes) register(route protocol.Route, params []protocol.PathParam, fn 
 		}
 	}
 	rt.mux.HandleFunc(route.Pattern, func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 		ctx, cancel := context.WithTimeout(r.Context(), requestDeadline)
 		defer cancel()
 		ctx, resp, err := rt.s.serve(ctx, r, route.Auth, func(ctx context.Context, c call) (any, error) {
@@ -286,7 +287,7 @@ func (rt routes) register(route protocol.Route, params []protocol.PathParam, fn 
 			return fn(ctx, w.Header(), c, body)
 		})
 		if err != nil {
-			rt.s.fail(ctx, w, r, err)
+			rt.s.fail(ctx, w, r, start, err)
 			return
 		}
 		if route.Status == http.StatusNoContent {
@@ -500,13 +501,17 @@ func resultLabel(err error) string {
 	return string(info.Code)
 }
 
-func (s *server) fail(ctx context.Context, w http.ResponseWriter, r *http.Request, err error) {
+func (s *server) fail(ctx context.Context, w http.ResponseWriter, r *http.Request, start time.Time, err error) {
 	if errors.Is(err, context.Canceled) && r.Context().Err() != nil {
 		return
 	}
 	info, expected := errorInfo(err)
-	if !expected {
+	switch {
+	case !expected:
 		s.logger.ErrorContext(withRequestID(ctx, err), "处理 HTTP 请求失败", "method", r.Method, "path", r.URL.Path, "error", err)
+	// 超时按预期的错误回复，但还是要记下来，因为数据库或下游变慢时，不开追踪就只有这条日志。
+	case errors.Is(err, context.DeadlineExceeded):
+		s.logger.WarnContext(withRequestID(ctx, err), "HTTP 请求超时", "method", r.Method, "route", r.Pattern, "path", r.URL.Path, "elapsed", time.Since(start), "error", err)
 	}
 	writeError(w, info)
 }

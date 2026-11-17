@@ -322,6 +322,14 @@ func TestRoomEventsOpeningTimesOut(t *testing.T) {
 		if elapsed := time.Since(start); elapsed != helloTimeout {
 			t.Errorf("%v 之后才回复，期望 %v", elapsed, helloTimeout)
 		}
+		var entry map[string]any
+		if err := json.Unmarshal(f.logs.Bytes(), &entry); err != nil {
+			t.Fatalf("应记录一行 JSON 日志：%v\n%s", err, f.logs)
+		}
+		f.logs.Reset()
+		if entry["level"] != "WARN" || entry["route"] != "GET "+RoomEventsPath || entry["elapsed"] != float64(helloTimeout) {
+			t.Errorf("日志 = %v，期望是 WARN，带着事件流的路由和已用时间 %d", entry, helloTimeout)
+		}
 	})
 }
 

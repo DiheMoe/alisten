@@ -17,6 +17,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -413,6 +415,32 @@ func TestUnexpectedErrorIsLogged(t *testing.T) {
 	}
 }
 
+type stalledRooms struct{ *porttest.Store }
+
+func (stalledRooms) ListRooms(ctx context.Context) ([]port.RoomRecord, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestTimedOutRequestIsLogged(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		f := newWSFixture(t, store, store, stalledRooms{store})
+
+		if got, want := f.send(t, http.MethodGet, "/api/rooms", ""), failure(protocol.ErrorCodeUnavailable, "服务器没有及时响应，请稍后再试。"); got != want {
+			t.Errorf("GET /api/rooms = %#v，期望 %#v", got, want)
+		}
+		var entry map[string]any
+		if err := json.Unmarshal(f.logs.Bytes(), &entry); err != nil {
+			t.Fatalf("应记录一行 JSON 日志：%v\n%s", err, f.logs)
+		}
+		f.logs.Reset()
+		if entry["level"] != "WARN" || entry["route"] != protocol.RouteListRooms.Pattern || entry["elapsed"] != float64(requestDeadline) || entry["error"] != context.DeadlineExceeded.Error() {
+			t.Errorf("日志 = %v，期望是 WARN，带着路由 %q、已用时间 %d 和错误", entry, protocol.RouteListRooms.Pattern, requestDeadline)
+		}
+	})
+}
+
 type abortingRooms struct{ *porttest.Store }
 
 func (abortingRooms) ListRooms(context.Context) ([]port.RoomRecord, error) {
@@ -469,9 +497,9 @@ func TestFailureLogsCarryTheRequestID(t *testing.T) {
 	broken := errors.New("连接中断")
 	request := httptest.NewRequest(http.MethodPost, "/api/room/messages", nil)
 
-	s.fail(t.Context(), httptest.NewRecorder(), request, &realtime.RequestError{ID: "a/r7", Err: broken})
+	s.fail(t.Context(), httptest.NewRecorder(), request, time.Now(), &realtime.RequestError{ID: "a/r7", Err: broken})
 	s.requestError(t.Context(), "chat.send", &realtime.RequestError{ID: "a/r8", Err: broken})
-	s.fail(t.Context(), httptest.NewRecorder(), request, broken)
+	s.fail(t.Context(), httptest.NewRecorder(), request, time.Now(), broken)
 	s.requestError(t.Context(), "search.tracks", broken)
 
 	var got []any

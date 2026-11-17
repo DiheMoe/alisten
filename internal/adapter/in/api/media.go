@@ -19,6 +19,7 @@ func (s *server) redirectMedia(w http.ResponseWriter, r *http.Request) {
 		writeError(w, protocol.ErrorInfo{Code: protocol.ErrorCodeNotFound, Message: "接口不存在"})
 		return
 	}
+	start := time.Now()
 	ctx, cancel := context.WithTimeout(r.Context(), requestDeadline)
 	defer cancel()
 	target, err := s.redirectTarget(ctx, r, track.Track{Source: source, ID: r.PathValue("id")})
@@ -28,7 +29,7 @@ func (s *server) redirectMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	s.redirects.WithLabelValues(string(source), resultLabel(err)).Inc()
 	if err != nil {
-		s.fail(ctx, w, r, err)
+		s.fail(ctx, w, r, start, err)
 		return
 	}
 	// 播放地址有时效，不能让浏览器缓存这次跳转。
