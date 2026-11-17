@@ -117,7 +117,10 @@ func roomMessageSamples() []port.RoomMessage {
 // 样例要包含每一种跨实例的输入和动作，因为经过 Redis 时每一种都要编码再解码。
 func inputSamples(roomID, gateway string) []port.RoomInput {
 	name := "新大厅"
-	samples := []port.RoomInput{{Room: roomID, Gateway: gateway, Input: room.Join{Session: "a/s1", Member: alice}, Takeover: true}}
+	samples := []port.RoomInput{
+		{Room: roomID, Gateway: gateway, Input: room.Join{RequestID: "a/r1", Session: "a/s1", Member: alice}, Takeover: true},
+		{Room: roomID, Gateway: gateway, Input: room.Join{Session: "a/s2", Member: alice, Rejoin: true}},
+	}
 	for _, a := range []room.Action{room.Enqueue{Track: sunnyEntry.Track, Meta: sunnyEntry.Meta}, room.Remove{Entry: 12}, room.Like{Entry: 12}, room.VoteSkip{}, room.SetPlayMode{Mode: room.Random}, room.Chat{Text: "你好"}, room.Sync{}} {
 		samples = append(samples, port.RoomInput{Room: roomID, Gateway: "g", Input: room.Command{RequestID: "g/r1", Member: alice, Action: a}, Takeover: true})
 	}

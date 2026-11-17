@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -443,6 +444,10 @@ type flakyForwards struct {
 	port.Bus
 	failing atomic.Bool
 	calls   atomic.Int32
+
+	mu sync.Mutex
+	// 送到了 owner 所在实例的 Join。
+	joins []room.Join
 }
 
 func (b *flakyForwards) SendInput(ctx context.Context, instanceID string, in port.RoomInput) (bool, error) {
@@ -450,7 +455,19 @@ func (b *flakyForwards) SendInput(ctx context.Context, instanceID string, in por
 	if b.failing.Load() {
 		return false, porttest.ErrRedisDown
 	}
-	return b.Bus.SendInput(ctx, instanceID, in)
+	delivered, err := b.Bus.SendInput(ctx, instanceID, in)
+	if j, ok := in.Input.(room.Join); ok && delivered && err == nil {
+		b.mu.Lock()
+		b.joins = append(b.joins, j)
+		b.mu.Unlock()
+	}
+	return delivered, err
+}
+
+func (b *flakyForwards) sentJoins() []room.Join {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return slices.Clone(b.joins)
 }
 
 func startFlakyInstance(t *testing.T, redis *porttest.Redis, id string, snapshots port.RoomSnapshots, store *porttest.Store, songs *songs) (*instance, *flakyOwners, *flakyForwards) {
@@ -539,6 +556,49 @@ func TestFailedRejoinIsRetried(t *testing.T) {
 		view := res.(room.SyncResult).View
 		if names := sessionNames(view); view.Term != 2 || !slices.Equal(names, []string{"alice", "bob"}) {
 			t.Errorf("Redis 恢复一分钟之后：任期 %d，在线 %q，期望任期 2、两个会话都在线", view.Term, names)
+		}
+	})
+}
+
+func TestSessionsRejoinWithoutTheCheckWhenTheRoomRunsAgain(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := &failingStore{Store: porttest.New()}
+		songs := newSongs()
+		redis := porttest.NewRedis()
+		a := startInstance(t, redis, "a", store, store.Store, songs)
+		b, _, forwards := startFlakyInstance(t, redis, "b", store.Store, store.Store, songs)
+		synctest.Wait()
+		id := createRoom(t, store.Store, room.Persistent)
+		a.join(t, id, alice)
+		b.join(t, id, bob)
+
+		// 落盘失败时 a 放弃房间，不发释放通知。a 再接管时房间开始新的一次运行，b 收到 OwnerChanged，把 bob 的会话重新加入。
+		store.fail.Store(true)
+		_, _ = a.gateway.Do(t.Context(), id, alice, room.SetPlayMode{Mode: room.Random})
+		store.fail.Store(false)
+		synctest.Wait()
+		res, err := a.gateway.Do(t.Context(), id, alice, room.Sync{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+
+		joins := forwards.sentJoins()
+		if len(joins) != 2 || joins[0].RequestID == "" || joins[0].Rejoin || joins[1].RequestID != "" || !joins[1].Rejoin {
+			t.Fatalf("b 发给 owner 的 Join = %+v，期望先是带 RequestID 的新会话，房间换了一次运行之后是不带 RequestID 的重新加入", joins)
+		}
+		if view := res.(room.SyncResult).View; view.Term != 2 {
+			t.Errorf("重新接管后任期 = %d，期望 2", view.Term)
+		}
+		res, err = a.gateway.Do(t.Context(), id, alice, room.Sync{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// a 和 b 各自重新加入本地的会话，谁先到 owner 不确定，所以排序之后再比较。
+		names := sessionNames(res.(room.SyncResult).View)
+		slices.Sort(names)
+		if !slices.Equal(names, []string{"alice", "bob"}) {
+			t.Errorf("重新加入之后在线 %q，期望两个会话都在", names)
 		}
 	})
 }

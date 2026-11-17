@@ -820,6 +820,8 @@
           "PROVIDER_ERROR",
           "UNAVAILABLE",
           "CLIENT_OUTDATED",
+          "ROOM_FULL",
+          "TOO_MANY_CONNECTIONS",
           "INTERNAL"
         ],
         "type": "string",
@@ -2440,7 +2442,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "57b468bf8422d2c3"
+    "version": "0d8804003399cf37"
   },
   "openapi": "3.1.0",
   "paths": {

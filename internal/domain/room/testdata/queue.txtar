@@ -4,6 +4,7 @@
 -- 02 --
 > 0s join s1 m1
 emit 1.1 members [s1=m1]
+reply q02 done
 -- 03 --
 > 0s enqueue m1 netease:a
 persist mode=sequential entrySeq=1 current=- pending=#1(netease:a) waiting=[]

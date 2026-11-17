@@ -38,6 +38,9 @@ var handshakeCloseCodes = map[protocol.ErrorCode]websocket.StatusCode{
 	protocol.ErrorCodeUnauthorized:    protocol.CloseUnauthorized,
 	protocol.ErrorCodeNotFound:        protocol.CloseNotFound,
 	protocol.ErrorCodeClientOutdated:  protocol.CloseClientOutdated,
+	protocol.ErrorCodeRoomFull:        protocol.CloseRoomFull,
+	// 连接太多可能只是网络断开后旧连接还没清掉，旧连接清掉之后重连就能进来，所以用客户端会重连的关闭码。
+	protocol.ErrorCodeTooManyConnections: protocol.CloseUnavailable,
 }
 
 var sessionCloseCodes = map[realtime.CloseReason]websocket.StatusCode{

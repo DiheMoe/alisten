@@ -17,12 +17,14 @@ import (
 )
 
 var roomErrorCodes = map[room.ErrorKind]protocol.ErrorCode{
-	room.NotFound:       protocol.ErrorCodeNotFound,
-	room.Forbidden:      protocol.ErrorCodeForbidden,
-	room.Conflict:       protocol.ErrorCodeConflict,
-	room.QueueFull:      protocol.ErrorCodeQueueFull,
-	room.RateLimited:    protocol.ErrorCodeRateLimited,
-	room.NothingPlaying: protocol.ErrorCodeNothingPlaying,
+	room.NotFound:        protocol.ErrorCodeNotFound,
+	room.Forbidden:       protocol.ErrorCodeForbidden,
+	room.Conflict:        protocol.ErrorCodeConflict,
+	room.QueueFull:       protocol.ErrorCodeQueueFull,
+	room.RateLimited:     protocol.ErrorCodeRateLimited,
+	room.NothingPlaying:  protocol.ErrorCodeNothingPlaying,
+	room.RoomFull:        protocol.ErrorCodeRoomFull,
+	room.TooManySessions: protocol.ErrorCodeTooManyConnections,
 }
 
 // bot 表示 by 是常驻房间的 bot 成员。返回的成员是房间命令的发起人。如果 bot 代填了点歌人，返回的成员 ID 不变，名字换成点歌人的名字加上“（bot）”。

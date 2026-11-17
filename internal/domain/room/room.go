@@ -105,7 +105,7 @@ func (r *Room) Handle(env Env, in Input) []Effect {
 	b := r.begin(env)
 	switch in := in.(type) {
 	case Join:
-		r.join(in)
+		r.join(b, in)
 	case Leave:
 		r.leave(b, in)
 	case MemberUpdated:

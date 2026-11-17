@@ -787,6 +787,8 @@ func (e envelope) requestID() room.RequestID {
 	switch in := e.input.(type) {
 	case room.Command:
 		return in.RequestID
+	case room.Join:
+		return in.RequestID
 	case room.UpdateInfo:
 		return in.RequestID
 	case room.Delete:

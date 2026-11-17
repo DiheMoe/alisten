@@ -369,6 +369,61 @@ func TestDeleteFailureAbandonsRoom(t *testing.T) {
 	})
 }
 
+func TestJoinRefusedByTheRoomLeavesAtOnce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		f := newGatewayFixture(t, store, store)
+		id, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "房间", Capacity: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.join(t, id, alice)
+		b := f.join(t, id, bob)
+
+		s, err := f.gateway.Join(t.Context(), id, carol, nil, nil)
+		if s != nil {
+			t.Cleanup(func() { f.gateway.Leave(s) })
+		}
+		var full *room.Error
+		if s != nil || !errors.As(err, &full) || full.Kind != room.RoomFull || full.Message != "房间已满，最多 2 人。" {
+			t.Fatalf("满员时加入 = %v, %v，期望返回 RoomFull 的房间错误", s, err)
+		}
+		var request *RequestError
+		if !errors.As(err, &request) || request.ID == "" {
+			t.Errorf("被拒的错误 = %#v，期望带着 Join 的 RequestID", err)
+		}
+		synctest.Wait()
+		if n := f.gateway.Sessions(); n != 2 {
+			t.Errorf("被拒之后网关上有 %d 个会话，期望 carol 的会话已经离开", n)
+		}
+		res, err := f.gateway.Do(t.Context(), id, alice, room.Sync{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if names := sessionNames(res.(room.SyncResult).View); !slices.Equal(names, []string{"alice", "bob"}) {
+			t.Errorf("被拒之后在线 %q，期望没有 carol", names)
+		}
+		if n := f.online(t, id); n != 2 {
+			t.Errorf("在线人数 = %d，期望 2", n)
+		}
+
+		f.gateway.Leave(b)
+		f.join(t, id, carol)
+	})
+}
+
+// 房间换一次运行时，正在等 Join 回复的会话也会被重新加入。这时不检查上限的话，它就绕过了上限。
+func TestOnlyAdmittedSessionsRejoinWithoutTheCheck(t *testing.T) {
+	s := newSession("s1", "room", carol, nil, nil)
+	if in, _ := joinOf(s)(); in.(room.Join).Rejoin {
+		t.Error("还没批准的会话重新加入时带着 Rejoin，期望由房间检查上限")
+	}
+	s.admitted.Store(true)
+	if in, _ := joinOf(s)(); !in.(room.Join).Rejoin {
+		t.Error("批准过的会话重新加入时没带 Rejoin，期望不检查上限")
+	}
+}
+
 func TestShutdownClosesSessions(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()

@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "57b468bf8422d2c3"
+const Version = "0d8804003399cf37"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -308,6 +308,8 @@ const (
 	ErrorCodeProviderError      ErrorCode = "PROVIDER_ERROR"
 	ErrorCodeUnavailable        ErrorCode = "UNAVAILABLE"
 	ErrorCodeClientOutdated     ErrorCode = "CLIENT_OUTDATED"
+	ErrorCodeRoomFull           ErrorCode = "ROOM_FULL"
+	ErrorCodeTooManyConnections ErrorCode = "TOO_MANY_CONNECTIONS"
 	ErrorCodeInternal           ErrorCode = "INTERNAL"
 )
 
@@ -992,6 +994,7 @@ const (
 	CloseServiceRestart   = 1012
 	CloseUnavailable      = 1013
 	CloseUnauthorized     = 4401
+	CloseRoomFull         = 4403
 	CloseNotFound         = 4404
 	CloseHandshakeTimeout = 4408
 	CloseClientOutdated   = 4426

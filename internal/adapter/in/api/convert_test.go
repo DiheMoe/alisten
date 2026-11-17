@@ -127,12 +127,14 @@ func TestActivityDTO(t *testing.T) {
 
 func TestRoomErrorCodes(t *testing.T) {
 	kinds := map[room.ErrorKind]protocol.ErrorCode{
-		room.NotFound:       protocol.ErrorCodeNotFound,
-		room.Forbidden:      protocol.ErrorCodeForbidden,
-		room.Conflict:       protocol.ErrorCodeConflict,
-		room.QueueFull:      protocol.ErrorCodeQueueFull,
-		room.RateLimited:    protocol.ErrorCodeRateLimited,
-		room.NothingPlaying: protocol.ErrorCodeNothingPlaying,
+		room.NotFound:        protocol.ErrorCodeNotFound,
+		room.Forbidden:       protocol.ErrorCodeForbidden,
+		room.Conflict:        protocol.ErrorCodeConflict,
+		room.QueueFull:       protocol.ErrorCodeQueueFull,
+		room.RateLimited:     protocol.ErrorCodeRateLimited,
+		room.NothingPlaying:  protocol.ErrorCodeNothingPlaying,
+		room.RoomFull:        protocol.ErrorCodeRoomFull,
+		room.TooManySessions: protocol.ErrorCodeTooManyConnections,
 	}
 	for kind, code := range kinds {
 		info, expected := errorInfo(&room.Error{Kind: kind, Message: "说明"})
@@ -140,7 +142,7 @@ func TestRoomErrorCodes(t *testing.T) {
 			t.Errorf("领域错误 %d 映射为 %#v, %v，期望 %s", kind, info, expected, code)
 		}
 	}
-	info, expected := errorInfo(&room.Error{Kind: room.NothingPlaying + 1, Message: "说明"})
+	info, expected := errorInfo(&room.Error{Kind: room.TooManySessions + 1, Message: "说明"})
 	if info.Code != protocol.ErrorCodeInternal || expected {
 		t.Errorf("没有映射的领域错误 = %#v, %v，期望按意外的错误回 INTERNAL", info, expected)
 	}

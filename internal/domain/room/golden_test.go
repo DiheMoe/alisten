@@ -73,14 +73,20 @@ func runStep(r *Room, step, line string) (*Room, []Effect, error) {
 		if r != nil {
 			return r, nil, errors.New("restore 只能是第一步")
 		}
-		if len(f) != 2 {
-			return nil, nil, fmt.Errorf("restore 之后应是房间类型：%q", line)
+		if len(f) != 2 && len(f) != 3 {
+			return nil, nil, fmt.Errorf("restore 之后应是房间类型，可以再跟上限：%q", line)
 		}
 		kind, err := lookup(roomKinds, "房间类型", f[1])
 		if err != nil {
 			return nil, nil, err
 		}
-		r, effects := Restore(at(0), 1, Snapshot{Info: Info{ID: "r1", Name: "房间", Kind: kind}, Mode: Sequential})
+		capacity := defaultCapacity[kind]
+		if len(f) == 3 {
+			if capacity, err = strconv.Atoi(f[2]); err != nil {
+				return nil, nil, fmt.Errorf("上限不是数字：%q", f[2])
+			}
+		}
+		r, effects := Restore(at(0), 1, Snapshot{Info: Info{ID: "r1", Name: "房间", Kind: kind, Capacity: capacity}, Mode: Sequential})
 		return r, effects, nil
 	}
 	if r == nil {
@@ -102,7 +108,7 @@ func runStep(r *Room, step, line string) (*Room, []Effect, error) {
 }
 
 var inputArity = map[string]int{
-	"join": 2, "leave": 1, "enqueue": 2, "remove": 2, "like": 2, "vote": 1, "mode": 2,
+	"join": 2, "rejoin": 2, "leave": 1, "enqueue": 2, "remove": 2, "like": 2, "vote": 1, "mode": 2,
 	"chat": 1, "sync": 1, "prepared": 2, "failed": 1, "recommended": 2, "timer": 1,
 }
 
@@ -127,7 +133,10 @@ func parseInput(id RequestID, f []string) (Input, error) {
 	switch verb {
 	case "join":
 		m, err := lookup(goldenMembers, "成员", args[1])
-		return Join{Session: SessionID(args[0]), Member: m}, err
+		return Join{RequestID: id, Session: SessionID(args[0]), Member: m}, err
+	case "rejoin":
+		m, err := lookup(goldenMembers, "成员", args[1])
+		return Join{Session: SessionID(args[0]), Member: m, Rejoin: true}, err
 	case "leave":
 		return Leave{Session: SessionID(args[0])}, nil
 	case "enqueue":
@@ -367,10 +376,12 @@ var activityNames = map[ActivityKind]string{
 }
 
 var errorNames = map[ErrorKind]string{
-	NotFound:       "not-found",
-	Forbidden:      "forbidden",
-	Conflict:       "conflict",
-	QueueFull:      "queue-full",
-	RateLimited:    "rate-limited",
-	NothingPlaying: "nothing-playing",
+	NotFound:        "not-found",
+	Forbidden:       "forbidden",
+	Conflict:        "conflict",
+	QueueFull:       "queue-full",
+	RateLimited:     "rate-limited",
+	NothingPlaying:  "nothing-playing",
+	RoomFull:        "room-full",
+	TooManySessions: "too-many-sessions",
 }

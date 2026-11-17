@@ -228,12 +228,13 @@ func TestEffectsRunInOrder(t *testing.T) {
 		id := f.createRoom(t, room.Persistent)
 		start := time.Now()
 
-		f.send(t, id, room.Join{Session: "s1", Member: alice})
+		f.send(t, id, room.Join{RequestID: "j1", Session: "s1", Member: alice})
 		f.send(t, id, command("r1", alice, room.Enqueue{Track: sunny, Meta: sunnyM}))
 		// 准备的结果在下一批处理，所以点歌的回复先到，开播在后。
 		checkMessages(t, f.spy.take(),
 			"started 1",
 			"1/1 room.MembersChanged",
+			"reply j1 room.Done",
 			"1/2 room.Activity",
 			"1/3 room.QueueChanged",
 			"reply r1 room.EnqueueResult",
@@ -369,11 +370,12 @@ func TestListensAreWrittenBeforeTheBroadcast(t *testing.T) {
 		id := f.createRoom(t, room.Persistent)
 		start := time.Now()
 
-		f.send(t, id, room.Join{Session: "s1", Member: a})
+		f.send(t, id, room.Join{RequestID: "j1", Session: "s1", Member: a})
 		f.send(t, id, command("r1", a, room.Enqueue{Track: sunny, Meta: sunnyM}))
 		checkLog(t, listens.messages(),
 			"started 1",
 			"1/1 room.MembersChanged",
+			"reply j1 room.Done",
 			"1/2 room.Activity",
 			"1/3 room.QueueChanged",
 			"reply r1 room.EnqueueResult",
@@ -381,8 +383,8 @@ func TestListensAreWrittenBeforeTheBroadcast(t *testing.T) {
 			"1/4 room.PlaybackChanged",
 			"1/5 room.QueueChanged",
 		)
-		f.send(t, id, room.Join{Session: "s2", Member: b})
-		checkLog(t, listens.messages(), "listen 1 186016", "1/6 room.MembersChanged")
+		f.send(t, id, room.Join{RequestID: "j2", Session: "s2", Member: b})
+		checkLog(t, listens.messages(), "listen 1 186016", "1/6 room.MembersChanged", "reply j2 room.Done")
 
 		startedAt := start.Add(1500 * time.Millisecond)
 		for _, m := range members {
@@ -742,7 +744,7 @@ func TestHostAcceptsRoomsOnlyBetweenStartAndShutdown(t *testing.T) {
 			t.Fatal(err)
 		}
 		watcher.watch(t, id)
-		join := envelope{input: room.Join{Session: "s1", Member: alice}}
+		join := envelope{input: room.Join{RequestID: "j1", Session: "s1", Member: alice}}
 		if err := h.send(t.Context(), id, join, true); !errors.Is(err, ErrUnavailable) {
 			t.Errorf("Start 之前的错误 = %v，期望 ErrUnavailable", err)
 		}
@@ -755,7 +757,7 @@ func TestHostAcceptsRoomsOnlyBetweenStartAndShutdown(t *testing.T) {
 		if err := h.Shutdown(t.Context()); err != nil {
 			t.Fatal(err)
 		}
-		checkMessages(t, watcher.take(), "started 1", "1/1 room.MembersChanged", "released")
+		checkMessages(t, watcher.take(), "started 1", "1/1 room.MembersChanged", "reply j1 room.Done", "released")
 		if err := h.send(t.Context(), id, join, true); !errors.Is(err, ErrUnavailable) {
 			t.Errorf("Shutdown 之后的错误 = %v，期望 ErrUnavailable", err)
 		}
@@ -1020,10 +1022,10 @@ func TestSlowTakeRoomKeepsHealthyLease(t *testing.T) {
 		f := newHostFixture(t, &slowTakeStore{Store: store, delay: renewInterval + time.Second}, store)
 		id := f.createRoom(t, room.Persistent)
 		start := time.Now()
-		f.send(t, id, room.Join{Session: "s1", Member: alice})
+		f.send(t, id, room.Join{RequestID: "j1", Session: "s1", Member: alice})
 		time.Sleep(ownerDeadline + 500*time.Millisecond - time.Since(start))
 		f.send(t, id, command("r1", alice, room.Sync{}))
-		checkMessages(t, f.spy.take(), "started 1", "1/1 room.MembersChanged", "reply r1 room.SyncResult")
+		checkMessages(t, f.spy.take(), "started 1", "1/1 room.MembersChanged", "reply j1 room.Done", "reply r1 room.SyncResult")
 		if n := f.host.LeasesLost(); n != 0 {
 			t.Errorf("LeasesLost = %d，Redis 正常时不应失去租约", n)
 		}
@@ -1176,12 +1178,12 @@ func TestRemoteInputsKeepTheirOrder(t *testing.T) {
 		store := porttest.New()
 		f := newHostFixture(t, store, store)
 		id := f.createRoom(t, room.Persistent)
-		f.host.deliver(context.Background(), port.RoomInput{Room: id, Gateway: "b", Input: room.Join{Session: "b/s1", Member: bob}, Takeover: true})
+		f.host.deliver(context.Background(), port.RoomInput{Room: id, Gateway: "b", Input: room.Join{RequestID: "b/j1", Session: "b/s1", Member: bob}, Takeover: true})
 		f.host.deliver(context.Background(), port.RoomInput{Room: id, Gateway: "b", Input: command("b/r1", bob, room.Sync{}), Takeover: true})
 		synctest.Wait()
 		msgs := f.spy.take()
-		checkMessages(t, msgs, "started 1", "1/1 room.MembersChanged", "reply b/r1 room.SyncResult")
-		if sessions := msgs[2].(port.Replied).Reply.Result.(room.SyncResult).View.Sessions; len(sessions) != 1 || sessions[0].ID != "b/s1" {
+		checkMessages(t, msgs, "started 1", "1/1 room.MembersChanged", "reply b/j1 room.Done", "reply b/r1 room.SyncResult")
+		if sessions := msgs[3].(port.Replied).Reply.Result.(room.SyncResult).View.Sessions; len(sessions) != 1 || sessions[0].ID != "b/s1" {
 			t.Errorf("快照中的在线列表 = %+v，期望有刚加入的会话", sessions)
 		}
 	})

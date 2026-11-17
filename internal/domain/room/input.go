@@ -8,8 +8,12 @@ import (
 type Input interface{ input() }
 
 type Join struct {
-	Session SessionID
-	Member  member.Member
+	RequestID RequestID
+	Session   SessionID
+	Member    member.Member
+	// Rejoin 为 true 表示会话已经进过房间，网关把它重新加入，比如房间换实例开始了新的一次运行。重新加入不检查上限，也不回复。
+	// 网关把本地已有的会话逐个重新加入，检查上限的话，先重新加入的会话会占满名额，后面的就被拒，换实例就成了随机踢人。
+	Rejoin bool
 }
 
 type Leave struct {

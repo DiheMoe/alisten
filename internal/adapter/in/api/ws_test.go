@@ -551,6 +551,34 @@ func TestHandshakeFailures(t *testing.T) {
 	})
 }
 
+func TestHandshakeRefusedByTheRoom(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		f := newWSFixture(t, store, store, store)
+		if err := store.SetEphemeralRoomCapacity(t.Context(), 2); err != nil {
+			t.Fatal(err)
+		}
+		roomID, _, first := f.enter(t, "")
+		_, _, second := f.enter(t, roomID)
+		_, _, third := f.enter(t, roomID)
+		refused := func(ticket, code, message string, closed websocket.StatusCode) {
+			t.Helper()
+			conn := f.dial(t, nil)
+			writeFrame(t, conn, hello(roomID, ticket))
+			checkMessage(t, conn, `{"kind":"response","type":"hello","id":"h1","data":{},"error":{"code":"`+code+`","message":"`+message+`"}}`)
+			checkClosed(t, conn, closed)
+		}
+
+		f.join(t, roomID, first)
+		f.join(t, roomID, second)
+		refused(third, "ROOM_FULL", "房间已满，最多 2 人。", protocol.CloseRoomFull)
+		for range 3 {
+			f.join(t, roomID, first)
+		}
+		refused(first, "TOO_MANY_CONNECTIONS", "你在这个房间已经开了 4 个连接。关掉一个，这里就会自动连上。", protocol.CloseUnavailable)
+	})
+}
+
 func TestHandshakeWhileRedisIsDown(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()

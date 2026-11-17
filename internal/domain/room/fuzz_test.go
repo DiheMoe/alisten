@@ -22,7 +22,9 @@ const (
 	// 宽限期的定时器在 arg 为偶数时按设定的时刻触发，这样宽限期结束的那一刻也能测到。arg 为奇数时不调时间，
 	// 模拟定时器早于设定的时刻送到。定时器按单调时钟等待，恢复出来的点歌时间却只有墙上时间，系统时钟被往回调时就会这样。
 	fuzzGrace = 20
-	fuzzOps   = 21
+	// 网关重新加入已经进过房间的会话，不检查上限。
+	fuzzRejoin = 21
+	fuzzOps    = 22
 )
 
 // ops 中每两个字节是一步：操作和它的参数。
@@ -50,20 +52,28 @@ func FuzzInvariants(f *testing.F) {
 	f.Add(false, []byte{2, 0, 2, 1, 7, 1, 20, 1})
 	// 删除待播。
 	f.Add(true, []byte{2, 0, 2, 1, 3, 1})
-	// 4 个人在线，其中一人开了两个连接，投了 1 票。关掉一个连接时门槛不变，再有一个人离开，门槛降到 1，要切歌。
-	f.Add(true, []byte{0, 0, 0, 1, 0, 2, 0, 3, 0, 4, 2, 0, 7, 0, 5, 0, 1, 4, 1, 1})
+	// 4 个人在线，第 4 个人是重新加入的，所以超过了上限。其中一人开了两个连接，投了 1 票。关掉一个连接时门槛不变，再有一个人离开，门槛降到 1，要切歌。
+	f.Add(true, []byte{0, 0, 0, 1, 0, 2, 21, 3, 0, 4, 2, 0, 7, 0, 5, 0, 1, 4, 1, 1})
 	// 随机模式切歌时，抽好的歌过了宽限期还没准备好，改放唯一准备好的那首。选完之后等待队列里没有准备好的歌了，抽好的歌看起来又占着位置。
 	f.Add(false, []byte{2, 1, 7, 1, 2, 2, 6, 1, 2, 0, 7, 0, 5, 14})
+	// 满员之后第 4 个人被拒，已经在房间里的人再开一个连接不受影响。
+	f.Add(false, []byte{0, 0, 0, 1, 0, 2, 0, 3, 0, 4})
+	// 同一个人的第 5 个连接被拒。
+	f.Add(true, []byte{0, 0, 0, 4, 0, 8, 0, 12, 0, 16})
+	// 4 个人重新加入，超过了上限。走了一个人之后还是满员，新来的人被拒，再走一个才进得来。
+	f.Add(false, []byte{21, 0, 21, 1, 21, 2, 21, 3, 1, 1, 0, 1, 1, 2, 0, 1})
 	f.Fuzz(func(t *testing.T, persistent bool, ops []byte) {
 		kind := Ephemeral
 		if persistent {
 			kind = Persistent
 		}
 		term := uint32(1)
-		r, _ := Restore(at(0), term, Snapshot{Info: Info{ID: "r1", Kind: kind}, Mode: Sequential})
+		r, _ := Restore(at(0), term, Snapshot{Info: Info{ID: "r1", Kind: kind, Capacity: 3}, Mode: Sequential})
 		table := map[track.Track]track.Prepared{}
 		var seq uint64
 		now := time.Duration(0)
+		// 房间这次运行开始以来有没有会话重新加入过。
+		rejoined := false
 		for i := 0; i+1 < len(ops); i += 2 {
 			op, arg := ops[i], ops[i+1]
 			now += time.Duration(arg%16) * time.Second
@@ -81,6 +91,7 @@ func FuzzInvariants(f *testing.F) {
 				seq = 0
 				before = stored(before, table)
 				r, effects = Restore(env, term, before)
+				rejoined = false
 				checkRestorePrepares(t, r, effects)
 			case fuzzStored:
 				table[fuzzTrack(arg)] = ready(time.Duration(arg%5+1) * time.Minute)
@@ -93,12 +104,20 @@ func FuzzInvariants(f *testing.F) {
 				if p, ok := in.(Prepared); ok {
 					table[p.Track] = p.Result
 				}
+				sessions := slices.Clone(r.sessions)
 				effects = r.Handle(env, in)
+				if j, ok := in.(Join); ok {
+					rejoined = rejoined || j.Rejoin
+					checkJoin(t, r, sessions, j, effects)
+				}
 			}
 			// 房间关闭后就被丢弃，不会再收到输入。关闭时结束了正在播放的歌，但不再开播下一首。
 			closed := len(find[Close](effects)) != 0
 			checkInvariants(t, r, before, effects, term, &seq, closed)
 			checkNext(t, r, before, beforeDrawn, beforeNext, op%fuzzOps == fuzzRestore, effects)
+			if !rejoined {
+				checkLimits(t, r)
+			}
 			if closed {
 				return
 			}
@@ -213,14 +232,15 @@ func persistentStateChanged(a, b Snapshot) bool {
 }
 
 func fuzzInput(r *Room, op, arg byte) Input {
-	// 4 个人在线时投票门槛是 2，才测得到票数不够的情况。会话数比成员多，同一成员才会有多个连接。
+	// 上限是 3，4 个成员才测得到满员。4 个人在线时投票门槛是 2，才测得到票数不够的情况，这要靠重新加入超过上限。
+	// 会话数比成员多，同一成员才会有多个连接。每个成员都能用上全部 5 个会话 ID，所以测得到第 5 个连接被拒。
 	members := []member.Member{alice, bob, carol, dave}
 	m := members[int(arg)%len(members)]
 	tr := fuzzTrack(arg)
 	session := SessionID(fmt.Sprint("s", arg%5))
 	switch op % fuzzOps {
 	case 0:
-		return Join{Session: session, Member: m}
+		return Join{RequestID: "q", Session: session, Member: m}
 	case 1:
 		return Leave{Session: session}
 	case 2:
@@ -254,6 +274,8 @@ func fuzzInput(r *Room, op, arg byte) Input {
 		return command(m, Chat{Text: "你好"})
 	case fuzzGrace:
 		return Timer{Token: r.graceTimer}
+	case fuzzRejoin:
+		return Join{Session: session, Member: m, Rejoin: true}
 	default:
 		return command(m, Sync{})
 	}
@@ -325,6 +347,58 @@ func checkInvariants(t *testing.T, r *Room, before Snapshot, effects []Effect, t
 			t.Fatalf("任期 %d 中 seq %d 之后是任期 %d 的 %d", term, *seq, e.Term, e.Seq)
 		}
 		*seq = e.Seq
+	}
+}
+
+// 新会话的 Join 恰好回复一次。被拒时不改在线列表，原因只能是这个成员已经有 maxSessionsPerMember 个会话，
+// 或者他还没有会话、人数已经到了上限。重新加入不回复。
+func checkJoin(t *testing.T, r *Room, before []Session, in Join, effects []Effect) {
+	t.Helper()
+	replies := find[Reply](effects)
+	if in.Rejoin {
+		if len(replies) != 0 {
+			t.Fatalf("重新加入不应回复：%#v", effects)
+		}
+		return
+	}
+	if len(replies) != 1 || replies[0].RequestID != in.RequestID {
+		t.Fatalf("新会话的 Join 应回复一次：%#v", effects)
+	}
+	if replies[0].Err == nil {
+		if !slices.ContainsFunc(r.sessions, func(s Session) bool { return s.ID == in.Session }) {
+			t.Fatalf("回复了 Done，会话 %s 却不在在线列表中：%#v", in.Session, r.sessions)
+		}
+		return
+	}
+	mine := 0
+	for _, s := range before {
+		if s.Member.ID == in.Member.ID {
+			mine++
+		}
+	}
+	refusal := RoomFull
+	if mine >= maxSessionsPerMember {
+		refusal = TooManySessions
+	}
+	if replies[0].Err.Kind != refusal || !slices.Equal(before, r.sessions) || len(events[MembersChanged](effects)) != 0 {
+		t.Fatalf("被拒的 Join 应回复 %d，不改在线列表：%#v", refusal, effects)
+	}
+	if mine < maxSessionsPerMember && (mine > 0 || Headcount(before) < r.info.Capacity) {
+		t.Fatalf("%s 有 %d 个会话，在线 %d 人，上限 %d，不应被拒：%v", in.Member.ID, mine, Headcount(before), r.info.Capacity, replies[0].Err)
+	}
+}
+
+// 只有重新加入不检查上限，所以房间这次运行开始以来没有会话重新加入过时，人数和每个成员的会话数都不超过上限。
+func checkLimits(t *testing.T, r *Room) {
+	t.Helper()
+	if n := Headcount(r.sessions); n > r.info.Capacity {
+		t.Fatalf("在线 %d 人，超过了上限 %d：%#v", n, r.info.Capacity, r.sessions)
+	}
+	counts := map[string]int{}
+	for _, s := range r.sessions {
+		if counts[s.Member.ID]++; counts[s.Member.ID] > maxSessionsPerMember {
+			t.Fatalf("%s 的会话超过了 %d 个：%#v", s.Member.ID, maxSessionsPerMember, r.sessions)
+		}
 	}
 }
 

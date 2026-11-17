@@ -1,0 +1,82 @@
+人数上限与每人连接数：上限为 2 的房间满了之后，新的成员进不来，已经在房间里的成员还能再开连接。每个成员最多 4 个连接，第 5 个被拒。会话 ID 已经在列表里时不重复加入，新会话的 Join 照样回复，重新加入的不回复。重新加入不检查上限，人数和连接数都可能超过上限。这时已经在房间里的会话不受影响，新的成员要等人数降到上限以下才进得来，新的连接要等这个成员的连接数降到上限以下。被拒的 Join 只回复错误。
+-- 01 --
+> restore persistent 2
+-- 02 --
+> 0s join s1 m1
+emit 1.1 members [s1=m1]
+reply q02 done
+-- 03 --
+> 0s join s2 m2
+emit 1.2 members [s1=m1 s2=m2]
+reply q03 done
+-- 04 --
+> 1s join s3 m3
+reply q04 error room-full 房间已满，最多 2 人。
+-- 05 --
+> 2s join s4 m1
+emit 1.3 members [s1=m1 s2=m2 s4=m1]
+reply q05 done
+-- 06 --
+> 2s join s5 m1
+emit 1.4 members [s1=m1 s2=m2 s4=m1 s5=m1]
+reply q06 done
+-- 07 --
+> 2s join s6 m1
+emit 1.5 members [s1=m1 s2=m2 s4=m1 s5=m1 s6=m1]
+reply q07 done
+-- 08 --
+> 3s join s7 m1
+reply q08 error too-many-sessions 你在这个房间已经开了 4 个连接。关掉一个，这里就会自动连上。
+-- 09 --
+> 3s join s1 m1
+reply q09 done
+-- 10 --
+> 3s rejoin s1 m1
+-- 11 --
+> 4s rejoin s3 m3
+emit 1.6 members [s1=m1 s2=m2 s4=m1 s5=m1 s6=m1 s3=m3]
+-- 12 --
+> 4s rejoin s7 m1
+emit 1.7 members [s1=m1 s2=m2 s4=m1 s5=m1 s6=m1 s3=m3 s7=m1]
+-- 13 --
+> 5s join s8 m4
+reply q13 error room-full 房间已满，最多 2 人。
+-- 14 --
+> 5s join s9 m3
+emit 1.8 members [s1=m1 s2=m2 s4=m1 s5=m1 s6=m1 s3=m3 s7=m1 s9=m3]
+reply q14 done
+-- 15 --
+> 6s leave s3
+emit 1.9 members [s1=m1 s2=m2 s4=m1 s5=m1 s6=m1 s7=m1 s9=m3]
+-- 16 --
+> 6s join s8 m4
+reply q16 error room-full 房间已满，最多 2 人。
+-- 17 --
+> 7s leave s2
+emit 1.10 members [s1=m1 s4=m1 s5=m1 s6=m1 s7=m1 s9=m3]
+-- 18 --
+> 7s join s8 m4
+reply q18 error room-full 房间已满，最多 2 人。
+-- 19 --
+> 7s leave s9
+emit 1.11 members [s1=m1 s4=m1 s5=m1 s6=m1 s7=m1]
+-- 20 --
+> 7s join s8 m4
+emit 1.12 members [s1=m1 s4=m1 s5=m1 s6=m1 s7=m1 s8=m4]
+reply q20 done
+-- 21 --
+> 8s join s10 m1
+reply q21 error too-many-sessions 你在这个房间已经开了 4 个连接。关掉一个，这里就会自动连上。
+-- 22 --
+> 8s leave s7
+emit 1.13 members [s1=m1 s4=m1 s5=m1 s6=m1 s8=m4]
+-- 23 --
+> 8s join s10 m1
+reply q23 error too-many-sessions 你在这个房间已经开了 4 个连接。关掉一个，这里就会自动连上。
+-- 24 --
+> 9s leave s6
+emit 1.14 members [s1=m1 s4=m1 s5=m1 s8=m4]
+-- 25 --
+> 9s join s10 m1
+emit 1.15 members [s1=m1 s4=m1 s5=m1 s8=m4 s10=m1]
+reply q25 done

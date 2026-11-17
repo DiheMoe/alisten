@@ -120,12 +120,19 @@ func (g *Gateway) Join(ctx context.Context, roomID string, m member.Member, memb
 		g.unhold(roomID, link, false)
 		return nil, ErrUnavailable
 	}
-	if err := g.route(ctx, roomID, envelope{input: room.Join{Session: s.id, Member: m}}, true); err != nil {
-		g.Leave(s)
-		return nil, err
-	}
-	// Join 没有回复，用紧接着的 Sync 回复中的快照作为握手的结果。
+	// 房间满了或者这个成员的连接太多时，房间拒绝新会话，所以要等 Join 的回复。
 	id := g.newRequestID()
+	g.request(ctx, roomID, id, envelope{input: room.Join{RequestID: id, Session: s.id, Member: m}}, false, func(_ room.Result, e error) {
+		if err = e; err == nil {
+			s.admitted.Store(true)
+		}
+	})
+	if err != nil {
+		g.Leave(s)
+		return nil, failed(id, err)
+	}
+	// Join 的回复不带快照，所以用紧接着的 Sync 回复中的快照作为握手的结果。
+	id = g.newRequestID()
 	g.request(ctx, roomID, id, envelope{input: room.Command{RequestID: id, Member: m, Action: room.Sync{}}}, false, func(res room.Result, e error) {
 		if err = e; err == nil {
 			s.welcome(res.(room.SyncResult).View)
@@ -542,7 +549,9 @@ func joinOf(s *Session) func() (room.Input, bool) {
 		if s.ended() {
 			return nil, false
 		}
-		return room.Join{Session: s.id, Member: s.Member()}, true
+		// 还没等到批准的会话按新会话加入，由房间检查上限。它的 Join 可能已经在上一次运行里被批准，回复还在路上，也可能随上一次运行丢了，
+		// 所以既不能跳过它，也不能不检查就让它进来。这次加入没有请求在等回复。
+		return room.Join{Session: s.id, Member: s.Member(), Rejoin: s.admitted.Load()}, true
 	}
 }
 

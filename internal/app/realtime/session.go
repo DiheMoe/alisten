@@ -88,6 +88,8 @@ type Session struct {
 	credential    string
 	// 在发出 Leave 之前设置。重新加入的 Join 可能排在 Leave 之后，网关据此补发 Leave。
 	left atomic.Bool
+	// 房间批准这个会话的 Join 之后设置。只有批准过的会话重新加入时才跳过上限检查。
+	admitted atomic.Bool
 
 	// 由 sendQueue 的 mu 保护。
 	member      member.Member

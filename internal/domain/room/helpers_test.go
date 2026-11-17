@@ -23,9 +23,17 @@ func netease(id string) track.Track { return track.Track{Source: track.NetEase, 
 
 func ready(d time.Duration) track.Prepared { return track.Prepared{Duration: d, Gain: 1} }
 
+// 和后台、大厅创建房间时的默认上限一致。
+var defaultCapacity = map[Kind]int{Ephemeral: 16, Persistent: 64}
+
 func newRoom(t *testing.T, kind Kind) *Room {
 	t.Helper()
-	r, _ := Restore(at(0), 1, Snapshot{Info: Info{ID: "r1", Name: "房间", Kind: kind}, Mode: Sequential})
+	return newRoomWithCapacity(t, kind, defaultCapacity[kind])
+}
+
+func newRoomWithCapacity(t *testing.T, kind Kind, capacity int) *Room {
+	t.Helper()
+	r, _ := Restore(at(0), 1, Snapshot{Info: Info{ID: "r1", Name: "房间", Kind: kind, Capacity: capacity}, Mode: Sequential})
 	return r
 }
 

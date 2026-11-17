@@ -5,9 +5,11 @@
 -- 02 --
 > 0s join s1 m1
 emit 1.1 members [s1=m1]
+reply q02 done
 -- 03 --
 > 0s join s2 m1
 emit 1.2 members [s1=m1 s2=m1]
+reply q03 done
 -- 04 --
 > 1s enqueue m1 netease:a
 persist mode=sequential entrySeq=1 current=- pending=#1(netease:a) waiting=[]
@@ -38,16 +40,20 @@ schedule 2 2m5.5s
 > 10s join s3 m2
 listen [m2] #1(netease:a,ready)@5.5s
 emit 1.10 members [s1=m1 s2=m1 s3=m2]
+reply q08 done
 -- 09 --
 > 11s join s4 m2
 emit 1.11 members [s1=m1 s2=m1 s3=m2 s4=m2]
+reply q09 done
 -- 10 --
 > 12s join s5 m3
 listen [m3] #1(netease:a,ready)@5.5s
 emit 1.12 members [s1=m1 s2=m1 s3=m2 s4=m2 s5=m3]
+reply q10 done
 -- 11 --
 > 13s join s6 m3
 emit 1.13 members [s1=m1 s2=m1 s3=m2 s4=m2 s5=m3 s6=m3]
+reply q11 done
 -- 12 --
 > 14s leave s5
 emit 1.14 members [s1=m1 s2=m1 s3=m2 s4=m2 s6=m3]
@@ -58,6 +64,7 @@ emit 1.15 members [s1=m1 s2=m1 s3=m2 s4=m2]
 > 16s join s7 m3
 listen [m3] #1(netease:a,ready)@5.5s
 emit 1.16 members [s1=m1 s2=m1 s3=m2 s4=m2 s7=m3]
+reply q14 done
 -- 15 --
 > 2m4.2s timer 2
 persist mode=sequential entrySeq=2 current=#2(netease:b,ready)@2m5.7s pending=- waiting=[]

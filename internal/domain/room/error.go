@@ -11,6 +11,8 @@ const (
 	QueueFull
 	RateLimited
 	NothingPlaying
+	RoomFull
+	TooManySessions
 )
 
 type Error struct {
@@ -29,4 +31,9 @@ var (
 	errNotInQueue          = &Error{NotFound, "这首歌已经不在播放列表里了。"}
 	errNothingPlaying      = &Error{NothingPlaying, "现在没有在放的歌。"}
 	errDuplicateVote       = &Error{Conflict, "你已经投过票了。"}
+	errTooManySessions     = &Error{TooManySessions, fmt.Sprintf("你在这个房间已经开了 %d 个连接。关掉一个，这里就会自动连上。", maxSessionsPerMember)}
 )
+
+func errRoomFull(capacity int) *Error {
+	return &Error{RoomFull, fmt.Sprintf("房间已满，最多 %d 人。", capacity)}
+}
