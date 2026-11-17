@@ -50,8 +50,43 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: v3.20.0
+      - name: Check chart
+        shell: bash
+        run: |
+          set -euo pipefail
+          helm lint helm/alisten \
+            --set domain=alisten.example \
+            --set database.host=postgres \
+            --set database.username=alisten \
+            --set database.name=alisten \
+            --set redis.host=valkey \
+            --set storage.endpointUrl=http://rustfs:9000 \
+            --set storage.publicUrl=https://s3.example/alisten \
+            --set secrets.databasePassword=test \
+            --set secrets.storageAccessKeyId=test \
+            --set secrets.storageSecretAccessKey=test
+          helm template alisten helm/alisten \
+            --set domain=alisten.example \
+            --set database.host=postgres \
+            --set database.username=alisten \
+            --set database.name=alisten \
+            --set redis.host=valkey \
+            --set storage.endpointUrl=http://rustfs:9000 \
+            --set storage.publicUrl=https://s3.example/alisten \
+            --set secrets.databasePassword=test \
+            --set secrets.storageAccessKeyId=test \
+            --set secrets.storageSecretAccessKey=test \
+            >/dev/null
+
   images:
-    needs: [go, web]
+    needs: [go, web, helm]
     runs-on: ubuntu-latest
     permissions:
       contents: read
