@@ -7,6 +7,7 @@ import { useStore } from '@/shared/lib/use-store'
 import { SectionLayout } from '@/shared/ui'
 import { Accounts } from './accounts'
 import { adminStore } from './admin-store'
+import { EphemeralRooms } from './ephemeral-rooms'
 import { PersistentRooms } from './persistent-rooms'
 import { Registration } from './registration'
 import { SiteSettings } from './site-settings'
@@ -95,7 +96,12 @@ function Sections({ section, q, page, sort, onNavigate, onEntered }: AdminPagePr
       {shown === 'site' && <SiteSettings />}
       {shown === 'registration' && <Registration />}
       {shown === 'users' && <Accounts />}
-      {shown === 'rooms' && <PersistentRooms q={q} page={page} onFilter={filter => onNavigate({ section: 'rooms', ...filter })} onEntered={onEntered} />}
+      {shown === 'rooms' && (
+        <>
+          <EphemeralRooms />
+          <PersistentRooms q={q} page={page} onFilter={filter => onNavigate({ section: 'rooms', ...filter })} onEntered={onEntered} />
+        </>
+      )}
       {shown === 'sources' && <SourceAccounts credentials={credentials} />}
       {shown === 'media' && <MediaPage q={q} sort={sort} page={page} onNavigate={view => onNavigate({ section: 'media', ...view })} />}
     </SectionLayout>

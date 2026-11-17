@@ -18,6 +18,7 @@ const noMembers: Member[] = []
 function OnlineMembers() {
   const sessions = useStore(roomStore, s => s.room?.members.sessions ?? noMembers)
   const onlineCount = useStore(roomStore, s => s.room?.members.onlineCount ?? 0)
+  const capacity = useStore(roomStore, s => s.room?.room.capacity)
   const [open, setOpen] = useState(false)
   const anchorRef = useRef<HTMLDivElement>(null)
   const popoverId = useId()
@@ -45,7 +46,7 @@ function OnlineMembers() {
       <button
         type="button"
         className="button-ghost chat-members-toggle text-ui-sm"
-        aria-label={`在线成员，${onlineCount} 人`}
+        aria-label={capacity === undefined ? `在线成员，${onlineCount} 人` : `在线成员，${onlineCount} 人，最多 ${capacity} 人`}
         aria-controls={open ? popoverId : undefined}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -58,7 +59,7 @@ function OnlineMembers() {
         <div className="member-popover" id={popoverId} role="dialog" aria-label="在线成员">
           <div className="member-popover-head">
             <strong className="text-ui-sm">在线成员</strong>
-            <span className="text-ui-xs muted">{`${onlineCount} 人`}</span>
+            <span className="text-ui-xs muted">{capacity === undefined ? `${onlineCount} 人` : `${onlineCount} / ${capacity} 人`}</span>
           </div>
           <div className="member-popover-list">
             {people.map(({ member, devices }) => (

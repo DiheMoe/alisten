@@ -102,7 +102,7 @@ export class RoomReplica {
         this.state = { ...this.state, playMode: event.data.playMode }
         break
       case 'room.updated':
-        this.state = { ...this.state, room: { ...this.state.room, name: event.data.name, description: event.data.description } }
+        this.state = { ...this.state, room: { ...this.state.room, name: event.data.name, description: event.data.description, capacity: event.data.capacity } }
         break
       // IDL 新增状态事件之后，这里不处理就通不过类型检查。否则副本照样推进编号，房间状态却没有变。
       default:

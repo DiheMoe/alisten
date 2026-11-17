@@ -7,7 +7,8 @@
 .room-card:hover:not(:disabled), .room-card:focus-visible { background: var(--color-card-hover); }
 .room-card-art { position: relative; width: 100%; }
 .room-art { width: 100%; aspect-ratio: 1.6; display: grid; place-items: center; border-radius: 8px; background: var(--color-card-hover); color: var(--color-brand); }
-.room-card-badge { position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: var(--color-content); color: var(--color-foreground-subtle); }
+.room-card-badges { position: absolute; top: 8px; left: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.room-card-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: var(--color-content); color: var(--color-foreground-subtle); }
 .room-card-join { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-primary); color: var(--color-primary-foreground); box-shadow: 0 8px 16px var(--color-shadow); opacity: 0; transform: translateY(8px); transition: opacity 150ms ease, transform 150ms ease; }
 .room-card:hover:not(:disabled) .room-card-join, .room-card:focus-visible .room-card-join { opacity: 1; transform: translateY(0); }
 @media (hover: none) {
@@ -28,6 +29,7 @@
 .join-detail { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .join-detail h3 { overflow-wrap: anywhere; }
 .join-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+.room-gate-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
 @media (max-width: 767px) {
   .room-toolbar { gap: 8px; margin-bottom: 20px; }
   .room-toolbar .search-field { height: 44px; padding: 0 16px; }

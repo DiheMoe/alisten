@@ -9,7 +9,7 @@ export function InlineTextField({ label, value, onSave, placeholder, maxLength, 
   onSave: (value: string) => Promise<void>
   placeholder?: string
   maxLength?: number
-  type?: 'text' | 'email'
+  type?: 'text' | 'email' | 'number'
 }) {
   const errorId = useId()
   const { state, savedNotice, edit, submit, revert } = useInlineSave(value, onSave)

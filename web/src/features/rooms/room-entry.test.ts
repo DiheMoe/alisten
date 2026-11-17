@@ -117,9 +117,9 @@ describe('进入房间', () => {
     const { roomEntryStore } = await load()
 
     const entering = roomEntryStore.enter('party')
-    expect(roomEntryStore.state).toEqual({ phase: 'resolving', ref: 'party', room: null })
+    expect(roomEntryStore.state).toEqual({ phase: 'resolving', ref: 'party', room: null, fullMessage: null })
     await entering
-    expect(roomEntryStore.state).toEqual({ phase: 'joining', ref: 'party', room: listing({ slug: 'party' }) })
+    expect(roomEntryStore.state).toEqual({ phase: 'joining', ref: 'party', room: listing({ slug: 'party' }), fullMessage: null })
 
     const socket = socketAt(0)
     socket.open()
@@ -137,7 +137,7 @@ describe('进入房间', () => {
     routes.set('GET /api/rooms/r1', found(listing({ hasPassword: true })))
     const { roomEntryStore } = await load()
     await roomEntryStore.enter('r1')
-    expect(roomEntryStore.state).toEqual({ phase: 'needs-ticket', ref: 'r1', room: listing({ hasPassword: true }) })
+    expect(roomEntryStore.state).toEqual({ phase: 'needs-ticket', ref: 'r1', room: listing({ hasPassword: true }), fullMessage: null })
     expect(sockets).toHaveLength(0)
 
     local.setItem(ticketKey, 't1')
@@ -184,7 +184,7 @@ describe('查不到房间', () => {
     const { roomEntryStore, notifications } = await load()
     expect(roomEntryStore.resume()).toBe('r1')
     await flush()
-    expect(roomEntryStore.state).toEqual({ phase: 'not-found', ref: 'r1', room: null })
+    expect(roomEntryStore.state).toEqual({ phase: 'not-found', ref: 'r1', room: null, fullMessage: null })
     expect(notifications()).toEqual([])
     expect(local.getItem(lastRoomKey)).toBeNull()
   })
@@ -202,7 +202,7 @@ describe('查不到房间', () => {
     routes.set('GET /api/rooms/r1', unavailable)
     const { roomEntryStore, notifications } = await load()
     await roomEntryStore.enter('r1')
-    expect(roomEntryStore.state).toEqual({ phase: 'failed', ref: 'r1', room: null })
+    expect(roomEntryStore.state).toEqual({ phase: 'failed', ref: 'r1', room: null, fullMessage: null })
     expect(notifications()).toEqual([{ tone: 'error', message: '服务暂时不可用，请稍后再试。' }])
 
     routes.set('GET /api/rooms/r1', found(listing()))
@@ -224,7 +224,7 @@ describe('被新的尝试取代', () => {
 
     late.resolve(json(200, listing()))
     await first
-    expect(roomEntryStore.state).toEqual({ phase: 'needs-ticket', ref: 'b', room: listing({ id: 'rb' }) })
+    expect(roomEntryStore.state).toEqual({ phase: 'needs-ticket', ref: 'b', room: listing({ id: 'rb' }), fullMessage: null })
     expect(sockets).toHaveLength(0)
   })
 
@@ -238,7 +238,7 @@ describe('被新的尝试取代', () => {
 
     late.resolve(unavailable())
     await first
-    expect(roomEntryStore.state).toEqual({ phase: 'needs-ticket', ref: 'b', room: listing({ id: 'rb' }) })
+    expect(roomEntryStore.state).toEqual({ phase: 'needs-ticket', ref: 'b', room: listing({ id: 'rb' }), fullMessage: null })
     expect(notifications()).toEqual([])
   })
 
@@ -252,7 +252,7 @@ describe('被新的尝试取代', () => {
 
     late.resolve(json(200, listing()))
     await first
-    expect(roomEntryStore.state).toEqual({ phase: 'idle', ref: null, room: null })
+    expect(roomEntryStore.state).toEqual({ phase: 'idle', ref: null, room: null, fullMessage: null })
     expect(sockets).toHaveLength(0)
   })
 })
@@ -269,7 +269,7 @@ describe('连接被服务端关闭', () => {
     socketAt(0).lose(CloseCode.unauthorized)
     await flush()
     expect(local.getItem(ticketKey)).toBeNull()
-    expect(roomEntryStore.state).toEqual({ phase: 'needs-ticket', ref: 'r1', room: listing({ hasPassword: true }) })
+    expect(roomEntryStore.state).toEqual({ phase: 'needs-ticket', ref: 'r1', room: listing({ hasPassword: true }), fullMessage: null })
     expect(sockets).toHaveLength(1)
   })
 
@@ -279,7 +279,7 @@ describe('连接被服务端关闭', () => {
     socketAt(0).lose(CloseCode.unauthorized)
     await flush()
     expect(local.getItem(ticketKey)).toBeNull()
-    expect(roomEntryStore.state).toEqual({ phase: 'needs-ticket', ref: 'r1', room: listing({ hasPassword: true }) })
+    expect(roomEntryStore.state).toEqual({ phase: 'needs-ticket', ref: 'r1', room: listing({ hasPassword: true }), fullMessage: null })
   })
 
   it('进入之后房间被关闭，进入 not-found 并忘掉这个房间，用别名进的也一样', async () => {
@@ -302,6 +302,73 @@ describe('连接被服务端关闭', () => {
     expect(roomEntryStore.state.phase).toBe('failed')
     expect(roomStore.state).toMatchObject({ roomId: null, stopCode: null })
   })
+
+  it('房间满了时进入 full，带着服务端给的原因。重试时重新进入', async () => {
+    local.setItem(ticketKey, 't1')
+    const { roomEntryStore, roomStore } = await load()
+    await roomEntryStore.enter('r1')
+    const socket = socketAt(0)
+    socket.open()
+    socket.reject(socket.last('hello'), 'ROOM_FULL', '房间已满，最多 16 人。')
+    await flush()
+    socket.lose(CloseCode.roomFull)
+    expect(roomEntryStore.state).toEqual({ phase: 'full', ref: 'r1', room: listing(), fullMessage: '房间已满，最多 16 人。' })
+    expect(roomStore.state).toMatchObject({ roomId: null, stopCode: null })
+
+    roomEntryStore.retry()
+    await flush()
+    expect(roomEntryStore.state).toMatchObject({ phase: 'joining', fullMessage: null })
+    socketAt(1).open()
+    acceptHello(socketAt(1))
+    await flush()
+    expect(roomEntryStore.state.phase).toBe('joined')
+  })
+
+  it('进入之后重连时被拒绝，同样进入 full', async () => {
+    const { roomEntryStore, roomStore } = await entered()
+    socketAt(0).lose(1006)
+    roomStore.reconnect()
+    const socket = socketAt(1)
+    socket.open()
+    socket.reject(socket.last('hello'), 'ROOM_FULL', '房间已满，最多 16 人。')
+    await flush()
+    socket.lose(CloseCode.roomFull)
+    expect(roomEntryStore.state).toMatchObject({ phase: 'full', fullMessage: '房间已满，最多 16 人。' })
+  })
+
+  it('连接太多时不进入 full，稍后自动重连', async () => {
+    local.setItem(ticketKey, 't1')
+    const { roomEntryStore, roomStore } = await load()
+    await roomEntryStore.enter('r1')
+    socketAt(0).open()
+    socketAt(0).reject(socketAt(0).last('hello'), 'TOO_MANY_CONNECTIONS', '你在这个房间已经开了 4 个连接。关掉一个，这里就会自动连上。')
+    await flush()
+    socketAt(0).lose(CloseCode.unavailable)
+    expect(roomEntryStore.state.phase).toBe('joining')
+    expect(roomStore.state.status).toBe('reconnecting')
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    socketAt(1).open()
+    acceptHello(socketAt(1))
+    await flush()
+    expect(roomEntryStore.state.phase).toBe('joined')
+  })
+
+  it('没有收到服务端给的原因时用默认的说法，不沿用上一次的', async () => {
+    local.setItem(ticketKey, 't1')
+    const { roomEntryStore } = await load()
+    await roomEntryStore.enter('r1')
+    socketAt(0).open()
+    socketAt(0).reject(socketAt(0).last('hello'), 'ROOM_FULL', '房间已满，最多 16 人。')
+    await flush()
+    socketAt(0).lose(CloseCode.roomFull)
+
+    roomEntryStore.retry()
+    await flush()
+    socketAt(1).open()
+    socketAt(1).lose(CloseCode.roomFull)
+    expect(roomEntryStore.state).toMatchObject({ phase: 'full', fullMessage: '房间已满，暂时进不去。' })
+  })
 })
 
 describe('在加入弹窗里确认', () => {
@@ -318,7 +385,7 @@ describe('在加入弹窗里确认', () => {
     await expect(roomEntryStore.join(locked, '芝麻开门')).resolves.toBe(true)
     expect(bodies.get(route)).toEqual({ password: '芝麻开门' })
     expect(local.getItem(ticketKey)).toBe('t9')
-    expect(roomEntryStore.state).toEqual({ phase: 'joining', ref: 'r1', room: locked })
+    expect(roomEntryStore.state).toEqual({ phase: 'joining', ref: 'r1', room: locked, fullMessage: null })
     socketAt(0).open()
     expect(socketAt(0).last('hello').data).toMatchObject({ roomId: 'r1', ticket: 't9' })
   })
@@ -409,7 +476,7 @@ describe('在加入弹窗里确认', () => {
     roomEntryStore.reset()
     ticket.resolve(json(201, { ticket: 't9' }))
     await expect(joining).resolves.toBe(false)
-    expect(roomEntryStore.state).toEqual({ phase: 'idle', ref: null, room: null })
+    expect(roomEntryStore.state).toEqual({ phase: 'idle', ref: null, room: null, fullMessage: null })
     expect(sockets).toHaveLength(0)
   })
 

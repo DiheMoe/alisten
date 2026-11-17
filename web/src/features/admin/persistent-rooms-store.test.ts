@@ -24,7 +24,7 @@ function json(status: number, body: unknown): Response {
 const unavailable = { error: { code: 'UNAVAILABLE', message: '服务暂时不可用，请稍后再试。' } }
 
 async function list(): Promise<Response> {
-  const response = failReads ? json(503, unavailable) : json(200, { items: [...server] })
+  const response = failReads ? json(503, unavailable) : json(200, { items: [...server], defaultCapacity: 32 })
   if (holdReads)
     await new Promise<void>(resolve => release.push(resolve))
   return response
@@ -39,7 +39,7 @@ function remove(id: string): Response {
 
 function ids(store: PersistentRoomsStore): string[] | string {
   const { current } = store.rooms.state
-  return current.status === 'loaded' ? current.value.map(item => item.id) : current.status
+  return current.status === 'loaded' ? current.value.items.map(item => item.id) : current.status
 }
 const messages = () => notificationStore.state.notifications.map(n => n.message)
 
@@ -83,11 +83,12 @@ beforeEach(() => {
 })
 
 describe('常驻房间的读取', () => {
-  it('打开时读取全部房间', async () => {
+  it('打开时读取全部房间和新建房间的默认上限', async () => {
     const store = new PersistentRoomsStore()
     store.open()
     expect(store.rooms.state.current).toEqual({ status: 'loading' })
     await vi.waitFor(() => expect(ids(store)).toEqual(['r1', 'r2', 'r3']))
+    expect(store.rooms.state.current).toMatchObject({ value: { defaultCapacity: 32 } })
     expect(requests).toEqual(['GET /api/admin/rooms'])
   })
 
@@ -134,6 +135,7 @@ describe('常驻房间的删除', () => {
     server.push(room(4))
     expect(await store.remove('r2')).toBe(true)
     expect(ids(store)).toEqual(['r1', 'r3'])
+    expect(store.rooms.state.current).toMatchObject({ value: { defaultCapacity: 32 } })
     await vi.waitFor(() => expect(release).toHaveLength(1))
     expect(requests).toEqual(['DELETE /api/admin/rooms/r2', 'GET /api/admin/rooms'])
     releaseAll()
@@ -163,7 +165,7 @@ describe('常驻房间的删除', () => {
     releaseAll()
   })
 
-  it('列表没有读到时删除成功，本地先显示为空，再重新读取', async () => {
+  it('列表没有读到时删除成功，直接重新读取', async () => {
     failReads = true
     const store = new PersistentRoomsStore()
     store.open()
@@ -171,7 +173,7 @@ describe('常驻房间的删除', () => {
     failReads = false
     holdReads = true
     expect(await store.remove('r1')).toBe(true)
-    expect(ids(store)).toEqual([])
+    expect(ids(store)).toBe('loading')
     await vi.waitFor(() => expect(release).toHaveLength(1))
     releaseAll()
     await vi.waitFor(() => expect(ids(store)).toEqual(['r2', 'r3']))

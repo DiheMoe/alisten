@@ -35,7 +35,7 @@ export function PersistentRooms({ q, page, onFilter, onEntered }: {
     store.open()
     return () => store.close()
   }, [store])
-  const rooms = listing.status === 'loaded' ? listing.value : null
+  const rooms = listing.status === 'loaded' ? listing.value.items : null
   const shown = rooms && filterRooms(rooms, q, page)
   // 删掉房间或者打开旧链接时，地址里的页码可能超出范围，改成实际显示的那一页。
   const shownPage = shown?.page
@@ -50,7 +50,7 @@ export function PersistentRooms({ q, page, onFilter, onEntered }: {
           <Search size={16} aria-hidden="true" />
           <input type="search" aria-label="搜索房间" placeholder="搜索房间" value={q} onChange={event => onFilter({ q: event.target.value })} />
         </label>
-        <button type="button" className="button-primary" onClick={() => setEditing('new')}>
+        <button type="button" className="button-primary" disabled={listing.status !== 'loaded'} onClick={() => setEditing('new')}>
           <Plus size={16} aria-hidden="true" />
           新建房间
         </button>
@@ -82,7 +82,7 @@ export function PersistentRooms({ q, page, onFilter, onEntered }: {
                             <li className="admin-room" key={room.id} data-key={room.id}>
                               <div className="admin-room-name">
                                 <strong className="truncate">{room.name}</strong>
-                                <span>{room.onlineCount ? `${room.onlineCount} 人在线` : '无人在线'}</span>
+                                <span>{room.onlineCount ? `${room.onlineCount} / ${room.capacity} 人在线` : `无人在线，最多 ${room.capacity} 人`}</span>
                               </div>
                               <span className="admin-room-slug truncate">
                                 {room.slug
@@ -127,9 +127,10 @@ export function PersistentRooms({ q, page, onFilter, onEntered }: {
                       <Pagination page={shown.page} totalPages={shown.totalPages} onPage={next => onFilter({ q, page: next })} />
                     </>
                   )}
-      {editing && (
+      {editing && listing.status === 'loaded' && (
         <RoomFormDialog
           room={editing === 'new' ? null : editing}
+          defaultCapacity={listing.value.defaultCapacity}
           onSaved={() => {
             setEditing(null)
             store.refresh()

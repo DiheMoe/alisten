@@ -81,10 +81,15 @@ export function Lobby({ filter, onFilter, onEntered }: { filter: string, onFilte
                             <div className="room-art">
                               <Headphones size={44} strokeWidth={1.2} aria-hidden="true" />
                             </div>
-                            {room.hasPassword && (
-                              <span className="room-card-badge text-ui-xs">
-                                <LockKeyhole size={12} aria-hidden="true" />
-                                密码
+                            {(room.hasPassword || room.onlineCount >= room.capacity) && (
+                              <span className="room-card-badges">
+                                {room.hasPassword && (
+                                  <span className="room-card-badge text-ui-xs">
+                                    <LockKeyhole size={12} aria-hidden="true" />
+                                    密码
+                                  </span>
+                                )}
+                                {room.onlineCount >= room.capacity && <span className="room-card-badge text-ui-xs">满员</span>}
                               </span>
                             )}
                             <span className="room-card-join" aria-hidden="true">
@@ -96,9 +101,7 @@ export function Lobby({ filter, onFilter, onEntered }: { filter: string, onFilte
                             <p className="text-ui-caption muted">{room.description || '来这里，听见好音乐。'}</p>
                             <span className="text-ui-sm muted">
                               <Users size={14} aria-hidden="true" />
-                              {room.onlineCount}
-                              {' '}
-                              人正在听
+                              {`${room.onlineCount} / ${room.capacity} 人正在听`}
                             </span>
                           </div>
                         </button>

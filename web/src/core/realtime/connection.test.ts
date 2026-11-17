@@ -109,6 +109,7 @@ describe('断线之后', () => {
     ['未授权', CloseCode.unauthorized],
     ['房间不存在', CloseCode.notFound],
     ['客户端版本过旧', CloseCode.clientOutdated],
+    ['房间已满', CloseCode.roomFull],
   ])('%s时停止，不再重连', async (_, code) => {
     const { handlers } = await started()
     socketAt(0).lose(code)

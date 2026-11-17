@@ -5,6 +5,7 @@
 .admin-eyebrow { margin-bottom: 2px; overflow-wrap: anywhere; color: var(--color-brand); font-size: var(--text-ui-sm); font-weight: 500; }
 
 .admin-section { container: admin / inline-size; }
+.admin-section + .admin-section { margin-top: 40px; }
 .admin-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 16px; margin-bottom: 20px; }
 .admin-head-copy { flex: 1 1 14em; min-width: 0; }
 .admin-head h2 { font-size: calc(var(--text-ui-lg) + 2px); font-weight: 700; line-height: 1.3; }

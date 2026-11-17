@@ -11,7 +11,7 @@ const pingIntervalMs = 5000
 // 半开的连接上写入不会出错，要等 TCP 重传超时才会关闭，所以 ping 收不到回包就当作连接已失效。
 const pongTimeoutMs = 3 * pingIntervalMs
 
-const stopCodes = new Set<number>([CloseCode.invalidArgument, CloseCode.unauthorized, CloseCode.notFound, CloseCode.clientOutdated])
+const stopCodes = new Set<number>([CloseCode.invalidArgument, CloseCode.unauthorized, CloseCode.notFound, CloseCode.clientOutdated, CloseCode.roomFull])
 
 // 浏览器在连接失败时先触发 error，再以 1006 触发 close。
 const abnormalClosure = 1006

@@ -1,4 +1,4 @@
-import type { RoomListing } from '@/core/realtime'
+import type { ErrorInfo, RoomListing } from '@/core/realtime'
 import { api, ApiError, deleteTicket, IdentityRenewedError, loadTicket, saveTicket } from '@/core/api'
 import { errorMessage } from '@/core/errors'
 import { CloseCode } from '@/core/realtime'
@@ -7,14 +7,18 @@ import { notificationStore } from '@/shared/lib/notification-store'
 import { Store } from '@/shared/lib/store'
 import { clearLastRoom, loadLastRoom, saveLastRoom } from './last-room'
 
-export type EntryPhase = 'idle' | 'resolving' | 'needs-ticket' | 'joining' | 'joined' | 'not-found' | 'failed'
+export type EntryPhase = 'idle' | 'resolving' | 'needs-ticket' | 'joining' | 'joined' | 'not-found' | 'full' | 'failed'
 
 interface EntryState {
   phase: EntryPhase
   // 房间的 UUID 或别名。
   ref: string | null
   room: RoomListing | null
+  // phase 为 full 时是服务端说明房间已满的文案。其他阶段是 null。
+  fullMessage: string | null
 }
+
+const fullFallback = '房间已满，暂时进不去。'
 
 export function joinErrorMessage(error: unknown): string {
   return error instanceof IdentityRenewedError ? '没有加入房间，再加入一次。' : errorMessage(error)
@@ -24,13 +28,16 @@ class RoomEntryStore extends Store<EntryState> {
   #attempt = 0
   // 加入弹窗里换票据的轮次。和 #attempt 分开，因为关掉弹窗不能打断另一个房间还在进行的进入。
   #joining = 0
+  // 服务端拒绝握手时先发来 ROOM_FULL 的错误，再以 4403 断开。所以先记下错误里的文案，等连接停下时再用。
+  #refusal: string | null = null
 
   constructor() {
-    super({ phase: 'idle', ref: null, room: null })
+    super({ phase: 'idle', ref: null, room: null, fullMessage: null })
   }
 
   start(): void {
     roomStore.addEventListener('change', this.#onSession)
+    roomStore.errors.on(this.#onError)
   }
 
   // 已经在这个房间里时什么也不做。重进会断开再连接，这次进房以来的聊天就没了。
@@ -70,7 +77,7 @@ class RoomEntryStore extends Store<EntryState> {
     const attempt = ++this.#attempt
     ++this.#joining
     roomStore.leave()
-    this.setState({ phase: 'resolving', ref, room: known ?? null })
+    this.setState({ phase: 'resolving', ref, room: known ?? null, fullMessage: null })
     let room = known
     if (!room) {
       try {
@@ -96,6 +103,7 @@ class RoomEntryStore extends Store<EntryState> {
       return
     }
     this.setState({ phase: 'joining', room })
+    this.#refusal = null
     roomStore.join(room.id, ticket)
   }
 
@@ -115,7 +123,12 @@ class RoomEntryStore extends Store<EntryState> {
     ++this.#attempt
     ++this.#joining
     roomStore.leave()
-    this.setState({ phase: 'idle', ref: null, room: null })
+    this.setState({ phase: 'idle', ref: null, room: null, fullMessage: null })
+  }
+
+  #onError = (error: ErrorInfo): void => {
+    if (error.code === 'ROOM_FULL')
+      this.#refusal = error.message
   }
 
   #onSession = (): void => {
@@ -135,6 +148,10 @@ class RoomEntryStore extends Store<EntryState> {
       case CloseCode.invalidArgument:
         roomStore.leave()
         this.setState({ phase: 'failed' })
+        return
+      case CloseCode.roomFull:
+        roomStore.leave()
+        this.setState({ phase: 'full', fullMessage: this.#refusal ?? fullFallback })
         return
     }
     if (phase === 'joining' && session.room) {

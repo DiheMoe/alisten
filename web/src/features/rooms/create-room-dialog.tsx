@@ -3,6 +3,7 @@ import { api, saveTicket } from '@/core/api'
 import { errorMessage } from '@/core/errors'
 import { RoomDescriptionLimits, RoomNameLimits } from '@/core/realtime'
 import { notificationStore } from '@/shared/lib/notification-store'
+import { useResource } from '@/shared/lib/use-resource'
 import { useSubmission } from '@/shared/lib/use-submission'
 import { Modal } from '@/shared/ui'
 import { joinErrorMessage, roomEntryStore } from './room-entry'
@@ -14,6 +15,7 @@ export function CreateRoomDialog({ onCreated, onClose }: { onCreated: (id: strin
   const [locked, setLocked] = useState(false)
   const [password, setPassword] = useState('')
   const { busy, submit } = useSubmission()
+  const site = useResource(() => api.getSite())
   const ready = name.trim() !== '' && (!locked || password !== '')
   const create = async () => {
     const secret = locked ? { password } : {}
@@ -63,6 +65,7 @@ export function CreateRoomDialog({ onCreated, onClose }: { onCreated: (id: strin
             <input type="password" autoComplete="new-password" value={password} onChange={event => setPassword(event.target.value)} required />
           </label>
         )}
+        {site.state.status === 'loaded' && <p className="text-ui-caption muted">{`房间最多 ${site.state.value.ephemeralRoomCapacity} 人。`}</p>}
         <button type="submit" className="button-primary" disabled={busy || !ready}>
           {busy ? '正在创建…' : '创建并加入'}
         </button>

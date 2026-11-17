@@ -33,9 +33,13 @@ export function JoinDialog({ room, onJoined, onClose }: { room: RoomListing, onJ
             <p className="text-ui-caption muted">{room.description || '来这里，听见好音乐。'}</p>
             <span className="join-meta text-ui-sm muted">
               <Users size={14} aria-hidden="true" />
-              {room.onlineCount}
-              {' '}
-              人正在听
+              {`${room.onlineCount} / ${room.capacity} 人正在听`}
+              {room.onlineCount >= room.capacity && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  已满员
+                </>
+              )}
               {room.hasPassword && (
                 <>
                   <span aria-hidden="true">·</span>

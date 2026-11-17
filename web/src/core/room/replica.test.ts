@@ -54,10 +54,10 @@ describe('roomReplica', () => {
     const replica = new RoomReplica(snapshot(3, 10))
     expect(replica.receive(queued(3, 11, ['a']))).toEqual({ changed: true, notice: null, sync: false })
     expect(replica.receive({ kind: 'event', type: 'settings.updated', term: 3, seq: 12, data: { playMode: 'random' } }).changed).toBe(true)
-    expect(replica.receive({ kind: 'event', type: 'room.updated', term: 3, seq: 13, data: { name: '新名字', description: '介绍', capacity: 64 } }).changed).toBe(true)
+    expect(replica.receive({ kind: 'event', type: 'room.updated', term: 3, seq: 13, data: { name: '新名字', description: '介绍', capacity: 32 } }).changed).toBe(true)
     expect(replica.state.items.map(e => e.id)).toEqual(['a'])
     expect(replica.state.playMode).toBe('random')
-    expect(replica.state.room).toEqual({ id: 'r1', name: '新名字', description: '介绍', kind: 'persistent', capacity: 64 })
+    expect(replica.state.room).toEqual({ id: 'r1', name: '新名字', description: '介绍', kind: 'persistent', capacity: 32 })
   })
 
   it('丢弃旧任期和重复的事件', () => {
