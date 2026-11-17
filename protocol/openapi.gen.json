@@ -1941,7 +1941,7 @@
                 "type": "null"
               }
             ],
-            "description": "下一首。顺序和轮流模式下是等待队列的第一首，随机模式下是服务端提前抽好的那首。没有歌在播放，或者下一首还没准备好时为 null"
+            "description": "下一首。顺序和轮流模式下是等待队列里第一首没被跳过的歌，随机模式下是服务端从没被跳过的歌里提前抽好的那首。等待队列里有准备好的歌时，点歌满 15 秒还没准备好的歌会被跳过。没有歌在播放，或者下一首还没准备好时为 null"
           },
           "nowPlaying": {
             "anyOf": [
@@ -1961,7 +1961,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "待播。没有歌在播放时，房间在等这首准备好再开播。点歌满 15 秒还没准备好、等待队列里又有准备好的歌时，它回到等待队列，先放准备好的歌"
           },
           "playMode": {
             "$ref": "#/components/schemas/PlayMode"
@@ -2439,7 +2440,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "10a70c0dce07a9a7"
+    "version": "b39cdb26f4d364c6"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -4943,7 +4944,7 @@
             "ticket": []
           }
         ],
-        "summary": "删除等待队列中的一首"
+        "summary": "删除待播或等待队列中的一首"
       }
     },
     "/api/room/queue/{entryId}/likes": {

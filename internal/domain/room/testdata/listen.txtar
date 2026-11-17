@@ -26,13 +26,14 @@ prepare netease:b
 > 3s prepared netease:b 1m
 persist mode=sequential entrySeq=2 current=- pending=#1(netease:a) waiting=[#2(netease:b,ready)]
 emit 1.7 queue pending=#1(netease:a) waiting=[#2(netease:b,ready)] next=-
+schedule 1 16s
 -- 07 --
 > 4s prepared netease:a 2m
 persist mode=sequential entrySeq=2 current=#1(netease:a,ready)@5.5s pending=- waiting=[#2(netease:b,ready)]
 listen [m1] #1(netease:a,ready)@5.5s
 emit 1.8 playback #1(netease:a,ready)@5.5s
 emit 1.9 queue pending=- waiting=[#2(netease:b,ready)] next=#2
-schedule 1 2m5.5s
+schedule 2 2m5.5s
 -- 08 --
 > 10s join s3 m2
 listen [m2] #1(netease:a,ready)@5.5s
@@ -58,16 +59,16 @@ emit 1.15 members [s1=m1 s2=m1 s3=m2 s4=m2]
 listen [m3] #1(netease:a,ready)@5.5s
 emit 1.16 members [s1=m1 s2=m1 s3=m2 s4=m2 s7=m3]
 -- 15 --
-> 2m4.2s timer 1
+> 2m4.2s timer 2
 persist mode=sequential entrySeq=2 current=#2(netease:b,ready)@2m5.7s pending=- waiting=[]
 record #1(netease:a,ready) 5.5s-2m5.5s
 listen [m1 m2 m3] #2(netease:b,ready)@2m5.7s
 emit 1.17 playback #2(netease:b,ready)@2m5.7s
 emit 1.18 queue pending=- waiting=[] next=-
-schedule 2 3m5.7s
-recommend 3
+schedule 3 3m5.7s
+recommend 4
 -- 16 --
-> 3m4.4s timer 2
+> 3m4.4s timer 3
 persist mode=sequential entrySeq=2 current=- pending=- waiting=[]
 record #2(netease:b,ready) 2m5.7s-3m5.7s
 emit 1.19 playback -

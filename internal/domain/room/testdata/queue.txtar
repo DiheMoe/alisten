@@ -1,4 +1,4 @@
-等待队列：点赞改变顺序，删除只针对等待队列。待播准备失败时移出队列，选下一首当待播，等待队列空了就没有待播。sync 的回复带着房间当前的 term、seq 和会话数。
+等待队列：点赞改变顺序，等待队列和待播中的歌都能删除，已经不在队列里的歌不能删除。待播被删除或准备失败时，选下一首当待播，等待队列空了就没有待播。sync 的回复带着房间当前的 term、seq 和会话数。
 -- 01 --
 > restore persistent
 -- 02 --
@@ -32,24 +32,38 @@ emit 1.8 activity liked m2 #3(netease:c,likes=1)
 emit 1.9 queue pending=#1(netease:a) waiting=[#3(netease:c,likes=1) #2(netease:b)] next=-
 reply q06 liked 1
 -- 07 --
-> 2s remove m3 1
-reply q07 error not-found 这首歌已经不在播放列表里了。
--- 08 --
 > 2s remove m3 2
 persist mode=sequential entrySeq=3 current=- pending=#1(netease:a) waiting=[#3(netease:c,likes=1)]
 emit 1.10 activity removed m3 #2(netease:b)
 emit 1.11 queue pending=#1(netease:a) waiting=[#3(netease:c,likes=1)] next=-
+reply q07 done
+-- 08 --
+> 2s remove m3 1
+persist mode=sequential entrySeq=3 current=- pending=#3(netease:c,likes=1) waiting=[]
+emit 1.12 activity removed m3 #1(netease:a)
+emit 1.13 queue pending=#3(netease:c,likes=1) waiting=[] next=-
 reply q08 done
 -- 09 --
-> 3s failed netease:a 歌曲已下架
-persist mode=sequential entrySeq=3 current=- pending=#3(netease:c,likes=1) waiting=[]
-emit 1.12 activity failed - #1(netease:a) 歌曲已下架
-emit 1.13 queue pending=#3(netease:c,likes=1) waiting=[] next=-
+> 3s enqueue m1 netease:d
+persist mode=sequential entrySeq=4 current=- pending=#3(netease:c,likes=1) waiting=[#4(netease:d)]
+emit 1.14 activity added m1 #4(netease:d)
+emit 1.15 queue pending=#3(netease:c,likes=1) waiting=[#4(netease:d)] next=-
+reply q09 enqueued #4(netease:d)
+prepare netease:d
 -- 10 --
-> 4s failed netease:c 没有版权
-persist mode=sequential entrySeq=3 current=- pending=- waiting=[]
-emit 1.14 activity failed - #3(netease:c,likes=1) 没有版权
-emit 1.15 queue pending=- waiting=[] next=-
+> 3s failed netease:c 没有版权
+persist mode=sequential entrySeq=4 current=- pending=#4(netease:d) waiting=[]
+emit 1.16 activity failed - #3(netease:c,likes=1) 没有版权
+emit 1.17 queue pending=#4(netease:d) waiting=[] next=-
 -- 11 --
+> 4s remove m3 1
+reply q11 error not-found 这首歌已经不在播放列表里了。
+-- 12 --
+> 4s remove m3 4
+persist mode=sequential entrySeq=4 current=- pending=- waiting=[]
+emit 1.18 activity removed m3 #4(netease:d)
+emit 1.19 queue pending=- waiting=[] next=-
+reply q12 done
+-- 13 --
 > 5s sync m1
-reply q11 sync term=1 seq=15 sessions=1 next=-
+reply q13 sync term=1 seq=19 sessions=1 next=-

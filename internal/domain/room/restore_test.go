@@ -45,8 +45,9 @@ func TestRestore(t *testing.T) {
 		if plays := recorded(effects); len(plays) != 1 || !plays[0].EndedAt.Equal(t0.Add(3*time.Minute)) {
 			t.Fatalf("补记已经放完的歌：%#v", effects)
 		}
-		if r.pending == nil || r.pending.ID != 3 {
-			t.Fatalf("应选下一首（点赞数最多的未就绪条目）：%#v", r.pending)
+		// #3 点赞最多，但很早以前就点了，现在还没准备好，所以先放准备好的 #2。
+		if r.current == nil || r.current.Entry.ID != 2 || r.pending != nil || !slices.Equal(ids(r.waiting), []EntryID{3}) {
+			t.Fatalf("应先放准备好的 #2，#3 留在等待队列：current=%#v pending=%#v waiting=%v", r.current, r.pending, ids(r.waiting))
 		}
 	})
 

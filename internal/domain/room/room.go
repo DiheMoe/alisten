@@ -10,7 +10,11 @@ import (
 
 const (
 	// 开播时间比切歌晚 startLead。没预加载上的客户端收到切歌之后才开始加载音频，留出这段时间，网络正常的客户端加载好时还没到开播时间，就能和其他人同时从头放。
-	startLead           = 1500 * time.Millisecond
+	startLead = 1500 * time.Millisecond
+	// 刚点的歌在 prepareGrace 之内还没准备好，轮到它时也等它。过了这段时间还没准备好，就先放后面已经准备好的歌。
+	// 网易云和 QQ 音乐的歌正常几秒就能准备好，所以连续点歌时，顺序不会被准备得快的歌打乱。准备得慢的歌，比如要先下载的链接，
+	// 或者音源出错要重试的歌，不能让房间一直等它。
+	prepareGrace        = 15 * time.Second
 	closeDelay          = 5 * time.Minute
 	autoDJQuiet         = 10 * time.Second
 	RefillInterval      = time.Minute
@@ -40,7 +44,12 @@ type Room struct {
 	token          Token
 	endTimer       Token
 	closeTimer     Token
+	graceTimer     Token
+	graceAt        time.Time
 	recommendation Token
+	// 上一批输入的时间。begin 先用它算出处理前的下一首，再把它更新为这一批的时间。歌是否还在 prepareGrace 之内按它判断，
+	// 所以处理前的下一首就是上一批广播过的那首，只因为时间过去而变的下一首也能比较出来。
+	now time.Time
 	// 随机模式下提前抽好的下一首。它和 served 一样只在内存中，换 owner 之后重新抽。
 	next EntryID
 	// 各点歌人已开播的最高轮次。served 只在内存中，所以换 owner 之后，刚放过歌的点歌人可能提前一轮。已在队列中的歌不受影响。
@@ -60,6 +69,7 @@ func Restore(env Env, term uint32, s Snapshot) (*Room, []Effect) {
 		pending:  clonePtr(s.Pending),
 		current:  clonePtr(s.Current),
 		served:   map[requester]int{},
+		now:      env.Now,
 	}
 	// 存储返回的条目顺序不保证符合排序规则。
 	r.sortWaiting()
@@ -77,11 +87,10 @@ func Restore(env Env, term uint32, s Snapshot) (*Room, []Effect) {
 		r.endTimer = r.schedule(b, r.current.EndsAt())
 	case r.current != nil:
 		r.endCurrent(b, r.current.EndsAt())
-	case r.pending != nil && r.pending.Ready:
-		r.start(b)
 	}
 	r.advanceIfIdle(b)
 	r.drawNext(b)
+	r.watchGrace(b)
 	if r.info.Kind == Ephemeral {
 		r.closeTimer = r.schedule(b, env.Now.Add(closeDelay))
 	}
@@ -126,7 +135,13 @@ func (r *Room) Handle(env Env, in Input) []Effect {
 	}
 	// 入队、点赞和切换播放模式都会改变等待队列的顺序。处理完统一排序，各条规则就不必各自排序。
 	r.sortWaiting()
+	// 选歌也在处理完之后统一做。宽限期会随时间结束，所以任何一批输入都可能让轮到的歌变化，不只是入队、准备结果和切歌。
+	// 房间关闭时不再开播下一首。
+	if !b.closed {
+		r.advanceIfIdle(b)
+	}
 	r.drawNext(b)
+	r.watchGrace(b)
 	return r.commit(b)
 }
 
@@ -144,13 +159,15 @@ type batch struct {
 }
 
 func (r *Room) begin(env Env) *batch {
-	return &batch{
+	b := &batch{
 		now:        env.Now,
 		rand:       rand.New(rand.NewPCG(env.Seed, 0)),
 		before:     r.snapshot(),
 		beforeNext: r.upNext(),
 		sessions:   slices.Clone(r.sessions),
 	}
+	r.now = env.Now
+	return b
 }
 
 func (b *batch) event(e Event) {
@@ -192,7 +209,7 @@ func (r *Room) commit(b *batch) []Effect {
 	if !samePtr(b.before.Current, after.Current) {
 		events = append(events, PlaybackChanged{Current: after.Current})
 	}
-	// 待播开播或者随机模式重新抽签时，等待队列可能没变，下一首却变了，所以要单独比较。
+	// 待播开播、随机模式重新抽签，或者排在前面的歌过了宽限期时，等待队列可能没变，下一首却变了，所以要单独比较。
 	if !samePtr(b.before.Pending, after.Pending) || !slices.Equal(b.before.Waiting, after.Waiting) || next != b.beforeNext {
 		events = append(events, QueueChanged{Pending: after.Pending, Waiting: after.Waiting, Next: next})
 	}
@@ -232,11 +249,13 @@ func (r *Room) listened(b *batch) (RecordListen, bool) {
 
 func (r *Room) timer(b *batch, in Timer) {
 	switch in.Token {
-	// 没有定时器时 endTimer 和 closeTimer 都是 0。
+	// 没有定时器时 endTimer、graceTimer 和 closeTimer 都是 0。
 	case 0:
 	case r.endTimer:
 		r.endCurrent(b, r.current.EndsAt())
-		r.advanceIfIdle(b)
+	// 宽限期结束时重新选歌，选歌在 Handle 处理完之后统一做。
+	case r.graceTimer:
+		r.graceTimer, r.graceAt = 0, time.Time{}
 	case r.closeTimer:
 		r.closeTimer = 0
 		r.stopPlayback(b)

@@ -27,7 +27,7 @@ function songItem(entry: Entry): SongItem {
   }
 }
 
-function QueueCard({ label, entry, className = '', playing = false, onSave }: { label: string, entry: Entry, className?: string, playing?: boolean, onSave: () => void }) {
+function QueueCard({ label, entry, className = '', playing = false, onSave, onRemove }: { label: string, entry: Entry, className?: string, playing?: boolean, onSave: () => void, onRemove?: { disabled: boolean, run: () => void } }) {
   const song = songItem(entry)
   return (
     <div className={`queue-current ${className}`}>
@@ -39,6 +39,7 @@ function QueueCard({ label, entry, className = '', playing = false, onSave }: { 
       </div>
       {playing && <PlayingBars />}
       <IconButton icon={ListPlus} label={saveToPlaylistLabel(song.title)} onClick={onSave} />
+      {onRemove && <IconButton icon={Trash2} label={`移除${bookTitle(song.title)}`} disabled={onRemove.disabled} onClick={onRemove.run} />}
     </div>
   )
 }
@@ -72,7 +73,15 @@ export function QueuePage({ compact = false }: { compact?: boolean }) {
         />
       </div>
       {nowPlaying && <QueueCard label="正在播放" entry={nowPlaying.entry} playing onSave={() => save(nowPlaying.entry)} />}
-      {pending && <QueueCard label="下一首" entry={pending} className="queue-pending" onSave={() => save(pending)} />}
+      {pending && (
+        <QueueCard
+          label="下一首"
+          entry={pending}
+          className="queue-pending"
+          onSave={() => save(pending)}
+          onRemove={{ disabled: !connected, run: () => void removeEntry(pending.id, pending.meta.title) }}
+        />
+      )}
       {items.length
         ? (
             <SongList

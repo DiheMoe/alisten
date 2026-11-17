@@ -19,7 +19,10 @@ const (
 	fuzzStored = 18
 	// 曲目表中的结果不能再用了，比如链接曲目的音频已经不在对象存储中。
 	fuzzDropped = 19
-	fuzzOps     = 20
+	// 宽限期的定时器在 arg 为偶数时按设定的时刻触发，这样宽限期结束的那一刻也能测到。arg 为奇数时不调时间，
+	// 模拟定时器早于设定的时刻送到。定时器按单调时钟等待，恢复出来的点歌时间却只有墙上时间，系统时钟被往回调时就会这样。
+	fuzzGrace = 20
+	fuzzOps   = 21
 )
 
 // ops 中每两个字节是一步：操作和它的参数。
@@ -39,6 +42,16 @@ func FuzzInvariants(f *testing.F) {
 	f.Add(true, []byte{2, 0, 18, 0, 17, 0})
 	// 等待队列中已就绪歌曲的结果不能再用了，恢复时要重新准备。
 	f.Add(true, []byte{2, 0, 7, 0, 2, 1, 7, 1, 19, 1, 17, 0})
+	// 待播过了宽限期还没准备好，先放后面准备好的歌。
+	f.Add(false, []byte{2, 0, 2, 1, 7, 1, 20, 0, 7, 0})
+	// 有歌在播时，排在前面的歌过了宽限期还没准备好，下一首换成后面准备好的歌。
+	f.Add(false, []byte{2, 0, 7, 0, 2, 1, 2, 2, 7, 2, 20, 0})
+	// 宽限期的定时器提前送到，要重新设定时器。
+	f.Add(false, []byte{2, 0, 2, 1, 7, 1, 20, 1})
+	// 删除待播。
+	f.Add(true, []byte{2, 0, 2, 1, 3, 1})
+	// 随机模式切歌时，抽好的歌过了宽限期还没准备好，改放唯一准备好的那首。选完之后等待队列里没有准备好的歌了，抽好的歌看起来又占着位置。
+	f.Add(false, []byte{2, 1, 7, 1, 2, 2, 6, 1, 2, 0, 7, 0, 5, 14})
 	f.Fuzz(func(t *testing.T, persistent bool, ops []byte) {
 		kind := Ephemeral
 		if persistent {
@@ -52,6 +65,9 @@ func FuzzInvariants(f *testing.F) {
 		for i := 0; i+1 < len(ops); i += 2 {
 			op, arg := ops[i], ops[i+1]
 			now += time.Duration(arg%16) * time.Second
+			if op%fuzzOps == fuzzGrace && arg%2 == 0 && r.graceAt.After(t0.Add(now)) {
+				now = r.graceAt.Sub(t0)
+			}
 			env := Env{Now: t0.Add(now), Seed: uint64(i)}
 			before := r.snapshot()
 			beforeDrawn, beforeNext := r.next, r.upNext()
@@ -109,8 +125,11 @@ func checkNext(t *testing.T, r *Room, before Snapshot, drawn, beforeNext EntryID
 		return
 	}
 	if before.Mode == Random && drawn != 0 {
-		if selected, ok := selectedFrom(before.Waiting, r); ok && selected != drawn && r.waitingIndex(drawn) >= 0 {
-			t.Fatalf("随机模式切歌选中了 #%d，抽好的 #%d 还在等待队列里", selected, drawn)
+		// 抽好的歌在选歌时不占着位置，才能换成别的歌。
+		if selected, ok := selectedFrom(before.Waiting, r); ok && selected != drawn {
+			if i := r.waitingIndex(drawn); i >= 0 && heldWhenChosen(r, r.waiting[i], selected) {
+				t.Fatalf("随机模式切歌选中了 #%d，抽好的 #%d 还在等待队列里", selected, drawn)
+			}
 		}
 	}
 	if next != beforeNext {
@@ -119,6 +138,15 @@ func checkNext(t *testing.T, r *Room, before Snapshot, drawn, beforeNext EntryID
 			t.Fatalf("下一首从 #%d 变成 #%d，没有广播：%#v", beforeNext, next, effects)
 		}
 	}
+}
+
+// 选歌时 e 是否占着位置。被选中的歌已经离开等待队列，它开播了的话，说明选歌时等待队列里有准备好的歌，
+// 这时过了宽限期还没准备好的歌不占位置，而现在的等待队列里可能已经没有准备好的歌了。
+func heldWhenChosen(r *Room, e Entry, selected EntryID) bool {
+	if r.current != nil && r.current.Entry.ID == selected {
+		return e.Ready || r.now.Before(e.AddedAt.Add(prepareGrace))
+	}
+	return r.holdsTurn()(e)
 }
 
 // 这一批从等待队列里选中的歌，开播了或者成为待播。
@@ -221,12 +249,14 @@ func fuzzInput(r *Room, op, arg byte) Input {
 		return Delete{RequestID: "q"}
 	case 15:
 		return command(m, Chat{Text: "你好"})
+	case fuzzGrace:
+		return Timer{Token: r.graceTimer}
 	default:
 		return command(m, Sync{})
 	}
 }
 
-// 多数时候选中等待队列中的条目，因为删除和点赞只接受这些条目。待播、正在播放和不存在的条目也会选到。
+// 多数时候选中等待队列中的条目，因为点赞只接受这些条目，删除只接受这些条目和待播。待播、正在播放和不存在的条目也会选到。
 func fuzzEntry(r *Room, arg byte) EntryID {
 	candidates := ids(r.waiting)
 	if r.pending != nil {
@@ -264,6 +294,13 @@ func checkInvariants(t *testing.T, r *Room, before Snapshot, effects []Effect, t
 	}
 	if r.pending != nil && r.pending.Ready {
 		t.Fatalf("已就绪的待播应立即开播：%#v", r.pending)
+	}
+	if !closed && r.pending != nil && !r.holdsTurn()(*r.pending) {
+		t.Fatalf("待播过了宽限期还没准备好，等待队列里又有准备好的歌时，应先放准备好的歌：pending=%#v waiting=%#v", r.pending, r.waiting)
+	}
+	// 没有新的输入时，只有这个定时器能让房间不再等这首歌。
+	if e := r.awaited(); !closed && e != nil && !e.Ready && r.anyReady() && (r.graceTimer == 0 || !r.graceAt.Equal(e.AddedAt.Add(prepareGrace))) {
+		t.Fatalf("房间在等没准备好的 #%d，又有准备好的歌，宽限期结束时应有定时器：graceAt=%v graceTimer=%d", e.ID, r.graceAt, r.graceTimer)
 	}
 	if !slices.IsSortedFunc(r.waiting, compareWaiting(r.mode)) {
 		t.Fatalf("等待队列没有按播放模式的排序规则排列：%#v", r.waiting)

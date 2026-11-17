@@ -63,7 +63,6 @@ func (r *Room) enqueue(b *batch, by member.Member, a Enqueue) (Result, *Error) {
 	e := r.add(b, a.Track, a.Meta, by, a.Requester, false)
 	r.lastPick = b.now
 	b.event(Activity{Kind: ActivityAdded, Member: by, Entry: e})
-	r.advanceIfIdle(b)
 	return EnqueueResult{Entry: e}, nil
 }
 
@@ -71,12 +70,17 @@ func (r *Room) remove(b *batch, by member.Member, a Remove) (Result, *Error) {
 	if !r.pickLimit.allow(b.now, r.burst(), RefillInterval) {
 		return nil, ErrRateLimited
 	}
-	i := r.waitingIndex(a.Entry)
-	if i < 0 {
-		return nil, errNotInQueue
+	var e Entry
+	if r.pending != nil && r.pending.ID == a.Entry {
+		e, r.pending = *r.pending, nil
+	} else {
+		i := r.waitingIndex(a.Entry)
+		if i < 0 {
+			return nil, errNotInQueue
+		}
+		e = r.waiting[i]
+		r.waiting = slices.Delete(r.waiting, i, i+1)
 	}
-	e := r.waiting[i]
-	r.waiting = slices.Delete(r.waiting, i, i+1)
 	b.event(Activity{Kind: ActivityRemoved, Member: by, Entry: e})
 	return Done{}, nil
 }
@@ -146,9 +150,6 @@ func (r *Room) prepared(b *batch, in Prepared) {
 		return
 	}
 	e.Meta, e.Ready, e.Prep = in.Meta, true, in.Result
-	if e == r.pending {
-		r.start(b)
-	}
 }
 
 func (r *Room) prepareFailed(b *batch, in PrepareFailed) {
@@ -163,7 +164,6 @@ func (r *Room) prepareFailed(b *batch, in PrepareFailed) {
 		r.waiting = slices.DeleteFunc(r.waiting, func(w Entry) bool { return w.ID == failed.ID })
 	}
 	b.event(Activity{Kind: ActivityFailed, Entry: failed, Reason: in.Reason})
-	r.advanceIfIdle(b)
 }
 
 func (r *Room) recommended(b *batch, in Recommended) {
