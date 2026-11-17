@@ -350,8 +350,9 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
     const position = audio.currentTime * 1000
     if (position >= current.durationMs)
       audio.pause()
-    this.frames.emit(Math.min(position, current.durationMs))
+    // 先预约下一帧再通知，因为 Emitter 不隔离监听的异常。某个监听出错时，进度条和歌词不会因此停在这一帧。
     this.#frame = requestAnimationFrame(this.#tick)
+    this.frames.emit(Math.min(position, current.durationMs))
   }
 
   #checkDrift = (): void => {

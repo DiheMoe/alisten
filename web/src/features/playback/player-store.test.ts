@@ -436,6 +436,21 @@ describe('播放过程中', () => {
     expect(playerStore.positionMs()).toBe(durationMs)
   })
 
+  it('监听的回调出错时，之后的帧照常发出', async () => {
+    const playerStore = await playing()
+    const positions: number[] = []
+    const off = playerStore.frames.on(() => {
+      throw new Error('监听出错')
+    })
+    audio.currentTime = 5
+    expect(() => nextFrame()).toThrow('监听出错')
+    off()
+    playerStore.frames.on(position => positions.push(position))
+    audio.currentTime = 6
+    nextFrame()
+    expect(positions).toEqual([6000])
+  })
+
   it('暂停之后不再发出位置', async () => {
     const playerStore = await playing()
     const positions: number[] = []
