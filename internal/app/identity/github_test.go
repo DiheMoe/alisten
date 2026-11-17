@@ -234,6 +234,15 @@ func TestGitHubExchangeChecksNonceAndMember(t *testing.T) {
 		t.Errorf("兑换失败之后再兑换 = %v，期望兑换码已经作废", err)
 	}
 
+	// nonce 是对的，兑换的却是另一个成员，比如兑换码和 nonce 一起泄漏了。只看 nonce 的话会把 GitHub 账号绑到 alice 身上。
+	exchange = f.authorize(t, mallory, port.GitHubBind, "mallory-nonce", "code-42")
+	if _, err := f.g.Exchange(t.Context(), callerOf(alice), exchange, "mallory-nonce"); !errors.Is(err, ErrGitHubLoginExpired) {
+		t.Errorf("别的成员带着正确的 nonce 兑换 = %v，期望 ErrGitHubLoginExpired", err)
+	}
+	if p, _ := f.store.AccountProfile(t.Context(), alice.Member.ID); p.GitHub {
+		t.Error("别的成员兑换时不应绑定到这个成员")
+	}
+
 	exchange = f.authorize(t, mallory, port.GitHubBind, "mallory-nonce", "code-42")
 	if _, err := f.g.Exchange(t.Context(), callerOf(mallory), exchange, "guessed-nonce"); !errors.Is(err, ErrGitHubLoginExpired) {
 		t.Errorf("nonce 不对 = %v，期望 ErrGitHubLoginExpired", err)
