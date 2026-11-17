@@ -21,6 +21,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"golang.org/x/sys/unix"
 
@@ -38,6 +39,13 @@ const (
 	metaFile    = "meta.json"
 	// yt-dlp 和它启动的进程写单个文件的上限。转出的 mp3 写过 MaxAudioSize 之后才停，所以留出余量。
 	fileSizeLimit = port.MaxAudioSize + 1<<20
+	// meta.json 最多读 1 MiB。它和 yt-dlp 写的其他文件一样只受 fileSizeLimit 限制，整个读进来可能占两百多 MiB 内存。
+	// 正常的 meta.json 只有标题、歌手、上传者、专辑和时长，远小于 1 MiB。
+	metaLimit = 1 << 20
+	// 和导入歌单文件时一样，标题、歌手和专辑最多 500 个字符。这些文本来自用户提交的页面，会存进曲目表，也会进入每个房间的队列事件。
+	textLimit = 500
+	// 时长最多 24 小时，和协议中 durationMs 的上限相同。音频解码失败时准备流程直接用 yt-dlp 给的时长，所以要在这里截断。
+	maxDuration = 24 * time.Hour
 )
 
 // 下载失败的原因，用作指标的标签。
@@ -234,11 +242,11 @@ func (t *tail) lines() []byte {
 }
 
 type info struct {
-	Title    string   `json:"title"`
-	Artist   string   `json:"artist"`
-	Uploader string   `json:"uploader"`
-	Album    string   `json:"album"`
-	Duration *float64 `json:"duration"`
+	Title    string      `json:"title"`
+	Artist   string      `json:"artist"`
+	Uploader string      `json:"uploader"`
+	Album    string      `json:"album"`
+	Duration json.Number `json:"duration"`
 }
 
 var errNoAudio = errors.New("yt-dlp 没有下载到音频")
@@ -252,7 +260,7 @@ func collect(dir string, stdout []byte) (port.LinkDownload, error) {
 		}
 		return port.LinkDownload{}, errNoAudio
 	}
-	meta, err := os.ReadFile(filepath.Join(dir, metaFile))
+	meta, err := readMeta(filepath.Join(dir, metaFile))
 	if err != nil {
 		return port.LinkDownload{}, fmt.Errorf("读取 yt-dlp 输出的元数据：%w", err)
 	}
@@ -261,16 +269,53 @@ func collect(dir string, stdout []byte) (port.LinkDownload, error) {
 		return port.LinkDownload{}, fmt.Errorf("解析 yt-dlp 输出的元数据：%w", err)
 	}
 	d := port.LinkDownload{
-		Meta:  track.Meta{Title: i.Title, Artist: cmp.Or(i.Artist, i.Uploader), Album: i.Album},
+		Meta:  track.Meta{Title: cleanText(i.Title), Artist: cmp.Or(cleanText(i.Artist), cleanText(i.Uploader)), Album: cleanText(i.Album), Duration: duration(i.Duration)},
 		Audio: file(audio),
-	}
-	if i.Duration != nil {
-		d.Meta.Duration = time.Duration(*i.Duration * float64(time.Second))
 	}
 	if covers, _ := filepath.Glob(filepath.Join(dir, "cover.*")); len(covers) == 1 {
 		d.Cover, d.CoverExt = file(covers[0]), strings.ToLower(strings.TrimPrefix(filepath.Ext(covers[0]), "."))
 	}
 	return d, nil
+}
+
+func readMeta(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	meta, err := io.ReadAll(io.LimitReader(f, metaLimit+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(meta) > metaLimit {
+		return nil, fmt.Errorf("超过 %d 字节", metaLimit)
+	}
+	return meta, nil
+}
+
+// 先去掉控制字符再截断，这样 textLimit 数的是留下的字符。PostgreSQL 的 text 存不了 U+0000，带着它的标题会让保存失败。
+func cleanText(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
+	if r := []rune(s); len(r) > textLimit {
+		s = string(r[:textLimit])
+	}
+	return s
+}
+
+// 没有时长或者时长为负数都当作没有。info.Duration 用 json.Number 而不是 float64，因为 yt-dlp 会原样写出页面给的大整数，
+// 超出 float64 范围的数字会让整份元数据解析失败。ParseFloat 把这样的数字解析成 ±Inf 并返回 ErrRange，时长照样按正负处理。
+func duration(seconds json.Number) time.Duration {
+	s, err := strconv.ParseFloat(string(seconds), 64)
+	if err != nil && !errors.Is(err, strconv.ErrRange) || s < 0 {
+		return 0
+	}
+	return time.Duration(min(s, maxDuration.Seconds()) * float64(time.Second))
 }
 
 type file string

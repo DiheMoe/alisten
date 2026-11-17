@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/app/port/porttest"
+	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
 // 网页里的地址都用 media.test，只有测试的代理能把它解析到本机，所以请求如果绕过代理，就无法连接。
@@ -118,6 +120,80 @@ func readFile(t *testing.T, f port.LinkFile) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+func collectMeta(t *testing.T, meta string) (track.Meta, error) {
+	t.Helper()
+	dir := t.TempDir()
+	for name, content := range map[string]string{"audio.mp3": "mp3", metaFile: meta} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d, err := collect(dir, nil)
+	return d.Meta, err
+}
+
+// yt-dlp 把页面里的控制字符原样转义进 meta.json，比如 U+0000 写成 \u0000。
+func TestCollectCleansText(t *testing.T) {
+	long := strings.Repeat("长", textLimit+1)
+	meta, err := collectMeta(t, `{"title": "晴\u0000天\n\u007f\u0085", "artist": "\u0000", "uploader": "周杰伦\t", "album": "`+long+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (track.Meta{Title: "晴天", Artist: "周杰伦", Album: strings.Repeat("长", textLimit)}); meta != want {
+		t.Errorf("元数据 = %+v，期望 %+v：去掉控制字符，歌手去掉控制字符后为空时取上传者，按字符截断", meta, want)
+	}
+}
+
+func TestCollectBoundsDuration(t *testing.T) {
+	for _, tt := range []struct {
+		duration string
+		want     time.Duration
+	}{
+		{"212.5", 212500 * time.Millisecond},
+		{"null", 0},
+		{"-1", 0},
+		{"86401", 24 * time.Hour},
+		// 超出 float64 的范围。yt-dlp 会原样写出这样的整数。
+		{"1" + strings.Repeat("0", 400), 24 * time.Hour},
+	} {
+		meta, err := collectMeta(t, `{"title": "晴天", "duration": `+tt.duration+`}`)
+		if err != nil || meta.Duration != tt.want {
+			t.Errorf("duration 为 %.20s 时 = %v, %v，期望 %v", tt.duration, meta.Duration, err, tt.want)
+		}
+	}
+}
+
+func TestCollectRefusesOversizedMeta(t *testing.T) {
+	meta := `{"title": "晴天"}`
+	if _, err := collectMeta(t, meta+strings.Repeat(" ", metaLimit-len(meta))); err != nil {
+		t.Errorf("%d 字节的元数据 = %v，期望可以读取", metaLimit, err)
+	}
+	if _, err := collectMeta(t, meta+strings.Repeat(" ", metaLimit-len(meta)+1)); err == nil {
+		t.Errorf("%d 字节的元数据可以读取，期望当作元数据不可用", metaLimit+1)
+	}
+
+	// 写到单个文件上限的 meta.json 不能整个读进内存。
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "audio.mp3"), []byte("mp3"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(filepath.Join(dir, metaFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(fileSizeLimit); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	_, err = collect(dir, nil)
+	runtime.ReadMemStats(&after)
+	if allocated := after.TotalAlloc - before.TotalAlloc; err == nil || allocated > 16<<20 {
+		t.Errorf("%d 字节的元数据 = %v，分配了 %d 字节，期望读到上限就停下，当作元数据不可用", fileSizeLimit, err, allocated)
+	}
 }
 
 func TestYtdlpRejectsUnsupportedLink(t *testing.T) {
