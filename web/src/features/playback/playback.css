@@ -4,8 +4,6 @@
 .player-artwork .artwork > svg { width: 32px; }
 .player-track { flex: 1; min-width: 0; position: relative; }
 .player-song { display: flex; min-width: 0; width: 100%; padding: 0 112px 0 0; text-align: left; color: inherit; border: 0; border-radius: 8px; background: transparent; }
-.player-source { color: inherit; }
-.player-source:hover { color: var(--color-brand); }
 .player-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding-left: 12px; }
 .player-center { display: flex; align-items: center; }
 .playback-progress { margin-top: 10px; color: var(--color-foreground-subtle); font-variant-numeric: tabular-nums; }
