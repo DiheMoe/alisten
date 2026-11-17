@@ -42,10 +42,11 @@ jobs:
           chart_version="${TAG#v}"
           repository="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
           printf '%s' "$GITHUB_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          # 不用 --reuse-values，因为它会拿上一版 Chart 合并后的 values 替换新 Chart 的默认值，新增或改动的默认值就到不了生产。
           helm upgrade alisten "oci://ghcr.io/${repository}/charts/alisten" \
             --version "$chart_version" \
             --namespace alisten \
-            --reuse-values \
+            --reset-then-reuse-values \
             --set-string "serve.image.tag=${chart_version}" \
             --set-string "worker.image.tag=${chart_version}" \
             --set-string "web.image.tag=${chart_version}" \
