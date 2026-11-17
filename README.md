@@ -50,7 +50,7 @@ docker compose \
 
 ### 使用 Helm
 
-Kubernetes 版本需为 1.30 或更高。该 Chart 仅包含 serve、worker 和 web，数据库、Valkey 和 S3 兼容对象存储需要单独部署。
+Kubernetes 版本需为 1.30 或更高。该 Chart 仅包含 serve、worker 和 web，数据库、Valkey 和 S3 兼容对象存储需要单独部署。数据库需为 PostgreSQL 18 或更高。
 
 参照 `helm/alisten/values.yaml` 配置域名、依赖服务地址和凭据，再执行：
 
