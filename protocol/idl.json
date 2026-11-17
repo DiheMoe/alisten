@@ -228,7 +228,7 @@
       "additionalProperties": false,
       "properties": {
         "sessions": {"type": "array", "items": {"$ref": "#/$defs/Member"}, "description": "每个会话一项"},
-        "onlineCount": {"type": "integer"}
+        "onlineCount": {"type": "integer", "description": "在线人数，按成员去重。同一成员开着多个连接时，sessions 里有多项，这里只算一次"}
       },
       "required": ["sessions", "onlineCount"]
     },
@@ -320,7 +320,7 @@
         "description": {"type": "string"},
         "kind": {"$ref": "#/$defs/RoomKind"},
         "hasPassword": {"type": "boolean"},
-        "onlineCount": {"type": "integer"},
+        "onlineCount": {"type": "integer", "description": "在线人数，按成员去重"},
         "capacity": {"$ref": "#/$defs/RoomCapacity", "description": "房间最多能进多少人，按成员去重计算。onlineCount 达到它时新的成员进不来"}
       },
       "required": ["id", "slug", "name", "description", "kind", "hasPassword", "onlineCount", "capacity"]
@@ -790,7 +790,7 @@
     },
     {
       "type": "room.activity",
-      "description": "点歌、移除、点赞、投票、投票切歌成功和准备失败。不同 kind 只填写各自相关的字段。有人离开后已有的票数达到门槛时也会切歌，这时 skipped 没有 member",
+      "description": "点歌、移除、点赞、投票、投票切歌成功和准备失败。所有 kind 都带 entry。member 是做这件事的成员，以下情况没有 member：AutoDJ 加的歌（added），有人离开后已有的票数达到门槛时的切歌（skipped），准备失败（failed）。votes 和 required 只在 voted 和 skipped 里有。准备失败的原因写在 message 里",
       "data": {
         "type": "object",
         "additionalProperties": false,

@@ -1298,6 +1298,7 @@
         "additionalProperties": false,
         "properties": {
           "onlineCount": {
+            "description": "在线人数，按成员去重。同一成员开着多个连接时，sessions 里有多项，这里只算一次",
             "type": "integer"
           },
           "sessions": {
@@ -1950,6 +1951,7 @@
             "type": "string"
           },
           "onlineCount": {
+            "description": "在线人数，按成员去重",
             "type": "integer"
           },
           "slug": {
