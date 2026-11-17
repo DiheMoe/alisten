@@ -33,6 +33,7 @@ func (r *Room) command(b *batch, c Command) {
 	b.respond(c.RequestID, res, err)
 }
 
+// 点歌、移除和点赞的额度全房间共用，所以请求通过了其他检查才扣。否则一个人反复发注定失败的请求，比如删除不存在的条目，就能耗光所有人的额度。
 func (r *Room) burst() int {
 	if r.info.Kind == Persistent {
 		return persistentBurst
@@ -48,9 +49,6 @@ func (r *Room) queueLimit() (int, *Error) {
 }
 
 func (r *Room) enqueue(b *batch, by member.Member, a Enqueue) (Result, *Error) {
-	if !r.pickLimit.allow(b.now, r.burst(), RefillInterval) {
-		return nil, ErrRateLimited
-	}
 	if a.Track.Source == track.Link && r.info.Kind == Ephemeral {
 		return nil, errLinkForbidden
 	}
@@ -60,6 +58,9 @@ func (r *Room) enqueue(b *batch, by member.Member, a Enqueue) (Result, *Error) {
 	if r.queued(a.Track) {
 		return nil, errDuplicatePick
 	}
+	if !r.pickLimit.allow(b.now, r.burst(), RefillInterval) {
+		return nil, ErrRateLimited
+	}
 	e := r.add(b, a.Track, a.Meta, by, a.Requester, false)
 	r.lastPick = b.now
 	b.event(Activity{Kind: ActivityAdded, Member: by, Entry: e})
@@ -67,17 +68,18 @@ func (r *Room) enqueue(b *batch, by member.Member, a Enqueue) (Result, *Error) {
 }
 
 func (r *Room) remove(b *batch, by member.Member, a Remove) (Result, *Error) {
+	pending := r.pending != nil && r.pending.ID == a.Entry
+	i := r.waitingIndex(a.Entry)
+	if !pending && i < 0 {
+		return nil, errNotInQueue
+	}
 	if !r.pickLimit.allow(b.now, r.burst(), RefillInterval) {
 		return nil, ErrRateLimited
 	}
 	var e Entry
-	if r.pending != nil && r.pending.ID == a.Entry {
+	if pending {
 		e, r.pending = *r.pending, nil
 	} else {
-		i := r.waitingIndex(a.Entry)
-		if i < 0 {
-			return nil, errNotInQueue
-		}
 		e = r.waiting[i]
 		r.waiting = slices.Delete(r.waiting, i, i+1)
 	}
@@ -86,12 +88,12 @@ func (r *Room) remove(b *batch, by member.Member, a Remove) (Result, *Error) {
 }
 
 func (r *Room) like(b *batch, by member.Member, a Like) (Result, *Error) {
-	if !r.likeLimit.allow(b.now, r.burst(), RefillInterval) {
-		return nil, ErrRateLimited
-	}
 	i := r.waitingIndex(a.Entry)
 	if i < 0 {
 		return nil, errNotInQueue
+	}
+	if !r.likeLimit.allow(b.now, r.burst(), RefillInterval) {
+		return nil, ErrRateLimited
 	}
 	r.waiting[i].Likes++
 	e := r.waiting[i]
