@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"bytes"
+	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
@@ -52,6 +53,24 @@ func TestLoadRedisConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRedisLoggerIgnoresTheLocalPortWhenSkippingRepeats(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var logs bytes.Buffer
+		l := newRedisLogger(newLogger(&logs, slog.LevelInfo))
+		// 每次重连都换一个本机端口，只有端口不同的错误算同一条。
+		for port := range 5 {
+			l.Printf(t.Context(), "redis: discarding bad PubSub connection: %v", fmt.Sprintf("read tcp 10.42.0.180:%d->10.42.1.125:6379: read: connection reset by peer", 40000+port))
+			time.Sleep(time.Second)
+		}
+		if n := strings.Count(strings.TrimSpace(logs.String()), "\n") + 1; n != 1 {
+			t.Errorf("一分钟内只有本机端口不同的日志记了 %d 条，期望 1 条：%s", n, logs.String())
+		}
+		if !strings.Contains(logs.String(), "10.42.0.180:40000") {
+			t.Errorf("记下的日志应保留原文：%s", logs.String())
+		}
+	})
 }
 
 func TestRedisLoggerSkipsRepeatsWithinAMinute(t *testing.T) {

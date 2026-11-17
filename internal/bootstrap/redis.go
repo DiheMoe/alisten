@@ -62,12 +62,14 @@ func newRedisLogger(logger *slog.Logger) *redisLogger {
 
 func (l *redisLogger) Printf(ctx context.Context, format string, v ...any) {
 	msg := fmt.Sprintf(format, v...)
+	// 网络错误里本机一侧的端口每次重连都不同，比较时去掉，否则同样的错误永远不算重复。
+	key := localAddress.ReplaceAllString(msg, "")
 	now := time.Now()
 	l.mu.Lock()
 	maps.DeleteFunc(l.logged, func(_ string, at time.Time) bool { return now.Sub(at) >= redisLogRepeat })
-	_, repeated := l.logged[msg]
+	_, repeated := l.logged[key]
 	if !repeated {
-		l.logged[msg] = now
+		l.logged[key] = now
 	}
 	l.mu.Unlock()
 	if !repeated {
