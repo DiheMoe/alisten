@@ -1,6 +1,6 @@
 -- name: CreateRoom :one
-INSERT INTO rooms (kind, slug, name, description, password_hash)
-VALUES (@kind, NULLIF(@slug::text, ''), @name, @description, NULLIF(@password_hash::text, ''))
+INSERT INTO rooms (kind, slug, name, description, password_hash, capacity)
+VALUES (@kind, NULLIF(@slug::text, ''), @name, @description, NULLIF(@password_hash::text, ''), @capacity)
 RETURNING id;
 
 -- name: ListRooms :many

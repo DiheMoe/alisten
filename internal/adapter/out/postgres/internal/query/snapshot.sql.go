@@ -187,13 +187,14 @@ func (q *Queries) RoomEntries(ctx context.Context, roomID string) ([]RoomEntries
 }
 
 const saveRoomState = `-- name: SaveRoomState :execrows
-UPDATE rooms SET name = $1, description = $2, play_mode = $3, entry_seq = $4
-WHERE id = $5 AND term = $6
+UPDATE rooms SET name = $1, description = $2, capacity = $3, play_mode = $4, entry_seq = $5
+WHERE id = $6 AND term = $7
 `
 
 type SaveRoomStateParams struct {
 	Name        string
 	Description string
+	Capacity    int32
 	PlayMode    string
 	EntrySeq    int64
 	ID          string
@@ -204,6 +205,7 @@ func (q *Queries) SaveRoomState(ctx context.Context, arg SaveRoomStateParams) (i
 	result, err := q.db.Exec(ctx, saveRoomState,
 		arg.Name,
 		arg.Description,
+		arg.Capacity,
 		arg.PlayMode,
 		arg.EntrySeq,
 		arg.ID,
@@ -216,7 +218,7 @@ func (q *Queries) SaveRoomState(ctx context.Context, arg SaveRoomStateParams) (i
 }
 
 const takeRoom = `-- name: TakeRoom :one
-UPDATE rooms SET term = term + 1 WHERE id = $1 RETURNING id, kind, slug, name, description, password_hash, term, play_mode, entry_seq, created_at, bot_member_id
+UPDATE rooms SET term = term + 1 WHERE id = $1 RETURNING id, kind, slug, name, description, password_hash, term, play_mode, entry_seq, created_at, bot_member_id, capacity
 `
 
 func (q *Queries) TakeRoom(ctx context.Context, id string) (Room, error) {
@@ -234,6 +236,7 @@ func (q *Queries) TakeRoom(ctx context.Context, id string) (Room, error) {
 		&i.EntrySeq,
 		&i.CreatedAt,
 		&i.BotMemberID,
+		&i.Capacity,
 	)
 	return i, err
 }

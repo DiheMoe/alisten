@@ -49,10 +49,10 @@ func addTrack(t *testing.T, store *Store, tr track.Track, m track.Meta, p track.
 
 func TestTakeRoomIncrementsTerm(t *testing.T) {
 	store, _ := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Ephemeral, Name: "临时", Description: "描述"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Ephemeral, Name: "临时", Description: "描述", Capacity: 16})
 
 	term, snap := takeRoom(t, store, id)
-	want := room.Snapshot{Info: room.Info{ID: id, Name: "临时", Description: "描述", Kind: room.Ephemeral}, Mode: room.Sequential}
+	want := room.Snapshot{Info: room.Info{ID: id, Name: "临时", Description: "描述", Kind: room.Ephemeral, Capacity: 16}, Mode: room.Sequential}
 	if term != 1 || !reflect.DeepEqual(snap, want) {
 		t.Fatalf("新房间第一次接管 = %d, %#v，期望任期 1 和 %#v", term, snap, want)
 	}
@@ -68,7 +68,7 @@ func TestTakeRoomIncrementsTerm(t *testing.T) {
 
 func TestSavedSnapshotIsRestored(t *testing.T) {
 	store, _ := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	term, _ := takeRoom(t, store, id)
 
 	playing := track.Prepared{Duration: 3 * time.Minute, Gain: 0.8, Lyric: "[00:00.00]歌词", LyricWords: "[0,500](0,250,0)歌(250,250,0)词", LyricTrans: "[00:00.00]Lyrics"}
@@ -82,7 +82,7 @@ func TestSavedSnapshotIsRestored(t *testing.T) {
 	// 准备中的链接曲目也可能带有封面的对象键，比如音频已不在对象存储里、要重新准备的歌。
 	unprepared := track.Track{Source: track.Link, ID: "https://example.com/c.mp3"}
 	saved := room.Snapshot{
-		Info:     room.Info{ID: id, Name: "新名字", Description: "新描述", Kind: room.Persistent},
+		Info:     room.Info{ID: id, Name: "新名字", Description: "新描述", Kind: room.Persistent, Capacity: 100},
 		Mode:     room.Random,
 		EntrySeq: 5,
 		Current: &room.NowPlaying{
@@ -113,7 +113,7 @@ func TestSavedSnapshotIsRestored(t *testing.T) {
 func TestPlayModesAreStored(t *testing.T) {
 	store, _ := newStore(t)
 	for _, mode := range []room.PlayMode{room.Sequential, room.Random, room.Rotation} {
-		id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+		id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 		term, snap := takeRoom(t, store, id)
 		snap.Mode = mode
 		saveRoom(t, store, term, snap)
@@ -125,11 +125,11 @@ func TestPlayModesAreStored(t *testing.T) {
 
 func TestSnapshotStoresMissingValuesAsNull(t *testing.T) {
 	store, pool := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Description: "介绍"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Description: "介绍", Capacity: 64})
 	term, _ := takeRoom(t, store, id)
 	bob := member.Member{ID: "01a15778-1911-7a28-8b2e-e08c2a25f382", Name: "乙"}
 	saved := room.Snapshot{
-		Info:     room.Info{ID: id, Name: "大厅", Kind: room.Persistent},
+		Info:     room.Info{ID: id, Name: "大厅", Kind: room.Persistent, Capacity: 64},
 		Mode:     room.Sequential,
 		EntrySeq: 2,
 		Waiting: []room.Entry{
@@ -172,7 +172,7 @@ func TestSnapshotStoresMissingValuesAsNull(t *testing.T) {
 
 func TestReadinessComesFromTracks(t *testing.T) {
 	store, _ := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	term, snap := takeRoom(t, store, id)
 
 	prepared := track.Prepared{Duration: time.Minute, Gain: 1}
@@ -197,7 +197,7 @@ func TestReadinessComesFromTracks(t *testing.T) {
 
 func TestSaveRoomRequiresCurrentTerm(t *testing.T) {
 	store, _ := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	stale, snap := takeRoom(t, store, id)
 	takeRoom(t, store, id)
 
@@ -212,7 +212,7 @@ func TestSaveRoomRequiresCurrentTerm(t *testing.T) {
 
 func TestFailedSaveKeepsLastSnapshot(t *testing.T) {
 	store, _ := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	term, snap := takeRoom(t, store, id)
 	snap.EntrySeq = 1
 	snap.Waiting = []room.Entry{{ID: 1, Track: netease("1"), AddedAt: t0}}
@@ -241,8 +241,8 @@ func TestFailedSaveKeepsLastSnapshot(t *testing.T) {
 
 func TestSaveRoomRecordsPlays(t *testing.T) {
 	store, pool := newStore(t)
-	first := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "一厅"})
-	second := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "二厅"})
+	first := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "一厅", Capacity: 64})
+	second := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "二厅", Capacity: 64})
 	addTrack(t, store, netease("1"), track.Meta{}, track.Prepared{Duration: time.Minute, Gain: 1})
 	firstTerm, firstSnap := takeRoom(t, store, first)
 	secondTerm, secondSnap := takeRoom(t, store, second)
@@ -294,7 +294,7 @@ func TestSaveRoomRecordsPlays(t *testing.T) {
 
 func TestDeleteRoom(t *testing.T) {
 	store, pool := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Ephemeral, Name: "临时"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Ephemeral, Name: "临时", Capacity: 16})
 	addTicket(t, pool, id)
 	addTrack(t, store, netease("1"), track.Meta{}, track.Prepared{Duration: time.Minute, Gain: 1})
 	stale, _ := takeRoom(t, store, id)

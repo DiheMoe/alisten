@@ -63,7 +63,7 @@ func registeredCallerOf(s Session) Caller {
 
 func createRoom(t *testing.T, store *porttest.Store, password string) string {
 	t.Helper()
-	id, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅", PasswordHash: hashPassword(t, password)})
+	id, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅", PasswordHash: hashPassword(t, password), Capacity: 64})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestEnterRoomJoinsTheStoredRoom(t *testing.T) {
 	s := New(store, store, store, porttest.Quota{}, newGateway(store, node, loggedSubscriptions{node, slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil)))}))
 	session := createMember(t, s)
 	alice := session.Member
-	id, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall"})
+	id, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall", Capacity: 64})
 	if err != nil {
 		t.Fatal(err)
 	}

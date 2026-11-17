@@ -57,6 +57,7 @@ func (s *Store) SaveRoom(ctx context.Context, term uint32, snap room.Snapshot, p
 			Term:        int64(term),
 			Name:        snap.Info.Name,
 			Description: snap.Info.Description,
+			Capacity:    int32(snap.Info.Capacity),
 			PlayMode:    modeName(snap.Mode),
 			EntrySeq:    int64(snap.EntrySeq),
 		})

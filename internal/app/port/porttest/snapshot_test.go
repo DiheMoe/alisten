@@ -11,7 +11,7 @@ import (
 
 func TestSnapshotKeepsRounds(t *testing.T) {
 	s := New()
-	id, err := s.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id, err := s.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	if err != nil {
 		t.Fatal(err)
 	}

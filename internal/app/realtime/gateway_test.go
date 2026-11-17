@@ -122,7 +122,12 @@ func (q *quota) Take(_ context.Context, key string, _ int, _ time.Duration) (tim
 
 func createRoom(t *testing.T, store *porttest.Store, kind room.Kind) string {
 	t.Helper()
-	id, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: kind, Name: "房间"})
+	// 和后台、大厅创建房间时的默认上限一致。
+	capacity := 64
+	if kind == room.Ephemeral {
+		capacity = 16
+	}
+	id, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: kind, Name: "房间", Capacity: capacity})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -34,7 +34,7 @@ func memberTickets(t *testing.T, pool *pgxpool.Pool, memberID string) int {
 
 func TestResetRoomAPIKey(t *testing.T) {
 	store, pool := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	if status, err := store.RoomAPIKeyStatus(t.Context(), id); err != nil || status.Set || !status.CreatedAt.IsZero() {
 		t.Fatalf("还没有 Key 时的状态 = %+v, %v，期望未生成", status, err)
 	}
@@ -74,7 +74,7 @@ func TestResetRoomAPIKey(t *testing.T) {
 
 func TestSettingPasswordKeepsAPIKey(t *testing.T) {
 	store, pool := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	resetAPIKey(t, store, id, "k1")
 	bot, err := store.TicketHolder(t.Context(), tokenHash("k1"))
 	if err != nil {
@@ -95,8 +95,8 @@ func TestSettingPasswordKeepsAPIKey(t *testing.T) {
 
 func TestDeletingRoomDeletesAPIKey(t *testing.T) {
 	store, pool := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
-	lounge := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "二厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
+	lounge := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "二厅", Capacity: 64})
 	resetAPIKey(t, store, id, "k1")
 	resetAPIKey(t, store, lounge, "k2")
 	bot, err := store.TicketHolder(t.Context(), tokenHash("k1"))
@@ -118,7 +118,7 @@ func TestDeletingRoomDeletesAPIKey(t *testing.T) {
 
 func TestConcurrentFirstResetsCreateOneBot(t *testing.T) {
 	store, pool := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 
 	// 先锁住房间行，让两次首次生成都等这把锁，放开之后再同时进行。
 	tx, err := pool.Begin(t.Context())
@@ -154,7 +154,7 @@ func TestConcurrentFirstResetsCreateOneBot(t *testing.T) {
 
 func TestRoomBotHasNoSession(t *testing.T) {
 	store, pool := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	resetAPIKey(t, store, id, "key-1")
 	var sessions int
 	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM member_sessions s JOIN rooms r ON r.bot_member_id = s.member_id WHERE r.id = $1", id).Scan(&sessions); err != nil {

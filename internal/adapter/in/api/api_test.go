@@ -42,7 +42,7 @@ func services(store *porttest.Store, rooms port.RoomDirectory, adminToken string
 	music := newCatalog(rooms, 10)
 	node := porttest.NewRedis().Node("a")
 	_, gateway := realtime.New(store, rooms, store, store, music, porttest.NewPreparer(), realtime.Cluster{Instance: "a", Leases: node, Liveness: node, Bus: node}, slog.New(slog.DiscardHandler))
-	l := lobby.New(rooms, node, porttest.Quota{})
+	l := lobby.New(rooms, store, node, porttest.Quota{})
 	accounts := identity.NewAccounts(store, store, nil, nil, nil, nil, gateway)
 	return Services{
 		Identity: identity.New(store, rooms, store, porttest.Quota{}, gateway),
@@ -230,7 +230,7 @@ func TestPlaylistBatchBodyLimit(t *testing.T) {
 func TestMalformedPathParametersAreNotFound(t *testing.T) {
 	store := porttest.New()
 	server, logs := start(t, services(store, store, "secret"))
-	if _, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall"}); err != nil {
+	if _, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall", Capacity: 64}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -38,7 +38,7 @@ func TestStoredMedia(t *testing.T) {
 	saveStored(t, store, video, "https://www.bilibili.com/video/BV1xx411c7mD?p=2", "ccc", track.Meta{Artist: "某个 UP 主", CoverKey: "link/ccc/cover.jpg"}, 300)
 	addTrack(t, store, netease("1"), track.Meta{Title: "晴天"}, track.Prepared{Duration: time.Minute, Gain: 1})
 
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	term, snap := takeRoom(t, store, id)
 	played := room.Entry{ID: 1, Track: a, By: alice}
 	saveRoom(t, store, term, snap, room.RecordPlay{Entry: played, StartedAt: t0, EndedAt: t0.Add(time.Minute)})

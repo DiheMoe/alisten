@@ -67,6 +67,8 @@ type NewRoom struct {
 	Password string
 }
 
+const defaultRoomCapacity = 64
+
 func (s *Service) CreateRoom(ctx context.Context, r NewRoom) (string, error) {
 	hash, err := identity.HashPassword(ctx, r.Password)
 	if err != nil {
@@ -78,6 +80,7 @@ func (s *Service) CreateRoom(ctx context.Context, r NewRoom) (string, error) {
 		Description:  r.Description,
 		Slug:         r.Slug,
 		PasswordHash: hash,
+		Capacity:     defaultRoomCapacity,
 	})
 }
 

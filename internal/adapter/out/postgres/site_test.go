@@ -1,7 +1,10 @@
 package postgres
 
 import (
+	"errors"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/dihemoe/alisten/internal/app/port"
 )
@@ -29,6 +32,18 @@ func TestSiteSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(port.SiteSettings{BrandName: "Alisten", RegistrationOpen: true}, "重新开放注册不影响品牌名")
+	if err := store.SetEphemeralRoomCapacity(t.Context(), 32); err != nil {
+		t.Fatal(err)
+	}
+	check(port.SiteSettings{BrandName: "Alisten", RegistrationOpen: true, EphemeralRoomCapacity: 32}, "修改临时房间最多人数不影响品牌名和注册开关")
+	if err := store.SetBrandName(t.Context(), "周末听歌会"); err != nil {
+		t.Fatal(err)
+	}
+	check(port.SiteSettings{BrandName: "周末听歌会", RegistrationOpen: true, EphemeralRoomCapacity: 32}, "修改品牌名不影响临时房间最多人数")
+	var pgErr *pgconn.PgError
+	if err := store.SetEphemeralRoomCapacity(t.Context(), 129); !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != "site_ephemeral_room_capacity_check" {
+		t.Errorf("临时房间最多人数设成 129 的错误 = %v，期望违反范围检查", err)
+	}
 	var rows int
 	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM site").Scan(&rows); err != nil {
 		t.Fatal(err)

@@ -48,8 +48,8 @@ func ptr(s string) *string { return &s }
 
 func TestCreateListAndFindRooms(t *testing.T) {
 	store, _ := newStore(t)
-	lobby := createRoom(t, store, port.NewRoom{Kind: room.Ephemeral, Name: "临时", Description: "随便听听"})
-	hall := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall", PasswordHash: "hash"})
+	lobby := createRoom(t, store, port.NewRoom{Kind: room.Ephemeral, Name: "临时", Description: "随便听听", Capacity: 16})
+	hall := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall", PasswordHash: "hash", Capacity: 64})
 
 	for _, id := range []string{lobby, hall} {
 		if !isUUID(id) || id[14] != '7' {
@@ -57,8 +57,8 @@ func TestCreateListAndFindRooms(t *testing.T) {
 		}
 	}
 	want := []port.RoomRecord{
-		{Info: room.Info{ID: lobby, Name: "临时", Description: "随便听听", Kind: room.Ephemeral}},
-		{Info: room.Info{ID: hall, Name: "大厅", Kind: room.Persistent}, Slug: "hall", PasswordHash: "hash"},
+		{Info: room.Info{ID: lobby, Name: "临时", Description: "随便听听", Kind: room.Ephemeral, Capacity: 16}},
+		{Info: room.Info{ID: hall, Name: "大厅", Kind: room.Persistent, Capacity: 64}, Slug: "hall", PasswordHash: "hash"},
 	}
 	got, err := store.ListRooms(t.Context())
 	if err != nil {
@@ -83,16 +83,16 @@ func TestCreateListAndFindRooms(t *testing.T) {
 
 func TestSlugIsUniqueAndOnlyForPersistentRooms(t *testing.T) {
 	store, _ := newStore(t)
-	createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall"})
-	other := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "二厅"})
+	createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall", Capacity: 64})
+	other := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "二厅", Capacity: 64})
 
-	if _, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "重名", Slug: "hall"}); !errors.Is(err, port.ErrSlugTaken) {
+	if _, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "重名", Slug: "hall", Capacity: 64}); !errors.Is(err, port.ErrSlugTaken) {
 		t.Errorf("新建房间使用已占用的别名，错误 = %v，期望 ErrSlugTaken", err)
 	}
 	if err := store.SetRoomSlug(t.Context(), other, "hall"); !errors.Is(err, port.ErrSlugTaken) {
 		t.Errorf("改用已占用的别名，错误 = %v，期望 ErrSlugTaken", err)
 	}
-	_, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Ephemeral, Name: "临时", Slug: "temp"})
+	_, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Ephemeral, Name: "临时", Slug: "temp", Capacity: 16})
 	var pgErr *pgconn.PgError
 	// 这条约束同时引用 slug 和 kind，PostgreSQL 给它起的名字是 rooms_check。
 	if !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != "rooms_check" {
@@ -102,7 +102,7 @@ func TestSlugIsUniqueAndOnlyForPersistentRooms(t *testing.T) {
 
 func TestSetRoomSlug(t *testing.T) {
 	store, pool := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall", Capacity: 64})
 	addTicket(t, pool, id)
 
 	if err := store.SetRoomSlug(t.Context(), id, ""); err != nil {
@@ -129,7 +129,7 @@ func TestSetRoomSlug(t *testing.T) {
 
 func TestSetRoomPassword(t *testing.T) {
 	store, pool := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Slug: "hall", Capacity: 64})
 	addTicket(t, pool, id)
 
 	if err := store.SetRoomPassword(t.Context(), id, "hash"); err != nil {

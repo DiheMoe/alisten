@@ -39,6 +39,8 @@ type Info struct {
 	Name        string
 	Description string
 	Kind        Kind
+	// 房间最多能进多少人，人数按成员去重计算。
+	Capacity int
 }
 
 type Entry struct {

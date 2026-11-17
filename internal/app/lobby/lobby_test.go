@@ -32,7 +32,7 @@ func newService(t *testing.T, store *porttest.Store) (*Service, *realtime.Gatewa
 		stop()
 		wait()
 	})
-	return New(store, node, porttest.Quota{}), gateway
+	return New(store, store, node, porttest.Quota{}), gateway
 }
 
 func TestOnlineCount(t *testing.T) {
@@ -80,7 +80,8 @@ func (unreadableCounts) OnlineCounts(context.Context, []string) ([]int, error) {
 }
 
 func TestUnreadableOnlineCountsAreUnavailable(t *testing.T) {
-	s := New(porttest.New(), unreadableCounts{}, porttest.Quota{})
+	store := porttest.New()
+	s := New(store, store, unreadableCounts{}, porttest.Quota{})
 	id, err := s.CreateRoom(t.Context(), clientIP, NewRoom{Name: "大厅"})
 	if err != nil {
 		t.Fatal(err)
@@ -95,12 +96,39 @@ func TestUnreadableOnlineCountsAreUnavailable(t *testing.T) {
 
 func TestCreateRoomRateLimitedByClientIP(t *testing.T) {
 	store := porttest.New()
-	s := New(store, porttest.NewRedis().Node("a"), porttest.Quota{Exhausted: map[string]bool{"room:ip:" + clientIP: true}})
+	s := New(store, store, porttest.NewRedis().Node("a"), porttest.Quota{Exhausted: map[string]bool{"room:ip:" + clientIP: true}})
 
 	if _, err := s.CreateRoom(t.Context(), clientIP, NewRoom{Name: "临时"}); !errors.Is(err, ErrTooManyRooms) {
 		t.Errorf("额度用完时的错误 = %v，期望 ErrTooManyRooms", err)
 	}
 	if _, err := s.CreateRoom(t.Context(), "203.0.113.8", NewRoom{Name: "临时"}); err != nil {
 		t.Errorf("另一个 IP 不受影响：%v", err)
+	}
+}
+
+func TestEphemeralRoomCapacityComesFromSiteSettings(t *testing.T) {
+	store := porttest.New()
+	s := New(store, store, porttest.NewRedis().Node("a"), porttest.Quota{})
+	capacity := func(name string) int {
+		t.Helper()
+		id, err := s.CreateRoom(t.Context(), clientIP, NewRoom{Name: name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, err := store.FindRoom(t.Context(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r.Info.Capacity
+	}
+
+	if got := capacity("没设置过"); got != 16 {
+		t.Errorf("没有设置过临时房间最多人数时，新房间的人数上限 = %d，期望 16", got)
+	}
+	if err := store.SetEphemeralRoomCapacity(t.Context(), 40); err != nil {
+		t.Fatal(err)
+	}
+	if got := capacity("设置过"); got != 40 {
+		t.Errorf("临时房间最多人数设成 40 之后，新房间的人数上限 = %d，期望 40", got)
 	}
 }

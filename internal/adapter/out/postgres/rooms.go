@@ -21,6 +21,7 @@ func (s *Store) CreateRoom(ctx context.Context, r port.NewRoom) (string, error) 
 		Name:         r.Name,
 		Description:  r.Description,
 		PasswordHash: r.PasswordHash,
+		Capacity:     int32(r.Capacity),
 	})
 	if err != nil {
 		return "", fmt.Errorf("创建房间：%w", slugError(err))
@@ -102,7 +103,7 @@ func roomRecord(row query.Room) port.RoomRecord {
 }
 
 func roomInfo(row query.Room) room.Info {
-	return room.Info{ID: row.ID, Name: row.Name, Description: row.Description, Kind: kindOf(row.Kind)}
+	return room.Info{ID: row.ID, Name: row.Name, Description: row.Description, Kind: kindOf(row.Kind), Capacity: int(row.Capacity)}
 }
 
 func kindName(k room.Kind) string {

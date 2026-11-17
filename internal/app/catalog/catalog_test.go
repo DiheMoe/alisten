@@ -98,10 +98,10 @@ func newFixture(t *testing.T, h history) *fixture {
 	f := &fixture{netease: porttest.NewSource(track.NetEase), qq: porttest.NewSource(track.QQ), bilibili: porttest.NewBilibili(), tracks: tracksTable{}, quota: &quota{}}
 	rooms := porttest.New()
 	var err error
-	if f.ephemeral, err = rooms.CreateRoom(t.Context(), port.NewRoom{Kind: room.Ephemeral, Name: "临时"}); err != nil {
+	if f.ephemeral, err = rooms.CreateRoom(t.Context(), port.NewRoom{Kind: room.Ephemeral, Name: "临时", Capacity: 16}); err != nil {
 		t.Fatal(err)
 	}
-	if f.persistent, err = rooms.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "常驻"}); err != nil {
+	if f.persistent, err = rooms.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "常驻", Capacity: 64}); err != nil {
 		t.Fatal(err)
 	}
 	f.quota.room = f.ephemeral

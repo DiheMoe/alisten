@@ -12,7 +12,7 @@ WHERE e.room_id = @room_id
 ORDER BY e.entry_id;
 
 -- name: SaveRoomState :execrows
-UPDATE rooms SET name = @name, description = @description, play_mode = @play_mode, entry_seq = @entry_seq
+UPDATE rooms SET name = @name, description = @description, capacity = @capacity, play_mode = @play_mode, entry_seq = @entry_seq
 WHERE id = @id AND term = @term;
 
 -- name: DeleteRoomEntries :exec

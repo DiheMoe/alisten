@@ -16,7 +16,7 @@ import (
 func TestTicketHolder(t *testing.T) {
 	store, _ := newStore(t)
 	alice := createMember(t, store, "alice", "甲")
-	id := createRoom(t, store, port.NewRoom{Kind: room.Ephemeral, Name: "临时"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Ephemeral, Name: "临时", Capacity: 16})
 
 	if err := store.CreateTicket(t.Context(), port.NewTicket{TokenHash: tokenHash("t1"), RoomID: id, MemberID: alice.ID, SessionTokenHash: tokenHash("alice")}); err != nil {
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func TestTicketHolder(t *testing.T) {
 func TestExistingTickets(t *testing.T) {
 	store, _ := newStore(t)
 	alice := createMember(t, store, "alice", "甲")
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	for _, ticket := range []string{"t1", "t2"} {
 		if err := store.CreateTicket(t.Context(), port.NewTicket{TokenHash: tokenHash(ticket), RoomID: id, MemberID: alice.ID, SessionTokenHash: tokenHash("alice")}); err != nil {
 			t.Fatal(err)
@@ -66,7 +66,7 @@ func TestExistingTickets(t *testing.T) {
 func TestCreateTicketRejectsDeletedSession(t *testing.T) {
 	store, _ := newStore(t)
 	alice := createMember(t, store, "alice", "甲")
-	id := createRoom(t, store, port.NewRoom{Kind: room.Ephemeral, Name: "临时"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Ephemeral, Name: "临时", Capacity: 16})
 	if err := store.DeleteSession(t.Context(), tokenHash("alice")); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestCreateTicketRejectsDeletedSession(t *testing.T) {
 func TestTicketsBelongToSessions(t *testing.T) {
 	store, _ := newStore(t)
 	alice := createMember(t, store, "alice-1", "甲")
-	id := createRoom(t, store, port.NewRoom{Kind: room.Ephemeral, Name: "临时"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Ephemeral, Name: "临时", Capacity: 16})
 	for _, guest := range []string{"guest-2", "guest-3", "guest-4"} {
 		createMember(t, store, guest, "游客")
 	}
@@ -147,7 +147,7 @@ func sameHashes(got, want [][]byte) bool {
 func TestCreateTicketChecksPasswordHash(t *testing.T) {
 	store, _ := newStore(t)
 	alice := createMember(t, store, "alice", "甲")
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", PasswordHash: "h1"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", PasswordHash: "h1", Capacity: 64})
 
 	stale := port.NewTicket{TokenHash: tokenHash("t1"), RoomID: id, MemberID: alice.ID}
 	if err := store.CreateTicket(t.Context(), stale); !errors.Is(err, port.ErrPasswordChanged) {
@@ -167,7 +167,7 @@ func TestCreateTicketChecksPasswordHash(t *testing.T) {
 func TestCreateTicketWaitsForPasswordChange(t *testing.T) {
 	store, pool := newStore(t)
 	alice := createMember(t, store, "alice", "甲")
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", PasswordHash: "h1"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", PasswordHash: "h1", Capacity: 64})
 
 	// 模拟 SetRoomPassword 设置密码的事务，先不提交。
 	tx, err := pool.Begin(t.Context())

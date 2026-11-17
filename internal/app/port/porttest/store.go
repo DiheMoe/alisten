@@ -31,12 +31,13 @@ type Store struct {
 	states   map[string]*roomState
 	tickets  map[string]storedTicket
 	// 房间 ID 到 bot 成员 ID。
-	bots               map[string]string
-	cookies            map[string]string
-	githubApp          port.GitHubOAuthApp
-	brandName          string
-	registrationClosed bool
-	playlists          []*storedPlaylist
+	bots                  map[string]string
+	cookies               map[string]string
+	githubApp             port.GitHubOAuthApp
+	brandName             string
+	registrationClosed    bool
+	ephemeralRoomCapacity int
+	playlists             []*storedPlaylist
 	// 成员 ID 到播放历史，按 MemberListens 的顺序排列。
 	listens map[string][]port.Listen
 }
@@ -108,6 +109,14 @@ func checkText(values ...string) error {
 		if strings.ContainsRune(v, 0) || !utf8.ValidString(v) {
 			return fmt.Errorf("PostgreSQL 无法处理文本 %q", v)
 		}
+	}
+	return nil
+}
+
+// 与 rooms.capacity 和 site.ephemeral_room_capacity 的 CHECK 约束一致。
+func checkCapacity(capacity int) error {
+	if capacity < 2 || capacity > 128 {
+		return fmt.Errorf("人数上限 %d 不在 2 到 128 之间", capacity)
 	}
 	return nil
 }
@@ -466,6 +475,9 @@ func (s *Store) CreateRoom(_ context.Context, r port.NewRoom) (string, error) {
 	if err := checkText(r.Name, r.Description, r.Slug, r.PasswordHash); err != nil {
 		return "", err
 	}
+	if err := checkCapacity(r.Capacity); err != nil {
+		return "", err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if r.Slug != "" && r.Kind != room.Persistent {
@@ -476,7 +488,7 @@ func (s *Store) CreateRoom(_ context.Context, r port.NewRoom) (string, error) {
 	}
 	id := s.newID()
 	s.rooms = append(s.rooms, port.RoomRecord{
-		Info:         room.Info{ID: id, Name: r.Name, Description: r.Description, Kind: r.Kind},
+		Info:         room.Info{ID: id, Name: r.Name, Description: r.Description, Kind: r.Kind, Capacity: r.Capacity},
 		Slug:         r.Slug,
 		PasswordHash: r.PasswordHash,
 	})
@@ -607,7 +619,7 @@ func (s *Store) DeleteGitHubOAuthApp(context.Context) error {
 func (s *Store) Settings(context.Context) (port.SiteSettings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return port.SiteSettings{BrandName: s.brandName, RegistrationOpen: !s.registrationClosed}, nil
+	return port.SiteSettings{BrandName: s.brandName, RegistrationOpen: !s.registrationClosed, EphemeralRoomCapacity: s.ephemeralRoomCapacity}, nil
 }
 
 func (s *Store) SetRegistrationOpen(_ context.Context, open bool) error {
@@ -624,6 +636,16 @@ func (s *Store) SetBrandName(_ context.Context, name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.brandName = name
+	return nil
+}
+
+func (s *Store) SetEphemeralRoomCapacity(_ context.Context, capacity int) error {
+	if err := checkCapacity(capacity); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ephemeralRoomCapacity = capacity
 	return nil
 }
 

@@ -231,3 +231,51 @@ func TestTicketSessionsMigrationBindsTicketsToSessions(t *testing.T) {
 		t.Errorf("API Key 的票据 = %#v, %v，期望保留，没有会话", holder, err)
 	}
 }
+
+func TestRoomCapacityMigrationSetsCapacityByKind(t *testing.T) {
+	ctx := t.Context()
+	name := fmt.Sprintf("test_%d", databases.Add(1))
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
+		t.Fatal(err)
+	}
+	cfg := server.Copy()
+	cfg.ConnConfig.Database = name
+	pool := connect(t, cfg)
+	db := stdlib.OpenDBFromPool(pool)
+	t.Cleanup(func() { _ = db.Close() })
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 8); err != nil {
+		t.Fatal(err)
+	}
+	var hall, lobby string
+	if err := pool.QueryRow(ctx, "INSERT INTO rooms (kind, name, description) VALUES ('persistent', '大厅', '') RETURNING id").Scan(&hall); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, "INSERT INTO rooms (kind, name, description) VALUES ('ephemeral', '临时', '') RETURNING id").Scan(&lobby); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO site (brand_name) VALUES ('周末听歌会')"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	store := New(pool)
+	for id, want := range map[string]int{hall: 64, lobby: 16} {
+		if r, err := store.FindRoom(ctx, id); err != nil || r.Info.Capacity != want {
+			t.Errorf("迁移之后房间 %s = %#v, %v，期望人数上限 %d", id, r.Info, err, want)
+		}
+	}
+	if settings, err := store.Settings(ctx); err != nil || settings != (port.SiteSettings{BrandName: "周末听歌会", RegistrationOpen: true}) {
+		t.Errorf("迁移之后的站点设置 = %#v, %v，期望临时房间最多人数没有设置过", settings, err)
+	}
+	// 回滚到旧版本之后，旧代码新建房间时不写 capacity。
+	var capacity int
+	if err := pool.QueryRow(ctx, "INSERT INTO rooms (kind, name, description) VALUES ('ephemeral', '旧版本建的', '') RETURNING capacity").Scan(&capacity); err != nil || capacity != 64 {
+		t.Errorf("不写 capacity 新建的房间 = %d, %v，期望取默认值 64", capacity, err)
+	}
+}

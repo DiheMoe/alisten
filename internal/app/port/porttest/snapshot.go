@@ -68,7 +68,10 @@ func (s *Store) SaveRoom(_ context.Context, term uint32, snap room.Snapshot, pla
 	if r == nil || st == nil || st.term != term {
 		return fmt.Errorf("落盘房间 %s：%w", snap.Info.ID, port.ErrTermExpired)
 	}
-	r.Info.Name, r.Info.Description = snap.Info.Name, snap.Info.Description
+	if err := checkCapacity(snap.Info.Capacity); err != nil {
+		return err
+	}
+	r.Info.Name, r.Info.Description, r.Info.Capacity = snap.Info.Name, snap.Info.Description, snap.Info.Capacity
 	st.mode, st.entrySeq = snap.Mode, snap.EntrySeq
 	st.waiting = slices.Clone(snap.Waiting)
 	st.pending, st.current = nil, nil

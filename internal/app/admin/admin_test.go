@@ -50,7 +50,7 @@ func newService(t *testing.T, token string) fixture {
 		stop()
 		wait()
 	})
-	l := lobby.New(store, node, porttest.Quota{})
+	l := lobby.New(store, store, node, porttest.Quota{})
 	netease, qq, bilibili, youtube := porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies()
 	return fixture{admin: New(token, l, store, store, store, netease, qq, bilibili, youtube, gateway), store: store, youtube: youtube, netease: netease, qq: qq, bilibili: bilibili, node: node, host: host, gateway: gateway}
 }
@@ -194,6 +194,20 @@ func TestAuthorize(t *testing.T) {
 		if err := s.Authorize(token); !errors.Is(err, ErrInvalidToken) {
 			t.Errorf("Authorize(%q) = %v，期望 ErrInvalidToken", token, err)
 		}
+	}
+}
+
+func TestCreateRoomCapacity(t *testing.T) {
+	f := newService(t, "secret")
+	if err := f.store.SetEphemeralRoomCapacity(t.Context(), 40); err != nil {
+		t.Fatal(err)
+	}
+	id, err := f.admin.CreateRoom(t.Context(), NewRoom{Name: "大厅"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, err := f.store.FindRoom(t.Context(), id); err != nil || r.Info.Capacity != 64 {
+		t.Errorf("新建的常驻房间 = %+v, %v，期望人数上限 64，不受临时房间最多人数影响", r.Info, err)
 	}
 }
 
@@ -341,7 +355,7 @@ func TestRoomAPIKey(t *testing.T) {
 		t.Errorf("设置密码之后成员票据的错误 = %v，期望 ErrTicketNotFound", err)
 	}
 
-	ephemeral, err := f.store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Ephemeral, Name: "临时"})
+	ephemeral, err := f.store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Ephemeral, Name: "临时", Capacity: 16})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -36,14 +36,17 @@ const (
 	roomRefill = 10 * time.Minute
 )
 
+const defaultEphemeralRoomCapacity = 16
+
 type Service struct {
 	rooms  port.RoomDirectory
+	site   port.Site
 	online port.OnlineCounts
 	quota  port.Quota
 }
 
-func New(rooms port.RoomDirectory, online port.OnlineCounts, quota port.Quota) *Service {
-	return &Service{rooms: rooms, online: online, quota: quota}
+func New(rooms port.RoomDirectory, site port.Site, online port.OnlineCounts, quota port.Quota) *Service {
+	return &Service{rooms: rooms, site: site, online: online, quota: quota}
 }
 
 func (s *Service) ListRooms(ctx context.Context) ([]Room, error) {
@@ -75,6 +78,14 @@ func (s *Service) CreateRoom(ctx context.Context, clientIP string, r NewRoom) (s
 	if wait > 0 {
 		return "", ErrTooManyRooms
 	}
+	settings, err := s.site.Settings(ctx)
+	if err != nil {
+		return "", err
+	}
+	capacity := settings.EphemeralRoomCapacity
+	if capacity == 0 {
+		capacity = defaultEphemeralRoomCapacity
+	}
 	hash, err := identity.HashPassword(ctx, r.Password)
 	if err != nil {
 		return "", err
@@ -84,6 +95,7 @@ func (s *Service) CreateRoom(ctx context.Context, clientIP string, r NewRoom) (s
 		Name:         r.Name,
 		Description:  r.Description,
 		PasswordHash: hash,
+		Capacity:     capacity,
 	})
 }
 

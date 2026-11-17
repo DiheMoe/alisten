@@ -19,6 +19,16 @@ func (q *Queries) SetBrandName(ctx context.Context, brandName *string) error {
 	return err
 }
 
+const setEphemeralRoomCapacity = `-- name: SetEphemeralRoomCapacity :exec
+INSERT INTO site (ephemeral_room_capacity) VALUES ($1)
+ON CONFLICT (id) DO UPDATE SET ephemeral_room_capacity = excluded.ephemeral_room_capacity
+`
+
+func (q *Queries) SetEphemeralRoomCapacity(ctx context.Context, ephemeralRoomCapacity *int32) error {
+	_, err := q.db.Exec(ctx, setEphemeralRoomCapacity, ephemeralRoomCapacity)
+	return err
+}
+
 const setRegistrationOpen = `-- name: SetRegistrationOpen :exec
 INSERT INTO site (registration_open) VALUES ($1)
 ON CONFLICT (id) DO UPDATE SET registration_open = excluded.registration_open
@@ -30,17 +40,18 @@ func (q *Queries) SetRegistrationOpen(ctx context.Context, registrationOpen bool
 }
 
 const siteSettings = `-- name: SiteSettings :one
-SELECT brand_name, registration_open FROM site
+SELECT brand_name, registration_open, ephemeral_room_capacity FROM site
 `
 
 type SiteSettingsRow struct {
-	BrandName        *string
-	RegistrationOpen bool
+	BrandName             *string
+	RegistrationOpen      bool
+	EphemeralRoomCapacity *int32
 }
 
 func (q *Queries) SiteSettings(ctx context.Context) (SiteSettingsRow, error) {
 	row := q.db.QueryRow(ctx, siteSettings)
 	var i SiteSettingsRow
-	err := row.Scan(&i.BrandName, &i.RegistrationOpen)
+	err := row.Scan(&i.BrandName, &i.RegistrationOpen, &i.EphemeralRoomCapacity)
 	return i, err
 }

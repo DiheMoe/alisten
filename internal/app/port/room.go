@@ -26,6 +26,7 @@ type (
 		Description  string
 		Slug         string
 		PasswordHash string
+		Capacity     int
 	}
 )
 

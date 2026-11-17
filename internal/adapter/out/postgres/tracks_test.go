@@ -45,7 +45,7 @@ func TestSavePreparedTrackOverwritesResult(t *testing.T) {
 	store, pool := newStore(t)
 	song := netease("1")
 	addTrack(t, store, song, track.Meta{Title: "旧"}, track.Prepared{Duration: time.Minute, Gain: 1, LyricWords: "旧逐字", LyricTrans: "旧翻译"})
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	term, snap := takeRoom(t, store, id)
 	saveRoom(t, store, term, snap, room.RecordPlay{Entry: room.Entry{ID: 1, Track: song, By: alice}, StartedAt: t0, EndedAt: t0.Add(time.Minute)})
 
@@ -116,7 +116,7 @@ func TestLinkTrackRoundTrip(t *testing.T) {
 		t.Errorf("cover_url = %q，cover_key = %q", coverURL, coverKey)
 	}
 
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	term, snap := takeRoom(t, store, id)
 	snap.EntrySeq = 1
 	snap.Waiting = []room.Entry{{ID: 1, Track: link, Meta: track.Meta{Title: link.ID, PageURL: link.ID}, By: alice, AddedAt: t0}}

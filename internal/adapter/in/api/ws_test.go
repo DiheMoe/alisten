@@ -146,7 +146,7 @@ func newWSFixtureWithTickets(t *testing.T, store *porttest.Store, tickets port.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	l := lobby.New(directory, node, porttest.Quota{})
+	l := lobby.New(directory, store, node, porttest.Quota{})
 	f := &wsFixture{
 		identity: identity.New(store, directory, tickets, porttest.Quota{}, gateway),
 		lobby:    l,

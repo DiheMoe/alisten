@@ -108,7 +108,7 @@ func TestRestoredLinksNeedTheirAudio(t *testing.T) {
 	rooms := postgres.New(pool)
 
 	// 上一个 owner 已经把房间落盘。等待队列中有两个已就绪的链接曲目，只有第二个的音频还在对象存储中。
-	hall, err := rooms.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	hall, err := rooms.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,8 +10,8 @@ import (
 )
 
 const createRoom = `-- name: CreateRoom :one
-INSERT INTO rooms (kind, slug, name, description, password_hash)
-VALUES ($1, NULLIF($2::text, ''), $3, $4, NULLIF($5::text, ''))
+INSERT INTO rooms (kind, slug, name, description, password_hash, capacity)
+VALUES ($1, NULLIF($2::text, ''), $3, $4, NULLIF($5::text, ''), $6)
 RETURNING id
 `
 
@@ -21,6 +21,7 @@ type CreateRoomParams struct {
 	Name         string
 	Description  string
 	PasswordHash string
+	Capacity     int32
 }
 
 func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) (string, error) {
@@ -30,6 +31,7 @@ func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) (string,
 		arg.Name,
 		arg.Description,
 		arg.PasswordHash,
+		arg.Capacity,
 	)
 	var id string
 	err := row.Scan(&id)
@@ -48,7 +50,7 @@ func (q *Queries) DeleteRoomTicketsExceptBot(ctx context.Context, roomID string)
 }
 
 const listRooms = `-- name: ListRooms :many
-SELECT id, kind, slug, name, description, password_hash, term, play_mode, entry_seq, created_at, bot_member_id FROM rooms ORDER BY id
+SELECT id, kind, slug, name, description, password_hash, term, play_mode, entry_seq, created_at, bot_member_id, capacity FROM rooms ORDER BY id
 `
 
 func (q *Queries) ListRooms(ctx context.Context) ([]Room, error) {
@@ -72,6 +74,7 @@ func (q *Queries) ListRooms(ctx context.Context) ([]Room, error) {
 			&i.EntrySeq,
 			&i.CreatedAt,
 			&i.BotMemberID,
+			&i.Capacity,
 		); err != nil {
 			return nil, err
 		}
@@ -84,7 +87,7 @@ func (q *Queries) ListRooms(ctx context.Context) ([]Room, error) {
 }
 
 const roomByID = `-- name: RoomByID :one
-SELECT id, kind, slug, name, description, password_hash, term, play_mode, entry_seq, created_at, bot_member_id FROM rooms WHERE id = $1
+SELECT id, kind, slug, name, description, password_hash, term, play_mode, entry_seq, created_at, bot_member_id, capacity FROM rooms WHERE id = $1
 `
 
 func (q *Queries) RoomByID(ctx context.Context, id string) (Room, error) {
@@ -102,12 +105,13 @@ func (q *Queries) RoomByID(ctx context.Context, id string) (Room, error) {
 		&i.EntrySeq,
 		&i.CreatedAt,
 		&i.BotMemberID,
+		&i.Capacity,
 	)
 	return i, err
 }
 
 const roomBySlug = `-- name: RoomBySlug :one
-SELECT id, kind, slug, name, description, password_hash, term, play_mode, entry_seq, created_at, bot_member_id FROM rooms WHERE slug = $1::text
+SELECT id, kind, slug, name, description, password_hash, term, play_mode, entry_seq, created_at, bot_member_id, capacity FROM rooms WHERE slug = $1::text
 `
 
 func (q *Queries) RoomBySlug(ctx context.Context, slug string) (Room, error) {
@@ -125,6 +129,7 @@ func (q *Queries) RoomBySlug(ctx context.Context, slug string) (Room, error) {
 		&i.EntrySeq,
 		&i.CreatedAt,
 		&i.BotMemberID,
+		&i.Capacity,
 	)
 	return i, err
 }

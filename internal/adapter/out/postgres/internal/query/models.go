@@ -47,4 +47,5 @@ type Room struct {
 	EntrySeq     int64
 	CreatedAt    time.Time
 	BotMemberID  *string
+	Capacity     int32
 }

@@ -178,7 +178,12 @@ func startHost(t *testing.T, f *hostFixture, h *Host) *hostFixture {
 
 func (f *hostFixture) createRoom(t *testing.T, kind room.Kind) string {
 	t.Helper()
-	id, err := f.store.CreateRoom(t.Context(), port.NewRoom{Kind: kind, Name: "房间"})
+	// 和后台、大厅创建房间时的默认上限一致。
+	capacity := 64
+	if kind == room.Ephemeral {
+		capacity = 16
+	}
+	id, err := f.store.CreateRoom(t.Context(), port.NewRoom{Kind: kind, Name: "房间", Capacity: capacity})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -732,7 +737,7 @@ func TestHostAcceptsRoomsOnlyBetweenStartAndShutdown(t *testing.T) {
 		redis := porttest.NewRedis()
 		watcher := spy{redis.Node("spy")}
 		h := newHost(store, store, store, songs.preparer, songs.music, cluster(redis.Node("a"), "a"), slog.New(slog.DiscardHandler))
-		id, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "房间"})
+		id, err := store.CreateRoom(t.Context(), port.NewRoom{Kind: room.Persistent, Name: "房间", Capacity: 64})
 		if err != nil {
 			t.Fatal(err)
 		}

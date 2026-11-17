@@ -42,8 +42,8 @@ func trackIDs(tracks []track.Track) []string {
 
 func TestAutoDJSeeds(t *testing.T) {
 	store, _ := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
-	other := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "二厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
+	other := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "二厅", Capacity: 64})
 	term, snap := takeRoom(t, store, id)
 	otherTerm, otherSnap := takeRoom(t, store, other)
 	saveRoom(t, store, otherTerm, otherSnap, played(picked(1, netease("elsewhere")), 9))
@@ -96,7 +96,7 @@ func TestAutoDJSeedsOrderTheQueueLikeTheRoom(t *testing.T) {
 	store, _ := newStore(t)
 	rng := rand.New(rand.NewPCG(1, 2))
 	for _, mode := range []room.PlayMode{room.Sequential, room.Random, room.Rotation} {
-		id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+		id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 		term, snap := takeRoom(t, store, id)
 		for range 20 {
 			// 有正在播放和待播的歌，恢复时房间不会从等待队列里挪歌出去，两边看到的队列相同。
@@ -135,7 +135,7 @@ func TestAutoDJSeedsOrderTheQueueLikeTheRoom(t *testing.T) {
 
 func TestAutoDJSeedsKeepsMostRecent32(t *testing.T) {
 	store, _ := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	term, snap := takeRoom(t, store, id)
 	var plays []room.RecordPlay
 	for i := range 40 {
@@ -160,8 +160,8 @@ func TestAutoDJSeedsKeepsMostRecent32(t *testing.T) {
 
 func TestAutoDJExclusions(t *testing.T) {
 	store, _ := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
-	other := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "二厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
+	other := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "二厅", Capacity: 64})
 	term, snap := takeRoom(t, store, id)
 	otherTerm, otherSnap := takeRoom(t, store, other)
 	// 其他房间自动播放的和正在播放的歌比本房间的所有记录都新，查询如果去掉 room_id 条件，它们就会挤进最近 128 首。
@@ -203,7 +203,7 @@ func TestAutoDJExclusions(t *testing.T) {
 
 func TestAutoDJLooksAtLast1000Plays(t *testing.T) {
 	store, _ := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	term, snap := takeRoom(t, store, id)
 	var plays []room.RecordPlay
 	add := func(e room.Entry) { plays = append(plays, played(e, len(plays))) }
@@ -248,7 +248,7 @@ func TestAutoDJLooksAtLast1000Plays(t *testing.T) {
 
 func TestTrackInUse(t *testing.T) {
 	store, _ := newStore(t)
-	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅"})
+	id := createRoom(t, store, port.NewRoom{Kind: room.Persistent, Name: "大厅", Capacity: 64})
 	term, snap := takeRoom(t, store, id)
 	link := track.Track{Source: track.Link, ID: "https://example.com/a.mp3"}
 	pending := picked(3, netease("3"))

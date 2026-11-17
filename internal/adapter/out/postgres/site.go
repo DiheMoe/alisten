@@ -20,7 +20,11 @@ func (s *Store) Settings(ctx context.Context) (port.SiteSettings, error) {
 	if err != nil {
 		return port.SiteSettings{}, fmt.Errorf("读取站点设置：%w", err)
 	}
-	return port.SiteSettings{BrandName: orEmpty(row.BrandName), RegistrationOpen: row.RegistrationOpen}, nil
+	settings := port.SiteSettings{BrandName: orEmpty(row.BrandName), RegistrationOpen: row.RegistrationOpen}
+	if row.EphemeralRoomCapacity != nil {
+		settings.EphemeralRoomCapacity = int(*row.EphemeralRoomCapacity)
+	}
+	return settings, nil
 }
 
 func (s *Store) SetBrandName(ctx context.Context, name string) error {
@@ -33,6 +37,14 @@ func (s *Store) SetBrandName(ctx context.Context, name string) error {
 func (s *Store) SetRegistrationOpen(ctx context.Context, open bool) error {
 	if err := s.q.SetRegistrationOpen(ctx, open); err != nil {
 		return fmt.Errorf("保存注册开关：%w", err)
+	}
+	return nil
+}
+
+func (s *Store) SetEphemeralRoomCapacity(ctx context.Context, capacity int) error {
+	c := int32(capacity)
+	if err := s.q.SetEphemeralRoomCapacity(ctx, &c); err != nil {
+		return fmt.Errorf("保存临时房间最多人数：%w", err)
 	}
 	return nil
 }
