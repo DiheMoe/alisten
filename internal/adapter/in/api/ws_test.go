@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"maps"
 	"net"
@@ -43,6 +44,8 @@ type pipeListener struct {
 	once   sync.Once
 	// 在 dial 之前设置。
 	onServerClose func()
+	// 在 dial 之前设置，拿到客户端那一端的连接。
+	onDial func(client net.Conn)
 }
 
 type hookedConn struct {
@@ -78,6 +81,9 @@ func (l *pipeListener) Addr() net.Addr { return &net.TCPAddr{} }
 
 func (l *pipeListener) dial(ctx context.Context, _, _ string) (net.Conn, error) {
 	server, client := net.Pipe()
+	if l.onDial != nil {
+		l.onDial(client)
+	}
 	conn := server
 	if l.onServerClose != nil {
 		conn = &hookedConn{Conn: server, onClose: l.onServerClose}
@@ -613,14 +619,14 @@ func TestFrameSizeLimit(t *testing.T) {
 	})
 }
 
-func TestIdleSessionIsDisconnected(t *testing.T) {
+func TestAnsweredPingsKeepAQuietSessionOpen(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()
 		f := newWSFixture(t, store, store, store)
 		roomID, _, ticket := f.enter(t, "")
 		conn := f.join(t, roomID, ticket)
-		// 客户端要一直读取，Ping 才能收到 pong。
-		frames := make(chan []byte)
+		// 客户端一直在读，收到 Ping 会自动回 Pong，但自己一帧都不发，就像定时器被浏览器节流的后台页面。
+		frames := make(chan []byte, 16)
 		closed := make(chan error, 1)
 		go func() {
 			for {
@@ -632,35 +638,55 @@ func TestIdleSessionIsDisconnected(t *testing.T) {
 				frames <- frame
 			}
 		}()
-		ping := `{"kind":"request","type":"ping","id":"p1","data":{"clientTimeMs":1}}`
 
-		time.Sleep(idleTimeout - time.Second)
-		writeFrame(t, conn, ping)
-		<-frames
-		time.Sleep(idleTimeout - time.Second)
-		if err := conn.Ping(t.Context()); err != nil {
-			t.Fatalf("ping 控制帧：%v", err)
-		}
-		time.Sleep(idleTimeout - time.Second)
-		writeFrame(t, conn, ping)
-		<-frames
-
-		time.Sleep(idleTimeout - time.Nanosecond)
+		time.Sleep(3 * idleTimeout)
 		synctest.Wait()
 		select {
 		case err := <-closed:
-			t.Fatalf("不到 30 秒就断开了：%v", err)
+			t.Fatalf("会回 Pong 的连接被断开了：%v", err)
+		default:
+		}
+		writeFrame(t, conn, `{"kind":"request","type":"ping","id":"p1","data":{"clientTimeMs":1}}`)
+		if frame := string(<-frames); !strings.Contains(frame, `"type":"ping"`) {
+			t.Fatalf("连接应仍然可用，实际收到：%s", frame)
+		}
+	})
+}
+
+func TestUnansweredSessionIsDisconnected(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		f := newWSFixture(t, store, store, store)
+		roomID, _, ticket := f.enter(t, "")
+		clients := make(chan net.Conn, 1)
+		f.listener.onDial = func(client net.Conn) { clients <- client }
+		// 服务端在自己的 goroutine 里关闭连接，关闭的时刻经 channel 交给测试。
+		closed := make(chan time.Time, 1)
+		f.listener.onServerClose = func() { closed <- time.Now() }
+		conn := f.join(t, roomID, ticket)
+		// 网络照常收下服务端发来的帧，客户端却不再处理，也就不回 Pong，和半开的连接一样。
+		raw := <-clients
+		go func() { _, _ = io.Copy(io.Discard, raw) }()
+
+		time.Sleep(idleTimeout - time.Second)
+		writeFrame(t, conn, `{"kind":"request","type":"ping","id":"p1","data":{"clientTimeMs":1}}`)
+		last := time.Now()
+		time.Sleep(idleTimeout - time.Nanosecond)
+		synctest.Wait()
+		select {
+		case at := <-closed:
+			t.Fatalf("最后一帧之后不到 30 秒就断开了：%v", at.Sub(last))
 		default:
 		}
 		time.Sleep(time.Nanosecond)
 		synctest.Wait()
 		select {
-		case err := <-closed:
-			if websocket.CloseStatus(err) != -1 {
-				t.Errorf("空闲的连接应直接断开，实际收到关闭帧：%v", err)
+		case at := <-closed:
+			if !at.Equal(last.Add(idleTimeout)) {
+				t.Fatalf("最后一帧之后 30 秒没有回 Pong，连接应在那时断开，实际断开时刻 %v", at)
 			}
 		default:
-			t.Error("30 秒没有收到任何帧之后连接应已断开")
+			t.Fatal("最后一帧之后 30 秒没有回 Pong，连接应已断开")
 		}
 	})
 }

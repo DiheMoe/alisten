@@ -24,6 +24,9 @@ import (
 const (
 	helloTimeout = 10 * time.Second
 	idleTimeout  = 30 * time.Second
+	// 服务端定时发 Ping，因为浏览器收到 Ping 会自动回 Pong，不经过页面的脚本。页面隐藏超过 5 分钟、又没有声音时，Chrome 会把它的定时器
+	// 节流到一分钟一次，客户端自己的 ping 就隔得比 idleTimeout 还久，只靠它的话，连接会被反复断开。
+	pingInterval = 10 * time.Second
 )
 
 var errClientOutdated = errors.New("前端与服务端的协议版本不一致，请刷新页面")
@@ -91,6 +94,7 @@ func (s *server) websocket(w http.ResponseWriter, r *http.Request) {
 
 	touch()
 	go watchIdle(ctx, conn, &lastFrame)
+	go pingPeer(ctx, conn)
 	go s.write(ctx, conn, sess, helloID)
 	for {
 		typ, frame, err := conn.Read(ctx)
@@ -280,6 +284,22 @@ func (s *server) writeMessage(ctx context.Context, conn *websocket.Conn, m proto
 		return false
 	}
 	return conn.Write(ctx, websocket.MessageText, frame) == nil
+}
+
+// 收到的 Pong 由 OnPongReceived 记为客户端发来的帧。Pong 没有回来时这里什么都不做，由 watchIdle 断开连接。
+func pingPeer(ctx context.Context, conn *websocket.Conn) {
+	ticker := time.NewTicker(pingInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			pingCtx, cancel := context.WithTimeout(ctx, pingInterval)
+			_ = conn.Ping(pingCtx)
+			cancel()
+		}
+	}
 }
 
 func watchIdle(ctx context.Context, conn *websocket.Conn, lastFrame *atomic.Int64) {
