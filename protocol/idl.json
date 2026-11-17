@@ -604,7 +604,7 @@
     },
     {
       "type": "settings.setPlayMode",
-      "description": "切换播放模式",
+      "description": "切换播放模式。每个成员先能连切 3 次，之后每 10 秒补 1 次，切得更快时返回 RATE_LIMITED",
       "http": {"method": "PATCH", "path": "/api/room/settings", "status": 204},
       "request": {
         "type": "object",
@@ -618,7 +618,7 @@
     },
     {
       "type": "chat.send",
-      "description": "发送聊天，超过 500 个字符的部分由服务端截断",
+      "description": "发送聊天，超过 500 个字符的部分由服务端截断。每个成员先能连发 10 条，之后每秒补 1 条，发得更快时返回 RATE_LIMITED",
       "http": {"method": "POST", "path": "/api/room/messages", "status": 204},
       "request": {
         "type": "object",

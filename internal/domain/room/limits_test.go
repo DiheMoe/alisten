@@ -2,9 +2,66 @@ package room
 
 import (
 	"testing"
+	"time"
 
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
+
+func TestChatIsLimitedPerMember(t *testing.T) {
+	r := newRoom(t, Persistent)
+	chat := func(now time.Duration, m Command) Reply {
+		t.Helper()
+		return reply(t, r.Handle(at(now), m))
+	}
+	for i := range chatBurst {
+		if res := chat(0, command(alice, Chat{Text: "你好"})); res.Err != nil {
+			t.Fatalf("第 %d 条聊天被拒：%v", i+1, res.Err)
+		}
+	}
+	if res := chat(0, command(alice, Chat{Text: "你好"})); res.Err != ErrRateLimited {
+		t.Fatalf("连发 %d 条之后再发 = %v，期望 ErrRateLimited", chatBurst, res.Err)
+	}
+	if res := chat(0, command(bob, Chat{Text: "你好"})); res.Err != nil {
+		t.Fatalf("别的成员发聊天 = %v，期望不受影响", res.Err)
+	}
+	if res := chat(chatRefill, command(alice, Chat{Text: "你好"})); res.Err != nil {
+		t.Fatalf("过了 %v 再发 = %v，期望补回一条", chatRefill, res.Err)
+	}
+	if res := chat(chatRefill, command(alice, Chat{Text: "你好"})); res.Err != ErrRateLimited {
+		t.Fatalf("补回的一条用掉之后再发 = %v，期望 ErrRateLimited", res.Err)
+	}
+}
+
+func TestPlayModeIsLimitedPerMember(t *testing.T) {
+	r := newRoom(t, Persistent)
+	modes := []PlayMode{Random, Sequential, Rotation, Random}
+	for i := range modeBurst {
+		if res := reply(t, r.Handle(at(0), command(alice, SetPlayMode{Mode: modes[i]}))); res.Err != nil {
+			t.Fatalf("第 %d 次切换被拒：%v", i+1, res.Err)
+		}
+	}
+	effects := r.Handle(at(0), command(alice, SetPlayMode{Mode: modes[modeBurst]}))
+	if res := reply(t, effects); res.Err != ErrRateLimited || len(find[Persist](effects)) != 0 {
+		t.Fatalf("连切 %d 次之后再切 = %#v，期望 ErrRateLimited，不落盘", modeBurst, effects)
+	}
+	if res := reply(t, r.Handle(at(0), command(bob, SetPlayMode{Mode: Random}))); res.Err != nil {
+		t.Fatalf("别的成员切换 = %v，期望不受影响", res.Err)
+	}
+	if res := reply(t, r.Handle(at(modeRefill), command(alice, SetPlayMode{Mode: Sequential}))); res.Err != nil {
+		t.Fatalf("过了 %v 再切 = %v，期望补回一次", modeRefill, res.Err)
+	}
+}
+
+func TestIdleMemberLimitsAreForgotten(t *testing.T) {
+	r := newRoom(t, Persistent)
+	for _, m := range []Command{command(alice, Chat{Text: "你好"}), command(bob, Chat{Text: "你好"})} {
+		r.Handle(at(0), m)
+	}
+	r.Handle(at(time.Hour), command(carol, Chat{Text: "你好"}))
+	if len(r.chatLimits) != 1 {
+		t.Errorf("一小时之后还记着 %d 个成员的聊天额度，期望只剩刚发过的那个", len(r.chatLimits))
+	}
+}
 
 func TestRejectedPicksKeepThePickQuota(t *testing.T) {
 	cases := map[string]struct {

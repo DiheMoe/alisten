@@ -24,6 +24,12 @@ const (
 	// 等待队列每次变化都要整体落盘，并向所有会话广播完整的队列，所以常驻房间也要有上限。
 	persistentQueueLimit = 200
 	chatLimit            = 500
+	// 聊天和切换播放模式按成员限流，bot 也一样。每条聊天都要广播给房间里的每个连接，每次切换模式都要整个房间落盘一次，
+	// 按成员计数是为了一个人刷屏时不挡住别人。
+	chatBurst  = 10
+	chatRefill = time.Second
+	modeBurst  = 3
+	modeRefill = 10 * time.Second
 )
 
 // Room 内部没有锁，同一个 Room 的 Handle 必须由调用方串行调用。
@@ -40,6 +46,8 @@ type Room struct {
 	votes          []string
 	pickLimit      limiter
 	likeLimit      limiter
+	chatLimits     memberLimits
+	modeLimits     memberLimits
 	lastPick       time.Time
 	token          Token
 	endTimer       Token
@@ -61,15 +69,17 @@ type Room struct {
 // 返回的 effect 和 Handle 返回的一样，按同样的规则执行。
 func Restore(env Env, term uint32, s Snapshot) (*Room, []Effect) {
 	r := &Room{
-		term:     term,
-		info:     s.Info,
-		mode:     s.Mode,
-		entrySeq: s.EntrySeq,
-		waiting:  slices.Clone(s.Waiting),
-		pending:  clonePtr(s.Pending),
-		current:  clonePtr(s.Current),
-		served:   map[requester]int{},
-		now:      env.Now,
+		term:       term,
+		info:       s.Info,
+		mode:       s.Mode,
+		entrySeq:   s.EntrySeq,
+		waiting:    slices.Clone(s.Waiting),
+		pending:    clonePtr(s.Pending),
+		current:    clonePtr(s.Current),
+		served:     map[requester]int{},
+		chatLimits: memberLimits{},
+		modeLimits: memberLimits{},
+		now:        env.Now,
 	}
 	// 存储返回的条目顺序不保证符合排序规则。
 	r.sortWaiting()

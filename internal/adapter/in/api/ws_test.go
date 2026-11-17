@@ -739,11 +739,14 @@ func TestOutstandingRequestLimit(t *testing.T) {
 		roomID, _, ticket := f.enter(t, "")
 		conn := f.join(t, roomID, ticket)
 
-		for i := range 16 {
-			writeFrame(t, conn, fmt.Sprintf(`{"kind":"request","type":"settings.setPlayMode","id":"m%d","data":{"playMode":"random"}}`, i))
+		// 第一个请求切换模式，房间落盘时卡住。房间按顺序处理输入，后面的请求都排在它后面等着。
+		// 后面用 room.sync，因为切换模式按成员限流，连发会被房间拒绝。
+		writeFrame(t, conn, `{"kind":"request","type":"settings.setPlayMode","id":"m0","data":{"playMode":"random"}}`)
+		for i := 1; i < 16; i++ {
+			writeFrame(t, conn, fmt.Sprintf(`{"kind":"request","type":"room.sync","id":"s%d","data":{}}`, i))
 		}
-		writeFrame(t, conn, `{"kind":"request","type":"settings.setPlayMode","id":"m16","data":{"playMode":"random"}}`)
-		checkMessage(t, conn, `{"kind":"response","type":"settings.setPlayMode","id":"m16","data":{},"error":{"code":"RATE_LIMITED","message":"操作太快了，请稍后再试。"}}`)
+		writeFrame(t, conn, `{"kind":"request","type":"room.sync","id":"s16","data":{}}`)
+		checkMessage(t, conn, `{"kind":"response","type":"room.sync","id":"s16","data":{},"error":{"code":"RATE_LIMITED","message":"操作太快了，请稍后再试。"}}`)
 		writeFrame(t, conn, `{"kind":"request","type":"ping","id":"p1","data":{"clientTimeMs":1}}`)
 		checkMessage(t, conn, `{"kind":"response","type":"ping","id":"p1","data":{"clientTimeMs":1,"serverTimeMs":1}}`)
 
@@ -757,7 +760,7 @@ func TestOutstandingRequestLimit(t *testing.T) {
 				responses++
 			}
 		}
-		want := map[string]float64{"settings.setPlayMode/ok": 16, "settings.setPlayMode/RATE_LIMITED": 1}
+		want := map[string]float64{"settings.setPlayMode/ok": 1, "room.sync/ok": 15, "room.sync/RATE_LIMITED": 1}
 		if got := commandCounts(t, f.metrics); !maps.Equal(got, want) {
 			t.Errorf("alisten_room_commands_total = %v，期望 %v", got, want)
 		}

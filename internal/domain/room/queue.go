@@ -22,9 +22,17 @@ func (r *Room) command(b *batch, c Command) {
 	case VoteSkip:
 		res, err = r.voteSkip(b, c.Member)
 	case SetPlayMode:
+		if !r.modeLimits.allow(c.Member.ID, b.now, modeBurst, modeRefill) {
+			err = ErrRateLimited
+			break
+		}
 		r.mode = a.Mode
 		res = Done{}
 	case Chat:
+		if !r.chatLimits.allow(c.Member.ID, b.now, chatBurst, chatRefill) {
+			err = ErrRateLimited
+			break
+		}
 		b.event(ChatPosted{Member: c.Member, Text: truncate(a.Text, chatLimit), SentAt: b.now})
 		res = Done{}
 	case Sync:

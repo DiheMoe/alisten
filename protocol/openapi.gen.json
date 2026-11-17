@@ -2497,7 +2497,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "8f6287a7575762d0"
+    "version": "36975cc7edcd3f47"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -4899,7 +4899,7 @@
             "ticket": []
           }
         ],
-        "summary": "发送聊天，超过 500 个字符的部分由服务端截断"
+        "summary": "发送聊天，超过 500 个字符的部分由服务端截断。每个成员先能连发 10 条，之后每秒补 1 条，发得更快时返回 RATE_LIMITED"
       }
     },
     "/api/room/playlists/{source}/{playlistId}/tracks": {
@@ -5310,7 +5310,7 @@
             "ticket": []
           }
         ],
-        "summary": "切换播放模式"
+        "summary": "切换播放模式。每个成员先能连切 3 次，之后每 10 秒补 1 次，切得更快时返回 RATE_LIMITED"
       }
     },
     "/api/room/skip-votes": {

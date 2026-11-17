@@ -217,8 +217,11 @@ func TestSendQueueOverflowClosesSession(t *testing.T) {
 		f := newGatewayFixture(t, store, store)
 		id := createRoom(t, store, room.Persistent)
 		a := f.join(t, id, alice)
+		// 聊天按成员限流，所以每条由不同的成员发。
+		sent := 0
 		chat := func() {
-			if _, err := f.gateway.Do(t.Context(), id, bob, room.Chat{Text: "刷屏"}); err != nil {
+			sent++
+			if _, err := f.gateway.Do(t.Context(), id, member.Member{ID: fmt.Sprint("chatter-", sent), Name: "刷屏的人"}, room.Chat{Text: "刷屏"}); err != nil {
 				t.Fatal(err)
 			}
 		}
