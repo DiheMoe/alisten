@@ -57,8 +57,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
         audio.addEventListener('error', this.#onError)
       }
       standby.muted = true
-      for (const type of ['click', 'touchend', 'keydown'])
-        document.addEventListener(type, this.#unlockStandby, { capture: true })
+      document.addEventListener('click', this.#unlockStandby, { capture: true })
       roomStore.addEventListener('change', this.#onRoom)
       clock.addEventListener('change', this.#onClock)
       volumeStore.addEventListener('change', this.#applyVolume)
@@ -85,8 +84,7 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
       audio.removeEventListener('pause', this.#onPause)
       audio.removeEventListener('error', this.#onError)
     }
-    for (const type of ['click', 'touchend', 'keydown'])
-      document.removeEventListener(type, this.#unlockStandby, { capture: true })
+    document.removeEventListener('click', this.#unlockStandby, { capture: true })
     roomStore.removeEventListener('change', this.#onRoom)
     clock.removeEventListener('change', this.#onClock)
     volumeStore.removeEventListener('change', this.#applyVolume)
@@ -243,10 +241,11 @@ class PlayerStore extends Store<{ needsGesture: boolean }> {
     standby.load()
   }
 
-  // 第一次点击、触摸或按键时对备用元素调一次 load()，因为 iOS 要求每个媒体元素在用户操作中解锁一次，否则互换之后 play() 会被拒绝。
+  // 第一次点击时对备用元素调一次 load()，因为 iOS 要求每个媒体元素在用户操作中解锁一次，否则互换之后 play() 会被拒绝。
+  // 只认 click，因为 iOS 上滑动结束的 touchend 和修饰键这类按键都不算用户操作，在里面调 load() 解不了锁，解锁的机会却用掉了。
+  // 点一下屏幕，或者在按钮上按回车、空格，都会产生 click。
   #unlockStandby = (): void => {
-    for (const type of ['click', 'touchend', 'keydown'])
-      document.removeEventListener(type, this.#unlockStandby, { capture: true })
+    document.removeEventListener('click', this.#unlockStandby, { capture: true })
     this.#standby?.load()
   }
 

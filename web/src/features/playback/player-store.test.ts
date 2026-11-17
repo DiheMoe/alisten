@@ -874,10 +874,13 @@ describe('预加载下一首', () => {
 
   it('第一次点击时解锁备用元素，之后不再调用', async () => {
     await attached()
-    document.dispatchEvent(new Event('click'))
-    expect(standby.loads).toBe(1)
+    // 滑动结束的 touchend 和修饰键在 iOS 上不算用户操作，不能用掉解锁的机会。
     document.dispatchEvent(new Event('touchend'))
     document.dispatchEvent(new Event('keydown'))
+    expect(standby.loads).toBe(0)
+    document.dispatchEvent(new Event('click'))
+    expect(standby.loads).toBe(1)
+    document.dispatchEvent(new Event('click'))
     expect(standby.loads).toBe(1)
   })
 
