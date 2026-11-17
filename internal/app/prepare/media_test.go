@@ -519,3 +519,45 @@ func TestLinkRunnerUnanalyzableAudioWinsOverUploadFailure(t *testing.T) {
 		t.Errorf("上传失败且无法分析时 = %v，期望不能准备", err)
 	}
 }
+
+// 读取时 panic 的音频，模拟解码器遇到意外输入时出错。
+type panickingAudio struct{}
+
+func (panickingAudio) Open() (io.ReadSeekCloser, error) {
+	return panickingReader{bytes.NewReader([]byte("x"))}, nil
+}
+
+type panickingReader struct{ *bytes.Reader }
+
+func (panickingReader) Read([]byte) (int, error) { panic("解码器出错") }
+
+func (panickingReader) Close() error { return nil }
+
+type panickingDownloader struct{}
+
+func (panickingDownloader) Download(context.Context, string) (port.LinkDownload, func(), error) {
+	return port.LinkDownload{Meta: track.Meta{Title: "晴天", Duration: time.Second}, Audio: panickingAudio{}}, func() {}, nil
+}
+
+// 上传时不读内容，这样只有分析会读到 panickingAudio。
+type bodyIgnoringStore struct{ *porttest.MediaStore }
+
+func (s bodyIgnoringStore) Put(ctx context.Context, key string, _ io.ReadSeeker, contentType string) error {
+	return s.MediaStore.Put(ctx, key, strings.NewReader(""), contentType)
+}
+
+func TestLinkRunnerAnalysisPanicFailsOnlyTheJob(t *testing.T) {
+	logs := &bytes.Buffer{}
+	tracks := newTracks()
+	err := newLinkRunner(panickingDownloader{}, bodyIgnoringStore{porttest.NewMediaStore()}, tracks, slog.New(slog.NewJSONHandler(logs, nil))).Run(t.Context(), link)
+	var rejected *port.RejectedError
+	if !errors.As(err, &rejected) {
+		t.Fatalf("分析时 panic，Run = %v，期望拒绝这首歌，不让 River 重试", err)
+	}
+	if _, ok := tracks.row(link); ok {
+		t.Error("分析失败的歌不应写入曲目表")
+	}
+	if !strings.Contains(logs.String(), "解码器出错") || !strings.Contains(logs.String(), `"stack":`) {
+		t.Errorf("panic 的内容应连同堆栈记进日志：%s", logs)
+	}
+}

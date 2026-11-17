@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -67,7 +68,17 @@ func (r *MediaRunner) Run(ctx context.Context, t track.Track) (err error) {
 		coverKey   string
 		uploadErr  error
 	)
-	wg.Go(func() { result, analyzeErr = analyzeFile(ctx, r.logger, t, d.Audio, d.Meta.Duration) })
+	wg.Go(func() {
+		// River 只恢复执行任务的那个 goroutine 里的 panic，这里的 panic 会让整个 worker 进程退出，正在执行的其他任务也跟着中断。
+		// 同一个文件每次分析都会 panic，所以和无法解码的音频一样拒绝，不让 River 重试。
+		defer func() {
+			if value := recover(); value != nil {
+				r.logger.ErrorContext(ctx, "分析音频时发生 panic", "source", t.Source, "track_id", t.ID, "panic", fmt.Sprint(value), "stack", string(debug.Stack()))
+				analyzeErr = &port.RejectedError{Err: errors.New("这首歌的音频无法播放")}
+			}
+		}()
+		result, analyzeErr = analyzeFile(ctx, r.logger, t, d.Audio, d.Meta.Duration)
+	})
 	size, coverKey, uploadErr = r.upload(ctx, key, d)
 	wg.Wait()
 	// 音频无法分析时重试也没有用，所以分析的错误先于上传的错误返回。
