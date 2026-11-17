@@ -54,6 +54,8 @@ func FuzzInvariants(f *testing.F) {
 	f.Add(false, []byte{2, 0, 2, 1, 7, 1, 20, 1})
 	// 删除待播。
 	f.Add(true, []byte{2, 0, 2, 1, 3, 1})
+	// 临时房间建好之后有人进来，建房时的关闭计时到点，不应关闭房间。
+	f.Add(false, []byte{0, 0, 10, 15})
 	// 4 个人在线，第 4 个人是重新加入的，所以超过了上限。其中一人开了两个连接，投了 1 票。关掉一个连接时门槛不变，再有一个人离开，门槛降到 1，要切歌。
 	f.Add(true, []byte{0, 0, 0, 1, 0, 2, 21, 3, 0, 4, 2, 0, 7, 0, 5, 0, 1, 4, 1, 1})
 	// 随机模式切歌时，抽好的歌过了宽限期还没准备好，改放唯一准备好的那首。选完之后等待队列里没有准备好的歌了，抽好的歌看起来又占着位置。
@@ -121,6 +123,10 @@ func FuzzInvariants(f *testing.F) {
 			}
 			// 房间关闭后就被丢弃，不会再收到输入。关闭时结束了正在播放的歌，但不再开播下一首。
 			closed := len(find[Close](effects)) != 0
+			// 除了删除房间，有会话在线时不应关闭。有人进来就要取消关闭的计时，否则临时房间建好 5 分钟会把在线的人全踢掉。
+			if closed && op%fuzzOps != 14 && len(r.sessions) != 0 {
+				t.Fatalf("还有 %d 个会话在线，房间却关闭了：%#v", len(r.sessions), effects)
+			}
 			checkInvariants(t, r, before, effects, term, &seq, closed)
 			checkNext(t, r, before, beforeDrawn, beforeNext, op%fuzzOps == fuzzRestore, effects)
 			if closed {
