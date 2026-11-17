@@ -232,6 +232,7 @@ func jsonPath(where string) string {
 }
 
 // 重新编码会按键排序并去掉空白，所以版本只随 IDL 的内容变化，不受格式影响。
+// 说明文字不算在版本里，因为握手要求版本完全相等，只改说明就让没更新的 App 进不了房间并不值得。
 func protocolVersion(data []byte) (string, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
@@ -239,6 +240,7 @@ func protocolVersion(data []byte) (string, error) {
 	if err := dec.Decode(&v); err != nil {
 		return "", fmt.Errorf("解析 IDL：%w", err)
 	}
+	v = withoutDescriptions(v)
 	var b bytes.Buffer
 	enc := json.NewEncoder(&b)
 	enc.SetEscapeHTML(false)
@@ -247,6 +249,28 @@ func protocolVersion(data []byte) (string, error) {
 	}
 	sum := sha256.Sum256(bytes.TrimSuffix(b.Bytes(), []byte("\n")))
 	return hex.EncodeToString(sum[:])[:16], nil
+}
+
+// 说明文字是值为字符串的 description。名叫 description 的字段（比如房间介绍）在 properties 里，值是它的定义，要保留。
+func withoutDescriptions(v any) any {
+	switch v := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for key, value := range v {
+			if _, text := value.(string); key == "description" && text {
+				continue
+			}
+			out[key] = withoutDescriptions(value)
+		}
+		return out
+	case []any:
+		out := make([]any, len(v))
+		for i, value := range v {
+			out[i] = withoutDescriptions(value)
+		}
+		return out
+	}
+	return v
 }
 
 const pathParam = `\{([a-z][A-Za-z0-9]*)\}`

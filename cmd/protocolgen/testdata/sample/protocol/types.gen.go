@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "73bb0faa1631059c"
+const Version = "3aa383402729ba01"
 
 type AdminUpdateRoomRequest struct {
 	Homepage *string `json:"homepage,omitempty"`

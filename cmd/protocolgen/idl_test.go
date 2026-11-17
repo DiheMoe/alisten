@@ -35,6 +35,28 @@ func TestProtocolVersionIgnoresKeyOrderAndWhitespace(t *testing.T) {
 	}
 }
 
+func TestProtocolVersionIgnoresDescriptions(t *testing.T) {
+	version := func(idl string) string {
+		t.Helper()
+		v, err := protocolVersion([]byte(idl))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	base := version(`{"x-requests":[{"type":"room.sync","description":"获取房间快照","response":{"type":"object","properties":{"description":{"type":"string"}}}}]}`)
+	if got := version(`{"x-requests":[{"type":"room.sync","description":"获取房间的完整快照","response":{"type":"object","properties":{"description":{"type":"string","description":"房间介绍"}}}}]}`); got != base {
+		t.Errorf("只改了说明，版本却从 %s 变成了 %s", base, got)
+	}
+	// 名叫 description 的字段是接口的一部分，它的定义是对象，不是说明文字。
+	if got := version(`{"x-requests":[{"type":"room.sync","description":"获取房间快照","response":{"type":"object","properties":{}}}]}`); got == base {
+		t.Error("去掉了名叫 description 的字段，版本应随之改变")
+	}
+	if got := version(`{"x-requests":[{"type":"room.sync","description":"获取房间快照","response":{"type":"object","properties":{"description":{"type":"integer"}}}}]}`); got == base {
+		t.Error("名叫 description 的字段换了类型，版本应随之改变")
+	}
+}
+
 func object(properties map[string]any, required ...string) map[string]any {
 	s := map[string]any{"type": "object", "additionalProperties": false, "properties": properties}
 	if len(required) > 0 {
