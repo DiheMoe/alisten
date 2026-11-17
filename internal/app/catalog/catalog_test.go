@@ -1,11 +1,15 @@
 package catalog
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -105,7 +109,7 @@ func newFixture(t *testing.T, h history) *fixture {
 		t.Fatal(err)
 	}
 	f.quota.room = f.ephemeral
-	f.svc = New(f.netease, f.qq, f.bilibili, f.bilibili, f.tracks, h, rooms, f.quota)
+	f.svc = New(f.netease, f.qq, f.bilibili, f.bilibili, f.tracks, h, rooms, f.quota, slog.New(slog.DiscardHandler))
 	return f
 }
 
@@ -434,6 +438,58 @@ func TestRecommendLimits(t *testing.T) {
 			t.Errorf("%d 首候选之后获取了 %v 的相似歌曲，期望 %v", tt.candidates, calls.seeds, tt.seeds)
 		}
 	}
+}
+
+func TestRecommendListLogsProviderFailuresWhenTheyStart(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f := newFixture(t, history{seeds: []track.Track{netease("a")}})
+		var logs bytes.Buffer
+		f.svc.logger = slog.New(slog.NewJSONHandler(&logs, nil))
+		warnings := func() []map[string]any {
+			t.Helper()
+			var found []map[string]any
+			for line := range strings.Lines(strings.TrimSpace(logs.String())) {
+				var entry map[string]any
+				if err := json.Unmarshal([]byte(line), &entry); err != nil {
+					t.Fatalf("日志不是 JSON：%v\n%s", err, line)
+				}
+				if entry["level"] == "WARN" {
+					found = append(found, entry)
+				}
+			}
+			return found
+		}
+
+		cancelled, cancel := context.WithCancel(t.Context())
+		cancel()
+		f.netease.Fail(context.Canceled)
+		if _, err := f.svc.RecommendList(cancelled, f.persistent); err != nil {
+			t.Fatal(err)
+		}
+		if got := warnings(); len(got) != 0 {
+			t.Fatalf("请求被取消时 WARN = %v，期望不记", got)
+		}
+		f.netease.Fail(errors.New("网易云不可用"))
+		for range 2 {
+			if list, err := f.svc.RecommendList(t.Context(), f.persistent); err != nil || len(list) != 0 {
+				t.Fatalf("接口出错时的推荐列表 = %v, %v，期望为空", list, err)
+			}
+		}
+		if got := warnings(); len(got) != 1 || !strings.Contains(fmt.Sprint(got[0]["error"]), "网易云不可用") {
+			t.Fatalf("接口连续出错两次，WARN = %v，期望一条带着错误的 WARN", got)
+		}
+		f.netease.Fail(nil)
+		if _, err := f.svc.RecommendList(t.Context(), f.persistent); err != nil {
+			t.Fatal(err)
+		}
+		f.netease.Fail(errors.New("网易云不可用"))
+		if _, err := f.svc.RecommendList(t.Context(), f.persistent); err != nil {
+			t.Fatal(err)
+		}
+		if n := len(warnings()); n != 2 {
+			t.Errorf("接口恢复之后又出错，WARN 共 %d 条，期望 2 条", n)
+		}
+	})
 }
 
 func TestNoRecommendation(t *testing.T) {

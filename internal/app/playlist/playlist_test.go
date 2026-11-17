@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"log/slog"
 	"slices"
 	"strconv"
 	"strings"
@@ -101,7 +102,7 @@ func newFixture(t *testing.T) fixture {
 	qq := porttest.NewSource(track.QQ)
 	bilibili := porttest.NewBilibili()
 	tracks := tracksTable{}
-	music := catalog.New(netease, qq, bilibili, bilibili, tracks, noHistory{}, store, porttest.Quota{})
+	music := catalog.New(netease, qq, bilibili, bilibili, tracks, noHistory{}, store, porttest.Quota{}, slog.New(slog.DiscardHandler))
 	q := &accountQuota{}
 	links := shortLinks{}
 	return fixture{svc: New(store, tracks, music, q, links), identity: identity.New(store, store, store, porttest.Quota{}, nil), store: store, tracks: tracks, quota: q, netease: netease, qq: qq, links: links}

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -66,5 +67,5 @@ func newCatalog(rooms port.RoomDirectory, left int) *catalog.Service {
 	netease.SetSimilar(sunnyTrack.ID, rain.Track.ID)
 	netease.AddPlaylist(port.Playlist{ID: "p1", Name: "周杰伦精选", Creator: "alice", TrackCount: 2, PlayCount: 9}, sunnyTrack.ID, rain.Track.ID)
 	bilibili := porttest.NewBilibili()
-	return catalog.New(netease, porttest.NewSource(track.QQ), bilibili, bilibili, noTracks{}, history{}, rooms, &quota{left: left})
+	return catalog.New(netease, porttest.NewSource(track.QQ), bilibili, bilibili, noTracks{}, history{}, rooms, &quota{left: left}, slog.New(slog.DiscardHandler))
 }

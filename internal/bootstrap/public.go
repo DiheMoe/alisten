@@ -71,7 +71,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 	}
 	preparer := prepare.New(media.NewTracks(store, objects), queue.New(jobs), logger)
 	quota := redis.NewQuota(rdb)
-	music := catalog.New(src.netease, src.qq, src.bilibili, src.bilibiliLinks, store, store, store, quota)
+	music := catalog.New(src.netease, src.qq, src.bilibili, src.bilibiliLinks, store, store, store, quota, base.With("component", "catalog"))
 	leases := redis.NewLeases(rdb, instance)
 	cluster := realtime.Cluster{
 		Instance: instance,

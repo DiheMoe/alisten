@@ -16,6 +16,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port/porttest"
 	"github.com/dihemoe/alisten/internal/domain/member"
 	"github.com/dihemoe/alisten/internal/domain/room"
+	"github.com/dihemoe/alisten/internal/lib/logctx"
 )
 
 type clusterFixture struct {
@@ -428,6 +429,45 @@ func TestGatewayRejoinsAfterItsAliveKeyExpired(t *testing.T) {
 	})
 }
 
+func TestHeartbeatFailuresAreLoggedWhenTheyStart(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		songs := newSongs()
+		node := porttest.NewRedis().Node("a")
+		liveness := &flakyLiveness{Liveness: node}
+		var logs logBuffer
+		h, g := New(store, store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: "a", Leases: node, Liveness: liveness, Bus: node}, slog.New(slog.NewJSONHandler(&logs, nil)))
+		ctx, stop := context.WithCancel(context.Background())
+		wait, err := Start(ctx, h, g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			_ = h.Shutdown(context.Background())
+			_ = g.Shutdown(context.Background())
+			stop()
+			wait()
+		})
+
+		liveness.fail.Store(true)
+		time.Sleep(30 * time.Second)
+		synctest.Wait()
+		failed := logs.entries(t, "刷新本实例的存活键失败")
+		if len(failed) != 1 || failed[0]["level"] != "WARN" || failed[0]["error"] == nil {
+			t.Fatalf("心跳连续失败了 30 秒，日志 = %v，期望一条带着错误的 WARN", failed)
+		}
+		liveness.fail.Store(false)
+		time.Sleep(heartbeatInterval)
+		synctest.Wait()
+		liveness.fail.Store(true)
+		time.Sleep(heartbeatInterval)
+		synctest.Wait()
+		if n := len(logs.entries(t, "刷新本实例的存活键失败")); n != 2 {
+			t.Errorf("心跳恢复之后又失败，日志共 %d 条，期望 2 条", n)
+		}
+	})
+}
+
 type flakyOwners struct {
 	port.Leases
 	failing atomic.Bool
@@ -472,9 +512,14 @@ func (b *flakyForwards) sentJoins() []room.Join {
 
 func startFlakyInstance(t *testing.T, redis *porttest.Redis, id string, snapshots port.RoomSnapshots, store *porttest.Store, songs *songs) (*instance, *flakyOwners, *flakyForwards) {
 	t.Helper()
+	return startFlakyLoggingInstance(t, redis, id, snapshots, store, songs, slog.New(slog.DiscardHandler))
+}
+
+func startFlakyLoggingInstance(t *testing.T, redis *porttest.Redis, id string, snapshots port.RoomSnapshots, store *porttest.Store, songs *songs, logger *slog.Logger) (*instance, *flakyOwners, *flakyForwards) {
+	t.Helper()
 	node := redis.Node(id)
 	leases, bus := &flakyOwners{Leases: node}, &flakyForwards{Bus: node}
-	h, g := New(snapshots, store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: id, Leases: leases, Liveness: node, Bus: bus}, slog.New(slog.DiscardHandler))
+	h, g := New(snapshots, store, store, unrevoked{}, songs.music, songs.preparer, Cluster{Instance: id, Leases: leases, Liveness: node, Bus: bus}, logger)
 	ctx, stop := context.WithCancel(context.Background())
 	wait, err := Start(ctx, h, g)
 	if err != nil {
@@ -697,6 +742,42 @@ func TestMemberUpdateRetryCarriesLatestProfile(t *testing.T) {
 		if names := sessionNames(res.(room.SyncResult).View); !slices.Equal(names, []string{"丙"}) {
 			t.Errorf("在线列表 = %q，期望最新的昵称", names)
 		}
+	})
+}
+
+func TestLostPresenceIsLoggedWhenItStarts(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		songs := newSongs()
+		redis := porttest.NewRedis()
+		a := startInstance(t, redis, "a", store, store, songs)
+		var logs logBuffer
+		b, owners, _ := startFlakyLoggingInstance(t, redis, "b", store, store, songs, slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil))))
+		synctest.Wait()
+		id := createRoom(t, store, room.Persistent)
+		if _, err := a.gateway.Do(t.Context(), id, alice, room.Sync{}); err != nil {
+			t.Fatal(err)
+		}
+		first, second := b.join(t, id, bob), b.join(t, id, carol)
+
+		owners.failing.Store(true)
+		b.gateway.Leave(first)
+		time.Sleep(30 * time.Second)
+		synctest.Wait()
+		lost := logs.entries(t, "在线状态消息没有送到 owner")
+		if len(lost) != 1 || lost[0]["level"] != "WARN" || lost[0]["room_id"] != id || lost[0]["input"] != "room.Leave" || lost[0]["error"] == nil {
+			t.Fatalf("Leave 重试了 30 秒仍然发不出去，日志 = %v，期望一条带着房间、输入和错误的 WARN", lost)
+		}
+		owners.failing.Store(false)
+		time.Sleep(presenceRetryMax)
+		synctest.Wait()
+		owners.failing.Store(true)
+		b.gateway.Leave(second)
+		synctest.Wait()
+		if n := len(logs.entries(t, "在线状态消息没有送到 owner")); n != 2 {
+			t.Errorf("送达恢复之后又发不出去，日志共 %d 条，期望 2 条", n)
+		}
+		owners.failing.Store(false)
 	})
 }
 

@@ -18,6 +18,7 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/member"
 	"github.com/dihemoe/alisten/internal/domain/room"
 	"github.com/dihemoe/alisten/internal/domain/track"
+	"github.com/dihemoe/alisten/internal/lib/logctx"
 )
 
 type instance struct {
@@ -564,6 +565,68 @@ func TestUnsubscribeAfterLastUse(t *testing.T) {
 		}
 		if _, err := f.gateway.Do(t.Context(), withHTTP, bob, room.Sync{}); err != nil {
 			t.Errorf("退订之后的请求失败：%v", err)
+		}
+	})
+}
+
+type flakyUnsubscribe struct {
+	port.Bus
+	failing atomic.Bool
+}
+
+func (b *flakyUnsubscribe) UnsubscribeRoom(ctx context.Context, roomID string) error {
+	if b.failing.Load() {
+		return porttest.ErrRedisDown
+	}
+	return b.Bus.UnsubscribeRoom(ctx, roomID)
+}
+
+func TestUnsubscribeFailuresAreLoggedWhenTheyStart(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := porttest.New()
+		songs := newSongs()
+		node := porttest.NewRedis().Node("a")
+		bus := &flakyUnsubscribe{Bus: node}
+		c := cluster(node, "a")
+		c.Bus = bus
+		var logs logBuffer
+		h, g := New(store, store, store, unrevoked{}, songs.music, songs.preparer, c, slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil))))
+		ctx, stop := context.WithCancel(context.Background())
+		wait, err := Start(ctx, h, g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			_ = h.Shutdown(context.Background())
+			_ = g.Shutdown(context.Background())
+			stop()
+			wait()
+		})
+		// 最后一个会话离开、房间没有 HTTP 请求时立即退订。
+		visit := func() string {
+			id := createRoom(t, store, room.Persistent)
+			s, err := g.Join(t.Context(), id, alice, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			g.Leave(s)
+			synctest.Wait()
+			return id
+		}
+
+		bus.failing.Store(true)
+		first := visit()
+		visit()
+		failed := logs.entries(t, "退订房间的频道失败")
+		if len(failed) != 1 || failed[0]["level"] != "WARN" || failed[0]["room_id"] != first || failed[0]["error"] == nil {
+			t.Fatalf("两个房间都退订失败，日志 = %v，期望一条带着第一个房间和错误的 WARN", failed)
+		}
+		bus.failing.Store(false)
+		visit()
+		bus.failing.Store(true)
+		visit()
+		if n := len(logs.entries(t, "退订房间的频道失败")); n != 2 {
+			t.Errorf("退订恢复之后又失败，日志共 %d 条，期望 2 条", n)
 		}
 	})
 }

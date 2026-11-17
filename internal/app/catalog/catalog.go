@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"time"
 
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/domain/room"
 	"github.com/dihemoe/alisten/internal/domain/track"
+	"github.com/dihemoe/alisten/internal/lib/logthrottle"
 )
 
 const (
@@ -46,10 +48,13 @@ type Service struct {
 	history  port.PlayHistory
 	rooms    port.RoomDirectory
 	quota    port.Quota
+	logger   *slog.Logger
+	// 推荐列表吞掉上游的错误，只能记日志。上游不可用时每个房间每次获取推荐列表都会出错，所以日志要节流。
+	recommendWarned logthrottle.Warning
 }
 
-func New(netease port.NetEaseSource, qq port.PlaylistSource, bilibili port.BilibiliSource, links port.BilibiliLinks, tracks port.Tracks, history port.PlayHistory, rooms port.RoomDirectory, quota port.Quota) *Service {
-	return &Service{netease: netease, qq: qq, bilibili: bilibili, links: links, tracks: tracks, history: history, rooms: rooms, quota: quota}
+func New(netease port.NetEaseSource, qq port.PlaylistSource, bilibili port.BilibiliSource, links port.BilibiliLinks, tracks port.Tracks, history port.PlayHistory, rooms port.RoomDirectory, quota port.Quota, logger *slog.Logger) *Service {
+	return &Service{netease: netease, qq: qq, bilibili: bilibili, links: links, tracks: tracks, history: history, rooms: rooms, quota: quota, logger: logger}
 }
 
 // SearchTracks 只在上游一次取回的结果中分页，page 从 1 开始。total 是取回的结果数。
@@ -111,8 +116,15 @@ func (s *Service) RecommendList(ctx context.Context, roomID string) ([]port.Song
 		return nil, err
 	}
 	songs, err := s.candidates(ctx, roomID, true)
-	if errors.Is(err, port.ErrProviderFailed) {
+	switch {
+	case errors.Is(err, port.ErrProviderFailed):
+		// 调用方放弃了请求时，上游的错误多半只是请求被取消，不记日志。
+		if ctx.Err() == nil {
+			s.logger.Log(ctx, s.recommendWarned.Level(), "获取推荐列表失败，返回空列表", "error", err)
+		}
 		return nil, nil
+	case err == nil:
+		s.recommendWarned.Recovered()
 	}
 	return songs, err
 }

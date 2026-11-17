@@ -18,6 +18,7 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/room"
 	"github.com/dihemoe/alisten/internal/domain/track"
 	"github.com/dihemoe/alisten/internal/lib/logctx"
+	"github.com/dihemoe/alisten/internal/lib/logthrottle"
 )
 
 const (
@@ -29,8 +30,7 @@ const (
 	// 距上次续约成功超过这个时长就停止处理房间的输入。ownerDeadline 早于租约过期，所以时钟正常时，同一时刻只有一个 owner 在处理房间的输入。
 	ownerDeadline = 10 * time.Second
 	// 租约、存活键和实例间消息单次调用的期限，不能超过续约的间隔。
-	clusterTimeout    = 5 * time.Second
-	takeoverLogRepeat = time.Minute
+	clusterTimeout = 5 * time.Second
 )
 
 var (
@@ -60,9 +60,9 @@ type Host struct {
 
 	owned      atomic.Int64
 	leasesLost atomic.Uint64
-	// 上一条接管房间失败的 WARN 的时刻，接管成功之后清空。存储不可用时，每次对账都会为每个没有 owner 的房间尝试接管，且每次都失败。
-	// 所以 takeoverLogRepeat 内只记一条 WARN，其余记 DEBUG，这样日志量不随房间数和对账次数增长。
-	takeoverWarned atomic.Pointer[time.Time]
+	// 存储不可用时，每次对账都会为每个没有 owner 的房间尝试接管，且每次都失败。所以接管失败的日志要节流，这样日志量不随房间数和对账次数增长。
+	// 接管成功之后重置。
+	takeoverWarned logthrottle.Warning
 
 	mu         sync.Mutex
 	state      hostState
@@ -436,17 +436,11 @@ func (h *Host) run(r *hostedRoom) {
 		if errors.Is(err, port.ErrRoomNotFound) {
 			r.err = port.ErrRoomNotFound
 		} else if r.ctx.Err() == nil {
-			level := slog.LevelDebug
-			if last := h.takeoverWarned.Load(); last == nil || time.Since(*last) >= takeoverLogRepeat {
-				if now := time.Now(); h.takeoverWarned.CompareAndSwap(last, &now) {
-					level = slog.LevelWarn
-				}
-			}
-			h.logger.Log(r.ctx, level, "接管房间失败", "error", err)
+			h.logger.Log(r.ctx, h.takeoverWarned.Level(), "接管房间失败", "error", err)
 		}
 		return
 	}
-	h.takeoverWarned.Store(nil)
+	h.takeoverWarned.Recovered()
 	var effects []room.Effect
 	r.room, effects = room.Restore(roomEnv(), term, snap)
 	r.term = term

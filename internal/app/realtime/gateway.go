@@ -18,6 +18,7 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/room"
 	"github.com/dihemoe/alisten/internal/domain/track"
 	"github.com/dihemoe/alisten/internal/lib/logctx"
+	"github.com/dihemoe/alisten/internal/lib/logthrottle"
 )
 
 const (
@@ -42,6 +43,10 @@ type Gateway struct {
 	tickets  port.ExistingTickets
 	logger   *slog.Logger
 	ids      atomic.Uint64
+	// 在线状态消息、心跳和退订出错时没有调用方能看到错误，只能记日志。故障持续时这几条路径会反复出错，所以日志要节流。
+	presenceWarned    logthrottle.Warning
+	heartbeatWarned   logthrottle.Warning
+	unsubscribeWarned logthrottle.Warning
 
 	mu       sync.Mutex
 	closing  bool
@@ -521,7 +526,15 @@ func (g *Gateway) sessionsRevoked(memberSessions [][]byte) {
 // next 在每次尝试前调用，返回这一次要发的输入。返回 false 表示这条消息已经不必再发。
 func (g *Gateway) sendPresence(roomID string, takeover bool, next func() (room.Input, bool)) (done bool) {
 	in, ok := next()
-	return !ok || g.route(context.Background(), roomID, envelope{input: in}, takeover) == nil
+	if !ok {
+		return true
+	}
+	if err := g.route(context.Background(), roomID, envelope{input: in}, takeover); err != nil {
+		g.logger.Log(logctx.WithRoom(context.Background(), roomID), g.presenceWarned.Level(), "在线状态消息没有送到 owner", "input", fmt.Sprintf("%T", in), "error", err)
+		return false
+	}
+	g.presenceWarned.Recovered()
+	return true
 }
 
 // 网关停止之后不再重试，因为进程即将退出，等本实例的存活键过期，owner 会让本实例的会话离开。
@@ -647,8 +660,15 @@ func (g *Gateway) heartbeat(ctx context.Context) {
 		beatCtx, cancel := context.WithTimeout(ctx, clusterTimeout)
 		alive, err := g.liveness.Heartbeat(beatCtx, aliveTTL)
 		cancel()
+		if err != nil {
+			if ctx.Err() == nil {
+				g.logger.Log(ctx, g.heartbeatWarned.Level(), "刷新本实例的存活键失败", "error", err)
+			}
+			continue
+		}
+		g.heartbeatWarned.Recovered()
 		// 存活键曾经过期（例如 Redis 被清空），owner 可能已经让本地会话离开了在线列表。
-		if err == nil && !alive {
+		if !alive {
 			for _, roomID := range g.joinedRooms() {
 				g.rejoin(roomID, false)
 			}
@@ -808,8 +828,13 @@ func (g *Gateway) unsubscribe(roomID string, link *roomLink) {
 	link.leaving = make(chan struct{})
 	g.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), clusterTimeout)
-	_ = g.bus.UnsubscribeRoom(ctx, roomID)
+	err := g.bus.UnsubscribeRoom(ctx, roomID)
 	cancel()
+	if err != nil {
+		g.logger.Log(logctx.WithRoom(context.Background(), roomID), g.unsubscribeWarned.Level(), "退订房间的频道失败", "error", err)
+	} else {
+		g.unsubscribeWarned.Recovered()
+	}
 	g.mu.Lock()
 	delete(g.links, roomID)
 	close(link.leaving)

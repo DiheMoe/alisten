@@ -73,7 +73,7 @@ func newSongs() *songs {
 
 func newPickingSongs(rooms port.RoomDirectory, quota port.Quota) *songs {
 	netease, bilibili := porttest.NewSource(track.NetEase), porttest.NewBilibili()
-	music := catalog.New(netease, porttest.NewSource(track.QQ), bilibili, bilibili, noTracks{}, noHistory{}, rooms, quota)
+	music := catalog.New(netease, porttest.NewSource(track.QQ), bilibili, bilibili, noTracks{}, noHistory{}, rooms, quota, slog.New(slog.DiscardHandler))
 	return &songs{netease: netease, bilibili: bilibili, music: music, preparer: porttest.NewPreparer()}
 }
 
@@ -605,7 +605,7 @@ func TestPanickingRecommendationKeepsRoomRunning(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := porttest.New()
 		bilibili := porttest.NewBilibili()
-		music := catalog.New(porttest.NewSource(track.NetEase), porttest.NewSource(track.QQ), bilibili, bilibili, noTracks{}, panickingHistory{}, nil, nil)
+		music := catalog.New(porttest.NewSource(track.NetEase), porttest.NewSource(track.QQ), bilibili, bilibili, noTracks{}, panickingHistory{}, nil, nil, slog.New(slog.DiscardHandler))
 		preparer := porttest.NewPreparer()
 		preparer.Add(sunny, sunnyM, sunnyP)
 		preparer.Add(rain, rainM, rainP)
