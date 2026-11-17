@@ -4,6 +4,7 @@ package loudness
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"math"
@@ -49,10 +50,17 @@ func GainToCoefficient(gainDb float64) float64 {
 	return math.Pow(10, gainDb/20)
 }
 
+// 真实的音乐和语音都不低于 8000 Hz。采样率可以随意写进 WAV 的文件头，低得离谱时每个 100ms 段只有一帧，
+// 每帧都会产生一个能量块，32 MiB 的 1 Hz 文件就要累计分配上 GB 的内存。
+const minSampleRate = 8000
+
 func AnalyzeReader(r io.Reader) (*Result, error) {
 	dec, err := wav.NewDecoder(r)
 	if err != nil {
 		return nil, err
+	}
+	if dec.SampleRate() < minSampleRate {
+		return nil, fmt.Errorf("loudness: 采样率 %d Hz 太低，至少要 %d Hz", dec.SampleRate(), minSampleRate)
 	}
 	an := NewAnalyzer(dec.SampleRate(), dec.Channels())
 	buf := make([]float64, 32768)

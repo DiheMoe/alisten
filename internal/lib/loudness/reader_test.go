@@ -113,3 +113,15 @@ func TestAnalyzeReaderMonoMatchesDualMono(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalyzeReaderRejectsSampleRatesBelowSpeech(t *testing.T) {
+	samples := make([]float64, 2*16000)
+	low, _ := pcm16WAV(samples, minSampleRate-1, 2)
+	if _, err := AnalyzeReader(bytes.NewReader(low)); err == nil {
+		t.Errorf("采样率 %d Hz 的音频应被拒绝", minSampleRate-1)
+	}
+	lowest, _ := pcm16WAV(samples, minSampleRate, 2)
+	if _, err := AnalyzeReader(bytes.NewReader(lowest)); err != nil {
+		t.Errorf("采样率 %d Hz 的音频应能分析：%v", minSampleRate, err)
+	}
+}
