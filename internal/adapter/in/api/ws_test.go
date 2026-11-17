@@ -740,8 +740,10 @@ func TestOutstandingRequestLimit(t *testing.T) {
 		conn := f.join(t, roomID, ticket)
 
 		// 第一个请求切换模式，房间落盘时卡住。房间按顺序处理输入，后面的请求都排在它后面等着。
-		// 后面用 room.sync，因为切换模式按成员限流，连发会被房间拒绝。
+		// 后面用 room.sync，因为切换模式按成员限流，连发会被房间拒绝。每个请求在各自的 goroutine 里交给房间，
+		// 所以先等切换模式卡住再发后面的请求，否则先到房间的 room.sync 会立即完成，空出名额。
 		writeFrame(t, conn, `{"kind":"request","type":"settings.setPlayMode","id":"m0","data":{"playMode":"random"}}`)
+		synctest.Wait()
 		for i := 1; i < 16; i++ {
 			writeFrame(t, conn, fmt.Sprintf(`{"kind":"request","type":"room.sync","id":"s%d","data":{}}`, i))
 		}
