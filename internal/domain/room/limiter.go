@@ -10,27 +10,28 @@ type limiter struct {
 	tat time.Time
 }
 
-func (l *limiter) allow(now time.Time, burst int, interval time.Duration) bool {
+// 放行时扣掉一次并返回 0，否则返回还要等多久，不扣。
+func (l *limiter) take(now time.Time, burst int, interval time.Duration) time.Duration {
 	tat := l.tat
 	if tat.Before(now) {
 		tat = now
 	}
-	if tat.Sub(now) > time.Duration(burst-1)*interval {
-		return false
+	if wait := tat.Sub(now) - time.Duration(burst-1)*interval; wait > 0 {
+		return wait
 	}
 	l.tat = tat.Add(interval)
-	return true
+	return 0
 }
 
 // 按成员分别计数的令牌桶。闲置到和新桶没有区别的记录随时清掉，所以记下的成员数不超过最近操作过的人数。
 type memberLimits map[string]limiter
 
-func (m memberLimits) allow(memberID string, now time.Time, burst int, interval time.Duration) bool {
+func (m memberLimits) take(memberID string, now time.Time, burst int, interval time.Duration) time.Duration {
 	maps.DeleteFunc(m, func(_ string, l limiter) bool { return !l.tat.After(now) })
 	l := m[memberID]
-	if !l.allow(now, burst, interval) {
-		return false
+	if wait := l.take(now, burst, interval); wait > 0 {
+		return wait
 	}
 	m[memberID] = l
-	return true
+	return 0
 }

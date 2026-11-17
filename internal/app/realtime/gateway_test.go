@@ -513,8 +513,9 @@ func TestPickQuotaBeforeUpstream(t *testing.T) {
 		f.quota.exhausted.Store(true)
 		f.songs.netease.Fail(errors.New("上游不可用"))
 		for _, p := range []Pick{{Track: sunny}, {Source: track.NetEase, Keyword: "晴"}} {
-			if _, _, err := f.gateway.Resolve(t.Context(), ephemeral, alice, false, p); !errors.Is(err, room.ErrRateLimited) {
-				t.Errorf("临时房间的点歌额度用完时 Resolve(%+v) 的错误 = %v，期望查询上游之前就以 room.ErrRateLimited 拒绝", p, err)
+			var roomErr *room.Error
+			if _, _, err := f.gateway.Resolve(t.Context(), ephemeral, alice, false, p); !errors.As(err, &roomErr) || roomErr.Kind != room.RateLimited {
+				t.Errorf("临时房间的点歌额度用完时 Resolve(%+v) 的错误 = %v，期望查询上游之前就以房间的点歌额度拒绝", p, err)
 			}
 		}
 		if _, _, err := f.gateway.Resolve(t.Context(), persistent, alice, false, Pick{Track: sunny}); !errors.Is(err, port.ErrProviderFailed) {

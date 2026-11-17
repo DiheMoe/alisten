@@ -248,7 +248,7 @@ func (s *Service) TakePick(ctx context.Context, roomID string) error {
 		return err
 	}
 	if wait > 0 {
-		return room.ErrRateLimited
+		return room.PickQuotaExhausted(wait)
 	}
 	return nil
 }

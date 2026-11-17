@@ -22,15 +22,15 @@ func (r *Room) command(b *batch, c Command) {
 	case VoteSkip:
 		res, err = r.voteSkip(b, c.Member)
 	case SetPlayMode:
-		if !r.modeLimits.allow(c.Member.ID, b.now, modeBurst, modeRefill) {
-			err = ErrRateLimited
+		if wait := r.modeLimits.take(c.Member.ID, b.now, modeBurst, modeRefill); wait > 0 {
+			err = errModeQuota(wait)
 			break
 		}
 		r.mode = a.Mode
 		res = Done{}
 	case Chat:
-		if !r.chatLimits.allow(c.Member.ID, b.now, chatBurst, chatRefill) {
-			err = ErrRateLimited
+		if wait := r.chatLimits.take(c.Member.ID, b.now, chatBurst, chatRefill); wait > 0 {
+			err = errChatQuota(wait)
 			break
 		}
 		b.event(ChatPosted{Member: c.Member, Text: truncate(a.Text, chatLimit), SentAt: b.now})
@@ -66,8 +66,8 @@ func (r *Room) enqueue(b *batch, by member.Member, a Enqueue) (Result, *Error) {
 	if r.queued(a.Track) {
 		return nil, errDuplicatePick
 	}
-	if !r.pickLimit.allow(b.now, r.burst(), RefillInterval) {
-		return nil, ErrRateLimited
+	if wait := r.pickLimit.take(b.now, r.burst(), RefillInterval); wait > 0 {
+		return nil, PickQuotaExhausted(wait)
 	}
 	e := r.add(b, a.Track, a.Meta, by, a.Requester, false)
 	r.lastPick = b.now
@@ -81,8 +81,8 @@ func (r *Room) remove(b *batch, by member.Member, a Remove) (Result, *Error) {
 	if !pending && i < 0 {
 		return nil, errNotInQueue
 	}
-	if !r.pickLimit.allow(b.now, r.burst(), RefillInterval) {
-		return nil, ErrRateLimited
+	if wait := r.pickLimit.take(b.now, r.burst(), RefillInterval); wait > 0 {
+		return nil, PickQuotaExhausted(wait)
 	}
 	var e Entry
 	if pending {
@@ -100,8 +100,8 @@ func (r *Room) like(b *batch, by member.Member, a Like) (Result, *Error) {
 	if i < 0 {
 		return nil, errNotInQueue
 	}
-	if !r.likeLimit.allow(b.now, r.burst(), RefillInterval) {
-		return nil, ErrRateLimited
+	if wait := r.likeLimit.take(b.now, r.burst(), RefillInterval); wait > 0 {
+		return nil, errLikeQuota(wait)
 	}
 	r.waiting[i].Likes++
 	e := r.waiting[i]

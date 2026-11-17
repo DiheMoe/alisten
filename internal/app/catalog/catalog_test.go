@@ -202,8 +202,9 @@ func TestTakePick(t *testing.T) {
 
 		f.quota.pickWait = time.Minute
 		start := time.Now()
-		if err := f.svc.TakePick(t.Context(), f.ephemeral); !errors.Is(err, room.ErrRateLimited) {
-			t.Errorf("点歌额度用完时的错误 = %v，期望 room.ErrRateLimited", err)
+		var roomErr *room.Error
+		if err := f.svc.TakePick(t.Context(), f.ephemeral); !errors.As(err, &roomErr) || roomErr.Kind != room.RateLimited || roomErr.Message != "这个房间点歌和移除的次数用完了，60 秒后再试。" {
+			t.Errorf("点歌额度用完时的错误 = %v，期望和房间一样说明是房间的额度、60 秒后再试", err)
 		}
 		if waited := time.Since(start); waited != 0 {
 			t.Errorf("等了 %v，期望与房间的点歌限流一样立即拒绝", waited)
