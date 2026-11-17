@@ -188,3 +188,40 @@ func TestStoredMediaPages(t *testing.T) {
 		}
 	}
 }
+
+// 后台按 media_key 查找和删除媒体。关掉顺序扫描之后，执行计划要用上 media_key 的索引，说明这两条查询都能走索引。
+func TestStoredMediaLookupsUseTheMediaKeyIndex(t *testing.T) {
+	_, pool := newStore(t)
+	ctx := t.Context()
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(ctx, "SET enable_seqscan = off"); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		"EXPLAIN SELECT * FROM tracks WHERE media_key = 'k'",
+		"EXPLAIN DELETE FROM tracks WHERE media_key = 'k'",
+	} {
+		rows, err := conn.Query(ctx, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var plan strings.Builder
+		for rows.Next() {
+			var line string
+			if err := rows.Scan(&line); err != nil {
+				t.Fatal(err)
+			}
+			plan.WriteString(line + "\n")
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(plan.String(), "tracks_media_key_idx") {
+			t.Errorf("%s 的执行计划没有用 media_key 的索引：\n%s", q, plan.String())
+		}
+	}
+}
