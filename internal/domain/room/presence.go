@@ -16,6 +16,7 @@ func (r *Room) leave(b *batch, in Leave) {
 		return
 	}
 	r.sessions = slices.Delete(r.sessions, i, i+1)
+	r.recountVotes(b)
 	if len(r.sessions) == 0 && r.info.Kind == Ephemeral {
 		r.closeTimer = r.schedule(b, b.now.Add(closeDelay))
 	}

@@ -782,7 +782,7 @@
     },
     {
       "type": "room.activity",
-      "description": "点歌、移除、点赞、投票、投票切歌成功和准备失败。不同 kind 只填写各自相关的字段",
+      "description": "点歌、移除、点赞、投票、投票切歌成功和准备失败。不同 kind 只填写各自相关的字段。有人离开后已有的票数达到门槛时也会切歌，这时 skipped 没有 member",
       "data": {
         "type": "object",
         "additionalProperties": false,

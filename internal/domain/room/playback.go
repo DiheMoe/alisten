@@ -194,8 +194,7 @@ func (r *Room) voteSkip(b *batch, by member.Member) (Result, *Error) {
 		return nil, errDuplicateVote
 	}
 	r.votes = append(r.votes, by.ID)
-	// 一人一票，所以门槛也按人数算，否则开着多个连接的成员会让票数永远凑不够。
-	votes, required := len(r.votes), max((Headcount(r.sessions)+2)/3, 1)
+	votes, required := len(r.votes), r.voteThreshold()
 	entry := r.current.Entry
 	if votes < required {
 		b.event(Activity{Kind: ActivityVoted, Member: by, Entry: entry, Votes: votes, Required: required})
@@ -204,4 +203,23 @@ func (r *Room) voteSkip(b *batch, by member.Member) (Result, *Error) {
 	b.event(Activity{Kind: ActivitySkipped, Member: by, Entry: entry, Votes: votes, Required: required})
 	r.endCurrent(b, b.now)
 	return VoteResult{Votes: votes, Required: required, Skipped: true}, nil
+}
+
+// 一人一票，所以门槛也按人数算，否则开着多个连接的成员会让票数永远凑不够。
+func (r *Room) voteThreshold() int {
+	return max((Headcount(r.sessions)+2)/3, 1)
+}
+
+// 有人离开后门槛会变低，已有的票数够了就直接切歌，否则投过票的人再投只会得到“已经投过票”，这首歌就切不掉了。
+// 离开的人投过的票仍然算数，因为票一直有效到这首歌结束。这次切歌不是哪一票促成的，所以动态里没有成员。
+func (r *Room) recountVotes(b *batch) {
+	if r.current == nil || len(r.votes) == 0 {
+		return
+	}
+	votes, required := len(r.votes), r.voteThreshold()
+	if votes < required {
+		return
+	}
+	b.event(Activity{Kind: ActivitySkipped, Entry: r.current.Entry, Votes: votes, Required: required})
+	r.endCurrent(b, b.now)
 }

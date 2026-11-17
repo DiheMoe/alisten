@@ -98,3 +98,47 @@ func TestSkipDuringStartLeadRecordsNoNegativeDuration(t *testing.T) {
 		t.Fatalf("开播前就被切掉时，结束时间等于开始时间：%#v", plays)
 	}
 }
+
+// 4 个人在线，alice 已经投了 1 票，门槛是 2。
+func votedRoom(t *testing.T) *Room {
+	t.Helper()
+	r := newRoom(t, Persistent)
+	for i, m := range []member.Member{alice, bob, carol, dave} {
+		r.Handle(at(0), Join{Session: SessionID(fmt.Sprint("s", i)), Member: m})
+	}
+	playing(t, r, 0, netease("a"), time.Minute)
+	pickReady(r, 0, bob, "b")
+	if res, ok := reply(t, r.Handle(at(time.Second), command(alice, VoteSkip{}))).Result.(VoteResult); !ok || res.Skipped {
+		t.Fatalf("4 个人时 1 票不够：%#v", res)
+	}
+	return r
+}
+
+func TestVotesAreRecountedWhenSomeoneLeaves(t *testing.T) {
+	r := votedRoom(t)
+	effects := r.Handle(at(2*time.Second), Leave{Session: "s2"})
+	skipped := events[Activity](effects)
+	if len(skipped) != 1 || skipped[0].Kind != ActivitySkipped || skipped[0].Member != (member.Member{}) || skipped[0].Votes != 1 || skipped[0].Required != 1 {
+		t.Fatalf("3 个人的门槛是 1，已有的 1 票够了，应切歌，动态里没有成员：%#v", effects)
+	}
+	if r.current == nil || r.current.Entry.Track != netease("b") {
+		t.Fatalf("切歌之后应放下一首：%#v", r.current)
+	}
+}
+
+func TestAVoteStaysAfterTheVoterLeaves(t *testing.T) {
+	r := votedRoom(t)
+	r.Handle(at(2*time.Second), Leave{Session: "s0"})
+	if r.current == nil || r.current.Entry.Track != netease("b") {
+		t.Fatalf("alice 离开后她的票仍然算数，3 个人的门槛是 1，应切歌：%#v", r.current)
+	}
+}
+
+func TestClosingOneOfSeveralConnectionsKeepsTheThreshold(t *testing.T) {
+	r := votedRoom(t)
+	r.Handle(at(time.Second), Join{Session: "a2", Member: alice})
+	effects := r.Handle(at(2*time.Second), Leave{Session: "a2"})
+	if len(events[Activity](effects)) != 0 || r.current.Entry.Track != netease("a") {
+		t.Fatalf("alice 还有一个连接在线，人数不变，不应切歌：%#v", effects)
+	}
+}
