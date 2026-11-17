@@ -75,6 +75,8 @@ func TestSetYouTubeCookies(t *testing.T) {
 		{"SID=fictional; HSID=other", "\tSID\tfictional"},
 		{"Cookie: SID=fictional; HSID=other", "\tSID\tfictional"},
 		{"cookie:sid=fictional", "\tsid\tfictional"},
+		// 从浏览器复制的请求头末尾常带一个分号。
+		{"SID=fictional; HSID=other;", "\tHSID\tother"},
 	} {
 		if err := f.admin.SetYouTubeCookies(t.Context(), tc.header); err != nil {
 			t.Fatalf("保存请求头格式的 cookies：%v", err)
@@ -101,7 +103,7 @@ func TestSetYouTubeCookies(t *testing.T) {
 	}
 
 	// 无法识别的内容返回固定错误，错误文本不包含输入的值。
-	unrecognized := []string{"fictional", "  \n ", "name\twith\ttabs", "a=1\nb=2", "# Netscape HTTP Cookie File"}
+	unrecognized := []string{"fictional", "  \n ", "name\twith\ttabs", "a=1\nb=2", "# Netscape HTTP Cookie File", ";"}
 	for _, input := range unrecognized {
 		err := f.admin.SetYouTubeCookies(t.Context(), input)
 		if !errors.Is(err, ErrUnrecognizedCookies) {

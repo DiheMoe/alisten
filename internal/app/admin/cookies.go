@@ -62,7 +62,12 @@ func convertCookieHeader(s string) (string, bool) {
 	expiry := strconv.FormatInt(time.Now().AddDate(1, 0, 0).Unix(), 10)
 	var lines []string
 	for _, part := range strings.Split(body, ";") {
-		name, value, ok := strings.Cut(strings.TrimSpace(part), "=")
+		part = strings.TrimSpace(part)
+		// 从浏览器复制的请求头末尾常带一个分号，分号之间的空段直接跳过。
+		if part == "" {
+			continue
+		}
+		name, value, ok := strings.Cut(part, "=")
 		if !ok || name == "" {
 			return "", false
 		}
