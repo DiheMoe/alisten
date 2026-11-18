@@ -13,6 +13,7 @@ import { appearanceStore, performanceStore } from '@/features/settings'
 import { setViewportHeight } from '@/shared/lib/viewport'
 import { App } from './app'
 import { watchConnection } from './connection-notices'
+import { watchKeyboard } from './keyboard'
 import { navigationStore } from './navigation'
 import { pwaStore } from './pwa'
 import './style.css'
@@ -45,6 +46,7 @@ pwaStore.start()
 navigationStore.start()
 setViewportHeight()
 window.addEventListener('resize', setViewportHeight, { passive: true })
+watchKeyboard()
 
 createRoot(root).render(
   <StrictMode>

@@ -166,4 +166,6 @@
   .mobile-nav button { display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center; min-height: 48px; background: none; color: var(--color-foreground-subtle); border: 0; border-radius: 8px; }
   .mobile-nav button:active { background: var(--color-frame-hover); }
   .mobile-nav .selected { color: var(--color-brand); }
+  /* 输入法开着时让输入框直接贴着输入法，见 keyboard.ts。 */
+  :root[data-keyboard='open'] .app-shell > .player-bar, :root[data-keyboard='open'] .mobile-nav { display: none; }
 }
