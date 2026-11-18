@@ -2,7 +2,7 @@
 
 在线音乐共享房间，支持实时同步播放、共享队列、多音源和管理后台。
 
-本项目在 [bihua-university/alisten](https://github.com/bihua-university/alisten) 基础上重构。
+本项目基于 [bihua-university/alisten](https://github.com/bihua-university/alisten) 的早期版本重构和扩展。
 
 ## 自行部署
 
@@ -78,7 +78,7 @@ helm upgrade alisten \
   --timeout 6m
 ```
 
-serve 和 worker 使用 `Recreate` 策略更新，不支持滚动发布，因为实例之间的消息按构建版本过滤，不同版本的实例无法协作。更新时旧 Pod 会先全部停止，所有房间的连接随之断开，新 Pod 就绪后客户端会自动重连。房间状态保存在数据库中，不会丢失。中断时长取决于新 Pod 拉取镜像和就绪所需的时间。
+serve 和 worker 使用 `Recreate` 策略更新，暂不支持滚动发布。
 
 ## 开放 API
 
