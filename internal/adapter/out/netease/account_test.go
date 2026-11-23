@@ -1,6 +1,8 @@
 package netease
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"reflect"
 	"testing"
@@ -10,13 +12,14 @@ import (
 
 func TestCurrentAccount(t *testing.T) {
 	tests := []struct {
-		name     string
-		body     string
-		id       string
-		nickname string
-		vip      bool
-		empty    bool
-		wantErr  bool
+		name      string
+		body      string
+		id        string
+		nickname  string
+		vip       bool
+		empty     bool
+		wantErr   bool
+		signedOut bool
 	}{
 		{
 			name:     "会员账号",
@@ -31,9 +34,9 @@ func TestCurrentAccount(t *testing.T) {
 			id:   "42",
 		},
 		{
-			name:  "成功但没有账号资料",
-			body:  `{"code":200,"profile":{}}`,
-			empty: true,
+			name:      "登录已失效",
+			body:      `{"code":200,"profile":{}}`,
+			signedOut: true,
 		},
 		{
 			name:    "业务错误",
@@ -54,6 +57,15 @@ func TestCurrentAccount(t *testing.T) {
 				},
 			})
 			got, err := client.CurrentAccount(t.Context())
+			if tc.signedOut {
+				if !errors.Is(err, port.ErrSourceSignedOut) {
+					t.Fatalf("登录失效的错误 = %v，期望 ErrSourceSignedOut", err)
+				}
+				if got != nil {
+					t.Fatalf("登录失效时返回了账号 %+v", got)
+				}
+				return
+			}
 			if tc.wantErr {
 				if err == nil {
 					t.Fatal("账号查询错误 = nil，期望失败")
@@ -78,5 +90,14 @@ func TestCurrentAccount(t *testing.T) {
 				t.Fatalf("账号资料 = %+v，期望 %+v", got, want)
 			}
 		})
+	}
+}
+
+// 没有保存凭据是"从未登录"，不是"登录失效"：返回 nil 账号，不发请求。
+func TestCurrentAccountWithoutCookie(t *testing.T) {
+	c := New(&http.Client{}, func(context.Context) (string, error) { return "", nil }, nil, (&observed{}).record, testLogger)
+	got, err := c.CurrentAccount(t.Context())
+	if err != nil || got != nil {
+		t.Fatalf("没有凭据时 = %+v, %v，期望 nil 账号且无错误", got, err)
 	}
 }

@@ -373,6 +373,20 @@ func (c *Client) PlayURL(ctx context.Context, id string) (string, error) {
 	if err := errors.Join(exhighErr, standardErr); err != nil {
 		return "", err
 	}
+	// 拿不到播放地址时复核登录：播放接口对失效凭据不直接报登录失效，用账号接口区分"登录失效"和"需要会员或没有版权"。
+	cookie, err := c.cookie.get(ctx)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(cookie) != "" {
+		info, err := c.accountInfo(ctx)
+		if err != nil {
+			return "", err
+		}
+		if info.UserID == 0 {
+			return "", fmt.Errorf("获取播放地址：%w", port.ErrSourceSignedOut)
+		}
+	}
 	if exhigh.trial() || standard.trial() {
 		return "", &port.RejectedError{Err: errors.New("这首歌需要网易云会员账号才能完整播放，请管理员在后台设置会员账号的 Cookie")}
 	}

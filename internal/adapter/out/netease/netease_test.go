@@ -286,8 +286,9 @@ const audioPath = "/song.mp3"
 
 func resolveRoutes(t *testing.T) map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
-		"/weapi/v3/song/detail": fixture(t, "song-detail.json"),
-		"/weapi/song/lyric/v1":  fixture(t, "lyric.json"),
+		"/weapi/v3/song/detail":    fixture(t, "song-detail.json"),
+		"/weapi/song/lyric/v1":     fixture(t, "lyric.json"),
+		"/weapi/nuser/account/get": body(`{"code":200,"profile":{"userId":42,"nickname":"","vipType":0}}`),
 		audioPath: func(w http.ResponseWriter, r *http.Request) {
 			// 音频来自 CDN，网易云的 Cookie 不能发给它。
 			if got := r.Header.Get("Cookie"); got != "" {
