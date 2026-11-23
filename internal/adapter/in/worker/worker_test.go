@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
@@ -29,6 +30,8 @@ func run(_ context.Context, t track.Track) error {
 		return nil
 	case "rejected":
 		return &port.RejectedError{Err: errors.New("网易云没有提供这首歌的播放地址")}
+	case "signed-out":
+		return fmt.Errorf("获取播放地址：平台返回 10004：%w", port.ErrSourceSignedOut)
 	}
 	return errors.New("连接被重置")
 }
@@ -81,7 +84,7 @@ func TestWorkerReportsFinalOutcomes(t *testing.T) {
 	}
 
 	jobs := map[string]int64{}
-	for _, id := range []string{"ok", "rejected", "broken"} {
+	for _, id := range []string{"ok", "rejected", "broken", "signed-out"} {
 		res, err := client.Insert(t.Context(), prepareArgs{Source: "netease", ID: id}, &river.InsertOpts{Queue: prepareQueue, MaxAttempts: 2})
 		if err != nil {
 			t.Fatal(err)
@@ -89,7 +92,7 @@ func TestWorkerReportsFinalOutcomes(t *testing.T) {
 		jobs[id] = res.Job.ID
 	}
 	// River 第一次重试的间隔约 1 秒。
-	for deadline := time.Now().Add(30 * time.Second); rec.count() < 3; time.Sleep(50 * time.Millisecond) {
+	for deadline := time.Now().Add(30 * time.Second); rec.count() < 4; time.Sleep(50 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatalf("30 秒后只收到 %d 个结果", rec.count())
 		}
@@ -104,6 +107,7 @@ func TestWorkerReportsFinalOutcomes(t *testing.T) {
 		{Track: netease("ok"), JobID: jobs["ok"]},
 		{Track: netease("rejected"), JobID: jobs["rejected"], Reason: "网易云没有提供这首歌的播放地址"},
 		{Track: netease("broken"), JobID: jobs["broken"], Reason: port.UnavailableReason},
+		{Track: netease("signed-out"), JobID: jobs["signed-out"], Reason: port.ErrSourceSignedOut.Error()},
 	}
 	byJob := func(a, b port.PrepareOutcome) int { return int(a.JobID - b.JobID) }
 	slices.SortFunc(rec.outcomes, byJob)
@@ -111,10 +115,10 @@ func TestWorkerReportsFinalOutcomes(t *testing.T) {
 		t.Errorf("任务的结果 = %+v\n期望 %+v", rec.outcomes, want)
 	}
 	slices.Sort(rec.results)
-	if want := []string{"netease failed", "netease ok", "netease rejected"}; !slices.Equal(rec.results, want) {
+	if want := []string{"netease failed", "netease ok", "netease rejected", "netease rejected"}; !slices.Equal(rec.results, want) {
 		t.Errorf("记下的结果 = %q，期望 %q：重试之前的失败不算", rec.results, want)
 	}
-	for _, msg := range []string{`"msg":"准备任务失败，稍后重试"`, `"msg":"准备任务失败"`} {
+	for _, msg := range []string{`"msg":"准备任务失败，稍后重试"`, `"msg":"准备任务失败"`, `"msg":"准备任务取消，音乐平台的登录已失效"`} {
 		if !strings.Contains(logs.String(), msg) {
 			t.Errorf("日志中没有 %s：\n%s", msg, logs.String())
 		}
@@ -131,6 +135,9 @@ func TestWorkerReportsFinalOutcomes(t *testing.T) {
 		}
 		if entry.Level == "INFO" && entry.Msg != "执行准备任务" {
 			t.Errorf("River 的 info 日志不应输出：%s", line)
+		}
+		if entry.TrackID == "signed-out" && strings.Contains(line, "10004") {
+			t.Errorf("登录失效的日志里出现了音源的错误文本：%s", line)
 		}
 		if strings.HasPrefix(entry.Msg, "执行准备任务") || strings.HasPrefix(entry.Msg, "准备任务失败") {
 			if entry.JobID != jobs[entry.TrackID] {

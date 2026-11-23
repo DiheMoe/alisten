@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
@@ -107,7 +108,7 @@ func TestCredentialStatus(t *testing.T) {
 	s.Admin = admin.New("admin-secret", s.Lobby, store, store, store, netease, qq, porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), s.Gateway)
 	server, _ := start(t, s)
 	for _, path := range []string{"/api/admin/credentials/netease", "/api/admin/credentials/qq"} {
-		want := response{status: http.StatusOK, body: `{"account":null,"set":false}`}
+		want := response{status: http.StatusOK, body: `{"account":null,"set":false,"signedOut":false}`}
 		if got := send(t, server, http.MethodGet, path, "", adminHeader...); got != want {
 			t.Errorf("没有凭据时 %s = %#v，期望 %#v", path, got, want)
 		}
@@ -123,8 +124,8 @@ func TestCredentialStatus(t *testing.T) {
 	netease.SetAccount(&port.SourceAccount{ID: "123", Name: &name, VIP: &vip, Verified: true})
 	qq.SetAccount(&port.SourceAccount{ID: "456"})
 	for path, want := range map[string]string{
-		"/api/admin/credentials/netease": `{"account":{"id":"123","name":"测试账号","verified":true,"vip":true},"set":true}`,
-		"/api/admin/credentials/qq":      `{"account":{"id":"456","name":null,"verified":false,"vip":null},"set":true}`,
+		"/api/admin/credentials/netease": `{"account":{"id":"123","name":"测试账号","verified":true,"vip":true},"set":true,"signedOut":false}`,
+		"/api/admin/credentials/qq":      `{"account":{"id":"456","name":null,"verified":false,"vip":null},"set":true,"signedOut":false}`,
 	} {
 		got := send(t, server, http.MethodGet, path, "", adminHeader...)
 		if got.status != http.StatusOK || got.body != want {
@@ -133,6 +134,11 @@ func TestCredentialStatus(t *testing.T) {
 		if strings.Contains(got.body, "cookie-secret") {
 			t.Errorf("%s 的响应泄漏了 Cookie：%s", path, got.body)
 		}
+	}
+
+	qq.FailAccount(fmt.Errorf("平台说未登录：%w", port.ErrSourceSignedOut))
+	if got, want := send(t, server, http.MethodGet, "/api/admin/credentials/qq", "", adminHeader...), (response{status: http.StatusOK, body: `{"account":null,"set":true,"signedOut":true}`}); got != want {
+		t.Errorf("登录已失效时 /api/admin/credentials/qq = %#v，期望 %#v", got, want)
 	}
 
 	netease.FailAccount(errors.New("上游失败"))

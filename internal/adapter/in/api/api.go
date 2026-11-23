@@ -11,6 +11,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,6 +30,7 @@ import (
 	playlistorder "github.com/dihemoe/alisten/internal/domain/playlist"
 	"github.com/dihemoe/alisten/internal/domain/room"
 	"github.com/dihemoe/alisten/internal/lib/logctx"
+	"github.com/dihemoe/alisten/internal/lib/logthrottle"
 	"github.com/dihemoe/alisten/protocol"
 )
 
@@ -73,6 +75,8 @@ type server struct {
 	logger    *slog.Logger
 	commands  *prometheus.CounterVec
 	redirects *prometheus.CounterVec
+	// 键是接口，HTTP 是路由加音源，WebSocket 是请求类型。值是 *logthrottle.Warning。
+	providerWarned sync.Map
 }
 
 type call struct {
@@ -426,6 +430,8 @@ var knownErrors = []struct {
 	{site.ErrInvalidBrandName, protocol.ErrorCodeInvalidArgument},
 	{realtime.ErrUnavailable, protocol.ErrorCodeUnavailable},
 	{realtime.ErrTooManyObservers, protocol.ErrorCodeRateLimited},
+	// 排在 ErrProviderFailed 前面，因为音源会把它和 ErrProviderFailed 包在同一个错误里，回复要说明是登录失效。
+	{port.ErrSourceSignedOut, protocol.ErrorCodeProviderError},
 	{port.ErrProviderFailed, protocol.ErrorCodeProviderError},
 	{media.ErrNoPlayback, protocol.ErrorCodeProviderError},
 	{catalog.ErrRateLimited, protocol.ErrorCodeRateLimited},
@@ -512,8 +518,33 @@ func (s *server) fail(ctx context.Context, w http.ResponseWriter, r *http.Reques
 	// 超时按预期的错误回复，但还是要记下来，因为数据库或下游变慢时，不开追踪就只有这条日志。
 	case errors.Is(err, context.DeadlineExceeded):
 		s.logger.WarnContext(withRequestID(ctx, err), "HTTP 请求超时", "method", r.Method, "route", r.Pattern, "path", r.URL.Path, "elapsed", time.Since(start), "error", err)
+	case info.Code == protocol.ErrorCodeProviderError:
+		// /media 的路径里带着音源，按音源分开节流，这样一个平台持续出错时，另一个平台刚开始的错误不会被压成 DEBUG。
+		s.warnProvider(withRequestID(ctx, err), r.Pattern+" "+r.PathValue("source"), "音乐平台出错", "method", r.Method, "route", r.Pattern, "path", r.URL.Path, "reason", providerReason(err))
 	}
 	writeError(w, info)
+}
+
+// 音乐平台出错是预期内的错误，但不记下来就查不到原因，比如登录已失效。平台故障期间同一个接口会被反复调用，
+// 房间里每个播放器都会重试 /media，所以按接口节流。成功时不调用 Recovered，距上一条 WARN 超过 logthrottle.Interval 之后再出错照样记 WARN。
+func (s *server) warnProvider(ctx context.Context, key, msg string, args ...any) {
+	warned, _ := s.providerWarned.LoadOrStore(key, &logthrottle.Warning{})
+	s.logger.Log(ctx, warned.(*logthrottle.Warning).Level(), msg, args...)
+}
+
+// 只记能确定的原因，不记音源给的错误文本，因为那段文本可能带着凭据，比如扫码登录的 key。
+func providerReason(err error) string {
+	var rejected *port.RejectedError
+	switch {
+	case errors.Is(err, port.ErrSourceSignedOut):
+		return "登录已失效"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "超时"
+	case errors.As(err, &rejected):
+		return "平台拒绝"
+	default:
+		return "平台出错"
+	}
 }
 
 func withRequestID(ctx context.Context, err error) context.Context {

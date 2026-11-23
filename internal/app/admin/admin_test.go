@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"log/slog"
 	"reflect"
 	"strconv"
@@ -438,6 +439,11 @@ func TestCredentialStatus(t *testing.T) {
 			source.failAccount(upstream)
 			if _, err := source.status(t.Context()); !errors.Is(err, port.ErrProviderFailed) || !errors.Is(err, upstream) {
 				t.Fatalf("账号查询错误 = %v，期望包含上游错误和 ErrProviderFailed", err)
+			}
+			source.failAccount(fmt.Errorf("平台说未登录：%w", port.ErrSourceSignedOut))
+			got, err = source.status(t.Context())
+			if err != nil || got != (port.CredentialStatus{Set: true, SignedOut: true}) {
+				t.Fatalf("登录已失效时的状态 = %+v, %v，期望已保存、登录已失效、不当成查询出错", got, err)
 			}
 		})
 	}

@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "b1900696599ef398"
+const Version = "77c2a450b56ba881"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -77,13 +77,15 @@ type AdminGetGithubCredentialResponse struct {
 }
 
 type AdminGetNeteaseCredentialResponse struct {
-	Account *SourceAccount `json:"account"`
-	Set     bool           `json:"set"`
+	Account   *SourceAccount `json:"account"`
+	Set       bool           `json:"set"`
+	SignedOut bool           `json:"signedOut"`
 }
 
 type AdminGetQQCredentialResponse struct {
-	Account *SourceAccount `json:"account"`
-	Set     bool           `json:"set"`
+	Account   *SourceAccount `json:"account"`
+	Set       bool           `json:"set"`
+	SignedOut bool           `json:"signedOut"`
 }
 
 type AdminGetRoomApiKeyResponse struct {

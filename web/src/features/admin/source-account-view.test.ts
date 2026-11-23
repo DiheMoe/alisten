@@ -6,6 +6,7 @@ const cases: { name: string, state: CredentialState, want: ReturnType<typeof sou
   { name: '正在查询', state: { status: 'loading' }, want: { status: '正在查询', tone: 'neutral', detail: '' }, attention: false },
   { name: '查询失败时说明原因', state: { status: 'failed', error: '网络不通' }, want: { status: '查询失败', tone: 'neutral', detail: '网络不通' }, attention: false },
   { name: '没有保存凭据', state: { status: 'loaded', value: { set: false, account: null } }, want: { status: '未登录', tone: 'danger', detail: '' }, attention: true },
+  { name: '平台确认登录已失效', state: { status: 'loaded', value: { set: true, account: null, signedOut: true } }, want: { status: '登录已失效', tone: 'danger', detail: '请重新扫码登录。' }, attention: true },
   { name: '保存凭据但没有账号资料', state: { status: 'loaded', value: { set: true, account: null } }, want: { status: '未识别账号', tone: 'danger', detail: '已保存登录信息，但没有识别出账号。' }, attention: true },
   {
     name: '上游已验证的会员账号',

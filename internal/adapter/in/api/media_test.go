@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -255,5 +257,59 @@ func TestPanickingMediaRedirectIsInternal(t *testing.T) {
 	}
 	if got, want := redirectCounts(t, metrics), map[string]float64{"netease INTERNAL": 1}; !maps.Equal(got, want) {
 		t.Errorf("跳转的计数 = %v，期望 %v", got, want)
+	}
+}
+
+type failingPlayURL struct{ err error }
+
+func (p failingPlayURL) PlayURL(context.Context, string) (string, error) { return "", p.err }
+
+func logLines(t *testing.T, logs *bytes.Buffer) []map[string]any {
+	t.Helper()
+	var entries []map[string]any
+	for line := range strings.Lines(strings.TrimSpace(logs.String())) {
+		var entry map[string]any
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("日志不是 JSON：%v\n%s", err, line)
+		}
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
+// 音乐平台出错时，回复和日志里要能看出是不是登录失效，但日志里不能有音源给的错误文本。同一个接口连续出错只记一条 WARN，按音源分开记。
+func TestMediaFailuresSayWhyAndAreLoggedPerSource(t *testing.T) {
+	store := porttest.New()
+	s := services(store, store, "")
+	signedOut := fmt.Errorf("平台说未登录：%w", port.ErrSourceSignedOut)
+	s.Playback = media.NewPlayback(map[track.Source]port.PlayURLs{
+		track.NetEase: failingPlayURL{signedOut},
+		track.QQ:      failingPlayURL{errors.New("连接被重置")},
+	}, inRooms{{Source: track.NetEase, ID: "1"}, {Source: track.QQ, ID: "2"}})
+	server, logs := start(t, s)
+
+	for range 2 {
+		if got, want := send(t, server, http.MethodGet, "/media/netease/1", ""), failure(protocol.ErrorCodeProviderError, port.ErrSourceSignedOut.Error()); got != want {
+			t.Fatalf("登录失效时 GET /media/netease/1 = %#v，期望 %#v", got, want)
+		}
+	}
+	if got, want := send(t, server, http.MethodGet, "/media/qq/2", ""), failure(protocol.ErrorCodeProviderError, port.ErrProviderFailed.Error()); got != want {
+		t.Fatalf("平台出错时 GET /media/qq/2 = %#v，期望 %#v", got, want)
+	}
+
+	entries := logLines(t, logs)
+	if len(entries) != 2 {
+		t.Fatalf("日志有 %d 条，期望网易云和 QQ 各一条 WARN：\n%s", len(entries), logs)
+	}
+	for i, path := range []string{"/media/netease/1", "/media/qq/2"} {
+		if entry := entries[i]; entry["level"] != "WARN" || entry["route"] != "GET /media/{source}/{id}" || entry["path"] != path {
+			t.Errorf("第 %d 条日志 = %v，期望是 %s 的 WARN", i+1, entry, path)
+		}
+	}
+	if entries[0]["reason"] != "登录已失效" || entries[1]["reason"] != "平台出错" {
+		t.Errorf("日志里的原因 = %v、%v，期望登录已失效和平台出错", entries[0]["reason"], entries[1]["reason"])
+	}
+	if strings.Contains(logs.String(), "平台说未登录") || strings.Contains(logs.String(), "连接被重置") {
+		t.Errorf("日志里出现了音源给的错误文本，它可能带着凭据：\n%s", logs)
 	}
 }

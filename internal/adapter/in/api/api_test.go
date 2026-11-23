@@ -515,6 +515,30 @@ func TestFailureLogsCarryTheRequestID(t *testing.T) {
 	}
 }
 
+// WebSocket 请求的音乐平台错误按请求类型节流，每种类型各记一条 WARN。
+func TestWebSocketProviderErrorsAreLoggedPerType(t *testing.T) {
+	var logs bytes.Buffer
+	s := &server{logger: slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil)))}
+	failed := fmt.Errorf("在网易云音乐搜索：%w：%w", errors.New("连接被重置"), port.ErrProviderFailed)
+
+	for range 3 {
+		if info := s.requestError(t.Context(), "search.tracks", failed); info.Code != protocol.ErrorCodeProviderError {
+			t.Fatalf("回复的错误码 = %s，期望 PROVIDER_ERROR", info.Code)
+		}
+	}
+	s.requestError(t.Context(), "search.playlists", failed)
+
+	entries := logLines(t, &logs)
+	if len(entries) != 2 || entries[0]["type"] != "search.tracks" || entries[1]["type"] != "search.playlists" {
+		t.Fatalf("日志 = %v，期望两种请求类型各一条", entries)
+	}
+	for _, entry := range entries {
+		if entry["level"] != "WARN" || entry["reason"] != "平台出错" || entry["error"] != nil {
+			t.Errorf("日志 = %v，期望是只带原因、不带错误文本的 WARN", entry)
+		}
+	}
+}
+
 type writeRecorder struct {
 	http.ResponseWriter
 	wrote bool

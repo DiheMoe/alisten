@@ -106,7 +106,7 @@ func (s *server) adminGetNeteaseCredential(ctx context.Context, _ call) (protoco
 	if err != nil {
 		return protocol.AdminGetNeteaseCredentialResponse{}, err
 	}
-	return protocol.AdminGetNeteaseCredentialResponse{Set: status.Set, Account: sourceAccountDTO(status.Account)}, nil
+	return protocol.AdminGetNeteaseCredentialResponse{Set: status.Set, Account: sourceAccountDTO(status.Account), SignedOut: status.SignedOut}, nil
 }
 
 func (s *server) adminGetQQCredential(ctx context.Context, _ call) (protocol.AdminGetQQCredentialResponse, error) {
@@ -114,7 +114,7 @@ func (s *server) adminGetQQCredential(ctx context.Context, _ call) (protocol.Adm
 	if err != nil {
 		return protocol.AdminGetQQCredentialResponse{}, err
 	}
-	return protocol.AdminGetQQCredentialResponse{Set: status.Set, Account: sourceAccountDTO(status.Account)}, nil
+	return protocol.AdminGetQQCredentialResponse{Set: status.Set, Account: sourceAccountDTO(status.Account), SignedOut: status.SignedOut}, nil
 }
 
 func (s *server) adminGetBilibiliCredential(ctx context.Context, _ call) (protocol.AdminGetBilibiliCredentialResponse, error) {

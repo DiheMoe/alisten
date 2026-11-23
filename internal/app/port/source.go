@@ -2,6 +2,7 @@ package port
 
 import (
 	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -33,9 +34,11 @@ type QRLoginResult struct {
 }
 
 type SourceAccount struct {
-	ID       string
-	Name     *string
-	VIP      *bool
+	ID   string
+	Name *string
+	// nil 表示没能确定是不是会员。只有平台确认了登录有效，才能据会员查询的结果填写，因为登录失效时平台可能照样回答“不是会员”。
+	VIP *bool
+	// 平台实时确认了这份登录仍然有效。只从本地保存的凭据识别出账号时为 false。
 	Verified bool
 }
 
@@ -46,17 +49,23 @@ const (
 	QQLoginWeChat QQLoginType = "wx"
 )
 
+// CurrentAccount 在平台明确表示保存的登录已失效时，返回包装了 ErrSourceSignedOut 的错误。
 type NetEaseQRLoginSource interface {
 	CreateQRLogin(context.Context) (QRLoginSession, error)
 	CheckQRLogin(context.Context, string) (QRLoginResult, error)
 	CurrentAccount(context.Context) (*SourceAccount, error)
 }
 
+// CurrentAccount 在平台明确表示保存的登录已失效时，返回包装了 ErrSourceSignedOut 的错误。
 type QQQRLoginSource interface {
 	CreateQRLogin(context.Context, QQLoginType) (QRLoginSession, error)
 	CheckQRLogin(context.Context, QQLoginType, string) (QRLoginResult, error)
 	CurrentAccount(context.Context) (*SourceAccount, error)
 }
+
+// 音乐平台明确表示保存的登录已失效时，音源返回包装了它的错误。登录失效之后重试没有用，要管理员重新扫码登录，
+// 所以要和平台一时出错区分开，回复和日志里才看得出原因。
+var ErrSourceSignedOut = errors.New("音乐平台的登录已失效，需要管理员重新扫码登录。")
 
 // RejectedError 表示音源明确拒绝了这首歌，比如歌曲下架或没有版权，所以准备不再重试。
 // RejectedError 的文本就是准备失败的原因。
@@ -114,7 +123,8 @@ type NetEaseSource interface {
 }
 
 // 供 /media 跳转使用。播放地址有时效，调用方把取到的地址复用 1 分钟。
-// 音源明确拒绝这首歌时返回 *RejectedError。实现要自己为对外请求设置期限。
+// 音源明确拒绝这首歌时返回 *RejectedError，平台明确表示登录已失效时返回包装了 ErrSourceSignedOut 的错误。
+// 实现要自己为对外请求设置期限。
 type PlayURLs interface {
 	PlayURL(ctx context.Context, id string) (string, error)
 }

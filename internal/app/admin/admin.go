@@ -224,7 +224,11 @@ func credentialStatus(ctx context.Context, cookie string, current func(context.C
 		return port.CredentialStatus{}, nil
 	}
 	account, err := current(ctx)
-	if err != nil {
+	switch {
+	// 登录失效是平台明确给出的状态，不是查询出错，所以照常回复，由后台提示重新扫码。
+	case errors.Is(err, port.ErrSourceSignedOut):
+		return port.CredentialStatus{Set: true, SignedOut: true}, nil
+	case err != nil:
 		return port.CredentialStatus{Set: true}, err
 	}
 	return port.CredentialStatus{Set: true, Account: account}, nil

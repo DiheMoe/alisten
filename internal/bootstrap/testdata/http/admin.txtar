@@ -130,14 +130,14 @@ GET /api/admin/credentials/netease
 Authorization: Bearer admin-secret
 -- response --
 200
-{"set": false, "account": null}
+{"set": false, "account": null, "signedOut": false}
 
 -- request --
 GET /api/admin/credentials/qq
 Authorization: Bearer admin-secret
 -- response --
 200
-{"set": false, "account": null}
+{"set": false, "account": null, "signedOut": false}
 
 -- request --
 PUT /api/admin/credentials/netease

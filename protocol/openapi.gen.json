@@ -247,11 +247,16 @@
           "set": {
             "description": "是否保存了登录凭据，不代表凭据仍然有效",
             "type": "boolean"
+          },
+          "signedOut": {
+            "description": "保存了登录凭据，但音乐平台确认登录已失效，要重新扫码登录。为 true 时 account 为 null",
+            "type": "boolean"
           }
         },
         "required": [
           "set",
-          "account"
+          "account",
+          "signedOut"
         ],
         "type": "object"
       },
@@ -271,11 +276,16 @@
           "set": {
             "description": "是否保存了登录凭据，不代表凭据仍然有效",
             "type": "boolean"
+          },
+          "signedOut": {
+            "description": "保存了登录凭据，但音乐平台确认登录已失效，要重新扫码登录。为 true 时 account 为 null",
+            "type": "boolean"
           }
         },
         "required": [
           "set",
-          "account"
+          "account",
+          "signedOut"
         ],
         "type": "object"
       },
@@ -2499,7 +2509,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "b1900696599ef398"
+    "version": "77c2a450b56ba881"
   },
   "openapi": "3.1.0",
   "paths": {

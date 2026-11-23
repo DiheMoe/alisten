@@ -15,6 +15,8 @@ type Credentials interface {
 type CredentialStatus struct {
 	Set     bool
 	Account *SourceAccount
+	// 保存了凭据，但音乐平台确认登录已失效。这时 Account 为 nil。
+	SignedOut bool
 }
 
 type YouTubeCookies interface {

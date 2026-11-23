@@ -49,11 +49,13 @@ export interface AdminGetGithubCredentialResponse {
 export interface AdminGetNeteaseCredentialResponse {
   account: SourceAccount | null
   set: boolean
+  signedOut: boolean
 }
 
 export interface AdminGetQQCredentialResponse {
   account: SourceAccount | null
   set: boolean
+  signedOut: boolean
 }
 
 export interface AdminGetRoomApiKeyResponse {

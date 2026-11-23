@@ -22,6 +22,8 @@ export function sourceAccountView(state: CredentialState, platform: string): { s
     return { status: '查询失败', tone: 'neutral', detail: state.error }
   if (!state.value.set)
     return { status: '未登录', tone: 'danger', detail: '' }
+  if ('signedOut' in state.value && state.value.signedOut)
+    return { status: '登录已失效', tone: 'danger', detail: '请重新扫码登录。' }
   if (state.value.account === null)
     return { status: '未识别账号', tone: 'danger', detail: '已保存登录信息，但没有识别出账号。' }
 

@@ -180,8 +180,15 @@ func newWSFixtureWithTickets(t *testing.T, store *porttest.Store, tickets port.T
 		wait()
 		_ = server.Close()
 		transport.CloseIdleConnections()
-		if logs.Len() != 0 {
-			t.Errorf("这些场景都不应产生日志：\n%s", logs.String())
+		// 音乐平台出错时接口层按设计记一条 WARN，有的场景故意让测试音源出错，所以这条不算在内。
+		var unexpected strings.Builder
+		for line := range strings.Lines(logs.String()) {
+			if !strings.Contains(line, `"level":"WARN","msg":"音乐平台出错"`) {
+				unexpected.WriteString(line)
+			}
+		}
+		if unexpected.Len() != 0 {
+			t.Errorf("这些场景都不应产生日志：\n%s", unexpected.String())
 		}
 	})
 	return f
