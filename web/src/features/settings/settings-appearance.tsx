@@ -7,7 +7,8 @@ import { useSettingSave } from '@/shared/lib/use-setting-save'
 import { useStore } from '@/shared/lib/use-store'
 import { SaveStatus, SegmentedControl } from '@/shared/ui'
 import { appearanceStore, fontSizes, themes } from './appearance-store'
-import { SettingRow } from './setting-row'
+import { lyricsDisplayStore } from './lyrics-display-store'
+import { SettingRow, SwitchRow } from './setting-row'
 import { themeNames } from './settings-labels'
 
 function ThemePicker() {
@@ -80,6 +81,28 @@ function FontSizeRow() {
   )
 }
 
+function LyricsRows() {
+  const { translation, words } = useStore(lyricsDisplayStore, s => s)
+  return (
+    <div className="section-group">
+      <SwitchRow
+        id="settings-lyrics-translation"
+        title="显示翻译"
+        description="有翻译的歌，在每行歌词下面显示翻译"
+        checked={translation}
+        onSave={on => lyricsDisplayStore.update(on, lyricsDisplayStore.state.words)}
+      />
+      <SwitchRow
+        id="settings-lyrics-words"
+        title="逐字歌词"
+        description="有逐字时间的歌，按字点亮正在唱的部分，关掉后整行高亮"
+        checked={words}
+        onSave={on => lyricsDisplayStore.update(lyricsDisplayStore.state.translation, on)}
+      />
+    </div>
+  )
+}
+
 export function AppearanceSettings() {
   return (
     <>
@@ -89,6 +112,8 @@ export function AppearanceSettings() {
       <div className="section-group">
         <FontSizeRow />
       </div>
+      <p className="section-group-label">歌词</p>
+      <LyricsRows />
     </>
   )
 }

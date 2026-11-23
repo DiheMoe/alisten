@@ -10,15 +10,21 @@ async function setup() {
   vi.resetModules()
   const room = Object.assign(new EventTarget(), { state: { room: null as { nowPlaying: NowPlaying | null } | null } })
   const frames = new Emitter<number>()
+  const display = Object.assign(new EventTarget(), { state: { translation: true, words: true } })
   vi.doMock('@/core/room', async importOriginal => ({ ...await importOriginal<typeof import('@/core/room')>(), roomStore: room }))
   vi.doMock('@/features/playback', () => ({ playerStore: { frames } }))
+  vi.doMock('@/features/settings', () => ({ lyricsDisplayStore: display }))
   const { lyricsStore } = await import('./lyrics-store')
   lyricsStore.start()
   const play = (next: NowPlaying | null) => {
     room.state = { room: next && { nowPlaying: next } }
     room.dispatchEvent(new Event('change'))
   }
-  return { lyricsStore, frames, play }
+  const show = (state: { translation: boolean, words: boolean }) => {
+    display.state = state
+    display.dispatchEvent(new Event('change'))
+  }
+  return { lyricsStore, frames, play, show }
 }
 
 describe('lyricsStore', () => {
@@ -57,6 +63,33 @@ describe('lyricsStore', () => {
     expect(lyricsStore.state.index).toBe(0)
     frames.emit(1900)
     expect(lyricsStore.state.index).toBe(1)
+  })
+
+  it('关掉翻译时，歌词行不带翻译', async () => {
+    const { lyricsStore, play, show } = await setup()
+    show({ translation: false, words: true })
+    play(nowPlaying('1', { lyricTrans: '[00:01.00]Line' }))
+    expect(lyricsStore.state.lines).toEqual([{ timeMs: 1000, text: '行级歌词' }])
+  })
+
+  it('关掉逐字时仍用逐字歌词的行和时间，只去掉逐字数据', async () => {
+    const { lyricsStore, play, show } = await setup()
+    play(nowPlaying('1', { lyric: '', lyricWords: '[1000,500](1000,500,0)一\n[2000,500](2000,500,0)二' }))
+    const withWords = lyricsStore.state.lines
+    expect(withWords.some(line => line.words)).toBe(true)
+    show({ translation: true, words: false })
+    expect(lyricsStore.state.lines).toEqual(withWords.map(({ words: _, ...line }) => line))
+  })
+
+  it('播放中切换显示设置时立即重建歌词行，当前行不变', async () => {
+    const { lyricsStore, frames, play, show } = await setup()
+    play(nowPlaying('1', { lyricWords: '[1000,500](1000,500,0)一\n[2000,500](2000,500,0)二', lyricTrans: '[00:01.00]One\n[00:02.00]Two' }))
+    frames.emit(2000)
+    const { lines, index } = lyricsStore.state
+    show({ translation: false, words: false })
+    expect(lyricsStore.state).toEqual({ lines: lines.map(({ words: _, translation: __, ...line }) => line), index })
+    show({ translation: true, words: true })
+    expect(lyricsStore.state).toEqual({ lines, index })
   })
 
   it('同一首歌的新快照不重建歌词行，离开房间后清空', async () => {

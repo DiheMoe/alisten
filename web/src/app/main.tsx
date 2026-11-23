@@ -9,7 +9,7 @@ import { playerStore, reminderStore, volumeStore } from '@/features/playback'
 import { playlistsStore, setAccountSettingsOpener } from '@/features/playlists'
 import { roomEntryStore } from '@/features/rooms'
 import { searchHistoryStore, searchStore } from '@/features/search'
-import { appearanceStore, performanceStore } from '@/features/settings'
+import { appearanceStore, lyricsDisplayStore, performanceStore } from '@/features/settings'
 import { setViewportHeight } from '@/shared/lib/viewport'
 import { App } from './app'
 import { watchConnection } from './connection-notices'
@@ -26,6 +26,7 @@ if (!root)
 // 聊天面板按需加载，歌词页也不常驻，但聊天、搜索和歌词的 Store 要从进入房间起就跟着房间变化，不能等到页面挂载再启动。
 appearanceStore.start()
 performanceStore.start()
+lyricsDisplayStore.start()
 volumeStore.start()
 brandStore.start()
 profileStore.start()
