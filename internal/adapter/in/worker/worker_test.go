@@ -338,6 +338,55 @@ func TestMediaClientSchedulesPeriodicJobsForServe(t *testing.T) {
 	}
 }
 
+func TestQQRefreshKeepsOnePendingJobAndRetriesOnce(t *testing.T) {
+	client, err := NewClient(newPool(t), run, cleanNothing, refreshNothing, noop.NewTracerProvider(), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := client.Insert(t.Context(), qqRefreshArgs{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := client.Insert(t.Context(), qqRefreshArgs{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.UniqueSkippedAsDuplicate || !second.UniqueSkippedAsDuplicate || second.Job.ID != first.Job.ID {
+		t.Fatalf("连续安排两次刷新 = %d（跳过 %v）、%d（跳过 %v），期望第二次因为第一次还没执行而跳过", first.Job.ID, first.UniqueSkippedAsDuplicate, second.Job.ID, second.UniqueSkippedAsDuplicate)
+	}
+	if first.Job.MaxAttempts != 2 {
+		t.Errorf("刷新任务最多执行 %d 次，期望 2 次", first.Job.MaxAttempts)
+	}
+
+	if err := client.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := client.Stop(context.Background()); err != nil {
+			t.Error(err)
+		}
+	}()
+	for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		job, err := client.JobGet(t.Context(), first.Job.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if job.State == rivertype.JobStateCompleted {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("30 秒后刷新任务的状态 = %s，期望已完成", job.State)
+		}
+	}
+	third, err := client.Insert(t.Context(), qqRefreshArgs{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if third.UniqueSkippedAsDuplicate {
+		t.Error("上一轮刷新已经完成，新的刷新不应被跳过")
+	}
+}
+
 func TestClientRunsQQRefreshOnStartAndCancelsWhenSignedOut(t *testing.T) {
 	var logs bytes.Buffer
 	logger := slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil)))

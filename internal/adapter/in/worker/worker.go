@@ -97,7 +97,21 @@ type qqRefreshArgs struct{}
 
 func (qqRefreshArgs) Kind() string { return "refresh_qq_login" }
 
-func (qqRefreshArgs) InsertOpts() river.InsertOpts { return river.InsertOpts{Queue: qqRefreshQueue} }
+// 下一轮刷新最多 qqRefreshInterval 之后就会来，所以失败的刷新只重试一次，不按 River 默认的 25 次重试好几天。
+// 没执行完的刷新任务只留一个，否则周期任务和每次换 leader 时补排的任务会堆起来，在多个 serve 实例上同时刷新。
+// 去重不包括已完成和已取消的任务，否则以后的刷新都会被挡住。
+func (qqRefreshArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{
+		Queue:       qqRefreshQueue,
+		MaxAttempts: 2,
+		UniqueOpts: river.UniqueOpts{
+			ByState: []rivertype.JobState{
+				rivertype.JobStateAvailable, rivertype.JobStatePending, rivertype.JobStateRetryable,
+				rivertype.JobStateRunning, rivertype.JobStateScheduled,
+			},
+		},
+	}
+}
 
 type qqRefreshWorker struct {
 	river.WorkerDefaults[qqRefreshArgs]
