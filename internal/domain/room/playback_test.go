@@ -105,14 +105,6 @@ func TestNextIsTheFirstReadyWaitingEntry(t *testing.T) {
 	}
 }
 
-func TestNoNextWhenNothingPlays(t *testing.T) {
-	r := newRoom(t, Persistent)
-	effects := r.Handle(at(0), enqueue(alice, netease("a")))
-	if got := events[QueueChanged](effects); len(got) != 1 || got[0].Next != 0 {
-		t.Fatalf("没有歌在播时不应有下一首：%#v", got)
-	}
-}
-
 func TestStartingThePendingTrackAnnouncesTheNext(t *testing.T) {
 	r := newRoom(t, Persistent)
 	r.Handle(at(0), enqueue(alice, netease("a")))

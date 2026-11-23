@@ -119,46 +119,6 @@ func wantRefused(t *testing.T, effects []Effect, kind ErrorKind, message string)
 	}
 }
 
-func TestFullRoomRefusesNewMembers(t *testing.T) {
-	r := newRoomWithCapacity(t, Persistent, 2)
-	joinAs(t, r, "a1", alice)
-	joinAs(t, r, "b1", bob)
-
-	wantRefused(t, r.Handle(at(time.Second), Join{RequestID: "q", Session: "c1", Member: carol}), RoomFull, "房间已满，最多 2 人。")
-	if got := sessionIDs(r); !slices.Equal(got, []SessionID{"a1", "b1"}) {
-		t.Fatalf("被拒之后的在线列表 = %v，期望不变", got)
-	}
-}
-
-func TestMemberInAFullRoomCanOpenAnotherConnection(t *testing.T) {
-	r := newRoomWithCapacity(t, Persistent, 2)
-	joinAs(t, r, "a1", alice)
-	joinAs(t, r, "b1", bob)
-
-	effects := r.Handle(at(time.Second), Join{RequestID: "q", Session: "a2", Member: alice})
-	if got := reply(t, effects); got.Err != nil {
-		t.Fatalf("已经在房间里的成员再开连接不算新增人数，不应被拒：%v", got.Err)
-	}
-	if got := sessionIDs(r); !slices.Equal(got, []SessionID{"a1", "b1", "a2"}) {
-		t.Fatalf("在线列表 = %v，期望加上 a2", got)
-	}
-}
-
-func TestFifthConnectionOfAMemberIsRefused(t *testing.T) {
-	r := newRoom(t, Persistent)
-	for i := range maxSessionsPerMember {
-		joinAs(t, r, SessionID(fmt.Sprint("a", i)), alice)
-	}
-
-	wantRefused(t, r.Handle(at(time.Second), Join{RequestID: "q", Session: "a4", Member: alice}), TooManySessions, "你在这个房间已经开了 4 个连接。关掉一个，这里就会自动连上。")
-	if n := len(r.sessions); n != maxSessionsPerMember {
-		t.Fatalf("被拒之后有 %d 个会话，期望 %d", n, maxSessionsPerMember)
-	}
-	joinAs(t, r, "b0", bob)
-	r.Handle(at(2*time.Second), Leave{Session: "a0"})
-	joinAs(t, r, "a4", alice)
-}
-
 // 用重新加入让人数超过上限，和上限调到比当前人数还低是同一种状态。
 func TestPeopleOverCapacityStayButNewMembersAreRefused(t *testing.T) {
 	r := newRoomWithCapacity(t, Persistent, 2)

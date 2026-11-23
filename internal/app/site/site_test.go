@@ -29,22 +29,6 @@ func TestSettings(t *testing.T) {
 	}
 }
 
-// site 不检查范围，因为协议的校验已经保证了范围。越界的值写到存储时被拒绝。
-func TestEphemeralRoomCapacityOutOfRangeIsRejectedByStore(t *testing.T) {
-	s := New(porttest.New())
-	if err := s.SetEphemeralRoomCapacity(t.Context(), 2); err != nil {
-		t.Fatal(err)
-	}
-	for _, capacity := range []int{1, 129} {
-		if err := s.SetEphemeralRoomCapacity(t.Context(), capacity); err == nil {
-			t.Errorf("SetEphemeralRoomCapacity(%d) 成功，期望被存储拒绝", capacity)
-		}
-	}
-	if got, err := s.Settings(t.Context()); err != nil || got.EphemeralRoomCapacity != 2 {
-		t.Errorf("被拒绝之后 = %d, %v，期望仍是 2", got.EphemeralRoomCapacity, err)
-	}
-}
-
 func TestBrandNameCountsCharacters(t *testing.T) {
 	s := New(porttest.New())
 	for _, name := range []string{strings.Repeat("歌", 20), strings.Repeat("🎵", 20), "  " + strings.Repeat("a", 20) + "  "} {

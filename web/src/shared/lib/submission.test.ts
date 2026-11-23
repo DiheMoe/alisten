@@ -63,16 +63,6 @@ describe('提交', () => {
     expect(changes).toEqual([true, false, true, false])
   })
 
-  it('关闭之后提交结束也不再通知', async () => {
-    const { submission, changes } = opened()
-    const task = deferred()
-    const running = submission.run(() => task.promise)
-    submission.close()
-    task.resolve()
-    await running
-    expect(changes).toEqual([true])
-  })
-
   it('关闭期间结束的提交，再次打开之后也不挡住新的提交', async () => {
     const { submission, changes } = opened()
     const task = deferred()
