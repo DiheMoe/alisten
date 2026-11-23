@@ -389,8 +389,9 @@ func TestRecommend(t *testing.T) {
 	for _, s := range list {
 		ids = append(ids, s.Track)
 	}
+	slices.SortFunc(ids, func(a, b track.Track) int { return strings.Compare(a.ID, b.ID) })
 	if want := append(want, netease("f")); !slices.Equal(ids, want) {
-		t.Errorf("推荐列表 = %v，期望 %v：种子还包括队列中的歌，去掉排除项和种子本身", ids, want)
+		t.Errorf("推荐列表 = %v，期望是 %v 这几首：种子还包括队列中的歌，去掉排除项和种子本身", ids, want)
 	}
 }
 
@@ -405,15 +406,14 @@ func (s *similarCalls) SimilarTracks(ctx context.Context, id string) ([]port.Son
 }
 
 func TestRecommendLimits(t *testing.T) {
-	// 推荐列表只取前 10 首，凑够 10 首就不再获取下一个种子的相似歌曲，不够时才继续。
+	// 推荐列表最多 10 首。候选凑够 10 首就不再获取下一个种子的相似歌曲，不够时才继续。
 	for _, tt := range []struct {
 		candidates int
 		seeds      []string
-		last       string
 	}{
-		{26, []string{"s1"}, "J"},
-		{10, []string{"s1"}, "J"},
-		{9, []string{"s1", "s2"}, "late"},
+		{26, []string{"s1"}},
+		{10, []string{"s1"}},
+		{9, []string{"s1", "s2"}},
 	} {
 		f := newFixture(t, history{seeds: []track.Track{netease("s1"), netease("s2")}})
 		var similar []string
@@ -432,11 +432,56 @@ func TestRecommendLimits(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(list) != 10 || list[0].Track.ID != "A" || list[9].Track.ID != tt.last {
-			t.Errorf("%d 首候选的推荐列表 = %v，期望 10 首，从 A 开始，最后一首是 %s", tt.candidates, list, tt.last)
+		similarOf := map[string][]string{"s1": similar, "s2": {"late"}}
+		fetched := map[string]bool{}
+		for _, seed := range tt.seeds {
+			for _, id := range similarOf[seed] {
+				fetched[id] = true
+			}
+		}
+		listed := map[string]bool{}
+		for _, s := range list {
+			if fetched[s.Track.ID] {
+				listed[s.Track.ID] = true
+			}
+		}
+		if len(list) != 10 || len(listed) != 10 {
+			t.Errorf("%d 首候选的推荐列表 = %v，期望是已经获取的相似歌曲里不重复的 10 首", tt.candidates, list)
 		}
 		if !slices.Equal(calls.seeds, tt.seeds) {
 			t.Errorf("%d 首候选之后获取了 %v 的相似歌曲，期望 %v", tt.candidates, calls.seeds, tt.seeds)
+		}
+	}
+}
+
+func TestRecommendListDrawsFromAllCandidates(t *testing.T) {
+	// 推荐列表每次从全部候选里随机抽，自动补歌仍只从前 10 首里挑。
+	f := newFixture(t, history{seeds: []track.Track{netease("s1")}})
+	var similar []string
+	for i := range 26 {
+		id := string(rune('A' + i))
+		f.add(f.netease, song(track.NetEase, id, id))
+		similar = append(similar, id)
+	}
+	f.netease.SetSimilar("s1", similar...)
+
+	// 每次抽中某一首的概率是 10/26，50 次里有任何一首从没抽中的概率不到 1e-9。
+	listed := map[string]bool{}
+	for range 50 {
+		list, err := f.svc.RecommendList(t.Context(), f.persistent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range list {
+			listed[s.Track.ID] = true
+		}
+	}
+	if len(listed) != len(similar) {
+		t.Errorf("获取 50 次推荐列表，出现过 %d 首候选，期望全部 %d 首都出现过", len(listed), len(similar))
+	}
+	for range 50 {
+		if got, _, ok, err := f.svc.Recommend(t.Context(), f.persistent); err != nil || !ok || got.ID > "J" {
+			t.Fatalf("自动补歌 = %v, %v, %v，期望从前 10 首 A 到 J 里挑", got, ok, err)
 		}
 	}
 }

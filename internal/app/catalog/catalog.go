@@ -126,7 +126,9 @@ func (s *Service) RecommendList(ctx context.Context, roomID string) ([]port.Song
 	case err == nil:
 		s.recommendWarned.Recovered()
 	}
-	return songs, err
+	// 每次从全部候选里随机抽，这样客户端重新获取就是换一批，也不会多请求上游。
+	rand.Shuffle(len(songs), func(i, j int) { songs[i], songs[j] = songs[j], songs[i] })
+	return songs[:min(len(songs), autoDJLimit)], err
 }
 
 func (s *Service) TrackMeta(ctx context.Context, t track.Track) (track.Meta, error) {
@@ -195,7 +197,7 @@ func (s *Service) Recommend(ctx context.Context, roomID string) (track.Track, tr
 	if err != nil || len(songs) == 0 {
 		return track.Track{}, track.Meta{}, false, err
 	}
-	pick := songs[rand.IntN(len(songs))]
+	pick := songs[rand.IntN(min(len(songs), autoDJLimit))]
 	return pick.Track, pick.Meta, true, nil
 }
 
@@ -233,7 +235,7 @@ func (s *Service) candidates(ctx context.Context, roomID string, includeQueue bo
 			}
 		}
 	}
-	return picks[:min(len(picks), autoDJLimit)], nil
+	return picks, nil
 }
 
 // 点歌要先向上游查询曲目，房间的点歌限流却在收到命令之后才判断，所以查询之前按同样的规则预扣一次，
