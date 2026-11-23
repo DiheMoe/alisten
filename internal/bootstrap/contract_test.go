@@ -176,6 +176,7 @@ func contractSources() sources {
 		playback:      map[track.Source]port.PlayURLs{track.NetEase: netease},
 		neteaseLogin:  porttest.NewNetEaseQRLogin(),
 		qqLogin:       porttest.NewQQQRLogin(),
+		qqRefresh:     func(context.Context) error { return nil },
 		bilibiliLogin: porttest.NewBilibiliQRLogin(),
 	}
 }

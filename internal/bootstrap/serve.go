@@ -87,6 +87,7 @@ func runServe(base *slog.Logger) (err error) {
 		playback:      map[track.Source]port.PlayURLs{track.NetEase: neteaseSource, track.QQ: qqSource},
 		neteaseLogin:  neteaseSource,
 		qqLogin:       qqSource,
+		qqRefresh:     qqSource.RefreshLogin,
 		bilibiliLogin: bilibiliSource,
 	}
 	p, err := newPublic(cfg, pool, rdb, instance, src, metrics, observed.prepared, tracer, base)

@@ -45,6 +45,14 @@ func (r playURLResponse) check() error {
 var _ port.PlayURLs = (*Client)(nil)
 
 func (c *Client) PlayURL(ctx context.Context, songMID string) (string, error) {
+	return c.playURL(ctx, songMID, true)
+}
+
+func (c *Client) playURL(ctx context.Context, songMID string, allowRefresh bool) (string, error) {
+	cookie, err := c.cookie.get(ctx)
+	if err != nil {
+		return "", err
+	}
 	filenames := []string{
 		"F000" + songMID + songMID + ".flac",
 		"M800" + songMID + songMID + ".mp3",
@@ -73,7 +81,7 @@ func (c *Client) PlayURL(ctx context.Context, songMID string) (string, error) {
 	}
 	var resp playURLResponse
 	query := url.Values{"data": {string(payload)}}
-	if err := c.get(ctx, "qq", "play_url", musicuAPI, query, desktopHeader, &resp); err != nil {
+	if err := c.getWithCookie(ctx, "qq", "play_url", musicuAPI, query, desktopHeader, cookie, &resp); err != nil {
 		return "", err
 	}
 	for _, filename := range filenames {
@@ -84,16 +92,21 @@ func (c *Client) PlayURL(ctx context.Context, songMID string) (string, error) {
 		}
 	}
 	// 拿不到播放地址时复核登录：vkey 对失效凭据不一定直接报错，用严格登录态接口区分"登录失效"和"需要会员或没有版权"。
-	cookie, err := c.cookie.get(ctx)
-	if err != nil {
-		return "", err
-	}
 	if strings.TrimSpace(cookie) != "" {
 		valid, err := c.loginState(ctx, cookie, qqAccountID(cookie))
 		if err != nil {
 			return "", err
 		}
 		if !valid {
+			if allowRefresh {
+				refreshed, err := c.refreshExpiredCookie(ctx, cookie)
+				if err != nil {
+					return "", err
+				}
+				if refreshed {
+					return c.playURL(ctx, songMID, false)
+				}
+			}
 			return "", fmt.Errorf("获取播放地址：%w", port.ErrSourceSignedOut)
 		}
 	}

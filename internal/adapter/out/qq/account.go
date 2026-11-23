@@ -45,7 +45,7 @@ func (c *Client) accountRequest(ctx context.Context, cookie, id string, module, 
 		return err
 	}
 	query := url.Values{"data": {string(payload)}}
-	return c.get(ctx, "qq", "account", musicuAPI, query, desktopHeader, out)
+	return c.getWithCookie(ctx, "qq", "account", musicuAPI, query, desktopHeader, cookie, out)
 }
 
 // loginState 用"我喜欢"歌单判断登录是否有效：它是必须登录才能读的接口，登录失效时返回业务码 10004。
@@ -67,6 +67,10 @@ func (c *Client) loginState(ctx context.Context, cookie, id string) (bool, error
 }
 
 func (c *Client) CurrentAccount(ctx context.Context) (*port.SourceAccount, error) {
+	return c.currentAccount(ctx, true)
+}
+
+func (c *Client) currentAccount(ctx context.Context, allowRefresh bool) (*port.SourceAccount, error) {
 	cookie, err := c.cookie.get(ctx)
 	if err != nil {
 		return nil, err
@@ -80,6 +84,15 @@ func (c *Client) CurrentAccount(ctx context.Context) (*port.SourceAccount, error
 		return nil, err
 	}
 	if !valid {
+		if allowRefresh {
+			refreshed, err := c.refreshExpiredCookie(ctx, cookie)
+			if err != nil {
+				return nil, err
+			}
+			if refreshed {
+				return c.currentAccount(ctx, false)
+			}
+		}
 		return nil, fmt.Errorf("查询 QQ 音乐登录状态：%w", port.ErrSourceSignedOut)
 	}
 	account := &port.SourceAccount{ID: id, Verified: true}
@@ -101,9 +114,13 @@ func qqAccountID(cookie string) string {
 		if value == "" {
 			continue
 		}
-		return strings.TrimSpace(strings.TrimLeft(strings.TrimPrefix(value, "o"), "0"))
+		return trimQQUIN(value)
 	}
 	return ""
+}
+
+func trimQQUIN(value string) string {
+	return strings.TrimSpace(strings.TrimLeft(strings.TrimPrefix(value, "o"), "0"))
 }
 
 func qqAccountCookieValue(cookie, name string) string {

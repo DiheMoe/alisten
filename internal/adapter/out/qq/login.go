@@ -13,6 +13,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -45,6 +46,8 @@ var qqLoginMusicURLs = []string{
 	"https://szu.y.qq.com/cgi-bin/musicu.fcg",
 	"https://shu.y.qq.com/cgi-bin/musicu.fcg",
 }
+
+var qqMusicKeyNames = []string{"qm_keyst", "qqmusic_key", "musickey", "music_key", "strMusicKey"}
 
 var (
 	_                    port.QQQRLoginSource = (*Client)(nil)
@@ -499,7 +502,7 @@ func (c *Client) completeQQLogin(ctx context.Context, client *http.Client, redir
 		return "", errors.New("QQ OAuth 回调缺少 code")
 	}
 	requestBody, err := json.Marshal(map[string]any{
-		"comm": map[string]any{"g_tk": 5381, "platform": "yqq", "ct": 24, "cv": 0},
+		"comm": map[string]any{"g_tk": 5381, "platform": "yqq", "ct": 24, "cv": 0, "tmeLoginType": "2"},
 		"req": map[string]any{
 			"module": "QQConnectLogin.LoginServer",
 			"method": "QQLogin",
@@ -529,6 +532,15 @@ func (c *Client) completeQQLogin(ctx context.Context, client *http.Client, redir
 	return serializeQQLoginCredentials(credentials), nil
 }
 
+type qqLoginRejectedError struct {
+	code    int
+	reqCode int
+}
+
+func (e *qqLoginRejectedError) Error() string {
+	return fmt.Sprintf("QQ 音乐登录返回错误码 %d、%d", e.code, e.reqCode)
+}
+
 func mergeQQMusicLoginResponse(credentials map[string]string, resp *http.Response, musicBody []byte) error {
 	var payload struct {
 		Code *int `json:"code"`
@@ -545,8 +557,11 @@ func mergeQQMusicLoginResponse(credentials map[string]string, resp *http.Respons
 	if payload.Code == nil || payload.Req.Code == nil {
 		return errors.New("QQ 音乐登录响应的 code 或 req.code 缺失或为 null")
 	}
-	if *payload.Code != 0 || *payload.Req.Code != 0 {
+	if *payload.Code != 0 {
 		return fmt.Errorf("QQ 音乐登录返回错误码 %d、%d", *payload.Code, *payload.Req.Code)
+	}
+	if *payload.Req.Code != 0 {
+		return &qqLoginRejectedError{code: *payload.Code, reqCode: *payload.Req.Code}
 	}
 	for _, cookie := range resp.Cookies() {
 		if cookie.Value != "" {
@@ -554,14 +569,15 @@ func mergeQQMusicLoginResponse(credentials map[string]string, resp *http.Respons
 		}
 	}
 	for name, value := range payload.Req.Data {
-		musicKey := false
-		switch name {
-		case "qm_keyst", "qqmusic_key", "musickey", "music_key", "strMusicKey":
-			musicKey = true
-		case "uin", "musicid", "userid", "user_id", "ptui_loginuin", "luin", "pt2gguin", "superuin", "p_uin", "wxuin",
-			"refresh_key", "refresh_token", "openid", "unionid", "wxaccess_token":
-		default:
-			continue
+		musicKey := slices.Contains(qqMusicKeyNames, name)
+		if !musicKey {
+			switch name {
+			case "uin", "musicid", "userid", "user_id", "ptui_loginuin", "luin", "pt2gguin", "superuin", "p_uin", "wxuin",
+				"refresh_key", "refresh_token", "openid", "unionid", "wxaccess_token",
+				"access_token", "expired_in", "expired_at", "keyExpiresIn", "musickeyCreateTime", "loginType":
+			default:
+				continue
+			}
 		}
 		credential := ""
 		switch value := value.(type) {
@@ -793,13 +809,7 @@ func mergeQQLoginJar(credentials map[string]string, jar http.CookieJar, rawURLs 
 }
 
 func normalizeQQLoginCredentials(credentials map[string]string) bool {
-	musicKey := ""
-	for _, name := range []string{"qm_keyst", "qqmusic_key", "musickey", "music_key", "strMusicKey"} {
-		if credentials[name] != "" {
-			musicKey = credentials[name]
-			break
-		}
-	}
+	musicKey := qqCredentialMusicKey(credentials)
 	if musicKey == "" {
 		return false
 	}

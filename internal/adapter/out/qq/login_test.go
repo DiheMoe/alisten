@@ -345,10 +345,11 @@ func addQQQOAuthRoutes(t *testing.T, routes map[string]http.HandlerFunc, musicRe
 		}
 		var payload struct {
 			Comm struct {
-				GTK      int    `json:"g_tk"`
-				Platform string `json:"platform"`
-				CT       int    `json:"ct"`
-				CV       int    `json:"cv"`
+				GTK          int    `json:"g_tk"`
+				Platform     string `json:"platform"`
+				CT           int    `json:"ct"`
+				CV           int    `json:"cv"`
+				TMELoginType string `json:"tmeLoginType"`
 			} `json:"comm"`
 			Req struct {
 				Module string `json:"module"`
@@ -361,7 +362,7 @@ func addQQQOAuthRoutes(t *testing.T, routes map[string]http.HandlerFunc, musicRe
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			t.Error(err)
 		}
-		if payload.Comm.GTK != 5381 || payload.Comm.Platform != "yqq" || payload.Comm.CT != 24 || payload.Comm.CV != 0 ||
+		if payload.Comm.GTK != 5381 || payload.Comm.Platform != "yqq" || payload.Comm.CT != 24 || payload.Comm.CV != 0 || payload.Comm.TMELoginType != "2" ||
 			payload.Req.Module != "QQConnectLogin.LoginServer" || payload.Req.Method != "QQLogin" || payload.Req.Param.Code != "fictitious-code" {
 			t.Errorf("音乐登录请求体 = %#v", payload)
 		}
@@ -407,7 +408,7 @@ func TestQQQRLoginCompletesOAuthAndSavesSortedCookies(t *testing.T) {
 	var saved string
 	routes := map[string]http.HandlerFunc{}
 	addQQQRCreateRoutes(t, routes)
-	addQQQOAuthRoutes(t, routes, `{"code":0,"req":{"code":0,"data":{"musickey":"test","musicid":"o1","json_extra":"keep","empty":""}}}`)
+	addQQQOAuthRoutes(t, routes, `{"code":0,"req":{"code":0,"data":{"musickey":"test","musicid":"o1","openid":"openid-1","access_token":"at-1","refresh_token":"rt-1","expired_at":1795180673,"keyExpiresIn":259200,"musickeyCreateTime":1789996673,"loginType":2,"json_extra":"keep","empty":""}}}`)
 	newClient, obs := serveQQQRLogin(t, routes, func(_ context.Context, value string) error {
 		saved = value
 		return nil
@@ -421,6 +422,8 @@ func TestQQQRLoginCompletesOAuthAndSavesSortedCookies(t *testing.T) {
 	}
 	requireQQCookies(t, saved, map[string]string{
 		"qm_keyst": testMusicKey, "qqmusic_key": testMusicKey, "musickey": testMusicKey, "uin": "o1",
+		"openid": "openid-1", "access_token": "at-1", "refresh_token": "rt-1",
+		"expired_at": "1795180673", "keyExpiresIn": "259200", "musickeyCreateTime": "1789996673", "loginType": "2",
 		"session": "keep", "redirect_extra": "keep", "oauth_temp": "keep",
 	})
 	if strings.Contains(saved, "json_extra=") || strings.Contains(saved, "empty=") {

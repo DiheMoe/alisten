@@ -68,11 +68,14 @@ func (a prepareArgs) track() track.Track {
 	return track.Track{Source: track.Source(a.Source), ID: a.ID}
 }
 
-// 清理闲置游客的任务用单独的队列，这样不占准备任务的并发。
+// 清理闲置游客和刷新 QQ 登录的任务各自用单独的队列，这样不占准备任务的并发。
 const (
-	cleanupQueue    = "cleanup"
-	cleanupWorkers  = 1
-	cleanupInterval = 24 * time.Hour
+	cleanupQueue      = "cleanup"
+	cleanupWorkers    = 1
+	cleanupInterval   = 24 * time.Hour
+	qqRefreshQueue    = "qq_refresh"
+	qqRefreshWorkers  = 1
+	qqRefreshInterval = 6 * time.Hour
 )
 
 type cleanupArgs struct{}
@@ -90,21 +93,52 @@ func (w *cleanupWorker) Work(ctx context.Context, job *river.Job[cleanupArgs]) e
 	return w.run(logctx.WithJob(ctx, job.ID), time.Now())
 }
 
-// River 只让当选 leader 的 client 安排周期任务，serve 和 worker 两个进程的 client 都可能当选，所以两种 client 都要配置清理任务。
-// 只有 serve 的 client 处理 cleanupQueue，所以不管由谁安排，任务都在 serve 进程里执行。
-// River 只在内存中计时，每次换 leader 都重新计时。所以当选时也安排一次，否则 leader 总是不到 24 小时就换掉的话，清理一次也不会执行。
-func cleanupJobs() []*river.PeriodicJob {
-	return []*river.PeriodicJob{river.NewPeriodicJob(river.PeriodicInterval(cleanupInterval), func() (river.JobArgs, *river.InsertOpts) {
-		return cleanupArgs{}, nil
-	}, &river.PeriodicJobOpts{RunOnStart: true})}
+type qqRefreshArgs struct{}
+
+func (qqRefreshArgs) Kind() string { return "refresh_qq_login" }
+
+func (qqRefreshArgs) InsertOpts() river.InsertOpts { return river.InsertOpts{Queue: qqRefreshQueue} }
+
+type qqRefreshWorker struct {
+	river.WorkerDefaults[qqRefreshArgs]
+	run func(context.Context) error
 }
 
-// run 返回 *port.RejectedError 或者包装了 port.ErrSourceSignedOut 的错误时任务取消，返回其他错误时由 River 重试。cleanup 返回错误时同样由 River 重试。
-func NewClient(pool *pgxpool.Pool, run func(context.Context, track.Track) error, cleanup func(context.Context, time.Time) error, tracer trace.TracerProvider, logger *slog.Logger) (*river.Client[pgx.Tx], error) {
+func (w *qqRefreshWorker) Work(ctx context.Context, job *river.Job[qqRefreshArgs]) error {
+	err := w.run(logctx.WithJob(ctx, job.ID))
+	// 刷新凭据已经被平台拒绝时重试没有意义，直接取消本轮任务，等管理员重新扫码。
+	if errors.Is(err, port.ErrSourceSignedOut) {
+		return river.JobCancel(port.ErrSourceSignedOut)
+	}
+	return err
+}
+
+// River 只让当选 leader 的 client 安排周期任务，serve 和 worker 两个进程的 client 都可能当选，所以两种 client 都要配置周期任务。
+// 只有 serve 的 client 处理 cleanupQueue 和 qqRefreshQueue，所以不管由谁安排，任务都在 serve 进程里执行。
+// River 只在内存中计时，每次换 leader 都重新计时。所以当选时也安排一次，否则 leader 频繁切换时周期任务可能一直得不到执行。
+func periodicJobs() []*river.PeriodicJob {
+	return []*river.PeriodicJob{
+		river.NewPeriodicJob(river.PeriodicInterval(cleanupInterval), func() (river.JobArgs, *river.InsertOpts) {
+			return cleanupArgs{}, nil
+		}, &river.PeriodicJobOpts{RunOnStart: true}),
+		river.NewPeriodicJob(river.PeriodicInterval(qqRefreshInterval), func() (river.JobArgs, *river.InsertOpts) {
+			return qqRefreshArgs{}, nil
+		}, &river.PeriodicJobOpts{RunOnStart: true}),
+	}
+}
+
+// run 返回 *port.RejectedError 或者包装了 port.ErrSourceSignedOut 的错误时任务取消，返回其他错误时由 River 重试。
+// cleanup 返回错误时由 River 重试。refreshQQ 返回包装了 port.ErrSourceSignedOut 的错误时取消，返回其他错误时重试。
+func NewClient(pool *pgxpool.Pool, run func(context.Context, track.Track) error, cleanup func(context.Context, time.Time) error, refreshQQ func(context.Context) error, tracer trace.TracerProvider, logger *slog.Logger) (*river.Client[pgx.Tx], error) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, &prepareWorker{run: run})
 	river.AddWorker(workers, &cleanupWorker{run: cleanup})
-	return newClient(pool, map[string]river.QueueConfig{prepareQueue: {MaxWorkers: prepareWorkers}, cleanupQueue: {MaxWorkers: cleanupWorkers}}, workers, tracer, logger)
+	river.AddWorker(workers, &qqRefreshWorker{run: refreshQQ})
+	return newClient(pool, map[string]river.QueueConfig{
+		prepareQueue:   {MaxWorkers: prepareWorkers},
+		cleanupQueue:   {MaxWorkers: cleanupWorkers},
+		qqRefreshQueue: {MaxWorkers: qqRefreshWorkers},
+	}, workers, tracer, logger)
 }
 
 // 执行链接和 B 站的歌的准备任务，每个队列在每个进程中同时只执行一个。
@@ -118,7 +152,7 @@ func newClient(pool *pgxpool.Pool, queues map[string]river.QueueConfig, workers 
 	return river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Queues:               queues,
 		Workers:              workers,
-		PeriodicJobs:         cleanupJobs(),
+		PeriodicJobs:         periodicJobs(),
 		JobTimeout:           prepareTimeout,
 		RescueStuckJobsAfter: rescueStuckJobs,
 		// 任务在单独的 trace 里执行，只链接到提交任务的 span，因为任务可能很久之后才执行，失败后还会重试，同一首歌的任务也由所有等待这首歌的房间共用。

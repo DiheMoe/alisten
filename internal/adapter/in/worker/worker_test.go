@@ -24,6 +24,8 @@ import (
 
 func cleanNothing(context.Context, time.Time) error { return nil }
 
+func refreshNothing(context.Context) error { return nil }
+
 func run(_ context.Context, t track.Track) error {
 	switch t.ID {
 	case "ok":
@@ -69,7 +71,7 @@ func TestWorkerReportsFinalOutcomes(t *testing.T) {
 	client, err := NewClient(newPool(t), func(ctx context.Context, tr track.Track) error {
 		logger.InfoContext(ctx, "执行准备任务", "track_id", tr.ID)
 		return run(ctx, tr)
-	}, cleanNothing, noop.NewTracerProvider(), logger)
+	}, cleanNothing, refreshNothing, noop.NewTracerProvider(), logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +227,7 @@ func TestClientRunsCleanupOnStartInItsOwnQueue(t *testing.T) {
 		logger.InfoContext(ctx, "清理闲置的游客")
 		ran <- now
 		return nil
-	}, noop.NewTracerProvider(), slog.New(slog.DiscardHandler))
+	}, refreshNothing, noop.NewTracerProvider(), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,8 +263,8 @@ func TestClientRunsCleanupOnStartInItsOwnQueue(t *testing.T) {
 	}
 }
 
-// worker 进程的 client 当选 leader 时由它安排清理任务，任务交给 serve 进程的 client 执行。
-func TestMediaClientSchedulesCleanupForServe(t *testing.T) {
+// worker 进程的 client 当选 leader 时由它安排周期任务，任务交给 serve 进程的 client 执行。
+func TestMediaClientSchedulesPeriodicJobsForServe(t *testing.T) {
 	pool := newPool(t)
 	logger := slog.New(slog.DiscardHandler)
 	media, err := NewMediaClient(pool, run, noop.NewTracerProvider(), logger)
@@ -272,28 +274,79 @@ func TestMediaClientSchedulesCleanupForServe(t *testing.T) {
 	if err := media.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	var scheduled *rivertype.JobRow
-	for deadline := time.Now().Add(30 * time.Second); scheduled == nil; time.Sleep(50 * time.Millisecond) {
+	scheduled := map[string]*rivertype.JobRow{}
+	wantQueues := map[string]string{
+		cleanupArgs{}.Kind():   cleanupQueue,
+		qqRefreshArgs{}.Kind(): qqRefreshQueue,
+	}
+	for deadline := time.Now().Add(30 * time.Second); len(scheduled) < len(wantQueues); time.Sleep(50 * time.Millisecond) {
 		if time.Now().After(deadline) {
-			t.Fatal("worker 进程的 client 启动之后 30 秒内没有安排清理任务")
+			t.Fatalf("worker 进程的 client 启动之后 30 秒内只安排了 %v", scheduled)
 		}
-		jobs, err := media.JobList(t.Context(), river.NewJobListParams().Kinds(cleanupArgs{}.Kind()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(jobs.Jobs) > 0 {
-			scheduled = jobs.Jobs[0]
+		for kind := range wantQueues {
+			if scheduled[kind] != nil {
+				continue
+			}
+			jobs, err := media.JobList(t.Context(), river.NewJobListParams().Kinds(kind))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(jobs.Jobs) > 0 {
+				scheduled[kind] = jobs.Jobs[0]
+			}
 		}
 	}
-	if scheduled.Queue != cleanupQueue || scheduled.State != rivertype.JobStateAvailable {
-		t.Errorf("清理任务在队列 %q 中，状态 %s，期望在 %q 中等待 serve 进程执行", scheduled.Queue, scheduled.State, cleanupQueue)
+	for kind, wantQueue := range wantQueues {
+		job := scheduled[kind]
+		if job.Queue != wantQueue || job.State != rivertype.JobStateAvailable {
+			t.Errorf("%s 任务在队列 %q 中，状态 %s，期望在 %q 中等待 serve 进程执行", kind, job.Queue, job.State, wantQueue)
+		}
 	}
 
-	ran := make(chan struct{}, 10)
+	cleaned := make(chan struct{}, 10)
+	refreshed := make(chan struct{}, 10)
 	client, err := NewClient(pool, run, func(context.Context, time.Time) error {
-		ran <- struct{}{}
+		cleaned <- struct{}{}
+		return nil
+	}, func(context.Context) error {
+		refreshed <- struct{}{}
 		return nil
 	}, noop.NewTracerProvider(), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for name, ch := range map[string]chan struct{}{"清理": cleaned, "QQ 刷新": refreshed} {
+		select {
+		case <-ch:
+		case <-time.After(30 * time.Second):
+			t.Fatalf("30 秒内 serve 进程的 client 没有执行%s任务", name)
+		}
+	}
+	if err := client.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := media.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for kind, job := range scheduled {
+		if got, err := client.JobGet(context.Background(), job.ID); err != nil || got.State != rivertype.JobStateCompleted {
+			t.Errorf("worker 进程的 client 安排的 %s 任务 = %v, %v，期望已执行完", kind, got, err)
+		}
+	}
+}
+
+func TestClientRunsQQRefreshOnStartAndCancelsWhenSignedOut(t *testing.T) {
+	var logs bytes.Buffer
+	logger := slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil)))
+	ran := make(chan struct{}, 10)
+	client, err := NewClient(newPool(t), run, cleanNothing, func(ctx context.Context) error {
+		logger.InfoContext(ctx, "刷新 QQ 登录")
+		ran <- struct{}{}
+		return fmt.Errorf("平台拒绝刷新：%w", port.ErrSourceSignedOut)
+	}, noop.NewTracerProvider(), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,15 +356,31 @@ func TestMediaClientSchedulesCleanupForServe(t *testing.T) {
 	select {
 	case <-ran:
 	case <-time.After(30 * time.Second):
-		t.Fatal("30 秒内 serve 进程的 client 没有执行清理任务")
+		t.Fatal("启动之后 30 秒内没有执行 QQ 刷新任务")
+	}
+	var job *rivertype.JobRow
+	for deadline := time.Now().Add(30 * time.Second); job == nil || job.State != rivertype.JobStateCancelled; time.Sleep(50 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("30 秒后 QQ 刷新任务 = %v，期望已取消", job)
+		}
+		jobs, err := client.JobList(t.Context(), river.NewJobListParams().Kinds(qqRefreshArgs{}.Kind()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(jobs.Jobs) > 0 {
+			job = jobs.Jobs[0]
+		}
 	}
 	if err := client.Stop(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if err := media.Stop(context.Background()); err != nil {
-		t.Fatal(err)
+	if job.Queue != qqRefreshQueue {
+		t.Errorf("QQ 刷新任务在队列 %q 中，期望 %q", job.Queue, qqRefreshQueue)
 	}
-	if job, err := client.JobGet(context.Background(), scheduled.ID); err != nil || job.State != rivertype.JobStateCompleted {
-		t.Errorf("worker 进程的 client 安排的清理任务 = %v, %v，期望已执行完", job, err)
+	var entry struct {
+		JobID int64 `json:"job_id"`
+	}
+	if err := json.Unmarshal(logs.Bytes(), &entry); err != nil || entry.JobID != job.ID {
+		t.Errorf("刷新时的日志 = %s，期望带 job_id %d", logs.String(), job.ID)
 	}
 }

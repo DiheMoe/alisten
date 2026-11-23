@@ -48,6 +48,7 @@ type sources struct {
 	playback      map[track.Source]port.PlayURLs
 	neteaseLogin  port.NetEaseQRLoginSource
 	qqLogin       port.QQQRLoginSource
+	qqRefresh     func(context.Context) error
 	bilibiliLogin port.BilibiliQRLoginSource
 }
 
@@ -65,7 +66,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 	logger := base.With("component", "prepare")
 	runner := prepare.NewRunner(map[track.Source]port.Source{track.NetEase: src.netease, track.QQ: src.qq}, store, logger)
 	guests := identity.NewGuestCleanup(store, base.With("component", "cleanup"))
-	jobs, err := worker.NewClient(pool, runner.Run, guests.Run, insertsInTraces{tracer}, logger)
+	jobs, err := worker.NewClient(pool, runner.Run, guests.Run, src.qqRefresh, insertsInTraces{tracer}, logger)
 	if err != nil {
 		return public{}, fmt.Errorf("创建 River client：%w", err)
 	}

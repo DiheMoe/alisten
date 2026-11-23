@@ -31,6 +31,7 @@ type Client struct {
 	http    *http.Client
 	api     *http.Client
 	cookie  cookieCache
+	refresh refreshState
 	cache   *expirable.LRU[string, any]
 	observe func(source, op string, elapsed time.Duration, err error)
 	logger  *slog.Logger
@@ -70,6 +71,25 @@ func (c *cookieCache) get(ctx context.Context) (string, error) {
 	if time.Now().Before(c.expires) {
 		return c.value, nil
 	}
+	return c.loadLocked(ctx)
+}
+
+func (c *cookieCache) current() (string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if time.Now().Before(c.expires) {
+		return c.value, true
+	}
+	return "", false
+}
+
+func (c *cookieCache) reload(ctx context.Context) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.loadLocked(ctx)
+}
+
+func (c *cookieCache) loadLocked(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, cookieLoadTimeout)
 	defer cancel()
 	value, err := c.load(ctx)
@@ -83,6 +103,23 @@ func (c *cookieCache) get(ctx context.Context) (string, error) {
 func (c *cookieCache) put(ctx context.Context, value string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.storeLocked(ctx, value)
+}
+
+// 刷新在后台或并发请求中完成，如果期间本地已经写入了新的凭据（比如管理员刚重新扫码），就不再覆盖。
+func (c *cookieCache) putIfUnchanged(ctx context.Context, expected, value string) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if time.Now().Before(c.expires) && c.value != expected {
+		return false, nil
+	}
+	if err := c.storeLocked(ctx, value); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (c *cookieCache) storeLocked(ctx context.Context, value string) error {
 	ctx, cancel := context.WithTimeout(ctx, cookieLoadTimeout)
 	defer cancel()
 	if err := c.store(ctx, value); err != nil {
@@ -118,17 +155,23 @@ func (s status) check() error {
 }
 
 func (c *Client) get(ctx context.Context, source, op, endpoint string, query url.Values, header http.Header, out response) error {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
+	var cookie string
 	if source == "qq" {
-		cookie, err := c.cookie.get(ctx)
+		var err error
+		cookie, err = c.cookie.get(ctx)
 		if err != nil {
 			return err
 		}
-		if cookie != "" {
-			header = header.Clone()
-			header.Set("Cookie", cookie)
-		}
+	}
+	return c.getWithCookie(ctx, source, op, endpoint, query, header, cookie, out)
+}
+
+func (c *Client) getWithCookie(ctx context.Context, source, op, endpoint string, query url.Values, header http.Header, cookie string, out response) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	if source == "qq" && cookie != "" {
+		header = header.Clone()
+		header.Set("Cookie", cookie)
 	}
 	start := time.Now()
 	err := c.fetch(ctx, endpoint+"?"+query.Encode(), header, out)
