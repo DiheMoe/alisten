@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/dihemoe/alisten/internal/app/port"
 )
@@ -80,6 +81,20 @@ func (c *Client) PlayURL(ctx context.Context, songMID string) (string, error) {
 			if item.Filename == filename && item.PURL != "" {
 				return playURLCDN + item.PURL, nil
 			}
+		}
+	}
+	// 拿不到播放地址时复核登录：vkey 对失效凭据不一定直接报错，用严格登录态接口区分"登录失效"和"需要会员或没有版权"。
+	cookie, err := c.cookie.get(ctx)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(cookie) != "" {
+		valid, err := c.loginState(ctx, cookie, qqAccountID(cookie))
+		if err != nil {
+			return "", err
+		}
+		if !valid {
+			return "", fmt.Errorf("获取播放地址：%w", port.ErrSourceSignedOut)
 		}
 	}
 	return "", &port.RejectedError{Err: errors.New("QQ 音乐没有提供这首歌的播放地址")}

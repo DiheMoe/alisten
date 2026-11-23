@@ -28,6 +28,8 @@ const testCookie = "qq_test_cookie=fictitious"
 
 var testLogger = slog.New(slog.DiscardHandler)
 
+const accountValidResponse = `{"code":0,"req":{"code":0,"data":{"dirinfo":{"dirid":201}}}}`
+
 // 测试服务器按路径返回 testdata 中录制的响应，Client 的所有请求都转到它。
 func serve(t *testing.T, routes map[string]http.HandlerFunc) (*Client, *observed) {
 	t.Helper()
@@ -238,6 +240,10 @@ func musicuLyric(t *testing.T, playResponse string, lyric http.HandlerFunc) http
 		}
 		if payload.Req1 != nil {
 			body(playResponse)(w, r)
+			return
+		}
+		if strings.Contains(r.URL.Query().Get("data"), "DissInfo") {
+			body(accountValidResponse)(w, r)
 			return
 		}
 		lyric(w, r)

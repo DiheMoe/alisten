@@ -83,7 +83,13 @@ func TestPlayURLSelectsRequestedQualityOrder(t *testing.T) {
 
 func TestPlayURLRejectsEmptyPURL(t *testing.T) {
 	c, _ := serve(t, map[string]http.HandlerFunc{
-		"/cgi-bin/musicu.fcg": body(`{"code":0,"req_1":{"code":0,"data":{"midurlinfo":[{"filename":"F000idid.flac","purl":""},{"filename":"M800idid.mp3","purl":""},{"filename":"M500idid.mp3","purl":""},{"filename":"F000otherother.flac","purl":"other"}]}}}`),
+		"/cgi-bin/musicu.fcg": func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.Query().Get("data"), "DissInfo") {
+				body(accountValidResponse)(w, r)
+				return
+			}
+			body(`{"code":0,"req_1":{"code":0,"data":{"midurlinfo":[{"filename":"F000idid.flac","purl":""},{"filename":"M800idid.mp3","purl":""},{"filename":"M500idid.mp3","purl":""},{"filename":"F000otherother.flac","purl":"other"}]}}}`)(w, r)
+		},
 	})
 	var rejected *port.RejectedError
 	if got, err := c.PlayURL(t.Context(), "id"); got != "" || !errors.As(err, &rejected) || err.Error() != "QQ 音乐没有提供这首歌的播放地址" {
@@ -150,7 +156,7 @@ func TestResolveRejectsEmptyPlayURL(t *testing.T) {
 	if !errors.As(err, &rejected) || err.Error() != "QQ 音乐没有提供这首歌的播放地址" {
 		t.Fatalf("QQ 没有播放地址时的错误 = %v，期望 QQ 音源拒绝", err)
 	}
-	obs.check(t, "qq track_detail", "qq lyric", "qq play_url")
+	obs.check(t, "qq track_detail", "qq lyric", "qq play_url", "qq account")
 }
 
 func TestPlayURLIsNotCached(t *testing.T) {

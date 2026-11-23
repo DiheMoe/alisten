@@ -7,12 +7,13 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/dihemoe/alisten/internal/app/port"
 )
 
-func accountTestClient(t *testing.T, cookie string, handler http.HandlerFunc) *Client {
+func accountTestClient(t *testing.T, cookie string, diss, vip http.HandlerFunc) *Client {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/cgi-bin/musicu.fcg" {
@@ -23,7 +24,11 @@ func accountTestClient(t *testing.T, cookie string, handler http.HandlerFunc) *C
 		if got := r.Header.Get("Cookie"); got != cookie {
 			t.Errorf("账号接口的 Cookie = %q，期望已保存的凭据", got)
 		}
-		handler(w, r)
+		if strings.Contains(r.URL.Query().Get("data"), "DissInfo") {
+			diss(w, r)
+			return
+		}
+		vip(w, r)
 	}))
 	t.Cleanup(server.Close)
 	target, err := url.Parse(server.URL)
@@ -61,7 +66,7 @@ func TestCurrentAccount(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := accountTestClient(t, tc.cookie, fixture(t, "account.json")).CurrentAccount(t.Context())
+			got, err := accountTestClient(t, tc.cookie, body(accountValidResponse), fixture(t, "account.json")).CurrentAccount(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -90,7 +95,7 @@ func TestCurrentAccountVIP(t *testing.T) {
 		{"account.json", boolPtr(false)},
 		{"account-no-identity.json", nil},
 	} {
-		got, err := accountTestClient(t, "uin=o000123", fixture(t, tc.file)).CurrentAccount(t.Context())
+		got, err := accountTestClient(t, "uin=o000123", body(accountValidResponse), fixture(t, tc.file)).CurrentAccount(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -100,11 +105,14 @@ func TestCurrentAccountVIP(t *testing.T) {
 	}
 }
 
-// QQ 音乐认为登录无效时返回 nil 账号而不是错误，与网易云个人资料为空一致。
+// QQ 音乐明确报告登录失效时返回包装了 ErrSourceSignedOut 的错误，不能再显示成非会员。
 func TestCurrentAccountExpired(t *testing.T) {
-	got, err := accountTestClient(t, "uin=o000123", fixture(t, "account-expired.json")).CurrentAccount(t.Context())
-	if err != nil || got != nil {
-		t.Fatalf("登录失效时 = %+v, %v，期望 nil 账号且无错误", got, err)
+	got, err := accountTestClient(t, "uin=o000123", fixture(t, "account-expired.json"), fixture(t, "account.json")).CurrentAccount(t.Context())
+	if !errors.Is(err, port.ErrSourceSignedOut) {
+		t.Fatalf("登录失效时 = %+v, %v，期望 ErrSourceSignedOut", got, err)
+	}
+	if got != nil {
+		t.Fatalf("登录失效时返回了账号 %+v", got)
 	}
 }
 
@@ -116,7 +124,7 @@ func TestCurrentAccountUpstreamError(t *testing.T) {
 		"业务码缺失":      body(`{"code":0,"req":{"data":{}}}`),
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := accountTestClient(t, "uin=o000123", handler).CurrentAccount(t.Context()); err == nil {
+			if _, err := accountTestClient(t, "uin=o000123", handler, fixture(t, "account.json")).CurrentAccount(t.Context()); err == nil {
 				t.Error("上游异常时没有返回错误")
 			}
 		})
