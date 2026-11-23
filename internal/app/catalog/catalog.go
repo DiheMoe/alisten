@@ -57,7 +57,6 @@ func New(netease port.NetEaseSource, qq port.PlaylistSource, bilibili port.Bilib
 	return &Service{netease: netease, qq: qq, bilibili: bilibili, links: links, tracks: tracks, history: history, rooms: rooms, quota: quota, logger: logger}
 }
 
-// SearchTracks 只在上游一次取回的结果中分页，page 从 1 开始。total 是取回的结果数。
 func (s *Service) SearchTracks(ctx context.Context, roomID string, source track.Source, keyword string, page, size int64) (songs []port.Song, total int64, err error) {
 	src, err := s.searchable(source)
 	if err != nil {
@@ -66,11 +65,11 @@ func (s *Service) SearchTracks(ctx context.Context, roomID string, source track.
 	if err := s.take(ctx, roomID); err != nil {
 		return nil, 0, err
 	}
-	all, err := src.SearchTracks(ctx, keyword)
+	songs, total, err = src.SearchTracks(ctx, keyword, page, size)
 	if err != nil {
 		return nil, 0, upstream(source, "搜索歌曲", err)
 	}
-	return paginate(all, page, size), int64(len(all)), nil
+	return songs, total, nil
 }
 
 func (s *Service) SearchPlaylists(ctx context.Context, roomID string, source track.Source, keyword string, page, size int64) (playlists []port.Playlist, total int64, err error) {
@@ -81,11 +80,11 @@ func (s *Service) SearchPlaylists(ctx context.Context, roomID string, source tra
 	if err := s.take(ctx, roomID); err != nil {
 		return nil, 0, err
 	}
-	all, err := src.SearchPlaylists(ctx, keyword)
+	playlists, total, err = src.SearchPlaylists(ctx, keyword, page, size)
 	if err != nil {
 		return nil, 0, upstream(source, "搜索歌单", err)
 	}
-	return paginate(all, page, size), int64(len(all)), nil
+	return playlists, total, nil
 }
 
 func (s *Service) PlaylistTracks(ctx context.Context, roomID string, source track.Source, playlistID string) ([]port.Song, error) {
@@ -182,7 +181,7 @@ func (s *Service) FirstMatch(ctx context.Context, source track.Source, keyword s
 	if err != nil {
 		return track.Track{}, track.Meta{}, err
 	}
-	songs, err := src.SearchTracks(ctx, keyword)
+	songs, _, err := src.SearchTracks(ctx, keyword, 1, 1)
 	if err != nil {
 		return track.Track{}, track.Meta{}, upstream(source, "搜索歌曲", err)
 	}
@@ -329,14 +328,4 @@ func unsupported(source track.Source, what string) error {
 
 func upstream(source track.Source, what string, err error) error {
 	return fmt.Errorf("在%s%s：%w：%w", source, what, err, port.ErrSourceFailed)
-}
-
-// page 从 1 开始，size 至少为 1。page 和 size 都来自客户端，乘积可能溢出。
-func paginate[T any](items []T, page, size int64) []T {
-	n := int64(len(items))
-	if page-1 > n/size {
-		return nil
-	}
-	start := (page - 1) * size
-	return items[start:min(start+size, n)]
 }

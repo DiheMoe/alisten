@@ -98,11 +98,11 @@ func (s *Source) Fail(err error) {
 	s.failure = err
 }
 
-func (s *Source) SearchTracks(_ context.Context, keyword string) ([]port.Song, error) {
+func (s *Source) SearchTracks(_ context.Context, keyword string, page, size int64) ([]port.Song, int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.failure != nil {
-		return nil, s.failure
+		return nil, 0, s.failure
 	}
 	var songs []port.Song
 	for _, song := range s.songs {
@@ -110,14 +110,14 @@ func (s *Source) SearchTracks(_ context.Context, keyword string) ([]port.Song, e
 			songs = append(songs, s.song(song))
 		}
 	}
-	return songs, nil
+	return paginate(songs, page, size), int64(len(songs)), nil
 }
 
-func (s *Source) SearchPlaylists(_ context.Context, keyword string) ([]port.Playlist, error) {
+func (s *Source) SearchPlaylists(_ context.Context, keyword string, page, size int64) ([]port.Playlist, int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.failure != nil {
-		return nil, s.failure
+		return nil, 0, s.failure
 	}
 	var playlists []port.Playlist
 	for _, p := range s.playlists {
@@ -125,7 +125,7 @@ func (s *Source) SearchPlaylists(_ context.Context, keyword string) ([]port.Play
 			playlists = append(playlists, p.playlist)
 		}
 	}
-	return playlists, nil
+	return paginate(playlists, page, size), int64(len(playlists)), nil
 }
 
 func (s *Source) PlaylistTracks(_ context.Context, playlistID string) ([]port.Song, error) {
@@ -217,6 +217,16 @@ func (s *Source) lookup(ids []string) []port.Song {
 
 func (s *Source) song(song sourceSong) port.Song {
 	return port.Song{Track: track.Track{Source: s.source, ID: song.id}, Meta: song.meta}
+}
+
+// page 从 1 开始，size 至少为 1。page 和 size 都来自客户端，乘积可能溢出。
+func paginate[T any](items []T, page, size int64) []T {
+	n := int64(len(items))
+	if page-1 > n/size {
+		return nil
+	}
+	start := (page - 1) * size
+	return items[start:min(start+size, n)]
 }
 
 // 静音的响度分析得到的增益正好是 1。

@@ -27,7 +27,9 @@ const (
 const (
 	searchTracks    = 1
 	searchPlaylists = 1000
-	detailBatch     = 500
+	// cloudsearch/pc 在偏移量达到总数或从 600 起时仍可能回绕并返回重复歌曲，所以限制偏移量上限并按总数截断。
+	maxSearchResults = 600
+	detailBatch      = 500
 )
 
 var (
@@ -83,38 +85,58 @@ type (
 	}
 )
 
-func (c *Client) SearchTracks(ctx context.Context, keyword string) ([]port.Song, error) {
-	return cached(c, "search_tracks "+keyword, func() ([]port.Song, error) {
-		var resp struct {
-			base
-			Result struct {
-				Songs []song `json:"songs"`
-			} `json:"result"`
-		}
-		if err := c.search(ctx, "search_tracks", keyword, searchTracks, &resp); err != nil {
-			return nil, err
-		}
-		songs := make([]port.Song, len(resp.Result.Songs))
-		for i, s := range resp.Result.Songs {
-			songs[i] = s.song()
-		}
-		return songs, nil
-	})
+type searchPage[T any] struct {
+	items []T
+	total int64
 }
 
-func (c *Client) SearchPlaylists(ctx context.Context, keyword string) ([]port.Playlist, error) {
-	return cached(c, "search_playlists "+keyword, func() ([]port.Playlist, error) {
+func (c *Client) SearchTracks(ctx context.Context, keyword string, page, size int64) ([]port.Song, int64, error) {
+	if page-1 > (maxSearchResults-1)/size {
+		return nil, 0, nil
+	}
+	offset := (page - 1) * size
+	limit := min(size, maxSearchResults-offset)
+	res, err := cached(c, fmt.Sprintf("search_tracks %d %d %s", page, size, keyword), func() (searchPage[port.Song], error) {
 		var resp struct {
 			base
 			Result struct {
-				Playlists []playlist `json:"playlists"`
+				Songs     []song `json:"songs"`
+				SongCount int64  `json:"songCount"`
 			} `json:"result"`
 		}
-		if err := c.search(ctx, "search_playlists", keyword, searchPlaylists, &resp); err != nil {
-			return nil, err
+		if err := c.search(ctx, "search_tracks", keyword, searchTracks, offset, limit, &resp); err != nil {
+			return searchPage[port.Song]{}, err
 		}
-		playlists := make([]port.Playlist, len(resp.Result.Playlists))
-		for i, p := range resp.Result.Playlists {
+		raw, total := trimSearchPage(resp.Result.Songs, resp.Result.SongCount, offset)
+		songs := make([]port.Song, len(raw))
+		for i, s := range raw {
+			songs[i] = s.song()
+		}
+		return searchPage[port.Song]{items: songs, total: total}, nil
+	})
+	return res.items, res.total, err
+}
+
+func (c *Client) SearchPlaylists(ctx context.Context, keyword string, page, size int64) ([]port.Playlist, int64, error) {
+	if page-1 > (maxSearchResults-1)/size {
+		return nil, 0, nil
+	}
+	offset := (page - 1) * size
+	limit := min(size, maxSearchResults-offset)
+	res, err := cached(c, fmt.Sprintf("search_playlists %d %d %s", page, size, keyword), func() (searchPage[port.Playlist], error) {
+		var resp struct {
+			base
+			Result struct {
+				Playlists     []playlist `json:"playlists"`
+				PlaylistCount int64      `json:"playlistCount"`
+			} `json:"result"`
+		}
+		if err := c.search(ctx, "search_playlists", keyword, searchPlaylists, offset, limit, &resp); err != nil {
+			return searchPage[port.Playlist]{}, err
+		}
+		raw, total := trimSearchPage(resp.Result.Playlists, resp.Result.PlaylistCount, offset)
+		playlists := make([]port.Playlist, len(raw))
+		for i, p := range raw {
 			playlists[i] = port.Playlist{
 				ID:          strconv.FormatInt(p.ID, 10),
 				Name:        text(p.Name),
@@ -125,15 +147,30 @@ func (c *Client) SearchPlaylists(ctx context.Context, keyword string) ([]port.Pl
 				PlayCount:   p.PlayCount,
 			}
 		}
-		return playlists, nil
+		return searchPage[port.Playlist]{items: playlists, total: total}, nil
 	})
+	return res.items, res.total, err
 }
 
-func (c *Client) search(ctx context.Context, op, keyword string, kind int, out response) error {
+func trimSearchPage[T any](items []T, rawTotal, offset int64) ([]T, int64) {
+	total := min(max(rawTotal, 0), maxSearchResults)
+	if total == 0 && offset == 0 {
+		total = int64(len(items))
+	}
+	if offset >= total {
+		return nil, total
+	}
+	if rem := total - offset; int64(len(items)) > rem {
+		items = items[:rem]
+	}
+	return items, total
+}
+
+func (c *Client) search(ctx context.Context, op, keyword string, kind int, offset, limit int64, out response) error {
 	form, err := linux(map[string]any{
 		"method": "POST",
 		"url":    "http://music.163.com/api/cloudsearch/pc",
-		"params": map[string]any{"s": keyword, "type": kind, "offset": 0, "limit": 100},
+		"params": map[string]any{"s": keyword, "type": kind, "offset": offset, "limit": limit},
 	})
 	if err != nil {
 		return err

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -134,35 +135,64 @@ var live = wantSong("004Fs2FP1EvZYc", "晴天 (Live)", "周杰伦地表最强世
 func TestSearchTracks(t *testing.T) {
 	c, obs := serve(t, map[string]http.HandlerFunc{
 		"/soso/fcgi-bin/search_for_qq_cp": func(w http.ResponseWriter, r *http.Request) {
-			if q := r.URL.Query(); q.Get("w") != "晴天" || q.Get("n") != "20" {
-				t.Errorf("搜索参数 = %v，期望一次取 20 首歌", q)
+			if q := r.URL.Query(); q.Get("w") != "晴天" || q.Get("p") != "2" || q.Get("n") != "20" {
+				t.Errorf("搜索参数 = %v，期望 p=2 n=20", q)
 			}
 			fixture(t, "search-tracks.json")(w, r)
 		},
 	})
 	want := []port.Song{wantSong("0039MnYb0qxYhV", "晴天", "叶惠美", "000MkMni19ClKG", 269), live}
 	for range 2 {
-		got, err := c.SearchTracks(t.Context(), "晴天")
+		got, total, err := c.SearchTracks(t.Context(), "晴天", 2, 20)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(got, want) {
-			t.Fatalf("搜索结果 = %#v\n期望 %#v", got, want)
+		if total != 600 || !reflect.DeepEqual(got, want) {
+			t.Fatalf("搜索结果 = %#v, total=%d\n期望 %#v, total=600", got, total, want)
 		}
 	}
+	if got, total, err := c.SearchTracks(t.Context(), "晴天", 1<<62, 100); err != nil || total != 0 || len(got) != 0 {
+		t.Fatalf("超大页码 = %#v, total=%d, %v，期望不请求上游直接返回空", got, total, err)
+	}
 	obs.check(t, "qq search_tracks")
+
+	// 单页超过 30 条时拆成多批 30 条请求并按区间裁剪。
+	var pages []string
+	batched, _ := serve(t, map[string]http.HandlerFunc{
+		"/soso/fcgi-bin/search_for_qq_cp": func(w http.ResponseWriter, r *http.Request) {
+			q := r.URL.Query()
+			pages = append(pages, q.Get("p")+":"+q.Get("n"))
+			p, _ := strconv.Atoi(q.Get("p"))
+			items := make([]map[string]any, 30)
+			for i := range items {
+				idx := strconv.Itoa((p-1)*30 + i)
+				items[i] = map[string]any{"songmid": "mid" + idx, "songname": "歌" + idx}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"code": 0,
+				"data": map[string]any{"song": map[string]any{"totalnum": 600, "list": items}},
+			})
+		},
+	})
+	got, total, err := batched.SearchTracks(t.Context(), "晴天", 2, 50)
+	if err != nil || total != 600 || len(got) != 50 || got[0].Track.ID != "mid50" || got[49].Track.ID != "mid99" {
+		t.Fatalf("跨批分页 = len %d (%v..%v), total=%d, %v", len(got), got[0].Track.ID, got[len(got)-1].Track.ID, total, err)
+	}
+	if wantPages := []string{"2:30", "3:30", "4:30"}; !slices.Equal(pages, wantPages) {
+		t.Errorf("批次请求 = %v，期望 %v", pages, wantPages)
+	}
 }
 
 func TestSearchPlaylists(t *testing.T) {
 	c, _ := serve(t, map[string]http.HandlerFunc{
 		"/soso/fcgi-bin/client_music_search_songlist": func(w http.ResponseWriter, r *http.Request) {
-			if q := r.URL.Query(); q.Get("query") != "晴天" || q.Get("num_per_page") != "20" {
-				t.Errorf("搜索参数 = %v，期望一次取 20 个歌单", q)
+			if q := r.URL.Query(); q.Get("query") != "晴天" || q.Get("page_no") != "1" || q.Get("num_per_page") != "20" {
+				t.Errorf("搜索参数 = %v，期望 page_no=1 num_per_page=20", q)
 			}
 			fixture(t, "search-playlists.json")(w, r)
 		},
 	})
-	got, err := c.SearchPlaylists(t.Context(), "晴天")
+	got, total, err := c.SearchPlaylists(t.Context(), "晴天", 2, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,8 +200,8 @@ func TestSearchPlaylists(t *testing.T) {
 		{ID: "7382629476", Name: "精选 | 好听到单曲循环的热歌", CoverURL: "http://p.qpic.cn/music_cover/Z89aLA93LOSOicz0QOnMboqgLaiaFohjweglHh6JSoL8hrjOfFOC6DXw/600", Creator: "故事未完待续", Description: "音乐，是生命中的一束光。", TrackCount: 130, PlayCount: 1646891961},
 		{ID: "7709684645", Name: "抖音热播 | 瞬间心动的神仙歌曲", CoverURL: "http://qpic.y.qq.com/music_cover/aDicdhbLYu1KGBxNOsA6ff1v3vCMPkgFNhdQf18FKSOUiaVCmJ7TOIXQ/300", Creator: "行走的荷尔蒙", Description: "抖音热播的神仙歌曲，建议收藏。", TrackCount: 121, PlayCount: 979011192},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("歌单 = %#v\n期望 %#v", got, want)
+	if total != 500 || !reflect.DeepEqual(got, want) {
+		t.Errorf("歌单 = %#v, total=%d\n期望 %#v, total=500", got, total, want)
 	}
 }
 
@@ -202,7 +232,7 @@ func TestTextDropsNUL(t *testing.T) {
 	if got, err := c.lyric(t.Context(), "004Fs2FP1EvZYc"); err != nil || got.LRC != "[00:01.00]故事\n" {
 		t.Errorf("歌词 = %q, %v", got.LRC, err)
 	}
-	playlists, err := c.SearchPlaylists(t.Context(), "歌单")
+	playlists, _, err := c.SearchPlaylists(t.Context(), "歌单", 1, 20)
 	if err != nil || len(playlists) != 1 || playlists[0].Name != "歌单 & 精选" || playlists[0].CoverURL != "http://p.qpic.cn/a.jpg" || playlists[0].Creator != "作者" || playlists[0].Description != "简介" {
 		t.Errorf("歌单 = %#v, %v", playlists, err)
 	}

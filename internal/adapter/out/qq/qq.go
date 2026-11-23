@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +21,14 @@ const (
 	searchAPI         = "https://c.y.qq.com/soso/fcgi-bin/search_for_qq_cp"
 	searchPlaylistAPI = "https://c.y.qq.com/soso/fcgi-bin/client_music_search_songlist"
 	detailAPI         = "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg"
+
+	// search_for_qq_cp 的 n 传得比 30 大也最多返回 30 首歌，totalnum 的上限是 600。
+	searchTrackBatch      = 30
+	maxTrackSearchResults = 600
+	// client_music_search_songlist 的 num_per_page 超过 50 会报 -3002。
+	// display_num 会给出更大的数字，但偏移量从 500 起不再返回歌单，page_no 到 50 还会报 -3001。
+	searchPlaylistBatch      = 50
+	maxPlaylistSearchResults = 500
 )
 
 var (
@@ -46,74 +55,138 @@ type singer struct {
 	Name string `json:"name"`
 }
 
-func (c *Client) SearchTracks(ctx context.Context, keyword string) ([]port.Song, error) {
-	return cached(c, "search_tracks "+keyword, func() ([]port.Song, error) {
-		var resp struct {
-			status
-			Data struct {
-				Song struct {
-					List []struct {
-						SongMID   string   `json:"songmid"`
-						SongName  string   `json:"songname"`
-						Singer    []singer `json:"singer"`
-						AlbumName string   `json:"albumname"`
-						AlbumMID  string   `json:"albummid"`
-						Interval  int64    `json:"interval"`
-					} `json:"list"`
-				} `json:"song"`
-			} `json:"data"`
-		}
-		query := url.Values{"w": {keyword}, "format": {"json"}, "p": {"1"}, "n": {"20"}}
-		if err := c.get(ctx, "search_tracks", searchAPI, query, mobileHeader, &resp); err != nil {
-			return nil, err
-		}
-		songs := make([]port.Song, len(resp.Data.Song.List))
-		for i, s := range resp.Data.Song.List {
-			songs[i] = song(s.SongMID, s.SongName, s.Singer, s.AlbumName, s.AlbumMID, s.Interval)
-		}
-		return songs, nil
-	})
+type searchPage[T any] struct {
+	items []T
+	total int64
 }
 
-func (c *Client) SearchPlaylists(ctx context.Context, keyword string) ([]port.Playlist, error) {
-	return cached(c, "search_playlists "+keyword, func() ([]port.Playlist, error) {
-		var resp struct {
-			status
-			Data struct {
-				List []struct {
-					DissID       string `json:"dissid"`
-					DissName     string `json:"dissname"`
-					ImgURL       string `json:"imgurl"`
-					Introduction string `json:"introduction"`
-					Creator      struct {
-						Name string `json:"name"`
-					} `json:"creator"`
-					ListenNum int64 `json:"listennum"`
-					SongCount int64 `json:"song_count"`
-				} `json:"list"`
-			} `json:"data"`
-		}
-		query := url.Values{
-			"query": {keyword}, "page_no": {"0"}, "num_per_page": {"20"}, "format": {"json"},
-			"remoteplace": {"txt.yqq.playlist"}, "flag_qc": {"0"},
-		}
-		if err := c.get(ctx, "search_playlists", searchPlaylistAPI, query, desktopHeader, &resp); err != nil {
-			return nil, err
-		}
-		playlists := make([]port.Playlist, len(resp.Data.List))
-		for i, p := range resp.Data.List {
-			playlists[i] = port.Playlist{
-				ID:          text(p.DissID),
-				Name:        text(html.UnescapeString(p.DissName)),
-				CoverURL:    text(p.ImgURL),
-				Creator:     text(html.UnescapeString(p.Creator.Name)),
-				Description: text(html.UnescapeString(p.Introduction)),
-				TrackCount:  p.SongCount,
-				PlayCount:   p.ListenNum,
+func (c *Client) SearchTracks(ctx context.Context, keyword string, page, size int64) ([]port.Song, int64, error) {
+	if page-1 > (maxTrackSearchResults-1)/size {
+		return nil, 0, nil
+	}
+	res, err := cached(c, fmt.Sprintf("search_tracks %d %d %s", page, size, keyword), func() (searchPage[port.Song], error) {
+		return collectPages(page, size, searchTrackBatch, maxTrackSearchResults, func(pageIndex, batch int64) ([]port.Song, int64, error) {
+			var resp struct {
+				status
+				Data struct {
+					Song struct {
+						TotalNum int64 `json:"totalnum"`
+						List     []struct {
+							SongMID   string   `json:"songmid"`
+							SongName  string   `json:"songname"`
+							Singer    []singer `json:"singer"`
+							AlbumName string   `json:"albumname"`
+							AlbumMID  string   `json:"albummid"`
+							Interval  int64    `json:"interval"`
+						} `json:"list"`
+					} `json:"song"`
+				} `json:"data"`
 			}
-		}
-		return playlists, nil
+			query := url.Values{
+				"w":      {keyword},
+				"format": {"json"},
+				"p":      {strconv.FormatInt(pageIndex+1, 10)},
+				"n":      {strconv.FormatInt(batch, 10)},
+			}
+			if err := c.get(ctx, "search_tracks", searchAPI, query, mobileHeader, &resp); err != nil {
+				return nil, 0, err
+			}
+			songs := make([]port.Song, len(resp.Data.Song.List))
+			for i, s := range resp.Data.Song.List {
+				songs[i] = song(s.SongMID, s.SongName, s.Singer, s.AlbumName, s.AlbumMID, s.Interval)
+			}
+			return songs, resp.Data.Song.TotalNum, nil
+		})
 	})
+	return res.items, res.total, err
+}
+
+func (c *Client) SearchPlaylists(ctx context.Context, keyword string, page, size int64) ([]port.Playlist, int64, error) {
+	if page-1 > (maxPlaylistSearchResults-1)/size {
+		return nil, 0, nil
+	}
+	res, err := cached(c, fmt.Sprintf("search_playlists %d %d %s", page, size, keyword), func() (searchPage[port.Playlist], error) {
+		return collectPages(page, size, searchPlaylistBatch, maxPlaylistSearchResults, func(pageIndex, batch int64) ([]port.Playlist, int64, error) {
+			var resp struct {
+				status
+				Data struct {
+					DisplayNum int64 `json:"display_num"`
+					List       []struct {
+						DissID       string `json:"dissid"`
+						DissName     string `json:"dissname"`
+						ImgURL       string `json:"imgurl"`
+						Introduction string `json:"introduction"`
+						Creator      struct {
+							Name string `json:"name"`
+						} `json:"creator"`
+						ListenNum int64 `json:"listennum"`
+						SongCount int64 `json:"song_count"`
+					} `json:"list"`
+				} `json:"data"`
+			}
+			query := url.Values{
+				"query":        {keyword},
+				"page_no":      {strconv.FormatInt(pageIndex, 10)},
+				"num_per_page": {strconv.FormatInt(batch, 10)},
+				"format":       {"json"},
+				"remoteplace":  {"txt.yqq.playlist"},
+				"flag_qc":      {"0"},
+			}
+			if err := c.get(ctx, "search_playlists", searchPlaylistAPI, query, desktopHeader, &resp); err != nil {
+				return nil, 0, err
+			}
+			playlists := make([]port.Playlist, len(resp.Data.List))
+			for i, p := range resp.Data.List {
+				playlists[i] = port.Playlist{
+					ID:          text(p.DissID),
+					Name:        text(html.UnescapeString(p.DissName)),
+					CoverURL:    text(p.ImgURL),
+					Creator:     text(html.UnescapeString(p.Creator.Name)),
+					Description: text(html.UnescapeString(p.Introduction)),
+					TrackCount:  p.SongCount,
+					PlayCount:   p.ListenNum,
+				}
+			}
+			return playlists, resp.Data.DisplayNum, nil
+		})
+	})
+	return res.items, res.total, err
+}
+
+func collectPages[T any](page, size, maxBatch, maxResults int64, fetchPage func(pageIndex, batch int64) ([]T, int64, error)) (searchPage[T], error) {
+	start := (page - 1) * size
+	end := min(start+size, maxResults)
+	batch := min(size, maxBatch)
+	firstIdx := start / batch
+	lastIdx := (end - 1) / batch
+
+	var out []T
+	var total int64
+	for idx := firstIdx; idx <= lastIdx; idx++ {
+		list, rawTotal, err := fetchPage(idx, batch)
+		if err != nil {
+			return searchPage[T]{}, err
+		}
+		if idx == firstIdx {
+			total = min(max(rawTotal, 0), maxResults)
+			if total == 0 && start == 0 {
+				total = int64(len(list))
+			}
+			if start >= total {
+				return searchPage[T]{total: total}, nil
+			}
+			end = min(end, total)
+			lastIdx = (end - 1) / batch
+		}
+		if len(list) == 0 {
+			break
+		}
+		base := idx * batch
+		lo := min(max(start-base, 0), int64(len(list)))
+		hi := min(max(end-base, 0), int64(len(list)))
+		out = append(out, list[lo:hi]...)
+	}
+	return searchPage[T]{items: out, total: total}, nil
 }
 
 func (c *Client) TrackMeta(ctx context.Context, id string) (track.Meta, error) {

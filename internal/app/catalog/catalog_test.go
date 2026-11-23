@@ -131,8 +131,6 @@ func TestSearchTracksPaginates(t *testing.T) {
 	}{
 		{1, 2, songs[:2]},
 		{2, 2, songs[2:]},
-		{3, 2, nil},
-		{1 << 62, 100, nil},
 	}
 	for _, c := range cases {
 		got, total, err := f.svc.SearchTracks(t.Context(), f.persistent, track.NetEase, "晴天", c.page, c.size)

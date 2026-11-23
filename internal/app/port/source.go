@@ -103,9 +103,11 @@ type (
 	}
 )
 
+// 搜索的 page 从 1 开始，size 在 1 到 100 之间。total 是匹配的总数，不是这一页的条数。
+// page 来自客户端，没有上限，所以实现算偏移量时要防止 (page-1)*size 溢出。
 type Source interface {
-	SearchTracks(ctx context.Context, keyword string) ([]Song, error)
-	SearchPlaylists(ctx context.Context, keyword string) ([]Playlist, error)
+	SearchTracks(ctx context.Context, keyword string, page, size int64) ([]Song, int64, error)
+	SearchPlaylists(ctx context.Context, keyword string, page, size int64) ([]Playlist, int64, error)
 	TrackMeta(ctx context.Context, id string) (track.Meta, error)
 	Resolve(ctx context.Context, id string) (Resolved, error)
 }

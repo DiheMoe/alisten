@@ -161,12 +161,14 @@ func wantSong(id string, title, artist, album, cover string, ms int) port.Song {
 var cover = wantSong("3387653989", "晴天 (Cover 蓝心羽)", "小汤圆", "", "https://p1.music.126.net/pvManIVaLdiDyKMDzuChuA==/109951173298787727.jpg", 176773)
 
 func TestSearchTracks(t *testing.T) {
+	var offsets []float64
 	c, obs := serve(t, map[string]http.HandlerFunc{
 		"/api/linux/forward": func(w http.ResponseWriter, r *http.Request) {
 			params := searchParams(t, r)
-			if params["s"] != "晴天" || params["type"] != float64(1) || params["limit"] != float64(100) {
-				t.Errorf("搜索参数 = %v，期望一次取 100 首歌", params)
+			if params["s"] != "晴天" || params["type"] != float64(1) || params["limit"] != float64(20) {
+				t.Errorf("搜索参数 = %v", params)
 			}
+			offsets = append(offsets, params["offset"].(float64))
 			fixture(t, "search-tracks.json")(w, r)
 		},
 	})
@@ -175,27 +177,37 @@ func TestSearchTracks(t *testing.T) {
 		wantSong("3387653989", "晴天 (Cover 蓝心羽)", "小汤圆", "", "http://p1.music.126.net/pvManIVaLdiDyKMDzuChuA==/109951173298787727.jpg", 176773),
 	}
 	for range 2 {
-		got, err := c.SearchTracks(t.Context(), "晴天")
+		got, total, err := c.SearchTracks(t.Context(), "晴天", 2, 20)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(got, want) {
-			t.Fatalf("搜索结果 = %#v\n期望 %#v", got, want)
+		if total != 338 || !reflect.DeepEqual(got, want) {
+			t.Fatalf("搜索结果 = %#v, total=%d\n期望 %#v, total=338", got, total, want)
 		}
 	}
-	obs.check(t, "search_tracks")
+	// 偏移量达到 songCount 时丢弃上游回绕返回的重复歌曲。
+	if got, total, err := c.SearchTracks(t.Context(), "晴天", 18, 20); err != nil || total != 338 || len(got) != 0 {
+		t.Fatalf("越过总数页 = %#v, total=%d, %v，期望空切片且 total=338", got, total, err)
+	}
+	if got, total, err := c.SearchTracks(t.Context(), "晴天", 1<<62, 100); err != nil || total != 0 || len(got) != 0 {
+		t.Fatalf("超大页码 = %#v, total=%d, %v，期望不请求上游直接返回空", got, total, err)
+	}
+	if !slices.Equal(offsets, []float64{20, 340}) {
+		t.Errorf("请求偏移量 = %v，期望 [20 340]", offsets)
+	}
+	obs.check(t, "search_tracks", "search_tracks")
 }
 
 func TestSearchPlaylists(t *testing.T) {
 	c, obs := serve(t, map[string]http.HandlerFunc{
 		"/api/linux/forward": func(w http.ResponseWriter, r *http.Request) {
-			if params := searchParams(t, r); params["type"] != float64(1000) || params["limit"] != float64(100) {
-				t.Errorf("搜索参数 = %v，期望一次取 100 个歌单", params)
+			if params := searchParams(t, r); params["type"] != float64(1000) || params["offset"] != float64(40) || params["limit"] != float64(20) {
+				t.Errorf("搜索参数 = %v，期望 offset=40 limit=20", params)
 			}
 			fixture(t, "search-playlists.json")(w, r)
 		},
 	})
-	got, err := c.SearchPlaylists(t.Context(), "晴天")
+	got, total, err := c.SearchPlaylists(t.Context(), "晴天", 3, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,8 +215,8 @@ func TestSearchPlaylists(t *testing.T) {
 		{ID: "6792103822", Name: "周杰伦-Jay 『网易云精选』", CoverURL: "http://p1.music.126.net/WFQ4EKF5QabD33U3NUOPWQ==/109951169535051638.jpg", Creator: "Buradarrr", Description: "【持续更新】欢迎投稿", TrackCount: 143, PlayCount: 34028960},
 		{ID: "17745261207", Name: "周杰伦歌单", CoverURL: "http://p1.music.126.net/-79-XFhWolhMzGESC8ifkg==/109951170218252280.jpg", Creator: "双鱼不困", TrackCount: 29, PlayCount: 514834},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("歌单 = %#v\n期望 %#v", got, want)
+	if total != 290 || !reflect.DeepEqual(got, want) {
+		t.Errorf("歌单 = %#v, total=%d\n期望 %#v, total=290", got, total, want)
 	}
 	obs.check(t, "search_playlists")
 }
@@ -256,7 +268,7 @@ func TestTextDropsNUL(t *testing.T) {
 	if got, err := c.lyric(t.Context(), "1"); err != nil || got.LRC != "[00:01.00]故事" {
 		t.Errorf("歌词 = %q, %v", got.LRC, err)
 	}
-	playlists, err := c.SearchPlaylists(t.Context(), "歌单")
+	playlists, _, err := c.SearchPlaylists(t.Context(), "歌单", 1, 20)
 	if err != nil || len(playlists) != 1 || playlists[0].Name != "歌单" || playlists[0].Creator != "创作者" || playlists[0].Description != "简介" {
 		t.Errorf("歌单 = %#v, %v", playlists, err)
 	}
@@ -474,10 +486,10 @@ func TestFailedResponseIsNotCached(t *testing.T) {
 			fixture(t, "search-tracks.json")(w, r)
 		},
 	})
-	if _, err := c.SearchTracks(t.Context(), "晴天"); err == nil {
+	if _, _, err := c.SearchTracks(t.Context(), "晴天", 1, 20); err == nil {
 		t.Fatal("错误码不是 200 时应失败")
 	}
-	if songs, err := c.SearchTracks(t.Context(), "晴天"); err != nil || len(songs) != 2 {
+	if songs, _, err := c.SearchTracks(t.Context(), "晴天", 1, 20); err != nil || len(songs) != 2 {
 		t.Errorf("再次搜索 = %d 首, %v，失败的响应不应缓存", len(songs), err)
 	}
 	obs.check(t, "search_tracks 失败", "search_tracks")
