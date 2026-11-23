@@ -17,7 +17,7 @@ func TestOnlineCountExpiresWithLease(t *testing.T) {
 	if err := client.PExpire(ctx, ownerKey(hall), 10*time.Second).Err(); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := a.SetOnline(ctx, hall, 3); err != nil || !ok {
+	if ok, err := a.SetOnlineCount(ctx, hall, 3); err != nil || !ok {
 		t.Fatalf("a 写入在线人数 = %v, %v", ok, err)
 	}
 	if ttl, err := client.PTTL(ctx, onlineKey(hall)).Result(); err != nil || ttl <= 9*time.Second || ttl > 10*time.Second {

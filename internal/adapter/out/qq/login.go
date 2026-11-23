@@ -34,11 +34,11 @@ const (
 	qqLoginAuthorizeURL     = "https://graph.qq.com/oauth2.0/authorize"
 	qqLoginMusicURL         = "https://u.y.qq.com/cgi-bin/musicu.fcg"
 	qqLoginRedirectURI      = "https://y.qq.com/portal/wx_redirect.html?login_type=1&surl=https%3A%2F%2Fy.qq.com%2F"
-	weChatLoginAppID        = "wx48db31d50e334801"
-	weChatLoginRedirectURI  = "https://y.qq.com/portal/wx_redirect.html?login_type=2&surl=https://y.qq.com/"
-	weChatLoginQRConnectURL = "https://open.weixin.qq.com/connect/qrconnect"
-	weChatLoginQRCheckURL   = "https://lp.open.weixin.qq.com/connect/l/qrconnect"
-	weChatLoginQRCodeURL    = "https://open.weixin.qq.com/connect/qrcode/"
+	wechatLoginAppID        = "wx48db31d50e334801"
+	wechatLoginRedirectURI  = "https://y.qq.com/portal/wx_redirect.html?login_type=2&surl=https://y.qq.com/"
+	wechatLoginQRConnectURL = "https://open.weixin.qq.com/connect/qrconnect"
+	wechatLoginQRCheckURL   = "https://lp.open.weixin.qq.com/connect/l/qrconnect"
+	wechatLoginQRCodeURL    = "https://open.weixin.qq.com/connect/qrcode/"
 )
 
 var qqLoginMusicURLs = []string{
@@ -51,9 +51,9 @@ var qqMusicKeyNames = []string{"qm_keyst", "qqmusic_key", "musickey", "music_key
 
 var (
 	_                    port.QQQRLoginSource = (*Client)(nil)
-	weChatQRUUIDPattern                       = regexp.MustCompile(`(?:connect/l/qrconnect\?uuid=|window\.QRLogin\.uuid\s*=\s*["']|/connect/qrcode/)([A-Za-z0-9_-]+)`)
-	weChatQRErrorPattern                      = regexp.MustCompile(`wx_errcode\s*=\s*([0-9]+)`)
-	weChatQRCodePattern                       = regexp.MustCompile(`wx_code\s*=\s*["']([^"']*)["']`)
+	wechatQRUUIDPattern                       = regexp.MustCompile(`(?:connect/l/qrconnect\?uuid=|window\.QRLogin\.uuid\s*=\s*["']|/connect/qrcode/)([A-Za-z0-9_-]+)`)
+	wechatQRErrorPattern                      = regexp.MustCompile(`wx_errcode\s*=\s*([0-9]+)`)
+	wechatQRCodePattern                       = regexp.MustCompile(`wx_code\s*=\s*["']([^"']*)["']`)
 )
 
 type qqQRLoginState struct {
@@ -62,7 +62,7 @@ type qqQRLoginState struct {
 	Cookies  map[string]string `json:"cookies"`
 }
 
-type weChatQRLoginState struct {
+type wechatQRLoginState struct {
 	UUID  string `json:"uuid"`
 	State string `json:"state"`
 }
@@ -279,14 +279,14 @@ func (c *Client) createWeChatQR(ctx context.Context) (port.QRLoginSession, error
 		return port.QRLoginSession{}, err
 	}
 	query := url.Values{
-		"appid":         {weChatLoginAppID},
-		"redirect_uri":  {weChatLoginRedirectURI},
+		"appid":         {wechatLoginAppID},
+		"redirect_uri":  {wechatLoginRedirectURI},
 		"response_type": {"code"},
 		"scope":         {"snsapi_login"},
 		"state":         {state},
 		"href":          {"https://y.qq.com/mediastyle/music_v17/src/css/popup_wechat.css#wechat_redirect"},
 	}
-	loginURL := weChatLoginQRConnectURL + "?" + query.Encode()
+	loginURL := wechatLoginQRConnectURL + "?" + query.Encode()
 	client := qqLoginClient(c.api, nil)
 	resp, err := qqLoginRequest(ctx, client, http.MethodGet, loginURL, nil, nil)
 	if err != nil {
@@ -296,19 +296,19 @@ func (c *Client) createWeChatQR(ctx context.Context) (port.QRLoginSession, error
 	if err != nil {
 		return port.QRLoginSession{}, err
 	}
-	matches := weChatQRUUIDPattern.FindSubmatch(pageHTML)
+	matches := wechatQRUUIDPattern.FindSubmatch(pageHTML)
 	if len(matches) != 2 || len(matches[1]) == 0 {
 		return port.QRLoginSession{}, errors.New("微信创建扫码登录的响应缺少 UUID")
 	}
 	uuid := string(matches[1])
-	encoded, err := json.Marshal(weChatQRLoginState{UUID: uuid, State: state})
+	encoded, err := json.Marshal(wechatQRLoginState{UUID: uuid, State: state})
 	if err != nil {
 		return port.QRLoginSession{}, err
 	}
 	return port.QRLoginSession{
 		Key:       base64.RawURLEncoding.EncodeToString(encoded),
 		LoginURL:  loginURL,
-		QRImage:   weChatLoginQRCodeURL + url.PathEscape(uuid),
+		QRImage:   wechatLoginQRCodeURL + url.PathEscape(uuid),
 		ExpiresAt: time.Now().Add(5 * time.Minute),
 	}, nil
 }
@@ -320,7 +320,7 @@ func (c *Client) checkWeChatQR(ctx context.Context, key string) (port.QRLoginRes
 	if err != nil {
 		return port.QRLoginResult{}, fmt.Errorf("解码微信扫码登录的 key：%w", err)
 	}
-	var state weChatQRLoginState
+	var state wechatQRLoginState
 	if err := json.Unmarshal(encoded, &state); err != nil {
 		return port.QRLoginResult{}, fmt.Errorf("解析微信扫码登录的 key：%w", err)
 	}
@@ -332,7 +332,7 @@ func (c *Client) checkWeChatQR(ctx context.Context, key string) (port.QRLoginRes
 		"uuid": {state.UUID},
 		"_":    {strconv.FormatInt(time.Now().UnixMilli(), 10)},
 	}
-	resp, err := qqLoginRequest(ctx, client, http.MethodGet, weChatLoginQRCheckURL+"?"+query.Encode(), nil, nil)
+	resp, err := qqLoginRequest(ctx, client, http.MethodGet, wechatLoginQRCheckURL+"?"+query.Encode(), nil, nil)
 	if err != nil {
 		return port.QRLoginResult{}, err
 	}
@@ -340,7 +340,7 @@ func (c *Client) checkWeChatQR(ctx context.Context, key string) (port.QRLoginRes
 	if err != nil {
 		return port.QRLoginResult{}, err
 	}
-	matches := weChatQRErrorPattern.FindSubmatch(body)
+	matches := wechatQRErrorPattern.FindSubmatch(body)
 	if len(matches) != 2 {
 		return port.QRLoginResult{}, errors.New("解析微信扫码轮询的响应失败")
 	}
@@ -348,11 +348,11 @@ func (c *Client) checkWeChatQR(ctx context.Context, key string) (port.QRLoginRes
 	if err != nil {
 		return port.QRLoginResult{}, fmt.Errorf("解析微信扫码状态：%w", err)
 	}
-	result := port.QRLoginResult{Status: weChatQRLoginStatus(code)}
+	result := port.QRLoginResult{Status: wechatQRLoginStatus(code)}
 	if result.Status != port.QRLoginSuccess {
 		return result, nil
 	}
-	matches = weChatQRCodePattern.FindSubmatch(body)
+	matches = wechatQRCodePattern.FindSubmatch(body)
 	if len(matches) != 2 || len(matches[1]) == 0 {
 		return port.QRLoginResult{}, errors.New("微信扫码成功的响应缺少授权 code")
 	}
@@ -371,7 +371,7 @@ func (c *Client) checkWeChatQR(ctx context.Context, key string) (port.QRLoginRes
 	return result, nil
 }
 
-func weChatQRLoginStatus(code int) port.QRLoginStatus {
+func wechatQRLoginStatus(code int) port.QRLoginStatus {
 	switch code {
 	case 405:
 		return port.QRLoginSuccess
@@ -397,7 +397,7 @@ func (c *Client) completeWeChatLogin(ctx context.Context, client *http.Client, c
 		"req": map[string]any{
 			"module": "music.login.LoginServer",
 			"method": "Login",
-			"param":  map[string]string{"strAppid": weChatLoginAppID, "code": code},
+			"param":  map[string]string{"strAppid": wechatLoginAppID, "code": code},
 		},
 	})
 	if err != nil {
@@ -405,7 +405,7 @@ func (c *Client) completeWeChatLogin(ctx context.Context, client *http.Client, c
 	}
 	header := http.Header{
 		"Content-Type": {"application/json"},
-		"Referer":      {weChatLoginRedirectURI},
+		"Referer":      {wechatLoginRedirectURI},
 		"Origin":       {"https://y.qq.com"},
 		"Cookie":       {"login_type=2"},
 	}

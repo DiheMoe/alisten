@@ -116,7 +116,7 @@ func TestStatusFollowsJob(t *testing.T) {
 			t.Fatal(err)
 		}
 		if row.Attempt != c.attempts {
-			t.Errorf("任务 %s 执行了 %d 次，期望 %d 次：失败之后只重试 1 次，被音源拒绝的任务不重试", c.id, row.Attempt, c.attempts)
+			t.Errorf("任务 %s 执行了 %d 次，期望 %d 次：失败之后只重试 1 次，被音乐平台拒绝的任务不重试", c.id, row.Attempt, c.attempts)
 		}
 	}
 

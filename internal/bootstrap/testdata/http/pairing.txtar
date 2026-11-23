@@ -73,7 +73,7 @@ GET /api/me
 Authorization: Bearer $alice2
 -- response --
 200
-{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice", "github": false}, "recordListens": true}
+{"member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "account": {"username": "alice", "github": false}, "listenRecording": true}
 
 -- request --
 POST /api/members
@@ -130,4 +130,4 @@ GET /api/me
 Authorization: Bearer $carol
 -- response --
 200
-{"member": {"id": "$carolId", "name": "$carolName", "avatarHash": ""}, "recordListens": true}
+{"member": {"id": "$carolId", "name": "$carolName", "avatarHash": ""}, "listenRecording": true}

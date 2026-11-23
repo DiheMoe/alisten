@@ -7,7 +7,7 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
-var ErrProviderFailed = errors.New("音乐平台没有正常响应，请稍后再试。")
+var ErrSourceFailed = errors.New("音乐平台没有正常响应，请稍后再试。")
 
 // 房间宿主调用 Prepare 时，ctx 在房间停止运行时取消，结果不再交回房间。
 // 实现要自己为每次对外请求设置期限。

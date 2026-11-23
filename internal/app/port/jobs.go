@@ -18,7 +18,7 @@ const (
 )
 
 // 任务重试用完时告诉用户的原因。这个原因会出现在房间动态里，也会被 bot 转发。最后一次的错误可能是下载工具的输出或 IO 错误，
-// 所以只写进日志。音源拒绝时的原因本来就是写给用户的，照旧使用。
+// 所以只写进日志。音乐平台拒绝时的原因本来就是写给用户的，照旧使用。
 const UnavailableReason = "暂时无法获取这首歌，可以稍后再点一次"
 
 // Reason 为空表示成功，结果已经写入曲目表。
@@ -32,6 +32,6 @@ type PrepareOutcome struct {
 type PrepareJobs interface {
 	// 这首歌已有未结束的任务时，返回那个任务的 ID。
 	Submit(ctx context.Context, t track.Track) (jobID int64, err error)
-	// 任务失败时 reason 是写给用户的原因：被取消（音源拒绝）时是拒绝的原因，重试用完时是 UnavailableReason。
+	// 任务失败时 reason 是写给用户的原因：被取消（音乐平台拒绝）时是拒绝的原因，重试用完时是 UnavailableReason。
 	Status(ctx context.Context, jobID int64) (state JobState, reason string, err error)
 }

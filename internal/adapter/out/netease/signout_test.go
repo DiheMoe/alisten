@@ -23,7 +23,7 @@ func TestPlayURLSignedOut(t *testing.T) {
 	}
 }
 
-// 没有保存凭据时不复核登录，按音源拒绝处理而不是登录失效。
+// 没有保存凭据时不复核登录，按音乐平台拒绝处理而不是登录失效。
 func TestPlayURLRejectsWithoutCookie(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/weapi/nuser/account/get" {
@@ -43,6 +43,6 @@ func TestPlayURLRejectsWithoutCookie(t *testing.T) {
 	c := New(&http.Client{Transport: redirect{target}}, func(context.Context) (string, error) { return "", nil }, nil, (&observed{}).record, testLogger)
 	var rejected *port.RejectedError
 	if _, err := c.PlayURL(t.Context(), "3387653989"); !errors.As(err, &rejected) {
-		t.Errorf("没有凭据时的错误 = %v，期望音源拒绝", err)
+		t.Errorf("没有凭据时的错误 = %v，期望音乐平台拒绝", err)
 	}
 }

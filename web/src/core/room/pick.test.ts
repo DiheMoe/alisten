@@ -15,13 +15,13 @@ const hello: HelloResponse = {
     nowPlaying: null,
     pending: null,
     next: null,
-    items: [],
+    waiting: [],
     members: { sessions: [], onlineCount: 0 },
   },
   serverTimeMs: 0,
 }
 
-// 服务端把 B 站的链接转成 B 站音源的曲目，歌名只在服务端的响应里。
+// 服务端把 B 站的链接转成来源为 bilibili 的曲目，歌名只在服务端的响应里。
 const video: Entry = {
   id: 'e1',
   track: { source: 'bilibili', id: 'BV1xx411c7mD' },

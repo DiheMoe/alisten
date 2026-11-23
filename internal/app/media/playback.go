@@ -25,7 +25,7 @@ const (
 )
 
 var (
-	ErrNoPlayback = errors.New("没有接入这个音源的播放地址")
+	ErrNoPlayback = errors.New("没有接入这个音乐平台的播放地址")
 	ErrNotInRoom  = errors.New("这首歌不在任何房间中")
 )
 
@@ -82,11 +82,11 @@ func (p *Playback) URL(ctx context.Context, t track.Track, now time.Time) (strin
 	case r := <-result:
 		var panicked *panicError
 		if errors.As(r.Err, &panicked) {
-			// 音源实现中的 panic 是程序缺陷，不是音源出错，所以交给调用方当作内部错误记录。
+			// 音乐平台适配器中的 panic 是程序缺陷，不是音乐平台出错，所以交给调用方当作内部错误记录。
 			return "", panicked
 		}
 		if r.Err != nil {
-			return "", fmt.Errorf("解析 %s %s 的播放地址：%w：%w", t.Source, t.ID, r.Err, port.ErrProviderFailed)
+			return "", fmt.Errorf("解析 %s %s 的播放地址：%w：%w", t.Source, t.ID, r.Err, port.ErrSourceFailed)
 		}
 		target, err := secure(r.Val.(string))
 		if err != nil {
@@ -127,7 +127,7 @@ func (e *panicError) Error() string {
 func secure(raw string) (string, error) {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
-		return "", fmt.Errorf("音源给出的播放地址不是 http 或 https 的绝对地址：%w", port.ErrProviderFailed)
+		return "", fmt.Errorf("音乐平台给出的播放地址不是 http 或 https 的绝对地址：%w", port.ErrSourceFailed)
 	}
 	return "https" + raw[strings.Index(raw, ":"):], nil
 }

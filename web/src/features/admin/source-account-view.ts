@@ -1,8 +1,8 @@
 import type { StatusTone } from './section-head'
-import type { AdminGetBilibiliCredentialResponse, AdminGetNeteaseCredentialResponse, AdminGetQQCredentialResponse } from '@/core/api'
+import type { AdminGetBilibiliCredentialResponse, AdminGetNetEaseCredentialResponse, AdminGetQQCredentialResponse } from '@/core/api'
 import type { ResourceState } from '@/shared/lib/resource'
 
-export type SourceCredential = AdminGetNeteaseCredentialResponse | AdminGetQQCredentialResponse | AdminGetBilibiliCredentialResponse
+export type SourceCredential = AdminGetNetEaseCredentialResponse | AdminGetQQCredentialResponse | AdminGetBilibiliCredentialResponse
 
 export type CredentialState = ResourceState<SourceCredential>
 

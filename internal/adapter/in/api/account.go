@@ -69,7 +69,7 @@ func (s *server) redeemPairingCode(ctx context.Context, c call, req protocol.Red
 }
 
 func accountDTO(a identity.Account) protocol.Account {
-	dto := protocol.Account{Github: a.GitHub}
+	dto := protocol.Account{GitHub: a.GitHub}
 	if a.Username != "" {
 		dto.Username = &a.Username
 	}

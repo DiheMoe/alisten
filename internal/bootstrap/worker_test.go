@@ -68,7 +68,7 @@ type runningWorker struct {
 	result func() error
 }
 
-// 只准备链接的测试用不到 B 站的音源和转码。
+// 只准备链接的测试用不到 B 站的适配器和转码。
 func startWorker(t *testing.T, download port.LinkDownloader) runningWorker {
 	t.Helper()
 	return startMediaWorker(t, workerSources{links: download})
@@ -257,7 +257,7 @@ func TestWorkerPreparesBilibili(t *testing.T) {
 	storageURL := objects.Endpoint + "/" + objects.Bucket
 	t.Setenv("STORAGE_PUBLIC_URL", storageURL)
 	svc := startService(t)
-	// serve 和 worker 各自构造音源。serve 的音源照常给出付费视频的元数据，worker 的音源拒绝下载付费视频，与真实的平台一样。
+	// serve 和 worker 各自构造音乐平台适配器。serve 的适配器照常给出付费视频的元数据，worker 的适配器拒绝下载付费视频，与真实的平台一样。
 	bilibili := contractBilibili()
 	bilibili.RejectVideo("BV1GJ411x7h7", "这个视频需要付费")
 	transcoder := porttest.NewTranscoder(porttest.SilentWAV(2 * time.Second))
@@ -304,7 +304,7 @@ func TestWorkerPreparesBilibili(t *testing.T) {
 		return m["type"] == "room.activity" && m["data"].(map[string]any)["kind"] == "failed"
 	})
 	if msg := failed["data"].(map[string]any)["message"]; msg != "《付费视频》没能准备好：这个视频需要付费" {
-		t.Errorf("音源拒绝下载时的动态 = %v，期望带着音源给出的原因", msg)
+		t.Errorf("音乐平台拒绝下载时的动态 = %v，期望带着音乐平台给出的原因", msg)
 	}
 	for result, want := range map[string]float64{"ok": 1, "rejected": 1} {
 		if got := metricValue(t, w.worker.metrics, "alisten_prepare_jobs_total", "source", "bilibili", "result", result); got != want {
@@ -341,10 +341,10 @@ func TestLinkCaseVariantsAreOneTrack(t *testing.T) {
 		if m["type"] != "queue.updated" {
 			return false
 		}
-		items := m["data"].(map[string]any)["items"].([]any)
-		return len(items) == 1 && items[0].(map[string]any)["status"] == "ready"
+		waiting := m["data"].(map[string]any)["waiting"].([]any)
+		return len(waiting) == 1 && waiting[0].(map[string]any)["status"] == "ready"
 	})
-	item := queued["data"].(map[string]any)["items"].([]any)[0].(map[string]any)
+	item := queued["data"].(map[string]any)["waiting"].([]any)[0].(map[string]any)
 	if id := item["track"].(map[string]any)["id"]; id != link {
 		t.Errorf("等待队列中的曲目 ID = %v，期望 %s", id, link)
 	}

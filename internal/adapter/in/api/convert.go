@@ -86,7 +86,7 @@ func (s *server) event(e room.Event) (string, any) {
 	case room.PlaybackChanged:
 		return protocol.EventPlaybackUpdated, protocol.PlaybackUpdatedEvent{NowPlaying: s.nowPlaying(e.Current)}
 	case room.QueueChanged:
-		return protocol.EventQueueUpdated, protocol.QueueUpdatedEvent{Pending: s.entryPtr(e.Pending), Items: s.entries(e.Waiting), Next: s.next(e.Next, e.Waiting)}
+		return protocol.EventQueueUpdated, protocol.QueueUpdatedEvent{Pending: s.entryPtr(e.Pending), Waiting: s.entries(e.Waiting), Next: s.next(e.Next, e.Waiting)}
 	case room.MembersChanged:
 		return protocol.EventMembersUpdated, members(e.Sessions)
 	case room.ModeChanged:
@@ -110,7 +110,7 @@ func (s *server) snapshot(v room.View) protocol.RoomSnapshot {
 		NowPlaying: s.nowPlaying(v.Snapshot.Current),
 		Pending:    s.entryPtr(v.Snapshot.Pending),
 		Next:       s.next(v.Next, v.Snapshot.Waiting),
-		Items:      s.entries(v.Snapshot.Waiting),
+		Waiting:    s.entries(v.Snapshot.Waiting),
 		Members:    members(v.Sessions),
 	}
 }
@@ -231,7 +231,7 @@ func members(sessions []room.Session) protocol.Members {
 	for i, s := range sessions {
 		list[i] = memberDTO(s.Member)
 	}
-	return protocol.Members{Sessions: list, OnlineCount: int64(room.Headcount(sessions))}
+	return protocol.Members{Sessions: list, OnlineCount: int64(room.OnlineCount(sessions))}
 }
 
 var activityKinds = map[room.ActivityKind]protocol.ActivityKind{

@@ -9,18 +9,18 @@ export const levelNames: Record<PerformanceLevel, { name: string, description: s
   off: { name: '极简', description: '关闭所有动画和过渡，去掉阴影和模糊。' },
 }
 
-export function sectionSummaries({ theme, level, volume, muted, recordListens }: {
+export function sectionSummaries({ theme, level, volume, muted, listenRecording }: {
   theme: Theme
   level: PerformanceLevel
   volume: number
   muted: boolean
-  recordListens: boolean | null
+  listenRecording: boolean | null
 }): { appearance: string, playback: string, performance: string, privacy?: string } {
   return {
     appearance: themeNames[theme],
     playback: muted ? '静音' : `${volume}%`,
     performance: levelNames[level].name,
-    ...recordListens !== null && { privacy: recordListens ? '开' : '关' },
+    ...listenRecording !== null && { privacy: listenRecording ? '开' : '关' },
   }
 }
 

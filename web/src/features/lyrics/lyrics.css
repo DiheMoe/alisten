@@ -1,4 +1,4 @@
-.listen-page { display: flex; height: 100%; min-height: 0; padding: 24px 32px; }
+.now-playing-page { display: flex; height: 100%; min-height: 0; padding: 24px 32px; }
 .lyrics-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .lyrics-scroll { flex: 1; min-height: 0; overflow-y: auto; position: relative; scrollbar-width: none; overscroll-behavior: contain; mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent); }
 .lyrics-scroll::-webkit-scrollbar { display: none; }
@@ -24,7 +24,7 @@
 :root[data-performance='low'] .lyric-interlude.active-lyric .lyric-dot { animation: none; }
 :root[data-performance='off'] .lyrics-scroll { mask-image: none; }
 @media (max-width: 767px) {
-  .listen-page { padding: 16px; }
+  .now-playing-page { padding: 16px; }
 }
 @keyframes lyric-breathe {
   0%, 100% { transform: scale(.9); }

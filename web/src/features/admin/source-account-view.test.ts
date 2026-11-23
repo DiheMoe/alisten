@@ -36,7 +36,7 @@ describe('sourceAccountView', () => {
   }
 })
 
-// 后台分类栏的“音源”是否显示红点。查询中和查询失败时不知道状态，所以不显示。
+// 后台分类栏的“音乐平台”是否显示红点。查询中和查询失败时不知道状态，所以不显示。
 describe('needsSignIn', () => {
   for (const tc of cases) {
     it(tc.name, () => {

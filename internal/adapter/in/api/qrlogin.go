@@ -11,16 +11,16 @@ import (
 	"github.com/dihemoe/alisten/protocol"
 )
 
-func (s *server) adminStartNeteaseLogin(ctx context.Context, _ call) (protocol.QRLogin, error) {
-	session, err := s.Admin.CreateNeteaseQRLogin(ctx)
+func (s *server) adminStartNetEaseLogin(ctx context.Context, _ call) (protocol.QRLogin, error) {
+	session, err := s.Admin.CreateNetEaseQRLogin(ctx)
 	if err != nil {
 		return protocol.QRLogin{}, err
 	}
 	return qrLogin(session)
 }
 
-func (s *server) adminCheckNeteaseLogin(ctx context.Context, _ call, req protocol.AdminCheckNeteaseLoginRequest) (protocol.QRLoginResult, error) {
-	result, err := s.Admin.CheckNeteaseQRLogin(ctx, req.Key)
+func (s *server) adminCheckNetEaseLogin(ctx context.Context, _ call, req protocol.AdminCheckNetEaseLoginRequest) (protocol.QRLoginResult, error) {
+	result, err := s.Admin.CheckNetEaseQRLogin(ctx, req.Key)
 	if err != nil {
 		return protocol.QRLoginResult{}, err
 	}
@@ -63,11 +63,11 @@ func qrLogin(session port.QRLoginSession) (protocol.QRLogin, error) {
 	image := session.QRImage
 	if image == "" {
 		if session.LoginURL == "" {
-			return protocol.QRLogin{}, fmt.Errorf("音源没有给出二维码图片和登录链接：%w", port.ErrProviderFailed)
+			return protocol.QRLogin{}, fmt.Errorf("音乐平台没有给出二维码图片和登录链接：%w", port.ErrSourceFailed)
 		}
 		var err error
 		if image, err = qrDataURI(session.LoginURL); err != nil {
-			return protocol.QRLogin{}, fmt.Errorf("把登录链接编码成二维码：%w：%w", err, port.ErrProviderFailed)
+			return protocol.QRLogin{}, fmt.Errorf("把登录链接编码成二维码：%w：%w", err, port.ErrSourceFailed)
 		}
 	}
 	return protocol.QRLogin{Key: session.Key, QrImage: image, ExpiresAtMs: session.ExpiresAt.UnixMilli()}, nil

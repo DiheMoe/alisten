@@ -18,7 +18,7 @@ const (
 	maxPlaylists  = 50
 	maxItems      = 1000
 	maxNameLength = 50
-	// 收藏可能要向音源查询元数据。这份额度防止批量请求让共用的音源账号被平台限流。
+	// 收藏可能要向音乐平台查询元数据。这份额度防止批量请求让共用的音乐平台账号被平台限流。
 	addBurst  = 30
 	addRefill = 2 * time.Second
 )
@@ -126,7 +126,7 @@ func (s *Service) take(ctx context.Context, key string, burst int, refill time.D
 	return nil
 }
 
-// 链接曲目准备好之前没有元数据，音源也查不到。
+// 链接曲目准备好之前没有元数据，音乐平台也查不到。
 func (s *Service) meta(ctx context.Context, t track.Track) (track.Meta, error) {
 	if t.Source != track.Link {
 		return s.catalog.TrackMeta(ctx, t)

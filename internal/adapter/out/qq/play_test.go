@@ -93,7 +93,7 @@ func TestPlayURLRejectsEmptyPURL(t *testing.T) {
 	})
 	var rejected *port.RejectedError
 	if got, err := c.PlayURL(t.Context(), "id"); got != "" || !errors.As(err, &rejected) || err.Error() != "QQ 音乐没有提供这首歌的播放地址" {
-		t.Errorf("空播放地址的结果 = %q, %v，期望音源拒绝", got, err)
+		t.Errorf("空播放地址的结果 = %q, %v，期望音乐平台拒绝", got, err)
 	}
 }
 
@@ -114,7 +114,7 @@ func TestPlayURLUpstreamErrorsAreRetryable(t *testing.T) {
 			c, _ := serve(t, map[string]http.HandlerFunc{"/cgi-bin/musicu.fcg": tt.handler})
 			var rejected *port.RejectedError
 			if _, err := c.PlayURL(t.Context(), "id"); err == nil || errors.As(err, &rejected) {
-				t.Errorf("上游错误 = %v，期望可重试且不进入音源拒绝", err)
+				t.Errorf("上游错误 = %v，期望可重试且不进入音乐平台拒绝", err)
 			}
 		})
 	}
@@ -125,7 +125,7 @@ func TestResolveRejectsEmptyPlayURL(t *testing.T) {
 	_, err := c.Resolve(t.Context(), "004Fs2FP1EvZYc")
 	var rejected *port.RejectedError
 	if !errors.As(err, &rejected) || err.Error() != "QQ 音乐没有提供这首歌的播放地址" {
-		t.Fatalf("QQ 没有播放地址时的错误 = %v，期望 QQ 音源拒绝", err)
+		t.Fatalf("QQ 没有播放地址时的错误 = %v，期望音乐平台拒绝", err)
 	}
 	obs.check(t, "qq track_detail", "qq lyric", "qq play_url", "qq account")
 }

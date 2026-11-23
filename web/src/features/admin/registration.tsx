@@ -4,7 +4,7 @@ import { useResource } from '@/shared/lib/use-resource'
 import { useSettingSave } from '@/shared/lib/use-setting-save'
 import { SaveStatus, Skeleton, Switch } from '@/shared/ui'
 import { adminStore } from './admin-store'
-import { GithubApp } from './github-app'
+import { GitHubApp } from './github-app'
 import { LoadFailed, SectionHead } from './section-head'
 
 // 保存期间不禁用开关，因为禁用会让开关失去焦点，键盘用户就找不到它了。
@@ -49,7 +49,7 @@ export function Registration() {
       <SectionHead id="admin-registration-title" title="登录与注册" />
       <OpenRegistration />
       <h3 className="section-group-label">GitHub 登录</h3>
-      <GithubApp />
+      <GitHubApp />
     </section>
   )
 }

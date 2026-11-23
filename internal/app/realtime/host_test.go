@@ -248,7 +248,7 @@ func TestEffectsRunInOrder(t *testing.T) {
 		plays := store.Plays(id)
 		startedAt := start.Add(1500 * time.Millisecond)
 		if len(plays) != 1 || !plays[0].StartedAt.Equal(startedAt) || !plays[0].EndedAt.Equal(startedAt.Add(sunnyP.Duration)) {
-			t.Errorf("播放记录 = %+v，期望一首从 %v 播到 %v", plays, startedAt, startedAt.Add(sunnyP.Duration))
+			t.Errorf("房间的播放记录 = %+v，期望一首从 %v 播到 %v", plays, startedAt, startedAt.Add(sunnyP.Duration))
 		}
 	})
 }

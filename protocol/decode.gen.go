@@ -9,8 +9,8 @@ import (
 
 var (
 	patternAdminCreateRoomRequestSlug                  = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
-	patternAdminSetGithubCredentialRequestClientID     = regexp.MustCompile(`^[A-Za-z0-9._-]{1,100}$`)
-	patternAdminSetGithubCredentialRequestClientSecret = regexp.MustCompile(`^[A-Za-z0-9._-]{1,200}$`)
+	patternAdminSetGitHubCredentialRequestClientID     = regexp.MustCompile(`^[A-Za-z0-9._-]{1,100}$`)
+	patternAdminSetGitHubCredentialRequestClientSecret = regexp.MustCompile(`^[A-Za-z0-9._-]{1,200}$`)
 	patternAdminUpdateRoomRequestSlug                  = regexp.MustCompile(`^[a-z0-9-]{0,32}$`)
 	patternCopyMyPlaylistItemsRequestFrom              = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 	patternHelloRequestRoomID                          = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
@@ -111,8 +111,8 @@ func decodeAdminCheckBilibiliLoginRequest(raw json.RawMessage, path string) (Adm
 	return v, nil
 }
 
-func decodeAdminCheckNeteaseLoginRequest(raw json.RawMessage, path string) (AdminCheckNeteaseLoginRequest, error) {
-	var v AdminCheckNeteaseLoginRequest
+func decodeAdminCheckNetEaseLoginRequest(raw json.RawMessage, path string) (AdminCheckNetEaseLoginRequest, error) {
+	var v AdminCheckNetEaseLoginRequest
 	m, err := decodeObject(raw, path, "key")
 	if err != nil {
 		return v, err
@@ -300,8 +300,8 @@ func decodeAdminSetEphemeralRoomCapacityRequest(raw json.RawMessage, path string
 	return v, nil
 }
 
-func decodeAdminSetGithubCredentialRequest(raw json.RawMessage, path string) (AdminSetGithubCredentialRequest, error) {
-	var v AdminSetGithubCredentialRequest
+func decodeAdminSetGitHubCredentialRequest(raw json.RawMessage, path string) (AdminSetGitHubCredentialRequest, error) {
+	var v AdminSetGitHubCredentialRequest
 	m, err := decodeObject(raw, path, "clientId", "clientSecret")
 	if err != nil {
 		return v, err
@@ -312,20 +312,20 @@ func decodeAdminSetGithubCredentialRequest(raw json.RawMessage, path string) (Ad
 	if v.ClientID, err = decodeString(m["clientId"], field(path, "clientId")); err != nil {
 		return v, err
 	}
-	if err = checkPattern(v.ClientID, field(path, "clientId"), patternAdminSetGithubCredentialRequestClientID); err != nil {
+	if err = checkPattern(v.ClientID, field(path, "clientId"), patternAdminSetGitHubCredentialRequestClientID); err != nil {
 		return v, err
 	}
 	if v.ClientSecret, err = decodeString(m["clientSecret"], field(path, "clientSecret")); err != nil {
 		return v, err
 	}
-	if err = checkPattern(v.ClientSecret, field(path, "clientSecret"), patternAdminSetGithubCredentialRequestClientSecret); err != nil {
+	if err = checkPattern(v.ClientSecret, field(path, "clientSecret"), patternAdminSetGitHubCredentialRequestClientSecret); err != nil {
 		return v, err
 	}
 	return v, nil
 }
 
-func decodeAdminSetYoutubeCredentialRequest(raw json.RawMessage, path string) (AdminSetYoutubeCredentialRequest, error) {
-	var v AdminSetYoutubeCredentialRequest
+func decodeAdminSetYouTubeCredentialRequest(raw json.RawMessage, path string) (AdminSetYouTubeCredentialRequest, error) {
+	var v AdminSetYouTubeCredentialRequest
 	m, err := decodeObject(raw, path, "cookies")
 	if err != nil {
 		return v, err
@@ -348,8 +348,8 @@ func decodeAdminStartBilibiliLoginRequest(raw json.RawMessage, path string) (Adm
 	return v, err
 }
 
-func decodeAdminStartNeteaseLoginRequest(raw json.RawMessage, path string) (AdminStartNeteaseLoginRequest, error) {
-	var v AdminStartNeteaseLoginRequest
+func decodeAdminStartNetEaseLoginRequest(raw json.RawMessage, path string) (AdminStartNetEaseLoginRequest, error) {
+	var v AdminStartNetEaseLoginRequest
 	_, err := decodeObject(raw, path)
 	return v, err
 }
@@ -619,8 +619,8 @@ func decodeEnableListenRecordingRequest(raw json.RawMessage, path string) (Enabl
 	return v, err
 }
 
-func decodeFinishGithubLoginRequest(raw json.RawMessage, path string) (FinishGithubLoginRequest, error) {
-	var v FinishGithubLoginRequest
+func decodeFinishGitHubLoginRequest(raw json.RawMessage, path string) (FinishGitHubLoginRequest, error) {
+	var v FinishGitHubLoginRequest
 	m, err := decodeObject(raw, path, "code", "nonce")
 	if err != nil {
 		return v, err
@@ -1283,14 +1283,14 @@ func decodeSource(raw json.RawMessage, path string) (Source, error) {
 		return "", err
 	}
 	switch v := Source(s); v {
-	case SourceNetease, SourceQQ, SourceBilibili, SourceLink:
+	case SourceNetEase, SourceQQ, SourceBilibili, SourceLink:
 		return v, nil
 	}
 	return "", invalid(path, "取值应为 netease、qq、bilibili、link 之一")
 }
 
-func decodeStartGithubLoginRequest(raw json.RawMessage, path string) (StartGithubLoginRequest, error) {
-	var v StartGithubLoginRequest
+func decodeStartGitHubLoginRequest(raw json.RawMessage, path string) (StartGitHubLoginRequest, error) {
+	var v StartGitHubLoginRequest
 	m, err := decodeObject(raw, path, "client", "currentPassword", "intent", "nonce")
 	if err != nil {
 		return v, err
@@ -1382,8 +1382,8 @@ func decodeTrack(raw json.RawMessage, path string) (Track, error) {
 	return v, nil
 }
 
-func decodeUnbindGithubRequest(raw json.RawMessage, path string) (UnbindGithubRequest, error) {
-	var v UnbindGithubRequest
+func decodeUnbindGitHubRequest(raw json.RawMessage, path string) (UnbindGitHubRequest, error) {
+	var v UnbindGitHubRequest
 	m, err := decodeObject(raw, path, "currentPassword")
 	if err != nil {
 		return v, err

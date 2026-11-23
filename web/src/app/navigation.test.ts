@@ -17,7 +17,7 @@ describe('取消进入房间', () => {
     vi.doMock('@/features/rooms', () => ({ roomEntryStore: entry }))
     vi.stubGlobal('window', { history: { replaceState() {} } })
     const { navigationStore } = await import('./navigation')
-    navigationStore.replace({ name: 'listen', ref: 'my-room', panel: null })
+    navigationStore.replace({ name: 'now-playing', ref: 'my-room', panel: null })
 
     navigationStore.leaveRoom()
 

@@ -26,8 +26,8 @@ describe('parseRoute', () => {
     ['/playlists', { name: 'playlists', panel: null }],
     ['/playlists/abc', { name: 'my-playlist', id: 'abc', panel: null }],
     ['/playlists/abc?panel=queue', { name: 'my-playlist', id: 'abc', panel: 'queue' }],
-    ['/r/my-room', { name: 'listen', ref: 'my-room', panel: null }],
-    ['/r/my-room?panel=history', { name: 'listen', ref: 'my-room', panel: 'history' }],
+    ['/r/my-room', { name: 'now-playing', ref: 'my-room', panel: null }],
+    ['/r/my-room?panel=history', { name: 'now-playing', ref: 'my-room', panel: 'history' }],
     ['/r/my-room/queue?panel=queue', { name: 'queue', ref: 'my-room', panel: 'queue' }],
     ['/r/my-room/chat', { name: 'chat', ref: 'my-room', panel: null }],
     ['/r/my-room/search', { name: 'search', ref: 'my-room', panel: null, query: { view: 'all', keyword: '', source: 'qq', page: 1 } }],
@@ -72,7 +72,7 @@ describe('parseRoute', () => {
     expect(route && formatRoute(route)).toBe(canonical)
   })
 
-  const unknown = ['/r/', '/r/my-room/listen', '/r/my-room/queue/extra', '/settings/profile', '/settings/', '/settings/account/extra', '/admin/', '/admin/overview', '/r/my-room/playlists/bilibili/123', '/r/my-room/playlists/netease', '/s/', '/s/abc/def']
+  const unknown = ['/r/', '/r/my-room/now-playing', '/r/my-room/queue/extra', '/settings/profile', '/settings/', '/settings/account/extra', '/admin/', '/admin/overview', '/r/my-room/playlists/bilibili/123', '/r/my-room/playlists/netease', '/s/', '/s/abc/def']
 
   it.each(unknown)('%s 不对应任何页面', (url) => {
     expect(parse(url)).toBeNull()
@@ -133,9 +133,9 @@ describe('parseRoute', () => {
 
 describe('isNewEntry', () => {
   it('换页面和进入另一个房间写入新记录', () => {
-    expect(isNewEntry({ name: 'lobby', filter: '', panel: null }, { name: 'listen', ref: 'a', panel: null })).toBe(true)
-    expect(isNewEntry({ name: 'listen', ref: 'a', panel: null }, { name: 'queue', ref: 'a', panel: null })).toBe(true)
-    expect(isNewEntry({ name: 'listen', ref: 'a', panel: null }, { name: 'listen', ref: 'b', panel: null })).toBe(true)
+    expect(isNewEntry({ name: 'lobby', filter: '', panel: null }, { name: 'now-playing', ref: 'a', panel: null })).toBe(true)
+    expect(isNewEntry({ name: 'now-playing', ref: 'a', panel: null }, { name: 'queue', ref: 'a', panel: null })).toBe(true)
+    expect(isNewEntry({ name: 'now-playing', ref: 'a', panel: null }, { name: 'now-playing', ref: 'b', panel: null })).toBe(true)
   })
 
   it('开关侧栏和输入筛选词只替换当前地址', () => {
@@ -203,11 +203,11 @@ describe('leaveStep', () => {
 
   it('不在这个房间的页面上时留在原处', () => {
     expect(leaveStep({ name: 'admin', section: null, panel: null, q: '', page: 1, sort: 'stored' }, leaving, true)).toBe('stay')
-    expect(leaveStep({ name: 'listen', ref: 'other-room', panel: null }, leaving, true)).toBe('stay')
+    expect(leaveStep({ name: 'now-playing', ref: 'other-room', panel: null }, leaving, true)).toBe('stay')
   })
 
   it('在这个房间的页面上一直后退，直接打开的房间换成发现房间', () => {
     expect(leaveStep({ name: 'queue', ref: 'a1b2c3', panel: 'chat' }, leaving, true)).toBe('back')
-    expect(leaveStep({ name: 'listen', ref: 'my-room', panel: null }, leaving, false)).toBe('lobby')
+    expect(leaveStep({ name: 'now-playing', ref: 'my-room', panel: null }, leaving, false)).toBe('lobby')
   })
 })

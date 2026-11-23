@@ -49,7 +49,7 @@ function SourceCard({ source, credential: { state, reload } }: { source: Source,
 export function SourceAccounts({ credentials }: { credentials: Record<SourceId, Credential> }) {
   return (
     <section className="admin-section" aria-labelledby="admin-sources-title">
-      <SectionHead id="admin-sources-title" title="音源" description="扫码登录各平台的账号，用来搜索和播放它们的歌曲。" />
+      <SectionHead id="admin-sources-title" title="音乐平台" description="扫码登录各平台的账号，用来搜索和播放它们的歌曲。" />
       <div className="admin-cards">
         {(Object.keys(sources) as SourceId[]).map(id => <SourceCard key={id} source={sources[id]} credential={credentials[id]} />)}
         <YouTubeCookies />

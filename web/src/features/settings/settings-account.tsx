@@ -9,7 +9,7 @@ import { useInlineSave } from '@/shared/lib/use-inline-save'
 import { savedNoticeWithFadeMs } from '@/shared/lib/use-setting-save'
 import { useStore } from '@/shared/lib/use-store'
 import { Avatar, ConfirmDialog, EmptyState, InlineTextField, Modal, SaveStatus } from '@/shared/ui'
-import { goToGitHub, logout, unbindGithub } from './account'
+import { goToGitHub, logout, unbindGitHub } from './account'
 import { CredentialsDialog, CurrentPasswordDialog, PasswordDialog } from './account-dialogs'
 import { takeCredentialsPrompt } from './github'
 import { PairingCodeForm, PairingDialog } from './pairing-dialog'
@@ -197,7 +197,7 @@ export function AccountSettings({ site, onRetrySite }: { site: Site, onRetrySite
       setBusy(false)
   }
   const unbind = async (currentPassword: string): Promise<boolean> => {
-    const unbound = await unbindGithub(currentPassword)
+    const unbound = await unbindGitHub(currentPassword)
     if (unbound)
       close()
     return unbound

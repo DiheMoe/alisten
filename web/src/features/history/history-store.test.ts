@@ -73,7 +73,7 @@ beforeEach(() => {
     if (request === 'POST /api/members')
       return json(201, { member: renewed, memberToken: 'token-2' })
     if (request === 'GET /api/me')
-      return json(200, { member: renewed, recordListens: true })
+      return json(200, { member: renewed, listenRecording: true })
     if (request === 'GET /api/me/listens') {
       const items = [...server]
       if (holdReads)

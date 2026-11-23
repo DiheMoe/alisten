@@ -13,7 +13,7 @@ import { volumeStore } from './volume-store'
 
 const driftCheckIntervalMs = 2000
 const maxGain = 1.5
-// 音源解析持续失败时，房间里的每个客户端都在请求上游，所以重试要有上限。
+// 音乐平台解析持续失败时，房间里的每个客户端都在请求上游，所以重试要有上限。
 const maxMediaRetries = 5
 const mediaNoticeMs = 8000
 

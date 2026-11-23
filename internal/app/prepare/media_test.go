@@ -64,7 +64,7 @@ func (f downloadedFile) Open() (io.ReadSeekCloser, error) {
 	return porttest.LinkFile(f.data).Open()
 }
 
-// 只准备链接的测试用不到 B 站的音源和转码。
+// 只准备链接的测试用不到 B 站的适配器和转码。
 func newLinkRunner(d port.LinkDownloader, store port.MediaStore, tracks port.Tracks, logger *slog.Logger) *MediaRunner {
 	return NewMediaRunner(d, nil, nil, store, tracks, logger)
 }

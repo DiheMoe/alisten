@@ -1,7 +1,7 @@
-import type { AdminGetYoutubeCredentialResponse } from '@/core/api'
+import type { AdminGetYouTubeCredentialResponse } from '@/core/api'
 import type { ResourceState } from '@/shared/lib/resource'
 
-export type YoutubeCredentialState = ResourceState<AdminGetYoutubeCredentialResponse>
+export type YouTubeCredentialState = ResourceState<AdminGetYouTubeCredentialResponse>
 
 export const youtubeCookiesText = {
   plaintextWarning: '当前连接不是 HTTPS，填写的 cookies 会以明文在网络上传输，只在可信网络中填写。',
@@ -15,7 +15,7 @@ export function youtubeCookiesTooLarge(cookies: string): boolean {
   return new TextEncoder().encode(JSON.stringify({ cookies })).length > requestLimitBytes
 }
 
-export function canSubmitYoutubeCookies(cookies: string, busy: boolean): boolean {
+export function canSubmitYouTubeCookies(cookies: string, busy: boolean): boolean {
   return !busy && cookies.trim() !== '' && !youtubeCookiesTooLarge(cookies)
 }
 
@@ -27,7 +27,7 @@ export function shouldWarnAboutPlaintext(location: Pick<Location, 'protocol' | '
   return !['localhost', '::1', '[::1]'].includes(host) && !host.endsWith('.localhost') && !/^127(?:\.\d{1,3}){3}$/.test(host)
 }
 
-export function youtubeCookiesView(state: YoutubeCredentialState): { status: string, updatedAtMs: number | null } {
+export function youtubeCookiesView(state: YouTubeCredentialState): { status: string, updatedAtMs: number | null } {
   if (state.status === 'loading')
     return { status: '正在查询', updatedAtMs: null }
   if (state.status === 'failed')

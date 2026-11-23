@@ -1,12 +1,12 @@
-import type { GithubLanding } from './github'
-import type { CreatePairingCodeResponse, FinishGithubLoginResponse } from '@/core/api'
+import type { GitHubLanding } from './github'
+import type { CreatePairingCodeResponse, FinishGitHubLoginResponse } from '@/core/api'
 import type { GitHubIntent } from '@/core/realtime'
 import { api, ApiError, IdentityRenewedError } from '@/core/api'
 import { errorMessage } from '@/core/errors'
 import { profileStore, switchIdentity } from '@/core/profile'
 import { AccountPasswordLimits } from '@/core/realtime'
 import { notificationStore } from '@/shared/lib/notification-store'
-import { finishGithubLogin, startGithubLogin } from './github'
+import { finishGitHubLogin, startGitHubLogin } from './github'
 import { isPairingCode } from './pairing'
 import { loginWithPassword } from './password-login'
 
@@ -57,7 +57,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
 // 返回 false 时，失败原因已经通过通知显示。成功时页面随即跳到 GitHub。
 export async function goToGitHub(intent: GitHubIntent, currentPassword?: string): Promise<boolean> {
   try {
-    window.location.assign(await startGithubLogin(intent, currentPassword))
+    window.location.assign(await startGitHubLogin(intent, currentPassword))
     return true
   }
   catch (error) {
@@ -67,12 +67,12 @@ export async function goToGitHub(intent: GitHubIntent, currentPassword?: string)
 }
 
 // 返回 false 时，失败原因已经通过通知显示。
-export async function unbindGithub(currentPassword: string): Promise<boolean> {
+export async function unbindGitHub(currentPassword: string): Promise<boolean> {
   const { account } = profileStore.state
   if (!account)
     return false
   try {
-    await api.unbindGithub({ currentPassword })
+    await api.unbindGitHub({ currentPassword })
   }
   catch (error) {
     notificationStore.error(error instanceof IdentityRenewedError ? '没有解绑，再试一次。' : errorMessage(error))
@@ -103,10 +103,10 @@ export async function logout(): Promise<boolean> {
 
 // 在 GitHub 落地页上兑换授权。signal 中止表示已经离开落地页，这时兑换的结果作废。
 // 成功时先调用 onDone，要换身份的话再换，因为换身份会重新加载页面。失败时返回给用户看的原因，其他情况返回 null。
-export async function completeGithubLogin({ code, nonce, intent }: Extract<GithubLanding, { kind: 'exchange' }>, signal: AbortSignal, onDone: () => void): Promise<string | null> {
-  let result: FinishGithubLoginResponse
+export async function completeGitHubLogin({ code, nonce, intent }: Extract<GitHubLanding, { kind: 'exchange' }>, signal: AbortSignal, onDone: () => void): Promise<string | null> {
+  let result: FinishGitHubLoginResponse
   try {
-    result = await finishGithubLogin(code, nonce, intent)
+    result = await finishGitHubLogin(code, nonce, intent)
   }
   catch (error) {
     if (signal.aborted)

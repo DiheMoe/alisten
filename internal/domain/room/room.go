@@ -13,7 +13,7 @@ const (
 	startLead = 1500 * time.Millisecond
 	// 刚点的歌在 prepareGrace 之内还没准备好，轮到它时也等它。过了这段时间还没准备好，就先放后面已经准备好的歌。
 	// 网易云和 QQ 音乐的歌正常几秒就能准备好，所以连续点歌时，顺序不会被准备得快的歌打乱。准备得慢的歌，比如要先下载的链接，
-	// 或者音源出错要重试的歌，不能让房间一直等它。
+	// 或者音乐平台出错要重试的歌，不能让房间一直等它。
 	prepareGrace        = 15 * time.Second
 	closeDelay          = 5 * time.Minute
 	autoDJQuiet         = 10 * time.Second
@@ -203,7 +203,7 @@ func (r *Room) commit(b *batch) []Effect {
 	if !sameSnapshot(b.before, after) || len(b.plays) > 0 {
 		out = append(out, Persist{Snapshot: after, Plays: b.plays})
 	}
-	// RecordListen 排在广播之前，这样客户端看到开播时，听歌记录已经写好。
+	// RecordListen 排在广播之前，这样客户端看到开播时，播放历史已经写好。
 	if l, ok := r.listened(b); ok {
 		out = append(out, l)
 	}
@@ -239,7 +239,7 @@ func (r *Room) commit(b *batch) []Effect {
 	return append(out, b.tasks...)
 }
 
-// 开播了一首新歌时，听歌记录记给所有在线成员。正在播放的歌没变时，只记给这一批处理之前还没有会话的成员。
+// 开播了一首新歌时，这首歌记进所有在线成员的播放历史。正在播放的歌没变时，只记给这一批处理之前还没有会话的成员。
 func (r *Room) listened(b *batch) (RecordListen, bool) {
 	c := r.current
 	if c == nil {

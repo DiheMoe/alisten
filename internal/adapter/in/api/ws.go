@@ -266,8 +266,8 @@ func (s *server) requestError(ctx context.Context, typ string, err error) protoc
 	switch {
 	case !expected:
 		s.logger.ErrorContext(withRequestID(ctx, err), "处理 WebSocket 请求失败", "type", typ, "error", err)
-	case info.Code == protocol.ErrorCodeProviderError:
-		s.warnProvider(withRequestID(ctx, err), typ, "音乐平台出错", "type", typ, "reason", providerReason(err))
+	case info.Code == protocol.ErrorCodeSourceError:
+		s.warnSource(withRequestID(ctx, err), typ, "音乐平台出错", "type", typ, "reason", sourceReason(err))
 	}
 	if info.Code.HTTPStatus() >= http.StatusInternalServerError {
 		trace.SpanFromContext(ctx).SetStatus(codes.Error, string(info.Code))

@@ -41,7 +41,7 @@ const sections: SectionItem<AdminSection>[] = [
   { id: 'registration', label: '登录与注册', icon: KeyRound },
   { id: 'users', label: '用户', icon: Users },
   { id: 'rooms', label: '房间', icon: DoorOpen },
-  { id: 'sources', label: '音源', icon: RadioTower },
+  { id: 'sources', label: '音乐平台', icon: RadioTower },
   { id: 'media', label: '媒体', icon: Database },
 ]
 

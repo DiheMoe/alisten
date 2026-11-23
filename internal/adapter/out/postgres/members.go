@@ -43,7 +43,7 @@ func (s *Store) MemberByToken(ctx context.Context, tokenHash []byte) (member.Mem
 	if err != nil {
 		return member.Member{}, false, fmt.Errorf("按 token 查找成员：%w", err)
 	}
-	return memberOf(row), port.AccountProfile{Username: orEmpty(row.Username), GitHub: row.GithubID != nil}.Registered(), nil
+	return memberOf(row), port.AccountProfile{Username: orEmpty(row.Username), GitHub: row.GitHubID != nil}.Registered(), nil
 }
 
 func (s *Store) UpdateMember(ctx context.Context, id string, name, avatarHash, email *string) (member.Member, error) {
@@ -69,7 +69,7 @@ func (s *Store) AccountProfile(ctx context.Context, memberID string) (port.Accou
 	if err != nil {
 		return port.AccountProfile{}, fmt.Errorf("读取成员 %s 的账号资料：%w", memberID, err)
 	}
-	return port.AccountProfile{Username: orEmpty(row.Username), Email: orEmpty(row.Email), GitHub: row.GithubID != nil}, nil
+	return port.AccountProfile{Username: orEmpty(row.Username), Email: orEmpty(row.Email), GitHub: row.GitHubID != nil}, nil
 }
 
 func (s *Store) Register(ctx context.Context, memberID, username, passwordHash string) error {
@@ -153,8 +153,8 @@ func (s *Store) AccountByGitHub(ctx context.Context, githubID int64) (port.Accou
 
 func accountOf(row query.Member) port.Account {
 	account := port.Account{Member: memberOf(row), Username: orEmpty(row.Username), Email: orEmpty(row.Email), PasswordHash: orEmpty(row.PasswordHash)}
-	if row.GithubID != nil {
-		account.GitHubID = *row.GithubID
+	if row.GitHubID != nil {
+		account.GitHubID = *row.GitHubID
 	}
 	return account
 }
@@ -162,7 +162,7 @@ func accountOf(row query.Member) port.Account {
 func (s *Store) BindGitHub(ctx context.Context, memberID string, githubID int64) error {
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		wasGuest, err := q.BindGitHub(ctx, query.BindGitHubParams{ID: memberID, GithubID: &githubID})
+		wasGuest, err := q.BindGitHub(ctx, query.BindGitHubParams{ID: memberID, GitHubID: &githubID})
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			return port.ErrGitHubAlreadyBound

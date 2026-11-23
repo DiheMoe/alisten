@@ -158,7 +158,7 @@ func TestTrackMetas(t *testing.T) {
 	wanted := []track.Track{netease("2"), netease("1"), {Source: track.QQ, ID: "1"}, link, netease("1")}
 	got, err := store.TrackMetas(t.Context(), wanted)
 	if err != nil || !maps.Equal(got, want) {
-		t.Errorf("批量读取 = %#v, %v\n期望只有命中的、与 PreparedTrack 读出的元数据一致 %#v：音源和 ID 都要对上，重复的只算一次", got, err, want)
+		t.Errorf("批量读取 = %#v, %v\n期望只有命中的、与 PreparedTrack 读出的元数据一致 %#v：来源和 ID 都要对上，重复的只算一次", got, err, want)
 	}
 	if got, err := store.TrackMetas(t.Context(), nil); err != nil || len(got) != 0 {
 		t.Errorf("什么也不查 = %#v, %v，期望空的结果", got, err)

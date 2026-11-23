@@ -328,7 +328,7 @@ describe('记录播放历史', () => {
   })
 
   it('取回资料时一并取回开关，修改时调用对应的接口', async () => {
-    me = { member, recordListens: false }
+    me = { member, listenRecording: false }
     const switched: string[] = []
     extraRoutes.set('PUT /api/me/listen-recording', () => {
       switched.push('on')
@@ -339,35 +339,35 @@ describe('记录播放历史', () => {
       return new Response(null, { status: 204 })
     })
     const { profileStore } = await load()
-    expect(profileStore.state.recordListens).toBeNull()
+    expect(profileStore.state.listenRecording).toBeNull()
     await profileStore.load()
-    expect(profileStore.state.recordListens).toBe(false)
-    await profileStore.setRecordListens(true)
-    expect(profileStore.state.recordListens).toBe(true)
-    await profileStore.setRecordListens(false)
-    expect(profileStore.state.recordListens).toBe(false)
+    expect(profileStore.state.listenRecording).toBe(false)
+    await profileStore.setListenRecording(true)
+    expect(profileStore.state.listenRecording).toBe(true)
+    await profileStore.setListenRecording(false)
+    expect(profileStore.state.listenRecording).toBe(false)
     expect(switched).toEqual(['on', 'off'])
   })
 
   it('修改失败时抛出原因，不弹通知，开关不变', async () => {
-    me = { member, recordListens: true }
+    me = { member, listenRecording: true }
     extraRoutes.set('DELETE /api/me/listen-recording', () => new Response(JSON.stringify({ error: { code: 'UNAVAILABLE', message: '暂时不可用' } }), { status: 503 }))
     const { profileStore, notificationStore } = await load()
     await profileStore.load()
-    await expect(profileStore.setRecordListens(false)).rejects.toThrow('暂时不可用')
-    expect(profileStore.state.recordListens).toBe(true)
+    await expect(profileStore.setListenRecording(false)).rejects.toThrow('暂时不可用')
+    expect(profileStore.state.listenRecording).toBe(true)
     expect(notificationStore.state.notifications).toEqual([])
   })
 
   it('身份被拒绝时开关未知，换成新的游客之后是默认的开启', async () => {
-    me = { member, recordListens: false }
+    me = { member, listenRecording: false }
     const { profileStore, identityEvents } = await load()
     profileStore.start()
     await profileStore.load()
     identityEvents.emit({ kind: 'rejected' })
-    expect(profileStore.state.recordListens).toBeNull()
+    expect(profileStore.state.listenRecording).toBeNull()
     identityEvents.emit({ kind: 'renewed', member: renewed })
-    expect(profileStore.state.recordListens).toBe(true)
+    expect(profileStore.state.listenRecording).toBe(true)
   })
 })
 
@@ -385,14 +385,14 @@ describe('读取期间资料被修改', () => {
       if (`${init.method} ${path}` === 'PATCH /api/me')
         return Promise.resolve(answer({ member: renamed }))
       reads += 1
-      return reads === 1 ? stale : Promise.resolve(answer({ member: renamed, recordListens: true }))
+      return reads === 1 ? stale : Promise.resolve(answer({ member: renamed, listenRecording: true }))
     })
     const { profileStore } = await load()
     const loading = profileStore.load()
     await profileStore.save({ name: '新名字' })
     expect(profileStore.state.member).toEqual(renamed)
 
-    releaseStale(answer({ member, recordListens: true }))
+    releaseStale(answer({ member, listenRecording: true }))
     await loading
     expect(profileStore.state.member).toEqual(renamed)
     expect(reads).toBe(2)

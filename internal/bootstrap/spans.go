@@ -173,7 +173,7 @@ func redisError(span trace.Span, err error) error {
 	return recordError(span, err)
 }
 
-// 只记方法、主机名和状态码，因为音源的地址中有签名、vkey 和用户的 ID。也不向音源传递追踪上下文。
+// 只记方法、主机名和状态码，因为音乐平台的地址中有签名、vkey 和用户的 ID。也不向音乐平台传递追踪上下文。
 // span 在响应体读完或关闭时结束，下载音频的时间也算在其中。
 func traceHTTP(next http.RoundTripper, tracer trace.TracerProvider) http.RoundTripper {
 	return clientSpans{next: next, tracer: tracer.Tracer(scope)}

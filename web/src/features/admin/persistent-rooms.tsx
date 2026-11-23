@@ -130,7 +130,7 @@ export function PersistentRooms({ q, page, onFilter, onEntered }: {
       {editing && listing.status === 'loaded' && (
         <RoomFormDialog
           room={editing === 'new' ? null : editing}
-          defaultCapacity={listing.value.defaultCapacity}
+          persistentRoomCapacity={listing.value.persistentRoomCapacity}
           onSaved={() => {
             setEditing(null)
             store.refresh()

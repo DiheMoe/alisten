@@ -147,8 +147,8 @@ func TestSearchTracksPaginates(t *testing.T) {
 		t.Errorf("搜索链接的错误 = %v，期望 ErrUnsupported", err)
 	}
 	f.netease.Fail(errors.New("网易云不可用"))
-	if _, _, err := f.svc.SearchTracks(t.Context(), f.persistent, track.NetEase, "晴天", 1, 10); !errors.Is(err, port.ErrProviderFailed) {
-		t.Errorf("上游出错时的错误 = %v，期望 ErrProviderFailed", err)
+	if _, _, err := f.svc.SearchTracks(t.Context(), f.persistent, track.NetEase, "晴天", 1, 10); !errors.Is(err, port.ErrSourceFailed) {
+		t.Errorf("上游出错时的错误 = %v，期望 ErrSourceFailed", err)
 	}
 }
 
@@ -236,8 +236,8 @@ func TestTrackMetaPrefersTracksTable(t *testing.T) {
 	if got, err := f.svc.TrackMeta(t.Context(), sunny.Track); err != nil || got != sunny.Meta {
 		t.Errorf("曲目表中没有的歌 = %v, %v，期望上游的元数据 %v", got, err, sunny.Meta)
 	}
-	if _, err := f.svc.TrackMeta(t.Context(), track.Track{Source: track.NetEase, ID: "404"}); !errors.Is(err, port.ErrProviderFailed) {
-		t.Errorf("上游没有的歌的错误 = %v，期望 ErrProviderFailed", err)
+	if _, err := f.svc.TrackMeta(t.Context(), track.Track{Source: track.NetEase, ID: "404"}); !errors.Is(err, port.ErrSourceFailed) {
+		t.Errorf("上游没有的歌的错误 = %v，期望 ErrSourceFailed", err)
 	}
 }
 
@@ -254,8 +254,8 @@ func TestFirstMatch(t *testing.T) {
 		t.Errorf("在 B 站按关键词点歌 = %v，期望 ErrUnsupported", err)
 	}
 	f.qq.Fail(errors.New("QQ 音乐不可用"))
-	if _, _, err := f.svc.FirstMatch(t.Context(), track.QQ, "晴天"); !errors.Is(err, port.ErrProviderFailed) {
-		t.Errorf("上游出错时的错误 = %v，期望 ErrProviderFailed", err)
+	if _, _, err := f.svc.FirstMatch(t.Context(), track.QQ, "晴天"); !errors.Is(err, port.ErrSourceFailed) {
+		t.Errorf("上游出错时的错误 = %v，期望 ErrSourceFailed", err)
 	}
 }
 
@@ -280,8 +280,8 @@ func TestPlaylistSongsSkipsRoomQuota(t *testing.T) {
 		t.Errorf("B 站的歌单 = %v，期望 ErrUnsupported", err)
 	}
 	f.netease.Fail(errors.New("网易云不可用"))
-	if _, err := f.svc.PlaylistSongs(t.Context(), track.NetEase, "p1"); !errors.Is(err, port.ErrProviderFailed) {
-		t.Errorf("上游出错时的错误 = %v，期望 ErrProviderFailed", err)
+	if _, err := f.svc.PlaylistSongs(t.Context(), track.NetEase, "p1"); !errors.Is(err, port.ErrSourceFailed) {
+		t.Errorf("上游出错时的错误 = %v，期望 ErrSourceFailed", err)
 	}
 }
 
@@ -339,27 +339,27 @@ func TestResolveLink(t *testing.T) {
 	}
 	var rejected *RejectedLinkError
 	if _, _, err := f.svc.ResolveLink(t.Context(), bangumi); !errors.As(err, &rejected) || err.Error() != "哔哩哔哩的番剧不能点播" {
-		t.Errorf("番剧的链接 = %v，期望 RejectedLinkError，文本是音源给出的原因", err)
+		t.Errorf("番剧的链接 = %v，期望 RejectedLinkError，文本是音乐平台给出的原因", err)
 	}
 }
 
 func TestResolveLinkFailures(t *testing.T) {
 	f := newFixture(t, history{})
 	const link = "https://www.bilibili.com/video/BV1xx411c7mD"
-	// 音源里也登记这个 ID，这样不检查格式的话，这个 ID 就会被当作 B 站的曲目点进队列。
+	// 音乐平台里也登记这个 ID，这样不检查格式的话，这个 ID 就会被当作 B 站的曲目点进队列。
 	f.bilibili.AddVideo("BV1xx411c7mD/1", track.Meta{Title: "第 1 P"}, nil, nil, "")
 	f.bilibili.AddLink(link, "BV1xx411c7mD/1")
-	if _, _, err := f.svc.ResolveLink(t.Context(), link); !errors.Is(err, port.ErrProviderFailed) {
-		t.Errorf("音源给出的曲目 ID 格式不对时 = %v，期望 ErrProviderFailed", err)
+	if _, _, err := f.svc.ResolveLink(t.Context(), link); !errors.Is(err, port.ErrSourceFailed) {
+		t.Errorf("音乐平台给出的曲目 ID 格式不对时 = %v，期望 ErrSourceFailed", err)
 	}
 	f.bilibili.AddLink(link, "BV1xx411c7mD")
-	if _, _, err := f.svc.ResolveLink(t.Context(), link); !errors.Is(err, port.ErrProviderFailed) {
-		t.Errorf("音源中查不到这个视频时 = %v，期望 ErrProviderFailed", err)
+	if _, _, err := f.svc.ResolveLink(t.Context(), link); !errors.Is(err, port.ErrSourceFailed) {
+		t.Errorf("音乐平台上查不到这个视频时 = %v，期望 ErrSourceFailed", err)
 	}
 	f.bilibili.Fail(errors.New("连接被重置"))
 	var rejected *RejectedLinkError
-	if _, _, err := f.svc.ResolveLink(t.Context(), link); !errors.Is(err, port.ErrProviderFailed) || errors.As(err, &rejected) {
-		t.Errorf("识别链接出错时 = %v，期望 ErrProviderFailed", err)
+	if _, _, err := f.svc.ResolveLink(t.Context(), link); !errors.Is(err, port.ErrSourceFailed) || errors.As(err, &rejected) {
+		t.Errorf("识别链接出错时 = %v，期望 ErrSourceFailed", err)
 	}
 }
 
@@ -441,7 +441,7 @@ func TestRecommendLimits(t *testing.T) {
 	}
 }
 
-func TestRecommendListLogsProviderFailuresWhenTheyStart(t *testing.T) {
+func TestRecommendListLogsSourceFailuresWhenTheyStart(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		f := newFixture(t, history{seeds: []track.Track{netease("a")}})
 		var logs bytes.Buffer

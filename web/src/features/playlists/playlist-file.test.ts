@@ -60,12 +60,12 @@ describe('parsePlaylistFile', () => {
     { name: 'format 不对', content: file([], { format: 'alisten.history' }), want: notPlaylistFile },
     { name: 'tracks 不是数组', content: file({ 0: sunny.track }), want: notPlaylistFile },
     { name: '空数组', content: file([]), want: '这个歌单文件里没有歌。' },
-    { name: '缺少音源', content: file([{ id: '186016', title: '晴天' }]), want: '文件里的第 1 首歌缺少音源或 ID，没有导入。' },
-    { name: '音源不认识', content: file([{ source: 'netease', id: '1' }, { source: 'spotify', id: '2' }]), want: '文件里的第 2 首歌缺少音源或 ID，没有导入。' },
-    { name: '音源是原型上的属性名', content: file([{ source: 'toString', id: '1' }]), want: '文件里的第 1 首歌缺少音源或 ID，没有导入。' },
-    { name: 'ID 为空', content: file([{ source: 'qq', id: '' }]), want: '文件里的第 1 首歌缺少音源或 ID，没有导入。' },
-    { name: 'ID 不是字符串', content: file([{ source: 'netease', id: 186016 }]), want: '文件里的第 1 首歌缺少音源或 ID，没有导入。' },
-    { name: '曲目不是对象', content: file([null]), want: '文件里的第 1 首歌缺少音源或 ID，没有导入。' },
+    { name: '缺少来源', content: file([{ id: '186016', title: '晴天' }]), want: '文件里的第 1 首歌缺少来源或 ID，没有导入。' },
+    { name: '来源不认识', content: file([{ source: 'netease', id: '1' }, { source: 'spotify', id: '2' }]), want: '文件里的第 2 首歌缺少来源或 ID，没有导入。' },
+    { name: '来源是原型上的属性名', content: file([{ source: 'toString', id: '1' }]), want: '文件里的第 1 首歌缺少来源或 ID，没有导入。' },
+    { name: 'ID 为空', content: file([{ source: 'qq', id: '' }]), want: '文件里的第 1 首歌缺少来源或 ID，没有导入。' },
+    { name: 'ID 不是字符串', content: file([{ source: 'netease', id: 186016 }]), want: '文件里的第 1 首歌缺少来源或 ID，没有导入。' },
+    { name: '曲目不是对象', content: file([null]), want: '文件里的第 1 首歌缺少来源或 ID，没有导入。' },
   ]
   for (const { name, content, want } of cases) {
     it(name, () => {

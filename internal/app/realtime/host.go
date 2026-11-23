@@ -593,7 +593,7 @@ func (h *Host) execute(ctx context.Context, r *hostedRoom, effects []room.Effect
 		case room.RecordListen:
 			h.recordListen(ctx, e)
 		case room.Emit:
-			if m, ok := e.Event.(room.MembersChanged); ok && !h.setOnline(ctx, r, room.Headcount(m.Sessions)) {
+			if m, ok := e.Event.(room.MembersChanged); ok && !h.setOnlineCount(ctx, r, room.OnlineCount(m.Sessions)) {
 				return false
 			}
 			if !h.publish(ctx, r, port.Emitted{Emit: e}) {
@@ -627,9 +627,9 @@ func (h *Host) execute(ctx context.Context, r *hostedRoom, effects []room.Effect
 
 // 在线人数在广播在线列表之前写入，这样看到在线列表变化的客户端，在房间列表中看到的也是新的人数。
 // 写入失败只影响房间列表，所以不放弃房间。真的连不上时续约也会失败，房间随之停止。
-func (h *Host) setOnline(ctx context.Context, r *hostedRoom, n int) bool {
+func (h *Host) setOnlineCount(ctx context.Context, r *hostedRoom, n int) bool {
 	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), clusterTimeout)
-	ok, err := h.leases.SetOnline(writeCtx, r.id, n)
+	ok, err := h.leases.SetOnlineCount(writeCtx, r.id, n)
 	cancel()
 	switch {
 	case err != nil:

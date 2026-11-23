@@ -69,9 +69,9 @@ func TestMediaRunnerRejectsBadBilibiliTasks(t *testing.T) {
 	f.source.RejectVideo("BV1xx411c7mD", "这个视频需要付费")
 	var rejected *port.RejectedError
 	if err := f.run(t, track.Track{Source: track.Bilibili, ID: "BV1xx411c7mD"}); !errors.As(err, &rejected) || err.Error() != "这个视频需要付费" {
-		t.Errorf("音源拒绝下载时 = %v，期望不能准备，原因是音源给出的", err)
+		t.Errorf("音乐平台拒绝下载时 = %v，期望不能准备，原因是音乐平台给出的", err)
 	}
-	// 音源里也登记这些 ID，这样只要交给音源，就会下载成功。
+	// 音乐平台里也登记这些 ID，这样只要交给音乐平台，就会下载成功。
 	for _, id := range []string{"BV1xx411c7mD/1", "../BV1xx411c7mD", ""} {
 		f.source.AddVideo(id, track.Meta{Title: "格式不对的 ID"}, []byte("平台给的原始音频"), nil, "")
 		if err := f.run(t, track.Track{Source: track.Bilibili, ID: id}); !errors.As(err, &rejected) {

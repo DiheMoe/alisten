@@ -2,14 +2,23 @@ package main
 
 import "strings"
 
-var initialisms = map[string]string{"id": "ID", "qq": "QQ", "url": "URL"}
+var initialisms = map[string]string{
+	"github":  "GitHub",
+	"id":      "ID",
+	"netease": "NetEase",
+	"qq":      "QQ",
+	"url":     "URL",
+	"youtube": "YouTube",
+}
 
 func words(s string) []string {
 	var out []string
 	for _, part := range strings.FieldsFunc(s, func(r rune) bool { return r == '.' || r == '_' }) {
 		start := 0
 		for i := 1; i < len(part); i++ {
-			if isUpper(part[i]) && !isUpper(part[i-1]) {
+			prevLowerOrDigit := isLower(part[i-1]) || isDigit(part[i-1])
+			upperBeforeLower := isUpper(part[i-1]) && i+1 < len(part) && isLower(part[i+1])
+			if isUpper(part[i]) && (prevLowerOrDigit || upperBeforeLower) {
 				out = append(out, part[start:i])
 				start = i
 			}
@@ -21,6 +30,14 @@ func words(s string) []string {
 
 func isUpper(c byte) bool {
 	return 'A' <= c && c <= 'Z'
+}
+
+func isLower(c byte) bool {
+	return 'a' <= c && c <= 'z'
+}
+
+func isDigit(c byte) bool {
+	return '0' <= c && c <= '9'
 }
 
 func pascal(s string) string {

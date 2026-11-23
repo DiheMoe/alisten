@@ -13,7 +13,7 @@ type Leases interface {
 	// 租约仍属于本实例时续期。返回 false 表示租约已经不属于本实例。
 	Renew(ctx context.Context, roomID string, ttl time.Duration) (bool, error)
 	// 租约仍属于本实例时写入在线人数。返回 false 表示租约已经不属于本实例。
-	SetOnline(ctx context.Context, roomID string, online int) (bool, error)
+	SetOnlineCount(ctx context.Context, roomID string, online int) (bool, error)
 	// 只删除属于本实例的租约。
 	Release(ctx context.Context, roomID string) error
 	// 按 roomIDs 的顺序返回各房间的 owner，没有 owner 时为空字符串。

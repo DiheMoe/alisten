@@ -12,7 +12,7 @@ describe('errorText', () => {
     { name: '重复点歌照旧显示', code: 'CONFLICT', message: '这首歌已经在播放列表里了。', want: '这首歌已经在播放列表里了。' },
     { name: '播放列表已满照旧显示', code: 'QUEUE_FULL', message: '临时房间的播放列表最多 10 首歌，等播放几首之后再点。', want: '临时房间的播放列表最多 10 首歌，等播放几首之后再点。' },
     { name: '没有在放的歌照旧显示', code: 'NOTHING_PLAYING', message: '现在没有在放的歌。', want: '现在没有在放的歌。' },
-    { name: '音乐平台出错照旧显示', code: 'PROVIDER_ERROR', message: '音乐平台没有正常响应，请稍后再试。', want: '音乐平台没有正常响应，请稍后再试。' },
+    { name: '音乐平台出错照旧显示', code: 'SOURCE_ERROR', message: '音乐平台没有正常响应，请稍后再试。', want: '音乐平台没有正常响应，请稍后再试。' },
     { name: '房间暂时不可用照旧显示', code: 'UNAVAILABLE', message: '房间暂时不可用，请稍后再试。', want: '房间暂时不可用，请稍后再试。' },
     { name: '服务器出错照旧显示', code: 'INTERNAL', message: '服务器出错了，请稍后再试。', want: '服务器出错了，请稍后再试。' },
   ]

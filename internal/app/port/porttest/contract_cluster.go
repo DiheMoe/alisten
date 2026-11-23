@@ -58,13 +58,13 @@ func runLeasesContract(t *testing.T, open func(t *testing.T) func(string) Cluste
 		if ok, err := b.Renew(ctx, hall, time.Minute); err != nil || ok {
 			t.Errorf("b 续期 a 的租约 = %v, %v，期望 false", ok, err)
 		}
-		if ok, err := b.SetOnline(ctx, hall, 5); err != nil || ok {
+		if ok, err := b.SetOnlineCount(ctx, hall, 5); err != nil || ok {
 			t.Errorf("b 写入 a 的房间的在线人数 = %v, %v，期望 false", ok, err)
 		}
 		if counts, err := a.OnlineCounts(ctx, []string{hall, party}); err != nil || !slices.Equal(counts, []int{0, 0}) {
 			t.Errorf("取得租约之后的在线人数 = %v, %v，期望 [0 0]", counts, err)
 		}
-		if ok, err := a.SetOnline(ctx, hall, 3); err != nil || !ok {
+		if ok, err := a.SetOnlineCount(ctx, hall, 3); err != nil || !ok {
 			t.Fatalf("a 写入在线人数 = %v, %v", ok, err)
 		}
 		if counts, err := b.OnlineCounts(ctx, []string{hall, party}); err != nil || !slices.Equal(counts, []int{3, 0}) {
@@ -85,8 +85,8 @@ func runLeasesContract(t *testing.T, open func(t *testing.T) func(string) Cluste
 		if ok, err := a.Acquire(t.Context(), hall, time.Minute); err != nil || !ok {
 			t.Fatalf("Acquire = %v, %v", ok, err)
 		}
-		if ok, err := a.SetOnline(t.Context(), hall, 3); err != nil || !ok {
-			t.Fatalf("SetOnline = %v, %v", ok, err)
+		if ok, err := a.SetOnlineCount(t.Context(), hall, 3); err != nil || !ok {
+			t.Fatalf("SetOnlineCount = %v, %v", ok, err)
 		}
 		if ok, err := a.Acquire(t.Context(), hall, time.Minute); err != nil || !ok {
 			t.Fatalf("再次 Acquire = %v, %v", ok, err)
@@ -105,8 +105,8 @@ func runLeasesContract(t *testing.T, open func(t *testing.T) func(string) Cluste
 		if ok, err := a.Acquire(ctx, hall, time.Minute); err != nil || !ok {
 			t.Fatalf("Acquire = %v, %v", ok, err)
 		}
-		if ok, err := a.SetOnline(ctx, hall, 3); err != nil || !ok {
-			t.Fatalf("SetOnline = %v, %v", ok, err)
+		if ok, err := a.SetOnlineCount(ctx, hall, 3); err != nil || !ok {
+			t.Fatalf("SetOnlineCount = %v, %v", ok, err)
 		}
 		if err := b.Release(ctx, hall); err != nil {
 			t.Fatal(err)
@@ -144,8 +144,8 @@ func runLeasesContract(t *testing.T, open func(t *testing.T) func(string) Cluste
 		if ok, err := a.Acquire(ctx, renewed, time.Minute); err != nil || !ok {
 			t.Fatalf("Acquire = %v, %v", ok, err)
 		}
-		if ok, err := a.SetOnline(ctx, renewed, 2); err != nil || !ok {
-			t.Fatalf("SetOnline = %v, %v", ok, err)
+		if ok, err := a.SetOnlineCount(ctx, renewed, 2); err != nil || !ok {
+			t.Fatalf("SetOnlineCount = %v, %v", ok, err)
 		}
 		if ok, err := a.Renew(ctx, renewed, 100*time.Millisecond); err != nil || !ok {
 			t.Fatalf("Renew = %v, %v", ok, err)
@@ -161,7 +161,7 @@ func runLeasesContract(t *testing.T, open func(t *testing.T) func(string) Cluste
 		if ok, err := a.Renew(ctx, acquired, time.Minute); err != nil || ok {
 			t.Errorf("续期已过期的租约 = %v, %v，期望 false", ok, err)
 		}
-		if ok, err := a.SetOnline(ctx, renewed, 3); err != nil || ok {
+		if ok, err := a.SetOnlineCount(ctx, renewed, 3); err != nil || ok {
 			t.Errorf("在已过期的租约上写入在线人数 = %v, %v，期望 false", ok, err)
 		}
 		if ok, err := b.Acquire(ctx, renewed, time.Minute); err != nil || !ok {

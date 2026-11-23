@@ -1,18 +1,18 @@
 import { useEffect, useEffectEvent, useState } from 'react'
-import { completeGithubLogin } from './account'
-import { takeGithubLanding } from './github'
+import { completeGitHubLogin } from './account'
+import { takeGitHubLanding } from './github'
 import './settings.css'
 
 // GitHub 授权之后的落地页。onDone 在离开这一页时调用（登录了另一个账号时在重新加载页面之前），由应用壳决定之后停在哪里。
 export function GitHubLoginPage({ fragment, onDone }: { fragment: string, onDone: () => void }) {
-  const [landing] = useState(() => takeGithubLanding(fragment))
+  const [landing] = useState(() => takeGitHubLanding(fragment))
   const [failure, setFailure] = useState(landing.kind === 'failed' ? landing.message : null)
   const done = useEffectEvent(onDone)
   useEffect(() => {
     if (landing.kind !== 'exchange')
       return
     const leaving = new AbortController()
-    void completeGithubLogin(landing, leaving.signal, () => done()).then((message) => {
+    void completeGitHubLogin(landing, leaving.signal, () => done()).then((message) => {
       if (message !== null)
         setFailure(message)
     })

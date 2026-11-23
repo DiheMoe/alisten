@@ -35,7 +35,7 @@ func TestDeleteEndsThePlayingSong(t *testing.T) {
 	for _, e := range effects {
 		kinds = append(kinds, fmt.Sprintf("%T", e))
 	}
-	// Close 会删除房间，播放记录必须先写入。
+	// Close 会删除房间，房间的播放记录必须先写入。
 	if want := []string{"room.Persist", "room.Emit", "room.Close", "room.Reply"}; !slices.Equal(kinds, want) {
 		t.Fatalf("删除时应依次落盘并记录播放、广播、关闭、回复：%v", kinds)
 	}

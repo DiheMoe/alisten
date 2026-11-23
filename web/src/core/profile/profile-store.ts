@@ -13,7 +13,7 @@ interface ProfileState {
   account: Account | null
   email: string
   // 是否记录播放历史。这个设置保存在服务端，还没有读到时为 null。
-  recordListens: boolean | null
+  listenRecording: boolean | null
   failed: boolean
 }
 
@@ -23,7 +23,7 @@ class ProfileStore extends Store<ProfileState> {
   #edits = 0
 
   constructor() {
-    super({ member: null, account: null, email: '', recordListens: null, failed: false })
+    super({ member: null, account: null, email: '', listenRecording: null, failed: false })
   }
 
   start(): void {
@@ -63,7 +63,7 @@ class ProfileStore extends Store<ProfileState> {
   }
 
   // 失败时抛出 Error，message 是给用户看的原因。
-  async setRecordListens(on: boolean): Promise<void> {
+  async setListenRecording(on: boolean): Promise<void> {
     try {
       await (on ? api.enableListenRecording() : api.disableListenRecording())
     }
@@ -71,7 +71,7 @@ class ProfileStore extends Store<ProfileState> {
       throw new Error(error instanceof IdentityRenewedError ? '没有保存，再试一次。' : errorMessage(error))
     }
     this.#edits += 1
-    this.setState({ recordListens: on })
+    this.setState({ listenRecording: on })
   }
 
   // 失败时返回错误。
@@ -113,8 +113,8 @@ class ProfileStore extends Store<ProfileState> {
         edits = this.#edits
         me = await api.getMe()
       } while (edits !== this.#edits)
-      const { member, account, recordListens } = me
-      this.setState({ member, account: account ?? null, email: account ? account.email ?? '' : localStorage.getItem(emailKey) ?? '', recordListens, failed: false })
+      const { member, account, listenRecording } = me
+      this.setState({ member, account: account ?? null, email: account ? account.email ?? '' : localStorage.getItem(emailKey) ?? '', listenRecording, failed: false })
       if (account && !account.email)
         await this.#moveLocalEmail()
     }
@@ -145,11 +145,11 @@ class ProfileStore extends Store<ProfileState> {
       case 'rejected':
         // 本机保存的邮箱属于原来的身份。
         localStorage.removeItem(emailKey)
-        this.setState({ member: null, account: null, email: '', recordListens: null, failed: false })
+        this.setState({ member: null, account: null, email: '', listenRecording: null, failed: false })
         return
       case 'renewed':
         // 新的游客按默认记录播放历史。
-        this.setState({ member: event.member, account: null, recordListens: true, failed: false })
+        this.setState({ member: event.member, account: null, listenRecording: true, failed: false })
         notificationStore.info('原来的身份已经失效，已为你换了一个新的身份。', 8000)
         return
       case 'renewalFailed':

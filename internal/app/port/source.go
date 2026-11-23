@@ -63,11 +63,11 @@ type QQQRLoginSource interface {
 	CredentialStatus(context.Context) (CredentialStatus, error)
 }
 
-// 音乐平台明确表示保存的登录已失效时，音源返回包装了它的错误。登录失效之后重试没有用，要管理员重新扫码登录，
+// 音乐平台明确表示保存的登录已失效时，音乐平台适配器返回包装了它的错误。登录失效之后重试没有用，要管理员重新扫码登录，
 // 所以要和平台一时出错区分开，回复和日志里才看得出原因。
 var ErrSourceSignedOut = errors.New("音乐平台的登录已失效，需要管理员重新扫码登录。")
 
-// RejectedError 表示音源明确拒绝了这首歌，比如歌曲下架或没有版权，所以准备不再重试。
+// RejectedError 表示音乐平台明确拒绝了这首歌，比如歌曲下架或没有版权，所以准备不再重试。
 // RejectedError 的文本就是准备失败的原因。
 type RejectedError struct {
 	Err error
@@ -123,7 +123,7 @@ type NetEaseSource interface {
 }
 
 // 供 /media 跳转使用。播放地址有时效，调用方把取到的地址复用 1 分钟。
-// 音源明确拒绝这首歌时返回 *RejectedError，平台明确表示登录已失效时返回包装了 ErrSourceSignedOut 的错误。
+// 音乐平台明确拒绝这首歌时返回 *RejectedError，平台明确表示登录已失效时返回包装了 ErrSourceSignedOut 的错误。
 // 实现要自己为对外请求设置期限。
 type PlayURLs interface {
 	PlayURL(ctx context.Context, id string) (string, error)

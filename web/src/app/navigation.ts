@@ -42,7 +42,7 @@ class NavigationStore extends Store<NavigationState> {
       const lastRoom = roomEntryStore.resume()
       // 直接打开网站时进入上次的房间。刷新或者回到发现房间时停在原处。
       if (lastRoom && fresh && parsed && formatRoute(parsed) === '/')
-        route = { name: 'listen', ref: lastRoom, panel: null }
+        route = { name: 'now-playing', ref: lastRoom, panel: null }
     }
     const url = formatRoute(route)
     // 片段只用来带进配对码这类一次性的值，页面读到之后就从地址里去掉。

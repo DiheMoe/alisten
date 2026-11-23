@@ -185,6 +185,6 @@ export function Lyrics() {
   )
 }
 
-export function ListenPage() {
-  return <div className="listen-page"><Lyrics /></div>
+export function NowPlayingPage() {
+  return <div className="now-playing-page"><Lyrics /></div>
 }

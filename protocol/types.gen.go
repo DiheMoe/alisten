@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "b23410b249f706ea"
+const Version = "31cf9198eff06722"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -12,7 +12,7 @@ type APIKey struct {
 
 type Account struct {
 	Email    *string `json:"email,omitempty"`
-	Github   bool    `json:"github"`
+	GitHub   bool    `json:"github"`
 	Username *string `json:"username,omitempty"`
 }
 
@@ -44,7 +44,7 @@ type AdminCheckBilibiliLoginRequest struct {
 	Key string `json:"key"`
 }
 
-type AdminCheckNeteaseLoginRequest struct {
+type AdminCheckNetEaseLoginRequest struct {
 	Key string `json:"key"`
 }
 
@@ -71,13 +71,13 @@ type AdminGetBilibiliCredentialResponse struct {
 	SignedOut bool           `json:"signedOut"`
 }
 
-type AdminGetGithubCredentialResponse struct {
+type AdminGetGitHubCredentialResponse struct {
 	CallbackURL     string  `json:"callbackUrl"`
 	ClientID        *string `json:"clientId"`
 	ClientSecretSet bool    `json:"clientSecretSet"`
 }
 
-type AdminGetNeteaseCredentialResponse struct {
+type AdminGetNetEaseCredentialResponse struct {
 	Account   *SourceAccount `json:"account"`
 	Set       bool           `json:"set"`
 	SignedOut bool           `json:"signedOut"`
@@ -94,7 +94,7 @@ type AdminGetRoomApiKeyResponse struct {
 	Set         bool  `json:"set"`
 }
 
-type AdminGetYoutubeCredentialResponse struct {
+type AdminGetYouTubeCredentialResponse struct {
 	Set         bool  `json:"set"`
 	UpdatedAtMs int64 `json:"updatedAtMs"`
 }
@@ -122,8 +122,8 @@ func (v AdminListMediaResponse) MarshalJSON() ([]byte, error) {
 }
 
 type AdminListRoomsResponse struct {
-	DefaultCapacity int64         `json:"defaultCapacity"`
-	Items           []RoomListing `json:"items"`
+	Items                  []RoomListing `json:"items"`
+	PersistentRoomCapacity int64         `json:"persistentRoomCapacity"`
 }
 
 func (v AdminListRoomsResponse) MarshalJSON() ([]byte, error) {
@@ -176,18 +176,18 @@ type AdminSetEphemeralRoomCapacityRequest struct {
 	Capacity int64 `json:"capacity"`
 }
 
-type AdminSetGithubCredentialRequest struct {
+type AdminSetGitHubCredentialRequest struct {
 	ClientID     string `json:"clientId"`
 	ClientSecret string `json:"clientSecret"`
 }
 
-type AdminSetYoutubeCredentialRequest struct {
+type AdminSetYouTubeCredentialRequest struct {
 	Cookies string `json:"cookies"`
 }
 
 type AdminStartBilibiliLoginRequest struct{}
 
-type AdminStartNeteaseLoginRequest struct{}
+type AdminStartNetEaseLoginRequest struct{}
 
 type AdminStartQQLoginRequest struct {
 	Type QQLoginType `json:"type"`
@@ -315,7 +315,7 @@ const (
 	ErrorCodeQueueFull          ErrorCode = "QUEUE_FULL"
 	ErrorCodeNothingPlaying     ErrorCode = "NOTHING_PLAYING"
 	ErrorCodeRateLimited        ErrorCode = "RATE_LIMITED"
-	ErrorCodeProviderError      ErrorCode = "PROVIDER_ERROR"
+	ErrorCodeSourceError        ErrorCode = "SOURCE_ERROR"
 	ErrorCodeUnavailable        ErrorCode = "UNAVAILABLE"
 	ErrorCodeClientOutdated     ErrorCode = "CLIENT_OUTDATED"
 	ErrorCodeRoomFull           ErrorCode = "ROOM_FULL"
@@ -328,27 +328,27 @@ type ErrorInfo struct {
 	Message string    `json:"message"`
 }
 
-type FinishGithubLoginRequest struct {
+type FinishGitHubLoginRequest struct {
 	Code  string `json:"code"`
 	Nonce string `json:"nonce"`
 }
 
-type FinishGithubLoginResponse struct {
+type FinishGitHubLoginResponse struct {
 	Account     Account `json:"account"`
 	Member      Member  `json:"member"`
 	MemberToken *string `json:"memberToken,omitempty"`
 }
 
 type GetMeResponse struct {
-	Account       *Account `json:"account,omitempty"`
-	Member        Member   `json:"member"`
-	RecordListens bool     `json:"recordListens"`
+	Account         *Account `json:"account,omitempty"`
+	ListenRecording bool     `json:"listenRecording"`
+	Member          Member   `json:"member"`
 }
 
 type GetSiteResponse struct {
 	BrandName             string `json:"brandName"`
 	EphemeralRoomCapacity int64  `json:"ephemeralRoomCapacity"`
-	GithubLogin           bool   `json:"githubLogin"`
+	GitHubLogin           bool   `json:"githubLogin"`
 	RegistrationOpen      bool   `json:"registrationOpen"`
 }
 
@@ -684,15 +684,15 @@ type QueueRemoveRequest struct {
 }
 
 type QueueUpdatedEvent struct {
-	Items   []Entry    `json:"items"`
 	Next    *NextTrack `json:"next"`
 	Pending *Entry     `json:"pending"`
+	Waiting []Entry    `json:"waiting"`
 }
 
 func (v QueueUpdatedEvent) MarshalJSON() ([]byte, error) {
 	type plain QueueUpdatedEvent
-	if v.Items == nil {
-		v.Items = []Entry{}
+	if v.Waiting == nil {
+		v.Waiting = []Entry{}
 	}
 	return json.Marshal(plain(v))
 }
@@ -795,7 +795,6 @@ type RoomListing struct {
 }
 
 type RoomSnapshot struct {
-	Items      []Entry     `json:"items"`
 	Members    Members     `json:"members"`
 	Next       *NextTrack  `json:"next"`
 	NowPlaying *NowPlaying `json:"nowPlaying"`
@@ -804,12 +803,13 @@ type RoomSnapshot struct {
 	Room       RoomInfo    `json:"room"`
 	Seq        int64       `json:"seq"`
 	Term       int64       `json:"term"`
+	Waiting    []Entry     `json:"waiting"`
 }
 
 func (v RoomSnapshot) MarshalJSON() ([]byte, error) {
 	type plain RoomSnapshot
-	if v.Items == nil {
-		v.Items = []Entry{}
+	if v.Waiting == nil {
+		v.Waiting = []Entry{}
 	}
 	return json.Marshal(plain(v))
 }
@@ -899,7 +899,7 @@ func (v SharedPlaylist) MarshalJSON() ([]byte, error) {
 type Source string
 
 const (
-	SourceNetease  Source = "netease"
+	SourceNetEase  Source = "netease"
 	SourceQQ       Source = "qq"
 	SourceBilibili Source = "bilibili"
 	SourceLink     Source = "link"
@@ -912,14 +912,14 @@ type SourceAccount struct {
 	Vip      *bool   `json:"vip"`
 }
 
-type StartGithubLoginRequest struct {
+type StartGitHubLoginRequest struct {
 	Client          *GitHubClient `json:"client,omitempty"`
 	CurrentPassword *string       `json:"currentPassword,omitempty"`
 	Intent          GitHubIntent  `json:"intent"`
 	Nonce           string        `json:"nonce"`
 }
 
-type StartGithubLoginResponse struct {
+type StartGitHubLoginResponse struct {
 	URL string `json:"url"`
 }
 
@@ -958,7 +958,7 @@ type TrackSummary struct {
 	Track Track     `json:"track"`
 }
 
-type UnbindGithubRequest struct {
+type UnbindGitHubRequest struct {
 	CurrentPassword string `json:"currentPassword"`
 }
 
@@ -1047,21 +1047,21 @@ var (
 	RouteAdminDeleteRoom               = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/admin/rooms/{id}", Auth: AuthAdmin, Status: 204}, decoder: noBody, Params: []PathParam{{Name: "id", Type: "RoomID", pattern: patternRoomID}}}
 	RouteAdminGetRoomApiKey            = Endpoint[NoRequest, AdminGetRoomApiKeyResponse]{Route: Route{Pattern: "GET /api/admin/rooms/{id}/api-key", Auth: AuthAdmin, Status: 200}, decoder: noBody, Params: []PathParam{{Name: "id", Type: "RoomID", pattern: patternRoomID}}}
 	RouteAdminResetRoomApiKey          = LocatedEndpoint[NoRequest, APIKey]{Route: Route{Pattern: "POST /api/admin/rooms/{id}/api-key", Auth: AuthAdmin, Status: 201}, decoder: discard(decodeAdminResetRoomApiKeyRequest), Params: []PathParam{{Name: "id", Type: "RoomID", pattern: patternRoomID}}}
-	RouteAdminGetNeteaseCredential     = Endpoint[NoRequest, AdminGetNeteaseCredentialResponse]{Route: Route{Pattern: "GET /api/admin/credentials/netease", Auth: AuthAdmin, Status: 200}, decoder: noBody}
+	RouteAdminGetNetEaseCredential     = Endpoint[NoRequest, AdminGetNetEaseCredentialResponse]{Route: Route{Pattern: "GET /api/admin/credentials/netease", Auth: AuthAdmin, Status: 200}, decoder: noBody}
 	RouteAdminGetQQCredential          = Endpoint[NoRequest, AdminGetQQCredentialResponse]{Route: Route{Pattern: "GET /api/admin/credentials/qq", Auth: AuthAdmin, Status: 200}, decoder: noBody}
-	RouteAdminStartNeteaseLogin        = Endpoint[NoRequest, QRLogin]{Route: Route{Pattern: "POST /api/admin/credentials/netease/qr-logins", Auth: AuthAdmin, Status: 201}, decoder: discard(decodeAdminStartNeteaseLoginRequest)}
-	RouteAdminCheckNeteaseLogin        = Endpoint[AdminCheckNeteaseLoginRequest, QRLoginResult]{Route: Route{Pattern: "POST /api/admin/credentials/netease/qr-logins/status", Auth: AuthAdmin, Status: 200}, decoder: decodeAdminCheckNeteaseLoginRequest}
+	RouteAdminStartNetEaseLogin        = Endpoint[NoRequest, QRLogin]{Route: Route{Pattern: "POST /api/admin/credentials/netease/qr-logins", Auth: AuthAdmin, Status: 201}, decoder: discard(decodeAdminStartNetEaseLoginRequest)}
+	RouteAdminCheckNetEaseLogin        = Endpoint[AdminCheckNetEaseLoginRequest, QRLoginResult]{Route: Route{Pattern: "POST /api/admin/credentials/netease/qr-logins/status", Auth: AuthAdmin, Status: 200}, decoder: decodeAdminCheckNetEaseLoginRequest}
 	RouteAdminStartQQLogin             = Endpoint[AdminStartQQLoginRequest, QRLogin]{Route: Route{Pattern: "POST /api/admin/credentials/qq/qr-logins", Auth: AuthAdmin, Status: 201}, decoder: decodeAdminStartQQLoginRequest}
 	RouteAdminCheckQQLogin             = Endpoint[AdminCheckQQLoginRequest, QRLoginResult]{Route: Route{Pattern: "POST /api/admin/credentials/qq/qr-logins/status", Auth: AuthAdmin, Status: 200}, decoder: decodeAdminCheckQQLoginRequest}
 	RouteAdminGetBilibiliCredential    = Endpoint[NoRequest, AdminGetBilibiliCredentialResponse]{Route: Route{Pattern: "GET /api/admin/credentials/bilibili", Auth: AuthAdmin, Status: 200}, decoder: noBody}
 	RouteAdminStartBilibiliLogin       = Endpoint[NoRequest, QRLogin]{Route: Route{Pattern: "POST /api/admin/credentials/bilibili/qr-logins", Auth: AuthAdmin, Status: 201}, decoder: discard(decodeAdminStartBilibiliLoginRequest)}
 	RouteAdminCheckBilibiliLogin       = Endpoint[AdminCheckBilibiliLoginRequest, QRLoginResult]{Route: Route{Pattern: "POST /api/admin/credentials/bilibili/qr-logins/status", Auth: AuthAdmin, Status: 200}, decoder: decodeAdminCheckBilibiliLoginRequest}
-	RouteAdminGetYoutubeCredential     = Endpoint[NoRequest, AdminGetYoutubeCredentialResponse]{Route: Route{Pattern: "GET /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 200}, decoder: noBody}
-	RouteAdminSetYoutubeCredential     = NoContentEndpoint[AdminSetYoutubeCredentialRequest]{Route: Route{Pattern: "PUT /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 204}, decoder: decodeAdminSetYoutubeCredentialRequest}
-	RouteAdminDeleteYoutubeCredential  = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 204}, decoder: noBody}
-	RouteAdminGetGithubCredential      = Endpoint[NoRequest, AdminGetGithubCredentialResponse]{Route: Route{Pattern: "GET /api/admin/credentials/github", Auth: AuthAdmin, Status: 200}, decoder: noBody}
-	RouteAdminSetGithubCredential      = NoContentEndpoint[AdminSetGithubCredentialRequest]{Route: Route{Pattern: "PUT /api/admin/credentials/github", Auth: AuthAdmin, Status: 204}, decoder: decodeAdminSetGithubCredentialRequest}
-	RouteAdminDeleteGithubCredential   = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/admin/credentials/github", Auth: AuthAdmin, Status: 204}, decoder: noBody}
+	RouteAdminGetYouTubeCredential     = Endpoint[NoRequest, AdminGetYouTubeCredentialResponse]{Route: Route{Pattern: "GET /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 200}, decoder: noBody}
+	RouteAdminSetYouTubeCredential     = NoContentEndpoint[AdminSetYouTubeCredentialRequest]{Route: Route{Pattern: "PUT /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 204}, decoder: decodeAdminSetYouTubeCredentialRequest}
+	RouteAdminDeleteYouTubeCredential  = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/admin/credentials/youtube", Auth: AuthAdmin, Status: 204}, decoder: noBody}
+	RouteAdminGetGitHubCredential      = Endpoint[NoRequest, AdminGetGitHubCredentialResponse]{Route: Route{Pattern: "GET /api/admin/credentials/github", Auth: AuthAdmin, Status: 200}, decoder: noBody}
+	RouteAdminSetGitHubCredential      = NoContentEndpoint[AdminSetGitHubCredentialRequest]{Route: Route{Pattern: "PUT /api/admin/credentials/github", Auth: AuthAdmin, Status: 204}, decoder: decodeAdminSetGitHubCredentialRequest}
+	RouteAdminDeleteGitHubCredential   = NoContentEndpoint[NoRequest]{Route: Route{Pattern: "DELETE /api/admin/credentials/github", Auth: AuthAdmin, Status: 204}, decoder: noBody}
 	RouteAdminListMedia                = Endpoint[AdminListMediaRequest, AdminListMediaResponse]{Route: Route{Pattern: "POST /api/admin/media/queries", Auth: AuthAdmin, Status: 200}, decoder: decodeAdminListMediaRequest}
 	RouteAdminRemoveMedia              = Endpoint[AdminRemoveMediaRequest, AdminRemoveMediaResponse]{Route: Route{Pattern: "POST /api/admin/media/removals", Auth: AuthAdmin, Status: 200}, decoder: decodeAdminRemoveMediaRequest}
 	RouteAdminUpdateSite               = Endpoint[AdminUpdateSiteRequest, AdminUpdateSiteResponse]{Route: Route{Pattern: "PATCH /api/admin/site", Auth: AuthAdmin, Status: 200}, decoder: decodeAdminUpdateSiteRequest}
@@ -1081,9 +1081,9 @@ var (
 	RouteCopySharedPlaylist            = Endpoint[CopySharedPlaylistRequest, MyPlaylist]{Route: Route{Pattern: "POST /api/shared-playlists/{shareId}/copies", Auth: AuthAccount, Status: 201}, decoder: decodeCopySharedPlaylistRequest, Params: []PathParam{{Name: "shareId", Type: "ShareID", pattern: patternShareID}}}
 	RouteCreatePairingCode             = Endpoint[NoRequest, CreatePairingCodeResponse]{Route: Route{Pattern: "POST /api/account/pairing-codes", Auth: AuthAccount, Status: 201}, decoder: discard(decodeCreatePairingCodeRequest)}
 	RouteRedeemPairingCode             = Endpoint[RedeemPairingCodeRequest, RedeemPairingCodeResponse]{Route: Route{Pattern: "POST /api/sessions/pairing", Auth: AuthMember, Status: 201}, decoder: decodeRedeemPairingCodeRequest}
-	RouteStartGithubLogin              = Endpoint[StartGithubLoginRequest, StartGithubLoginResponse]{Route: Route{Pattern: "POST /api/auth/github", Auth: AuthMember, Status: 201}, decoder: decodeStartGithubLoginRequest}
-	RouteFinishGithubLogin             = Endpoint[FinishGithubLoginRequest, FinishGithubLoginResponse]{Route: Route{Pattern: "POST /api/auth/github/exchange", Auth: AuthMember, Status: 200}, decoder: decodeFinishGithubLoginRequest}
-	RouteUnbindGithub                  = NoContentEndpoint[UnbindGithubRequest]{Route: Route{Pattern: "POST /api/account/github/removals", Auth: AuthMember, Status: 204}, decoder: decodeUnbindGithubRequest}
+	RouteStartGitHubLogin              = Endpoint[StartGitHubLoginRequest, StartGitHubLoginResponse]{Route: Route{Pattern: "POST /api/auth/github", Auth: AuthMember, Status: 201}, decoder: decodeStartGitHubLoginRequest}
+	RouteFinishGitHubLogin             = Endpoint[FinishGitHubLoginRequest, FinishGitHubLoginResponse]{Route: Route{Pattern: "POST /api/auth/github/exchange", Auth: AuthMember, Status: 200}, decoder: decodeFinishGitHubLoginRequest}
+	RouteUnbindGitHub                  = NoContentEndpoint[UnbindGitHubRequest]{Route: Route{Pattern: "POST /api/account/github/removals", Auth: AuthMember, Status: 204}, decoder: decodeUnbindGitHubRequest}
 )
 
 var RoomRoutes = []RoomRoute{
@@ -1110,7 +1110,7 @@ var errorCodeHTTPStatus = map[ErrorCode]int{
 	ErrorCodeQueueFull:          409,
 	ErrorCodeNothingPlaying:     409,
 	ErrorCodeRateLimited:        429,
-	ErrorCodeProviderError:      502,
+	ErrorCodeSourceError:        502,
 	ErrorCodeUnavailable:        503,
 	ErrorCodeInternal:           500,
 }

@@ -148,7 +148,7 @@ export function PlaylistTracks({ items, playing, selection, selecting, actions, 
               {selecting
                 ? <input type="checkbox" className="playlist-track-check" checked={selected} readOnly aria-label={`选择${bookTitle(meta.title)}`} />
                 : <span className="song-index text-ui-sm muted">{String(index + 1).padStart(2, '0')}</span>}
-              {/* 多选时点封面也是切换选中，不打开音源页面。 */}
+              {/* 多选时点封面也是切换选中，不打开音乐平台的页面。 */}
               <SongArtwork coverUrl={meta.coverUrl} title={meta.title} href={selecting ? undefined : meta.pageUrl} sourceName={source} />
               <div className="song-copy">
                 <span className="song-title">

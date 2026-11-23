@@ -174,7 +174,7 @@ func (r *Room) endCurrent(b *batch, at time.Time) {
 	b.plays = append(b.plays, RecordPlay{Entry: c.Entry, StartedAt: c.StartedAt, EndedAt: at})
 }
 
-// 房间关闭时还在播放的歌也算结束，要写播放记录。关闭可能在歌曲原定的结束时间之后才送达，所以记录不能比歌曲本身还长。
+// 房间关闭时还在播放的歌也算结束，要写房间的播放记录。关闭可能在歌曲原定的结束时间之后才送达，所以记录不能比歌曲本身还长。
 func (r *Room) stopPlayback(b *batch) {
 	if r.current == nil {
 		return
@@ -207,7 +207,7 @@ func (r *Room) voteSkip(b *batch, by member.Member) (Result, *Error) {
 
 // 一人一票，所以门槛也按人数算，否则开着多个连接的成员会让票数永远凑不够。
 func (r *Room) voteThreshold() int {
-	return max((Headcount(r.sessions)+2)/3, 1)
+	return max((OnlineCount(r.sessions)+2)/3, 1)
 }
 
 // 有人离开后门槛会变低，已有的票数够了就直接切歌，否则投过票的人再投只会得到“已经投过票”，这首歌就切不掉了。

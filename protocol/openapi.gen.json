@@ -99,7 +99,7 @@
         ],
         "type": "object"
       },
-      "AdminCheckNeteaseLoginRequest": {
+      "AdminCheckNetEaseLoginRequest": {
         "additionalProperties": false,
         "properties": {
           "key": {
@@ -133,7 +133,7 @@
         "additionalProperties": false,
         "properties": {
           "capacity": {
-            "description": "房间最多能进多少人，按成员去重计算。不填时是 adminListRooms 返回的 defaultCapacity",
+            "description": "房间最多能进多少人，按成员去重计算。不填时是 adminListRooms 返回的 persistentRoomCapacity",
             "maximum": 128,
             "minimum": 2,
             "type": "integer"
@@ -206,7 +206,7 @@
         ],
         "type": "object"
       },
-      "AdminGetGithubCredentialResponse": {
+      "AdminGetGitHubCredentialResponse": {
         "additionalProperties": false,
         "properties": {
           "callbackUrl": {
@@ -236,7 +236,7 @@
         ],
         "type": "object"
       },
-      "AdminGetNeteaseCredentialResponse": {
+      "AdminGetNetEaseCredentialResponse": {
         "additionalProperties": false,
         "properties": {
           "account": {
@@ -312,7 +312,7 @@
         ],
         "type": "object"
       },
-      "AdminGetYoutubeCredentialResponse": {
+      "AdminGetYouTubeCredentialResponse": {
         "additionalProperties": false,
         "properties": {
           "set": {
@@ -387,22 +387,22 @@
       "AdminListRoomsResponse": {
         "additionalProperties": false,
         "properties": {
-          "defaultCapacity": {
-            "description": "adminCreateRoom 不填 capacity 时的人数上限",
-            "maximum": 128,
-            "minimum": 2,
-            "type": "integer"
-          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/RoomListing"
             },
             "type": "array"
+          },
+          "persistentRoomCapacity": {
+            "description": "adminCreateRoom 不填 capacity 时的人数上限",
+            "maximum": 128,
+            "minimum": 2,
+            "type": "integer"
           }
         },
         "required": [
           "items",
-          "defaultCapacity"
+          "persistentRoomCapacity"
         ],
         "type": "object"
       },
@@ -486,7 +486,7 @@
         ],
         "type": "object"
       },
-      "AdminSetGithubCredentialRequest": {
+      "AdminSetGitHubCredentialRequest": {
         "additionalProperties": false,
         "properties": {
           "clientId": {
@@ -506,7 +506,7 @@
         ],
         "type": "object"
       },
-      "AdminSetYoutubeCredentialRequest": {
+      "AdminSetYouTubeCredentialRequest": {
         "additionalProperties": false,
         "properties": {
           "cookies": {
@@ -523,7 +523,7 @@
         "additionalProperties": false,
         "type": "object"
       },
-      "AdminStartNeteaseLoginRequest": {
+      "AdminStartNetEaseLoginRequest": {
         "additionalProperties": false,
         "type": "object"
       },
@@ -866,7 +866,7 @@
           "QUEUE_FULL",
           "NOTHING_PLAYING",
           "RATE_LIMITED",
-          "PROVIDER_ERROR",
+          "SOURCE_ERROR",
           "UNAVAILABLE",
           "CLIENT_OUTDATED",
           "ROOM_FULL",
@@ -882,9 +882,9 @@
           "INVALID_CREDENTIALS": 401,
           "NOTHING_PLAYING": 409,
           "NOT_FOUND": 404,
-          "PROVIDER_ERROR": 502,
           "QUEUE_FULL": 409,
           "RATE_LIMITED": 429,
+          "SOURCE_ERROR": 502,
           "UNAUTHORIZED": 401,
           "UNAVAILABLE": 503
         }
@@ -918,7 +918,7 @@
         ],
         "type": "object"
       },
-      "FinishGithubLoginRequest": {
+      "FinishGitHubLoginRequest": {
         "additionalProperties": false,
         "properties": {
           "code": {
@@ -937,7 +937,7 @@
         ],
         "type": "object"
       },
-      "FinishGithubLoginResponse": {
+      "FinishGitHubLoginResponse": {
         "additionalProperties": false,
         "properties": {
           "account": {
@@ -963,17 +963,17 @@
           "account": {
             "$ref": "#/components/schemas/Account"
           },
-          "member": {
-            "$ref": "#/components/schemas/Member"
-          },
-          "recordListens": {
+          "listenRecording": {
             "description": "是否把在房间里听到的歌记进播放历史",
             "type": "boolean"
+          },
+          "member": {
+            "$ref": "#/components/schemas/Member"
           }
         },
         "required": [
           "member",
-          "recordListens"
+          "listenRecording"
         ],
         "type": "object"
       },
@@ -1996,13 +1996,6 @@
       "RoomSnapshot": {
         "additionalProperties": false,
         "properties": {
-          "items": {
-            "description": "等待队列",
-            "items": {
-              "$ref": "#/components/schemas/Entry"
-            },
-            "type": "array"
-          },
           "members": {
             "$ref": "#/components/schemas/Members"
           },
@@ -2049,6 +2042,13 @@
           },
           "term": {
             "type": "integer"
+          },
+          "waiting": {
+            "description": "等待队列",
+            "items": {
+              "$ref": "#/components/schemas/Entry"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -2059,7 +2059,7 @@
           "nowPlaying",
           "pending",
           "next",
-          "items",
+          "waiting",
           "members"
         ],
         "type": "object"
@@ -2192,7 +2192,7 @@
         "additionalProperties": false,
         "properties": {
           "id": {
-            "description": "音源平台的账号 ID，用字符串避免大整数精度丢失",
+            "description": "音乐平台的账号 ID，用字符串避免大整数精度丢失",
             "type": "string"
           },
           "name": {
@@ -2230,7 +2230,7 @@
         ],
         "type": "object"
       },
-      "StartGithubLoginRequest": {
+      "StartGitHubLoginRequest": {
         "additionalProperties": false,
         "properties": {
           "client": {
@@ -2258,7 +2258,7 @@
         ],
         "type": "object"
       },
-      "StartGithubLoginResponse": {
+      "StartGitHubLoginResponse": {
         "additionalProperties": false,
         "properties": {
           "url": {
@@ -2419,7 +2419,7 @@
             "type": "integer"
           },
           "pageUrl": {
-            "description": "这首歌在音源网站上的页面，来源为 link 时是规范化之后的链接（scheme 和主机名转成小写），即曲目 ID",
+            "description": "这首歌在音乐平台网站上的页面，来源为 link 时是规范化之后的链接（scheme 和主机名转成小写），即曲目 ID",
             "type": "string"
           },
           "title": {
@@ -2452,7 +2452,7 @@
         ],
         "type": "object"
       },
-      "UnbindGithubRequest": {
+      "UnbindGitHubRequest": {
         "additionalProperties": false,
         "properties": {
           "currentPassword": {
@@ -2514,7 +2514,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "b23410b249f706ea"
+    "version": "31cf9198eff06722"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2558,17 +2558,17 @@
             "memberToken": []
           }
         ],
-        "summary": "游客注册账号，设置用户名和密码，成员和成员 token 都不变。站点关闭注册时返回 FORBIDDEN。只绑定了 GitHub 的账号也用 register 补设用户名和密码，不受注册开关限制。但发出请求的成员 token 要在 10 分钟内用绑定的 GitHub 确认过身份（startGithubLogin 的 verify），没有确认时返回 FORBIDDEN。这样拿到成员 token 的人就不能抢先设成自己的密码。补设成功之后这次确认作废，账号在其他设备上的成员 token 随即失效，这与修改密码相同。补设失败时确认仍然有效"
+        "summary": "游客注册账号，设置用户名和密码，成员和成员 token 都不变。站点关闭注册时返回 FORBIDDEN。只绑定了 GitHub 的账号也用 register 补设用户名和密码，不受注册开关限制。但发出请求的成员 token 要在 10 分钟内用绑定的 GitHub 确认过身份（startGitHubLogin 的 verify），没有确认时返回 FORBIDDEN。这样拿到成员 token 的人就不能抢先设成自己的密码。补设成功之后这次确认作废，账号在其他设备上的成员 token 随即失效，这与修改密码相同。补设失败时确认仍然有效"
       }
     },
     "/api/account/github/removals": {
       "post": {
-        "operationId": "unbindGithub",
+        "operationId": "unbindGitHub",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UnbindGithubRequest"
+                "$ref": "#/components/schemas/UnbindGitHubRequest"
               }
             }
           },
@@ -2594,7 +2594,7 @@
             "memberToken": []
           }
         ],
-        "summary": "解绑 GitHub。账号还没有设置密码时返回 CONFLICT，因为解绑之后这个账号就再也无法登录。要带上当前密码，不对时返回 INVALID_CREDENTIALS。只凭成员 token 不能更换登录凭证，理由同 startGithubLogin 的 bind。后台没有配置 GitHub OAuth App 时返回 NOT_FOUND"
+        "summary": "解绑 GitHub。账号还没有设置密码时返回 CONFLICT，因为解绑之后这个账号就再也无法登录。要带上当前密码，不对时返回 INVALID_CREDENTIALS。只凭成员 token 不能更换登录凭证，理由同 startGitHubLogin 的 bind。后台没有配置 GitHub OAuth App 时返回 NOT_FOUND"
       }
     },
     "/api/account/pairing-codes": {
@@ -2898,7 +2898,7 @@
     },
     "/api/admin/credentials/github": {
       "delete": {
-        "operationId": "adminDeleteGithubCredential",
+        "operationId": "adminDeleteGitHubCredential",
         "responses": {
           "204": {
             "description": "成功"
@@ -2922,13 +2922,13 @@
         "summary": "清除 GitHub 登录使用的 OAuth App，关闭 GitHub 登录。之后 GitHub 相关的接口返回 NOT_FOUND，已经绑定的 GitHub 保持绑定，已经登录的设备不受影响。只绑定了 GitHub 的账号没有密码，所以重新开启之前，新设备只能用已经登录的设备生成的配对码登录这个账号"
       },
       "get": {
-        "operationId": "adminGetGithubCredential",
+        "operationId": "adminGetGitHubCredential",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminGetGithubCredentialResponse"
+                  "$ref": "#/components/schemas/AdminGetGitHubCredentialResponse"
                 }
               }
             },
@@ -2953,12 +2953,12 @@
         "summary": "GitHub 登录使用的 OAuth App：Client ID、Client Secret 是否已设置和要填进 OAuth App 的回调地址，不返回 Client Secret"
       },
       "put": {
-        "operationId": "adminSetGithubCredential",
+        "operationId": "adminSetGitHubCredential",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AdminSetGithubCredentialRequest"
+                "$ref": "#/components/schemas/AdminSetGitHubCredentialRequest"
               }
             }
           },
@@ -2989,13 +2989,13 @@
     },
     "/api/admin/credentials/netease": {
       "get": {
-        "operationId": "adminGetNeteaseCredential",
+        "operationId": "adminGetNetEaseCredential",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminGetNeteaseCredentialResponse"
+                  "$ref": "#/components/schemas/AdminGetNetEaseCredentialResponse"
                 }
               }
             },
@@ -3022,12 +3022,12 @@
     },
     "/api/admin/credentials/netease/qr-logins": {
       "post": {
-        "operationId": "adminStartNeteaseLogin",
+        "operationId": "adminStartNetEaseLogin",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AdminStartNeteaseLoginRequest"
+                "$ref": "#/components/schemas/AdminStartNetEaseLoginRequest"
               }
             }
           },
@@ -3065,12 +3065,12 @@
     },
     "/api/admin/credentials/netease/qr-logins/status": {
       "post": {
-        "operationId": "adminCheckNeteaseLogin",
+        "operationId": "adminCheckNetEaseLogin",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AdminCheckNeteaseLoginRequest"
+                "$ref": "#/components/schemas/AdminCheckNetEaseLoginRequest"
               }
             }
           },
@@ -3108,7 +3108,7 @@
     },
     "/api/admin/credentials/qq": {
       "get": {
-        "operationId": "adminGetQqCredential",
+        "operationId": "adminGetQQCredential",
         "responses": {
           "200": {
             "content": {
@@ -3141,7 +3141,7 @@
     },
     "/api/admin/credentials/qq/qr-logins": {
       "post": {
-        "operationId": "adminStartQqLogin",
+        "operationId": "adminStartQQLogin",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3184,7 +3184,7 @@
     },
     "/api/admin/credentials/qq/qr-logins/status": {
       "post": {
-        "operationId": "adminCheckQqLogin",
+        "operationId": "adminCheckQQLogin",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3227,7 +3227,7 @@
     },
     "/api/admin/credentials/youtube": {
       "delete": {
-        "operationId": "adminDeleteYoutubeCredential",
+        "operationId": "adminDeleteYouTubeCredential",
         "responses": {
           "204": {
             "description": "成功"
@@ -3251,13 +3251,13 @@
         "summary": "清除 YouTube cookies"
       },
       "get": {
-        "operationId": "adminGetYoutubeCredential",
+        "operationId": "adminGetYouTubeCredential",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminGetYoutubeCredentialResponse"
+                  "$ref": "#/components/schemas/AdminGetYouTubeCredentialResponse"
                 }
               }
             },
@@ -3282,12 +3282,12 @@
         "summary": "YouTube cookies 是否已设置及最近一次填写的时间，不返回 cookies"
       },
       "put": {
-        "operationId": "adminSetYoutubeCredential",
+        "operationId": "adminSetYouTubeCredential",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AdminSetYoutubeCredentialRequest"
+                "$ref": "#/components/schemas/AdminSetYouTubeCredentialRequest"
               }
             }
           },
@@ -3815,12 +3815,12 @@
     },
     "/api/auth/github": {
       "post": {
-        "operationId": "startGithubLogin",
+        "operationId": "startGitHubLogin",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/StartGithubLoginRequest"
+                "$ref": "#/components/schemas/StartGitHubLoginRequest"
               }
             }
           },
@@ -3831,7 +3831,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StartGithubLoginResponse"
+                  "$ref": "#/components/schemas/StartGitHubLoginResponse"
                 }
               }
             },
@@ -3858,12 +3858,12 @@
     },
     "/api/auth/github/exchange": {
       "post": {
-        "operationId": "finishGithubLogin",
+        "operationId": "finishGitHubLogin",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/FinishGithubLoginRequest"
+                "$ref": "#/components/schemas/FinishGitHubLoginRequest"
               }
             }
           },
@@ -3874,7 +3874,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FinishGithubLoginResponse"
+                  "$ref": "#/components/schemas/FinishGitHubLoginResponse"
                 }
               }
             },
@@ -4375,7 +4375,7 @@
             "memberToken": []
           }
         ],
-        "summary": "把平台歌单导入成一个新歌单，元数据取自平台。只收前 1000 首，重复的歌只留第一次出现的位置。歌单名不合法时返回 INVALID_ARGUMENT，不会像 importMyPlaylist 那样改用“导入的歌单”。新歌单受“最多 50 个”的限制。返回实际导入的数量。只支持网易云和 QQ 音乐，其他音源返回 INVALID_ARGUMENT"
+        "summary": "把平台歌单导入成一个新歌单，元数据取自平台。只收前 1000 首，重复的歌只留第一次出现的位置。歌单名不合法时返回 INVALID_ARGUMENT，不会像 importMyPlaylist 那样改用“导入的歌单”。新歌单受“最多 50 个”的限制。返回实际导入的数量。只支持网易云和 QQ 音乐，其他音乐平台返回 INVALID_ARGUMENT"
       }
     },
     "/api/me/playlists/{id}": {

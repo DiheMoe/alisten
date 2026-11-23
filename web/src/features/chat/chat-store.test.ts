@@ -31,7 +31,7 @@ function hello(roomId: string): HelloResponse {
       nowPlaying: null,
       pending: null,
       next: null,
-      items: [],
+      waiting: [],
       members: { sessions: [], onlineCount: 0 },
     },
     serverTimeMs: 0,

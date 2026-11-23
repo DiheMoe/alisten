@@ -516,14 +516,14 @@ func TestFailureLogsCarryTheRequestID(t *testing.T) {
 }
 
 // WebSocket 请求的音乐平台错误按请求类型节流，每种类型各记一条 WARN。
-func TestWebSocketProviderErrorsAreLoggedPerType(t *testing.T) {
+func TestWebSocketSourceErrorsAreLoggedPerType(t *testing.T) {
 	var logs bytes.Buffer
 	s := &server{logger: slog.New(logctx.NewHandler(slog.NewJSONHandler(&logs, nil)))}
-	failed := fmt.Errorf("在网易云音乐搜索：%w：%w", errors.New("连接被重置"), port.ErrProviderFailed)
+	failed := fmt.Errorf("在网易云音乐搜索：%w：%w", errors.New("连接被重置"), port.ErrSourceFailed)
 
 	for range 3 {
-		if info := s.requestError(t.Context(), "search.tracks", failed); info.Code != protocol.ErrorCodeProviderError {
-			t.Fatalf("回复的错误码 = %s，期望 PROVIDER_ERROR", info.Code)
+		if info := s.requestError(t.Context(), "search.tracks", failed); info.Code != protocol.ErrorCodeSourceError {
+			t.Fatalf("回复的错误码 = %s，期望 SOURCE_ERROR", info.Code)
 		}
 	}
 	s.requestError(t.Context(), "search.playlists", failed)

@@ -9,7 +9,7 @@ function listRooms(): Promise<AdminListRoomsResponse> {
 
 // 每打开一次常驻房间页就新建一个 PersistentRoomsStore，这样离开再回来时会重新读取。
 export class PersistentRoomsStore {
-  // 新建房间的表单要用 defaultCapacity，所以和房间列表一起存。
+  // 新建房间的表单要用 persistentRoomCapacity，所以和房间列表一起存。
   readonly rooms = new Resource<AdminListRoomsResponse>()
 
   open(): void {

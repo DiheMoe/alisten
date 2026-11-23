@@ -1,4 +1,4 @@
-// 接口的 source 字段收全部 Source，但服务端只能在这几个音源里搜索、读取歌单内的歌曲。搜索页按这里的顺序列出它们。
+// 接口的 source 字段收全部 Source，但服务端只能在这几个音乐平台里搜索、读取歌单内的歌曲。搜索页按这里的顺序列出它们。
 export const searchSources = ['qq', 'netease'] as const
 export type SearchSource = typeof searchSources[number]
 export const searchSourceNames: Record<SearchSource, string> = { qq: 'QQ 音乐', netease: '网易云音乐' }

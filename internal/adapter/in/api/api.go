@@ -75,8 +75,8 @@ type server struct {
 	logger    *slog.Logger
 	commands  *prometheus.CounterVec
 	redirects *prometheus.CounterVec
-	// 键是接口，HTTP 是路由加音源，WebSocket 是请求类型。值是 *logthrottle.Warning。
-	providerWarned sync.Map
+	// 键是接口，HTTP 是路由加音乐平台，WebSocket 是请求类型。值是 *logthrottle.Warning。
+	sourceWarned sync.Map
 }
 
 type call struct {
@@ -156,21 +156,21 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	handleNoContentNoRequest(rt, protocol.RouteAdminDeleteRoom, srv.adminDeleteRoom)
 	handleNoRequest(rt, protocol.RouteAdminGetRoomApiKey, srv.adminGetRoomAPIKey)
 	handleLocatedNoRequest(rt, protocol.RouteAdminResetRoomApiKey, srv.adminResetRoomAPIKey)
-	handleNoRequest(rt, protocol.RouteAdminGetNeteaseCredential, srv.adminGetNeteaseCredential)
+	handleNoRequest(rt, protocol.RouteAdminGetNetEaseCredential, srv.adminGetNetEaseCredential)
 	handleNoRequest(rt, protocol.RouteAdminGetQQCredential, srv.adminGetQQCredential)
-	handleNoRequest(rt, protocol.RouteAdminStartNeteaseLogin, srv.adminStartNeteaseLogin)
-	handle(rt, protocol.RouteAdminCheckNeteaseLogin, srv.adminCheckNeteaseLogin)
+	handleNoRequest(rt, protocol.RouteAdminStartNetEaseLogin, srv.adminStartNetEaseLogin)
+	handle(rt, protocol.RouteAdminCheckNetEaseLogin, srv.adminCheckNetEaseLogin)
 	handle(rt, protocol.RouteAdminStartQQLogin, srv.adminStartQQLogin)
 	handle(rt, protocol.RouteAdminCheckQQLogin, srv.adminCheckQQLogin)
 	handleNoRequest(rt, protocol.RouteAdminGetBilibiliCredential, srv.adminGetBilibiliCredential)
 	handleNoRequest(rt, protocol.RouteAdminStartBilibiliLogin, srv.adminStartBilibiliLogin)
 	handle(rt, protocol.RouteAdminCheckBilibiliLogin, srv.adminCheckBilibiliLogin)
-	handleNoRequest(rt, protocol.RouteAdminGetYoutubeCredential, srv.adminGetYoutubeCredential)
-	handleNoContent(rt, protocol.RouteAdminSetYoutubeCredential, srv.adminSetYoutubeCredential)
-	handleNoContentNoRequest(rt, protocol.RouteAdminDeleteYoutubeCredential, srv.adminDeleteYoutubeCredential)
-	handleNoRequest(rt, protocol.RouteAdminGetGithubCredential, srv.adminGetGithubCredential)
-	handleNoContent(rt, protocol.RouteAdminSetGithubCredential, srv.adminSetGithubCredential)
-	handleNoContentNoRequest(rt, protocol.RouteAdminDeleteGithubCredential, srv.adminDeleteGithubCredential)
+	handleNoRequest(rt, protocol.RouteAdminGetYouTubeCredential, srv.adminGetYouTubeCredential)
+	handleNoContent(rt, protocol.RouteAdminSetYouTubeCredential, srv.adminSetYouTubeCredential)
+	handleNoContentNoRequest(rt, protocol.RouteAdminDeleteYouTubeCredential, srv.adminDeleteYouTubeCredential)
+	handleNoRequest(rt, protocol.RouteAdminGetGitHubCredential, srv.adminGetGitHubCredential)
+	handleNoContent(rt, protocol.RouteAdminSetGitHubCredential, srv.adminSetGitHubCredential)
+	handleNoContentNoRequest(rt, protocol.RouteAdminDeleteGitHubCredential, srv.adminDeleteGitHubCredential)
 	handle(rt, protocol.RouteAdminListMedia, srv.adminListMedia)
 	handle(rt, protocol.RouteAdminRemoveMedia, srv.adminRemoveMedia)
 	handle(rt, protocol.RouteAdminUpdateSite, srv.adminUpdateSite)
@@ -190,9 +190,9 @@ func New(s Services, metrics prometheus.Registerer, tracer trace.TracerProvider,
 	handle(rt, protocol.RouteCopySharedPlaylist, srv.copySharedPlaylist)
 	handleNoRequest(rt, protocol.RouteCreatePairingCode, srv.createPairingCode)
 	handle(rt, protocol.RouteRedeemPairingCode, srv.redeemPairingCode)
-	handle(rt, protocol.RouteStartGithubLogin, srv.startGithubLogin)
-	handle(rt, protocol.RouteFinishGithubLogin, srv.finishGithubLogin)
-	handleNoContent(rt, protocol.RouteUnbindGithub, srv.unbindGithub)
+	handle(rt, protocol.RouteStartGitHubLogin, srv.startGitHubLogin)
+	handle(rt, protocol.RouteFinishGitHubLogin, srv.finishGitHubLogin)
+	handleNoContent(rt, protocol.RouteUnbindGitHub, srv.unbindGitHub)
 	mux.HandleFunc("GET "+GitHubCallbackPath, srv.githubCallback)
 	mux.HandleFunc("GET "+WebSocketPath, srv.websocket)
 	mux.HandleFunc("GET "+RoomEventsPath, srv.roomEvents)
@@ -423,17 +423,17 @@ var knownErrors = []struct {
 	{playlist.ErrTooFast, protocol.ErrorCodeRateLimited},
 	{playlist.ErrInvalidPlaylistLink, protocol.ErrorCodeInvalidArgument},
 	{playlist.ErrUnsupportedPlaylist, protocol.ErrorCodeInvalidArgument},
-	{playlist.ErrShortLinkFailed, protocol.ErrorCodeProviderError},
+	{playlist.ErrShortLinkFailed, protocol.ErrorCodeSourceError},
 	{playlistorder.ErrBeforeMoved, protocol.ErrorCodeInvalidArgument},
 	{playlistorder.ErrBeforeMissing, protocol.ErrorCodeConflict},
 	{realtime.ErrRequesterNotAllowed, protocol.ErrorCodeInvalidArgument},
 	{site.ErrInvalidBrandName, protocol.ErrorCodeInvalidArgument},
 	{realtime.ErrUnavailable, protocol.ErrorCodeUnavailable},
 	{realtime.ErrTooManyObservers, protocol.ErrorCodeRateLimited},
-	// 排在 ErrProviderFailed 前面，因为音源会把它和 ErrProviderFailed 包在同一个错误里，回复要说明是登录失效。
-	{port.ErrSourceSignedOut, protocol.ErrorCodeProviderError},
-	{port.ErrProviderFailed, protocol.ErrorCodeProviderError},
-	{media.ErrNoPlayback, protocol.ErrorCodeProviderError},
+	// 排在 ErrSourceFailed 前面，因为音乐平台适配器会把它和 ErrSourceFailed 包在同一个错误里，回复要说明是登录失效。
+	{port.ErrSourceSignedOut, protocol.ErrorCodeSourceError},
+	{port.ErrSourceFailed, protocol.ErrorCodeSourceError},
+	{media.ErrNoPlayback, protocol.ErrorCodeSourceError},
 	{catalog.ErrRateLimited, protocol.ErrorCodeRateLimited},
 	{catalog.ErrNoMatch, protocol.ErrorCodeNotFound},
 	{catalog.ErrUnsupported, protocol.ErrorCodeInvalidArgument},
@@ -518,22 +518,22 @@ func (s *server) fail(ctx context.Context, w http.ResponseWriter, r *http.Reques
 	// 超时按预期的错误回复，但还是要记下来，因为数据库或下游变慢时，不开追踪就只有这条日志。
 	case errors.Is(err, context.DeadlineExceeded):
 		s.logger.WarnContext(withRequestID(ctx, err), "HTTP 请求超时", "method", r.Method, "route", r.Pattern, "path", r.URL.Path, "elapsed", time.Since(start), "error", err)
-	case info.Code == protocol.ErrorCodeProviderError:
-		// /media 的路径里带着音源，按音源分开节流，这样一个平台持续出错时，另一个平台刚开始的错误不会被压成 DEBUG。
-		s.warnProvider(withRequestID(ctx, err), r.Pattern+" "+r.PathValue("source"), "音乐平台出错", "method", r.Method, "route", r.Pattern, "path", r.URL.Path, "reason", providerReason(err))
+	case info.Code == protocol.ErrorCodeSourceError:
+		// /media 的路径里带着音乐平台，按音乐平台分开节流，这样一个平台持续出错时，另一个平台刚开始的错误不会被压成 DEBUG。
+		s.warnSource(withRequestID(ctx, err), r.Pattern+" "+r.PathValue("source"), "音乐平台出错", "method", r.Method, "route", r.Pattern, "path", r.URL.Path, "reason", sourceReason(err))
 	}
 	writeError(w, info)
 }
 
 // 音乐平台出错是预期内的错误，但不记下来就查不到原因，比如登录已失效。平台故障期间同一个接口会被反复调用，
 // 房间里每个播放器都会重试 /media，所以按接口节流。成功时不调用 Recovered，距上一条 WARN 超过 logthrottle.Interval 之后再出错照样记 WARN。
-func (s *server) warnProvider(ctx context.Context, key, msg string, args ...any) {
-	warned, _ := s.providerWarned.LoadOrStore(key, &logthrottle.Warning{})
+func (s *server) warnSource(ctx context.Context, key, msg string, args ...any) {
+	warned, _ := s.sourceWarned.LoadOrStore(key, &logthrottle.Warning{})
 	s.logger.Log(ctx, warned.(*logthrottle.Warning).Level(), msg, args...)
 }
 
-// 只记能确定的原因，不记音源给的错误文本，因为那段文本可能带着凭据，比如扫码登录的 key。
-func providerReason(err error) string {
+// 只记能确定的原因，不记音乐平台适配器给的错误文本，因为那段文本可能带着凭据，比如扫码登录的 key。
+func sourceReason(err error) string {
 	var rejected *port.RejectedError
 	switch {
 	case errors.Is(err, port.ErrSourceSignedOut):

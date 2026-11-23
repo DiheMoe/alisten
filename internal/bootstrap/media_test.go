@@ -52,7 +52,7 @@ func TestMediaRedirect(t *testing.T) {
 	for _, c := range []struct {
 		source, result string
 		want           float64
-	}{{"netease", "ok", 1}, {"netease", "NOT_FOUND", 1}, {"qq", "PROVIDER_ERROR", 1}} {
+	}{{"netease", "ok", 1}, {"netease", "NOT_FOUND", 1}, {"qq", "SOURCE_ERROR", 1}} {
 		if got := metricValue(t, svc.metrics, "alisten_media_redirects_total", "source", c.source, "result", c.result); got != c.want {
 			t.Errorf("alisten_media_redirects_total{%s,%s} = %v，期望 %v", c.source, c.result, got, c.want)
 		}
@@ -70,7 +70,7 @@ func entryStatuses(snapshot map[string]any) map[string]string {
 	if playing, ok := snapshot["nowPlaying"].(map[string]any); ok {
 		add(playing["entry"])
 	}
-	for _, e := range snapshot["items"].([]any) {
+	for _, e := range snapshot["waiting"].([]any) {
 		add(e)
 	}
 	return statuses

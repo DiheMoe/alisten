@@ -1,4 +1,4 @@
-import type { FinishGithubLoginResponse } from '@/core/api'
+import type { FinishGitHubLoginResponse } from '@/core/api'
 import type { GitHubIntent } from '@/core/realtime'
 import { api } from '@/core/api'
 
@@ -19,23 +19,23 @@ function randomNonce(): string {
 }
 
 // 返回 GitHub 的授权地址，调用方随后跳转过去。绑定要带上用户输入的当前密码。
-export async function startGithubLogin(intent: GitHubIntent, currentPassword?: string): Promise<string> {
+export async function startGitHubLogin(intent: GitHubIntent, currentPassword?: string): Promise<string> {
   const nonce = randomNonce()
   sessionStorage.setItem(nonceKey, nonce)
   sessionStorage.setItem(intentKey, intent)
-  const { url } = await api.startGithubLogin({ intent, nonce, currentPassword })
+  const { url } = await api.startGitHubLogin({ intent, nonce, currentPassword })
   return url
 }
 
-export type GithubLanding
+export type GitHubLanding
   = | { kind: 'exchange', code: string, nonce: string, intent: GitHubIntent }
     | { kind: 'failed', message: string }
 
-let landed: { fragment: string, landing: GithubLanding } | null = null
+let landed: { fragment: string, landing: GitHubLanding } | null = null
 
 // fragment 是落地页地址中 # 之后的部分：code=<兑换码> 或 error=<错误码>。保存的 nonce 取出即删除，所以每次发起只能兑换一次。
 // 同一次落地重复读取时（开发模式下组件会挂载两次）返回同样的结果。
-export function takeGithubLanding(fragment: string): GithubLanding {
+export function takeGitHubLanding(fragment: string): GitHubLanding {
   if (landed?.fragment === fragment)
     return landed.landing
   const nonce = sessionStorage.getItem(nonceKey)
@@ -45,7 +45,7 @@ export function takeGithubLanding(fragment: string): GithubLanding {
   const params = new URLSearchParams(fragment)
   const code = params.get('code')
   const error = params.get('error')
-  let landing: GithubLanding
+  let landing: GitHubLanding
   if (code)
     landing = nonce && intent ? { kind: 'exchange', code, nonce, intent } : { kind: 'failed', message: '这次 GitHub 登录不是在这个页面发起的，请回到设置重新发起。' }
   else if (error)
@@ -56,13 +56,13 @@ export function takeGithubLanding(fragment: string): GithubLanding {
   return landing
 }
 
-let finishing: { code: string, result: Promise<FinishGithubLoginResponse> } | null = null
+let finishing: { code: string, result: Promise<FinishGitHubLoginResponse> } | null = null
 let credentialsPending = false
 
 // 兑换码只能用一次，所以同一个兑换码重复调用时，返回同一次请求的结果。
-export function finishGithubLogin(code: string, nonce: string, intent: GitHubIntent): Promise<FinishGithubLoginResponse> {
+export function finishGitHubLogin(code: string, nonce: string, intent: GitHubIntent): Promise<FinishGitHubLoginResponse> {
   if (finishing?.code !== code) {
-    let result = api.finishGithubLogin({ code, nonce })
+    let result = api.finishGitHubLogin({ code, nonce })
     if (intent === 'verify') {
       result = result.then((response) => {
         credentialsPending = true

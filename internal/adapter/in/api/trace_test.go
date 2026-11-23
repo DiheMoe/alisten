@@ -27,8 +27,8 @@ func TestWebSocketRequestSpans(t *testing.T) {
 		readMessage(t, conn)
 		readMessage(t, conn)
 		writeFrame(t, conn, `{"kind":"request","type":"queue.add","id":"a1","data":{"track":{"source":"qq","id":"0039MnYb0qxYhV"}}}`)
-		if m := readMessage(t, conn); m["error"].(map[string]any)["code"] != "PROVIDER_ERROR" {
-			t.Fatalf("音源里查不到这首歌时点歌的回复 = %v，期望 PROVIDER_ERROR", m)
+		if m := readMessage(t, conn); m["error"].(map[string]any)["code"] != "SOURCE_ERROR" {
+			t.Fatalf("音乐平台上查不到这首歌时点歌的回复 = %v，期望 SOURCE_ERROR", m)
 		}
 		synctest.Wait()
 

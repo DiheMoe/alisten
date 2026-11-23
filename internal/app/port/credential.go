@@ -15,10 +15,10 @@ type CredentialStatus struct {
 type YouTubeCookies interface {
 	// cookies 为空字符串时删除已保存的 cookies。
 	SetYouTubeCookies(context.Context, string) error
-	YouTubeCookiesStatus(context.Context) (YouTubeCookiesStatus, error)
+	YouTubeCredentialStatus(context.Context) (YouTubeCredentialStatus, error)
 }
 
-type YouTubeCookiesStatus struct {
+type YouTubeCredentialStatus struct {
 	Set bool
 	// 最近一次填写的时间，Set 为 false 时为零值。
 	UpdatedAt time.Time

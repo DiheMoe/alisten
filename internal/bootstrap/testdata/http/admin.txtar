@@ -1,4 +1,4 @@
-后台：常驻房间的列表和新建、按别名查找房间、音源账号的登录状态和扫码登录（包括 B 站）、YouTube cookies 的填写、清除和状态（不返回内容，空的 cookies 不能填写）、已存储的媒体。
+后台：常驻房间的列表和新建、按别名查找房间、音乐平台账号的登录状态和扫码登录（包括 B 站）、YouTube cookies 的填写、清除和状态（不返回内容，空的 cookies 不能填写）、已存储的媒体。
 
 -- request --
 GET /api/admin/rooms
@@ -18,7 +18,7 @@ GET /api/admin/rooms
 Authorization: Bearer admin-secret
 -- response --
 200
-{"items": [], "defaultCapacity": 64}
+{"items": [], "persistentRoomCapacity": 64}
 
 -- request --
 POST /api/admin/rooms
@@ -75,7 +75,7 @@ Authorization: Bearer admin-secret
 {"items": [
   {"id": "$hall", "slug": "hall", "name": "大厅", "description": "常驻", "kind": "persistent", "hasPassword": true, "onlineCount": 0, "capacity": 64},
   {"id": "$second", "slug": null, "name": "二厅", "description": "", "kind": "persistent", "hasPassword": false, "onlineCount": 0, "capacity": 64}
-], "defaultCapacity": 64}
+], "persistentRoomCapacity": 64}
 
 -- request --
 GET /api/rooms

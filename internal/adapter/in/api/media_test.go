@@ -142,7 +142,7 @@ func TestMediaRedirect(t *testing.T) {
 		t.Errorf("不在房间里的歌 = %#v，期望 %#v", got, want)
 	}
 
-	want := map[string]float64{"netease ok": 1, "netease PROVIDER_ERROR": 1, "netease NOT_FOUND": 1, "qq PROVIDER_ERROR": 1}
+	want := map[string]float64{"netease ok": 1, "netease SOURCE_ERROR": 1, "netease NOT_FOUND": 1, "qq SOURCE_ERROR": 1}
 	if got := redirectCounts(t, metrics); !maps.Equal(got, want) {
 		t.Errorf("跳转的计数 = %v，期望 %v", got, want)
 	}
@@ -277,7 +277,7 @@ func logLines(t *testing.T, logs *bytes.Buffer) []map[string]any {
 	return entries
 }
 
-// 音乐平台出错时，回复和日志里要能看出是不是登录失效，但日志里不能有音源给的错误文本。同一个接口连续出错只记一条 WARN，按音源分开记。
+// 音乐平台出错时，回复和日志里要能看出是不是登录失效，但日志里不能有音乐平台适配器给的错误文本。同一个接口连续出错只记一条 WARN，按音乐平台分开记。
 func TestMediaFailuresSayWhyAndAreLoggedPerSource(t *testing.T) {
 	store := porttest.New()
 	s := services(store, store, "")
@@ -289,11 +289,11 @@ func TestMediaFailuresSayWhyAndAreLoggedPerSource(t *testing.T) {
 	server, logs := start(t, s)
 
 	for range 2 {
-		if got, want := send(t, server, http.MethodGet, "/media/netease/1", ""), failure(protocol.ErrorCodeProviderError, port.ErrSourceSignedOut.Error()); got != want {
+		if got, want := send(t, server, http.MethodGet, "/media/netease/1", ""), failure(protocol.ErrorCodeSourceError, port.ErrSourceSignedOut.Error()); got != want {
 			t.Fatalf("登录失效时 GET /media/netease/1 = %#v，期望 %#v", got, want)
 		}
 	}
-	if got, want := send(t, server, http.MethodGet, "/media/qq/2", ""), failure(protocol.ErrorCodeProviderError, port.ErrProviderFailed.Error()); got != want {
+	if got, want := send(t, server, http.MethodGet, "/media/qq/2", ""), failure(protocol.ErrorCodeSourceError, port.ErrSourceFailed.Error()); got != want {
 		t.Fatalf("平台出错时 GET /media/qq/2 = %#v，期望 %#v", got, want)
 	}
 
@@ -310,6 +310,6 @@ func TestMediaFailuresSayWhyAndAreLoggedPerSource(t *testing.T) {
 		t.Errorf("日志里的原因 = %v、%v，期望登录已失效和平台出错", entries[0]["reason"], entries[1]["reason"])
 	}
 	if strings.Contains(logs.String(), "平台说未登录") || strings.Contains(logs.String(), "连接被重置") {
-		t.Errorf("日志里出现了音源给的错误文本，它可能带着凭据：\n%s", logs)
+		t.Errorf("日志里出现了音乐平台适配器给的错误文本，它可能带着凭据：\n%s", logs)
 	}
 }

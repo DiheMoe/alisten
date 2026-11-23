@@ -58,7 +58,7 @@ class ReminderStore extends Store<ReminderSettings> {
       if (shouldRemind(previous, next, member.id, live, this.state.enabled, firstSeen === undefined ? null : now - firstSeen))
         this.#remind(room.room.id, next.entry)
     }
-    const own = new Set([...room.items, room.pending, next?.entry].flatMap(entry => entry?.by?.id === member.id ? [entry.id] : []))
+    const own = new Set([...room.waiting, room.pending, next?.entry].flatMap(entry => entry?.by?.id === member.id ? [entry.id] : []))
     // 同一次切歌会先后收到 playback.updated 和 queue.updated，两条之间的房间状态只更新了一半，这时判断条目还在不在房间里不可靠。
     // 所以只在收到快照，或者正在播放的歌变化时，才删掉不在房间状态里的记录。
     if (!live || next !== previous) {

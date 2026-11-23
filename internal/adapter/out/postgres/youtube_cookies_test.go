@@ -12,7 +12,7 @@ func TestYouTubeCookies(t *testing.T) {
 	s, _ := newStore(t)
 	ctx := t.Context()
 
-	status, err := s.YouTubeCookiesStatus(ctx)
+	status, err := s.YouTubeCredentialStatus(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestYouTubeCookies(t *testing.T) {
 	if err := s.SetYouTubeCookies(ctx, "session=fictional"); err != nil {
 		t.Fatal(err)
 	}
-	first, err := s.YouTubeCookiesStatus(ctx)
+	first, err := s.YouTubeCredentialStatus(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestYouTubeCookies(t *testing.T) {
 	if err := s.SetYouTubeCookies(ctx, "session=replacement"); err != nil {
 		t.Fatal(err)
 	}
-	second, err := s.YouTubeCookiesStatus(ctx)
+	second, err := s.YouTubeCredentialStatus(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestYouTubeCookies(t *testing.T) {
 	if err := s.SetYouTubeCookies(ctx, ""); err != nil {
 		t.Fatal(err)
 	}
-	status, err = s.YouTubeCookiesStatus(ctx)
+	status, err = s.YouTubeCredentialStatus(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

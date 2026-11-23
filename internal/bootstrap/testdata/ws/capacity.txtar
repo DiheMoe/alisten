@@ -86,7 +86,7 @@ Authorization: Bearer $carol
   "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
   "serverTimeMs": 1,
   "room": {"term": 1, "seq": 1, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent", "capacity": 3},
-    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "waiting": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
 
 -- request --
@@ -116,7 +116,7 @@ Authorization: Bearer admin-secret
   "member": {"id": "$bobId", "name": "$bobName", "avatarHash": ""},
   "serverTimeMs": 1,
   "room": {"term": 1, "seq": 3, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent", "capacity": 2},
-    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "waiting": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}], "onlineCount": 2}}}}
 -- receive alice --
 {"kind": "event", "type": "members.updated", "term": 1, "seq": 3, "data": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}], "onlineCount": 2}}
@@ -137,7 +137,7 @@ Authorization: Bearer admin-secret
   "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
   "serverTimeMs": 1,
   "room": {"term": 1, "seq": 4, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent", "capacity": 2},
-    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "waiting": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 2}}}}
 
 -- connect alice3 --
@@ -148,7 +148,7 @@ Authorization: Bearer admin-secret
   "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
   "serverTimeMs": 1,
   "room": {"term": 1, "seq": 5, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent", "capacity": 2},
-    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "waiting": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 2}}}}
 
 -- connect alice4 --
@@ -159,7 +159,7 @@ Authorization: Bearer admin-secret
   "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
   "serverTimeMs": 1,
   "room": {"term": 1, "seq": 6, "room": {"id": "$hall", "name": "大厅", "description": "", "kind": "persistent", "capacity": 2},
-    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "waiting": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$bobId", "name": "$bobName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 2}}}}
 
 -- connect alice5 --

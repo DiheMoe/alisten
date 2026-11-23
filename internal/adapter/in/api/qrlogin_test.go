@@ -65,8 +65,8 @@ func TestQRLoginImage(t *testing.T) {
 	}
 
 	empty, _ := startQRLogin(t, noQRCode{porttest.NewNetEaseQRLogin()}, porttest.NewQQQRLogin())
-	if got, want := send(t, empty, http.MethodPost, "/api/admin/credentials/netease/qr-logins", "{}", adminHeader...), failure(protocol.ErrorCodeProviderError, "音乐平台没有正常响应，请稍后再试。"); got != want {
-		t.Errorf("音源没有给出二维码图片和登录链接时 = %#v，期望 %#v", got, want)
+	if got, want := send(t, empty, http.MethodPost, "/api/admin/credentials/netease/qr-logins", "{}", adminHeader...), failure(protocol.ErrorCodeSourceError, "音乐平台没有正常响应，请稍后再试。"); got != want {
+		t.Errorf("音乐平台没有给出二维码图片和登录链接时 = %#v，期望 %#v", got, want)
 	}
 }
 
@@ -91,8 +91,8 @@ func TestQRLoginKeyIsNotLogged(t *testing.T) {
 		"/api/admin/credentials/netease/qr-logins/status": `{"key":"` + key + `"}`,
 		"/api/admin/credentials/qq/qr-logins/status":      `{"type":"wx","key":"` + wx + `"}`,
 	} {
-		if got, want := send(t, server, http.MethodPost, path, body, adminHeader...), failure(protocol.ErrorCodeProviderError, "音乐平台没有正常响应，请稍后再试。"); got != want {
-			t.Errorf("音源出错时 %s = %#v，期望 %#v", path, got, want)
+		if got, want := send(t, server, http.MethodPost, path, body, adminHeader...), failure(protocol.ErrorCodeSourceError, "音乐平台没有正常响应，请稍后再试。"); got != want {
+			t.Errorf("音乐平台出错时 %s = %#v，期望 %#v", path, got, want)
 		}
 	}
 	if strings.Contains(logs.String(), key) || strings.Contains(logs.String(), wx) {
@@ -138,7 +138,7 @@ func TestCredentialStatus(t *testing.T) {
 	}
 
 	netease.FailStatus(errors.New("上游失败"))
-	if got, want := send(t, server, http.MethodGet, "/api/admin/credentials/netease", "", adminHeader...), failure(protocol.ErrorCodeProviderError, "音乐平台没有正常响应，请稍后再试。"); got != want {
+	if got, want := send(t, server, http.MethodGet, "/api/admin/credentials/netease", "", adminHeader...), failure(protocol.ErrorCodeSourceError, "音乐平台没有正常响应，请稍后再试。"); got != want {
 		t.Errorf("账号查询失败 = %#v，期望 %#v", got, want)
 	}
 }
@@ -164,8 +164,8 @@ func TestBilibiliQRLogin(t *testing.T) {
 		t.Errorf("B 站的扫码结果 = %#v", got)
 	}
 	bilibili.Fail(errors.New("登录会话 " + login.Key + " 已失效"))
-	if got, want := send(t, server, http.MethodPost, "/api/admin/credentials/bilibili/qr-logins/status", check, adminHeader...), failure(protocol.ErrorCodeProviderError, "音乐平台没有正常响应，请稍后再试。"); got != want {
-		t.Errorf("音源出错时 = %#v，期望 %#v", got, want)
+	if got, want := send(t, server, http.MethodPost, "/api/admin/credentials/bilibili/qr-logins/status", check, adminHeader...), failure(protocol.ErrorCodeSourceError, "音乐平台没有正常响应，请稍后再试。"); got != want {
+		t.Errorf("音乐平台出错时 = %#v，期望 %#v", got, want)
 	}
 	if strings.Contains(logs.String(), login.Key) {
 		t.Errorf("日志中出现了扫码登录的 key：\n%s", logs)

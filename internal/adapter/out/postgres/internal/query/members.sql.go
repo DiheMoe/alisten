@@ -26,7 +26,7 @@ func (q *Queries) AccountByGitHub(ctx context.Context, githubID *int64) (Member,
 		&i.PasswordHash,
 		&i.Email,
 		&i.RecordListens,
-		&i.GithubID,
+		&i.GitHubID,
 	)
 	return i, err
 }
@@ -47,7 +47,7 @@ func (q *Queries) AccountByID(ctx context.Context, id string) (Member, error) {
 		&i.PasswordHash,
 		&i.Email,
 		&i.RecordListens,
-		&i.GithubID,
+		&i.GitHubID,
 	)
 	return i, err
 }
@@ -68,7 +68,7 @@ func (q *Queries) AccountByUsername(ctx context.Context, username *string) (Memb
 		&i.PasswordHash,
 		&i.Email,
 		&i.RecordListens,
-		&i.GithubID,
+		&i.GitHubID,
 	)
 	return i, err
 }
@@ -100,13 +100,13 @@ RETURNING (username IS NULL)::boolean AS was_guest
 `
 
 type BindGitHubParams struct {
-	GithubID *int64
+	GitHubID *int64
 	ID       string
 }
 
 // 只给还没有绑定 GitHub 的成员绑定。已经绑定过的成员不受影响，查询没有返回的行。was_guest 表示成员原来是游客，这次绑定就是注册。
 func (q *Queries) BindGitHub(ctx context.Context, arg BindGitHubParams) (bool, error) {
-	row := q.db.QueryRow(ctx, bindGitHub, arg.GithubID, arg.ID)
+	row := q.db.QueryRow(ctx, bindGitHub, arg.GitHubID, arg.ID)
 	var was_guest bool
 	err := row.Scan(&was_guest)
 	return was_guest, err
@@ -129,7 +129,7 @@ func (q *Queries) CreateMember(ctx context.Context, name string) (Member, error)
 		&i.PasswordHash,
 		&i.Email,
 		&i.RecordListens,
-		&i.GithubID,
+		&i.GitHubID,
 	)
 	return i, err
 }
@@ -256,13 +256,13 @@ SELECT username, email, github_id FROM members WHERE id = $1
 type MemberAccountProfileRow struct {
 	Username *string
 	Email    *string
-	GithubID *int64
+	GitHubID *int64
 }
 
 func (q *Queries) MemberAccountProfile(ctx context.Context, id string) (MemberAccountProfileRow, error) {
 	row := q.db.QueryRow(ctx, memberAccountProfile, id)
 	var i MemberAccountProfileRow
-	err := row.Scan(&i.Username, &i.Email, &i.GithubID)
+	err := row.Scan(&i.Username, &i.Email, &i.GitHubID)
 	return i, err
 }
 
@@ -287,7 +287,7 @@ func (q *Queries) MemberByToken(ctx context.Context, tokenHash []byte) (Member, 
 		&i.PasswordHash,
 		&i.Email,
 		&i.RecordListens,
-		&i.GithubID,
+		&i.GitHubID,
 	)
 	return i, err
 }
@@ -403,7 +403,7 @@ func (q *Queries) UpdateMember(ctx context.Context, arg UpdateMemberParams) (Mem
 		&i.PasswordHash,
 		&i.Email,
 		&i.RecordListens,
-		&i.GithubID,
+		&i.GitHubID,
 	)
 	return i, err
 }

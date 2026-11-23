@@ -35,7 +35,7 @@ func (r *Room) admit(memberID string) *Error {
 	if mine >= maxSessionsPerMember {
 		return errTooManySessions
 	}
-	if mine == 0 && Headcount(r.sessions) >= r.info.Capacity {
+	if mine == 0 && OnlineCount(r.sessions) >= r.info.Capacity {
 		return errRoomFull(r.info.Capacity)
 	}
 	return nil
@@ -53,8 +53,8 @@ func (r *Room) leave(b *batch, in Leave) {
 	}
 }
 
-// Headcount 是在线的人数。同一成员可能同时开着多个标签页或客户端，每个连接是一个会话，但只算一个人。
-func Headcount(sessions []Session) int {
+// OnlineCount 是在线的人数。同一成员可能同时开着多个标签页或客户端，每个连接是一个会话，但只算一个人。
+func OnlineCount(sessions []Session) int {
 	people := map[string]bool{}
 	for _, s := range sessions {
 		people[s.Member.ID] = true

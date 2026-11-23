@@ -7,7 +7,7 @@ import { useSubmission } from '@/shared/lib/use-submission'
 import { ConfirmDialog, Modal } from '@/shared/ui'
 import { adminStore } from './admin-store'
 import { StatusPill } from './section-head'
-import { canSubmitYoutubeCookies, shouldWarnAboutPlaintext, youtubeCookiesText, youtubeCookiesTooLarge, youtubeCookiesView } from './youtube-cookies-view'
+import { canSubmitYouTubeCookies, shouldWarnAboutPlaintext, youtubeCookiesText, youtubeCookiesTooLarge, youtubeCookiesView } from './youtube-cookies-view'
 
 function YouTubeCookiesDialog({ onSaved, onClose }: { onSaved: () => void, onClose: () => void }) {
   const [cookies, setCookies] = useState('')
@@ -16,7 +16,7 @@ function YouTubeCookiesDialog({ onSaved, onClose }: { onSaved: () => void, onClo
   const tooLargeId = useId()
   const save = async () => {
     // 空白和超过 64 KiB 的内容不会提交，所以 INVALID_ARGUMENT 只剩认不出格式这一种原因，这时的 message 是写给用户的。
-    const saved = await adminStore.call(() => api.adminSetYoutubeCredential({ cookies }), { INVALID_ARGUMENT: message => message })
+    const saved = await adminStore.call(() => api.adminSetYouTubeCredential({ cookies }), { INVALID_ARGUMENT: message => message })
     if (saved !== null)
       onSaved()
   }
@@ -26,7 +26,7 @@ function YouTubeCookiesDialog({ onSaved, onClose }: { onSaved: () => void, onClo
         className="form-stack"
         onSubmit={(event) => {
           event.preventDefault()
-          if (canSubmitYoutubeCookies(cookies, busy))
+          if (canSubmitYouTubeCookies(cookies, busy))
             void submit(save)
         }}
       >
@@ -53,7 +53,7 @@ function YouTubeCookiesDialog({ onSaved, onClose }: { onSaved: () => void, onClo
         </div>
         <div className="dialog-actions">
           <button type="button" className="button-secondary" onClick={onClose}>取消</button>
-          <button type="submit" className="button-primary" disabled={!canSubmitYoutubeCookies(cookies, busy)}>{busy ? '正在保存…' : '保存'}</button>
+          <button type="submit" className="button-primary" disabled={!canSubmitYouTubeCookies(cookies, busy)}>{busy ? '正在保存…' : '保存'}</button>
         </div>
       </form>
     </Modal>
@@ -62,7 +62,7 @@ function YouTubeCookiesDialog({ onSaved, onClose }: { onSaved: () => void, onClo
 
 export function YouTubeCookies() {
   const titleId = useId()
-  const { state: credential, reload: refetch } = useResource(() => adminStore.attempt(() => api.adminGetYoutubeCredential()))
+  const { state: credential, reload: refetch } = useResource(() => adminStore.attempt(() => api.adminGetYouTubeCredential()))
   const [editing, setEditing] = useState(false)
   const [clearing, setClearing] = useState(false)
   const view = youtubeCookiesView(credential)
@@ -103,7 +103,7 @@ export function YouTubeCookies() {
           confirmLabel="清除"
           danger
           onConfirm={async () => {
-            if (await adminStore.call(() => api.adminDeleteYoutubeCredential()) === null)
+            if (await adminStore.call(() => api.adminDeleteYouTubeCredential()) === null)
               return
             setClearing(false)
             refetch()

@@ -518,7 +518,7 @@ func TestPickQuotaBeforeUpstream(t *testing.T) {
 				t.Errorf("临时房间的点歌额度用完时 Resolve(%+v) 的错误 = %v，期望查询上游之前就以房间的点歌额度拒绝", p, err)
 			}
 		}
-		if _, _, err := f.gateway.Resolve(t.Context(), persistent, alice, false, Pick{Track: sunny}); !errors.Is(err, port.ErrProviderFailed) {
+		if _, _, err := f.gateway.Resolve(t.Context(), persistent, alice, false, Pick{Track: sunny}); !errors.Is(err, port.ErrSourceFailed) {
 			t.Errorf("常驻房间 Resolve 的错误 = %v，期望不预扣点歌额度，直接查询上游", err)
 		}
 	})

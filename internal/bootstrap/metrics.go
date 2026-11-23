@@ -13,44 +13,44 @@ import (
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
-type providerMetrics struct {
-	providerRequests *prometheus.CounterVec
-	providerDuration *prometheus.HistogramVec
+type sourceMetrics struct {
+	sourceRequests *prometheus.CounterVec
+	sourceDuration *prometheus.HistogramVec
 }
 
-func newProviderMetrics(reg prometheus.Registerer) providerMetrics {
-	m := providerMetrics{
-		providerRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "alisten_provider_requests_total",
-			Help: "对音源上游的请求，source 为 netease、qq 或 bilibili，result 为 ok 或 error。命中进程内缓存的不算。",
+func newSourceMetrics(reg prometheus.Registerer) sourceMetrics {
+	m := sourceMetrics{
+		sourceRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "alisten_source_requests_total",
+			Help: "对音乐平台的请求，source 为 netease、qq 或 bilibili，result 为 ok 或 error。命中进程内缓存的不算。",
 		}, []string{"source", "op", "result"}),
-		providerDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: "alisten_provider_request_duration_seconds",
-			Help: "对音源上游的请求的耗时。",
+		sourceDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name: "alisten_source_request_duration_seconds",
+			Help: "对音乐平台的请求的耗时。",
 			// 接口调用的期限是 30 秒。
 			Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20, 30},
 		}, []string{"source", "op"}),
 	}
-	reg.MustRegister(m.providerRequests, m.providerDuration)
+	reg.MustRegister(m.sourceRequests, m.sourceDuration)
 	return m
 }
 
-func (m providerMetrics) provider(source, op string, elapsed time.Duration, err error) {
+func (m sourceMetrics) sourceRequested(source, op string, elapsed time.Duration, err error) {
 	result := "ok"
 	if err != nil {
 		result = "error"
 	}
-	m.providerRequests.WithLabelValues(source, op, result).Inc()
-	m.providerDuration.WithLabelValues(source, op).Observe(elapsed.Seconds())
+	m.sourceRequests.WithLabelValues(source, op, result).Inc()
+	m.sourceDuration.WithLabelValues(source, op).Observe(elapsed.Seconds())
 }
 
 type serveMetrics struct {
-	providerMetrics
+	sourceMetrics
 	prepareMetrics
 }
 
 func newServeMetrics(reg prometheus.Registerer) *serveMetrics {
-	return &serveMetrics{providerMetrics: newProviderMetrics(reg), prepareMetrics: newPrepareMetrics(reg)}
+	return &serveMetrics{sourceMetrics: newSourceMetrics(reg), prepareMetrics: newPrepareMetrics(reg)}
 }
 
 // 任务的期限是 15 分钟。
@@ -65,7 +65,7 @@ func newPrepareMetrics(reg prometheus.Registerer) prepareMetrics {
 	m := prepareMetrics{
 		prepareJobs: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "alisten_prepare_jobs_total",
-			Help: "本实例执行完的准备任务，result 为 ok、rejected（音源明确拒绝）或 failed（重试之后仍失败）。",
+			Help: "本实例执行完的准备任务，result 为 ok、rejected（音乐平台明确拒绝）或 failed（重试之后仍失败）。",
 		}, []string{"source", "result"}),
 		prepareDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "alisten_prepare_duration_seconds",
@@ -83,7 +83,7 @@ func (m prepareMetrics) prepared(source track.Source, result string, elapsed tim
 }
 
 type workerMetrics struct {
-	providerMetrics
+	sourceMetrics
 	prepareMetrics
 	downloadDuration prometheus.Histogram
 	downloadFailures *prometheus.CounterVec
@@ -92,8 +92,8 @@ type workerMetrics struct {
 
 func newWorkerMetrics(reg prometheus.Registerer) *workerMetrics {
 	m := &workerMetrics{
-		providerMetrics: newProviderMetrics(reg),
-		prepareMetrics:  newPrepareMetrics(reg),
+		sourceMetrics:  newSourceMetrics(reg),
+		prepareMetrics: newPrepareMetrics(reg),
 		downloadDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Name:    "alisten_ytdlp_download_duration_seconds",
 			Help:    "每次运行 yt-dlp 的耗时，包括失败的运行，不包括 worker 退出时取消的运行。",

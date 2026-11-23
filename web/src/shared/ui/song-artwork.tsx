@@ -14,7 +14,7 @@ function safeHref(href: string | undefined): string | undefined {
   }
 }
 
-export function SongArtwork({ coverUrl, title, href, sourceName = '音源' }: { coverUrl: string, title: string, href?: string, sourceName?: string }) {
+export function SongArtwork({ coverUrl, title, href, sourceName = '音乐平台' }: { coverUrl: string, title: string, href?: string, sourceName?: string }) {
   const link = safeHref(href)
   if (!link)
     return <Artwork src={coverUrl} title={title} />

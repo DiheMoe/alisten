@@ -131,7 +131,7 @@ type SearchTracksResponse struct {
 type Source string
 
 const (
-	SourceNetease Source = "netease"
+	SourceNetEase Source = "netease"
 	SourceQQ      Source = "qq"
 	SourceLink    Source = "link"
 )

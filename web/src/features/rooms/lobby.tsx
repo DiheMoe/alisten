@@ -100,7 +100,7 @@ export function Lobby({ filter, onFilter, onEntered }: { filter: string, onFilte
                             {room.description && <p className="text-ui-caption muted">{room.description}</p>}
                             <span className="text-ui-sm muted">
                               <Users size={14} aria-hidden="true" />
-                              {`${room.onlineCount} / ${room.capacity} 人正在听`}
+                              {`${room.onlineCount} / ${room.capacity} 人在线`}
                             </span>
                           </div>
                         </button>

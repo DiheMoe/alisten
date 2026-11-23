@@ -56,18 +56,18 @@ func TestSnapshotDTO(t *testing.T) {
 		},
 		Sessions: []room.Session{{ID: "s1", Member: alice}, {ID: "s2", Member: alice}},
 	}
-	want := `{"items":[{"auto":true,"by":null,"id":"14","likes":0,"meta":{"album":"","artist":"","coverUrl":"","durationMs":0,"pageUrl":"","title":"七里香"},"status":"ready","track":{"id":"185811","source":"netease"}}],` +
-		`"members":{"onlineCount":1,"sessions":[{"avatarHash":"c160f8cc69a4f0bf2b0362752353d060","id":"0199f1c2-8a4b-7c3d-9e5f-6a7b8c9d0e1f","name":"alice"},{"avatarHash":"c160f8cc69a4f0bf2b0362752353d060","id":"0199f1c2-8a4b-7c3d-9e5f-6a7b8c9d0e1f","name":"alice"}]},` +
+	want := `{"members":{"onlineCount":1,"sessions":[{"avatarHash":"c160f8cc69a4f0bf2b0362752353d060","id":"0199f1c2-8a4b-7c3d-9e5f-6a7b8c9d0e1f","name":"alice"},{"avatarHash":"c160f8cc69a4f0bf2b0362752353d060","id":"0199f1c2-8a4b-7c3d-9e5f-6a7b8c9d0e1f","name":"alice"}]},` +
 		`"next":{"entryId":"14","loadWithinMs":60000,"mediaUrl":"/media/netease/185811"},` +
 		`"nowPlaying":{"durationMs":269500,"entry":{"auto":false,"by":{"avatarHash":"c160f8cc69a4f0bf2b0362752353d060","id":"0199f1c2-8a4b-7c3d-9e5f-6a7b8c9d0e1f","name":"alice"},"id":"12","likes":2,"meta":{"album":"叶惠美","artist":"周杰伦","coverUrl":"https://p1.music.126.net/example.jpg","durationMs":269000,"pageUrl":"https://music.163.com/#/song?id=186016","title":"晴天"},"status":"ready","track":{"id":"186016","source":"netease"}},"gain":0.75,"lyric":"[00:01.00]故事的小黄花","mediaUrl":"/media/netease/186016","startedAtMs":1760000000123},` +
 		`"pending":{"auto":false,"by":{"avatarHash":"c160f8cc69a4f0bf2b0362752353d060","id":"0199f1c2-8a4b-7c3d-9e5f-6a7b8c9d0e1f","name":"alice"},"id":"13","likes":0,"meta":{"album":"","artist":"","coverUrl":"","durationMs":0,"pageUrl":"https://www.youtube.com/watch?v=x","title":"https://www.youtube.com/watch?v=x"},"status":"preparing","track":{"id":"https://www.youtube.com/watch?v=x","source":"link"}},` +
-		`"playMode":"random","room":{"capacity":64,"description":"常驻","id":"0199f1c2-0000-7000-8000-000000000001","kind":"persistent","name":"大厅"},"seq":128,"term":3}`
+		`"playMode":"random","room":{"capacity":64,"description":"常驻","id":"0199f1c2-0000-7000-8000-000000000001","kind":"persistent","name":"大厅"},"seq":128,"term":3,` +
+		`"waiting":[{"auto":true,"by":null,"id":"14","likes":0,"meta":{"album":"","artist":"","coverUrl":"","durationMs":0,"pageUrl":"","title":"七里香"},"status":"ready","track":{"id":"185811","source":"netease"}}]}`
 	if got := jsonOf(t, s.snapshot(view)); got != want {
 		t.Errorf("快照编码为\n%s\n期望\n%s", got, want)
 	}
 
 	empty := room.View{Term: 1, Snapshot: room.Snapshot{Info: room.Info{ID: "r", Kind: room.Ephemeral, Capacity: 16}, Mode: room.Sequential}}
-	wantEmpty := `{"items":[],"members":{"onlineCount":0,"sessions":[]},"next":null,"nowPlaying":null,"pending":null,"playMode":"sequential","room":{"capacity":16,"description":"","id":"r","kind":"ephemeral","name":""},"seq":0,"term":1}`
+	wantEmpty := `{"members":{"onlineCount":0,"sessions":[]},"next":null,"nowPlaying":null,"pending":null,"playMode":"sequential","room":{"capacity":16,"description":"","id":"r","kind":"ephemeral","name":""},"seq":0,"term":1,"waiting":[]}`
 	if got := jsonOf(t, s.snapshot(empty)); got != wantEmpty {
 		t.Errorf("空房间的快照编码为\n%s\n期望\n%s", got, wantEmpty)
 	}
@@ -168,7 +168,7 @@ func TestPlayModes(t *testing.T) {
 func TestRejectedLinkIsInvalidArgument(t *testing.T) {
 	info, expected := errorInfo(fmt.Errorf("点歌：%w", &catalog.RejectedLinkError{Reason: "哔哩哔哩的番剧不能点播"}))
 	if info != (protocol.ErrorInfo{Code: protocol.ErrorCodeInvalidArgument, Message: "哔哩哔哩的番剧不能点播"}) || !expected {
-		t.Errorf("不能点的链接 = %#v, %v，期望 INVALID_ARGUMENT，message 是音源给出的原因", info, expected)
+		t.Errorf("不能点的链接 = %#v, %v，期望 INVALID_ARGUMENT，message 是音乐平台给出的原因", info, expected)
 	}
 }
 

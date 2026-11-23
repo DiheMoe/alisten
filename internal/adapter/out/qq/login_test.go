@@ -146,7 +146,7 @@ func addQQQRPollRoute(t *testing.T, routes map[string]http.HandlerFunc, response
 	}
 }
 
-func addQQQOAuthRoutes(t *testing.T, routes map[string]http.HandlerFunc, musicResponse string) {
+func addQQOAuthRoutes(t *testing.T, routes map[string]http.HandlerFunc, musicResponse string) {
 	t.Helper()
 	addQQQRPollRoute(t, routes, `ptuiCB('0','0','https://graph.qq.com/oauth2.0/login_jump','0','登录成功','')`)
 	routes["/oauth2.0/login_jump"] = func(w http.ResponseWriter, r *http.Request) {
@@ -320,7 +320,7 @@ func addMusicLoginFlowRoutes(t *testing.T, routes map[string]http.HandlerFunc, l
 		return
 	}
 	addQQQRCreateRoutes(t, routes)
-	addQQQOAuthRoutes(t, routes, musicResponse)
+	addQQOAuthRoutes(t, routes, musicResponse)
 }
 
 func parseSavedQQCookies(t *testing.T, saved string) map[string]string {
@@ -447,7 +447,7 @@ func TestQQQRLoginCompletesOAuthAndSavesSortedCookies(t *testing.T) {
 	var saved string
 	routes := map[string]http.HandlerFunc{}
 	addQQQRCreateRoutes(t, routes)
-	addQQQOAuthRoutes(t, routes, `{"code":0,"req":{"code":0,"data":{"musickey":"test","musicid":"o1","openid":"openid-1","access_token":"at-1","refresh_token":"rt-1","expired_at":1795180673,"keyExpiresIn":259200,"musickeyCreateTime":1789996673,"loginType":2,"json_extra":"keep","empty":""}}}`)
+	addQQOAuthRoutes(t, routes, `{"code":0,"req":{"code":0,"data":{"musickey":"test","musicid":"o1","openid":"openid-1","access_token":"at-1","refresh_token":"rt-1","expired_at":1795180673,"keyExpiresIn":259200,"musickeyCreateTime":1789996673,"loginType":2,"json_extra":"keep","empty":""}}}`)
 	newClient, obs := serveQQQRLogin(t, routes, func(_ context.Context, value string) error {
 		saved = value
 		return nil
@@ -828,13 +828,13 @@ func TestQQLoginMalformedLocationErrorIsSanitized(t *testing.T) {
 	checkMalformedQQLoginError(t, err, location, credential)
 }
 
-func TestQQQOAuthMalformedLocationErrorIsSanitized(t *testing.T) {
+func TestQQOAuthMalformedLocationErrorIsSanitized(t *testing.T) {
 	const credential = "fictitious-oauth-token"
 	location := "https://y.qq.com/callback/" + credential + "%zz"
 	saved := "未保存"
 	routes := map[string]http.HandlerFunc{}
 	addQQQRCreateRoutes(t, routes)
-	addQQQOAuthRoutes(t, routes, `{"code":0,"req":{"code":0,"data":{"musickey":"test","uin":"o1"}}}`)
+	addQQOAuthRoutes(t, routes, `{"code":0,"req":{"code":0,"data":{"musickey":"test","uin":"o1"}}}`)
 	routes["/oauth2.0/authorize"] = func(w http.ResponseWriter, r *http.Request) {
 		checkClientIP(t, r)
 		w.Header().Set("Location", location)
@@ -906,11 +906,11 @@ func TestQQLoginRedirectLimit(t *testing.T) {
 	}
 }
 
-type weChatEndpointTransport struct {
+type wechatEndpointTransport struct {
 	calls []string
 }
 
-func (t *weChatEndpointTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *wechatEndpointTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	t.calls = append(t.calls, req.URL.Host)
 	resp := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: http.NoBody, Request: req}
 	switch req.URL.Host {
@@ -925,7 +925,7 @@ func (t *weChatEndpointTransport) RoundTrip(req *http.Request) (*http.Response, 
 }
 
 func TestWeChatMusicLoginFallsBackAcrossEndpoints(t *testing.T) {
-	transport := &weChatEndpointTransport{}
+	transport := &wechatEndpointTransport{}
 	c := New(
 		&http.Client{Transport: transport},
 		func(context.Context) (string, error) { return "", nil },

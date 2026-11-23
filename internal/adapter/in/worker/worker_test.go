@@ -139,7 +139,7 @@ func TestWorkerReportsFinalOutcomes(t *testing.T) {
 			t.Errorf("River 的 info 日志不应输出：%s", line)
 		}
 		if entry.TrackID == "signed-out" && strings.Contains(line, "10004") {
-			t.Errorf("登录失效的日志里出现了音源的错误文本：%s", line)
+			t.Errorf("登录失效的日志里出现了音乐平台适配器的错误文本：%s", line)
 		}
 		if strings.HasPrefix(entry.Msg, "执行准备任务") || strings.HasPrefix(entry.Msg, "准备任务失败") {
 			if entry.JobID != jobs[entry.TrackID] {
@@ -148,7 +148,7 @@ func TestWorkerReportsFinalOutcomes(t *testing.T) {
 		}
 	}
 	if job, err := client.JobGet(t.Context(), jobs["rejected"]); err != nil || job.State != "cancelled" {
-		t.Errorf("被音源拒绝的任务 = %v, %v，期望直接取消", job, err)
+		t.Errorf("被音乐平台拒绝的任务 = %v, %v，期望直接取消", job, err)
 	}
 }
 

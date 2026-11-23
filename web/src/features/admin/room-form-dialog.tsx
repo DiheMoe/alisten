@@ -12,14 +12,14 @@ type PasswordChange = 'keep' | 'set' | 'remove'
 
 const slugPattern = /^[a-z0-9-]{1,32}$/
 
-// 新建时表单从 defaultCapacity 开始。默认值由服务端给出，前端不另存一份，否则服务端改了默认值，网页上建的房间仍是旧值。
-export function RoomFormDialog({ room, defaultCapacity, onSaved, onClose }: { room: RoomListing | null, defaultCapacity: number, onSaved: () => void, onClose: () => void }) {
+// 新建时表单从 persistentRoomCapacity 开始。默认值由服务端给出，前端不另存一份，否则服务端改了默认值，网页上建的房间仍是旧值。
+export function RoomFormDialog({ room, persistentRoomCapacity, onSaved, onClose }: { room: RoomListing | null, persistentRoomCapacity: number, onSaved: () => void, onClose: () => void }) {
   const [name, setName] = useState(room?.name ?? '')
   const [description, setDescription] = useState(room?.description ?? '')
   const [slug, setSlug] = useState(room?.slug ?? '')
   const [passwordChange, setPasswordChange] = useState<PasswordChange>(room ? 'keep' : 'set')
   const [password, setPassword] = useState('')
-  const [capacityDraft, setCapacityDraft] = useState(String(room?.capacity ?? defaultCapacity))
+  const [capacityDraft, setCapacityDraft] = useState(String(room?.capacity ?? persistentRoomCapacity))
   const { busy, submit } = useSubmission()
   const slugHintId = useId()
   const capacityHintId = useId()

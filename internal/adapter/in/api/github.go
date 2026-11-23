@@ -21,7 +21,7 @@ const (
 	githubAppLanding = "moe.dihe.alisten:/auth/github"
 )
 
-func (s *server) startGithubLogin(ctx context.Context, c call, req protocol.StartGithubLoginRequest) (protocol.StartGithubLoginResponse, error) {
+func (s *server) startGitHubLogin(ctx context.Context, c call, req protocol.StartGitHubLoginRequest) (protocol.StartGitHubLoginResponse, error) {
 	intent := port.GitHubLogin
 	switch req.Intent {
 	case protocol.GitHubIntentBind:
@@ -35,40 +35,40 @@ func (s *server) startGithubLogin(ctx context.Context, c call, req protocol.Star
 	}
 	url, err := s.GitHub.Authorize(ctx, c.caller.Member.ID, c.clientIP, intent, client, req.Nonce, deref(req.CurrentPassword))
 	if err != nil {
-		return protocol.StartGithubLoginResponse{}, err
+		return protocol.StartGitHubLoginResponse{}, err
 	}
-	return protocol.StartGithubLoginResponse{URL: url}, nil
+	return protocol.StartGitHubLoginResponse{URL: url}, nil
 }
 
-func (s *server) finishGithubLogin(ctx context.Context, c call, req protocol.FinishGithubLoginRequest) (protocol.FinishGithubLoginResponse, error) {
+func (s *server) finishGitHubLogin(ctx context.Context, c call, req protocol.FinishGitHubLoginRequest) (protocol.FinishGitHubLoginResponse, error) {
 	result, err := s.GitHub.Exchange(ctx, c.caller, req.Code, req.Nonce)
 	if err != nil {
-		return protocol.FinishGithubLoginResponse{}, err
+		return protocol.FinishGitHubLoginResponse{}, err
 	}
-	resp := protocol.FinishGithubLoginResponse{Member: memberDTO(result.Member), Account: accountDTO(result.Account)}
+	resp := protocol.FinishGitHubLoginResponse{Member: memberDTO(result.Member), Account: accountDTO(result.Account)}
 	if result.Session != nil {
 		resp.MemberToken = &result.Session.MemberToken
 	}
 	return resp, nil
 }
 
-func (s *server) unbindGithub(ctx context.Context, c call, req protocol.UnbindGithubRequest) error {
+func (s *server) unbindGitHub(ctx context.Context, c call, req protocol.UnbindGitHubRequest) error {
 	return s.GitHub.Unbind(ctx, c.caller.Member.ID, req.CurrentPassword)
 }
 
-func (s *server) adminGetGithubCredential(ctx context.Context, _ call) (protocol.AdminGetGithubCredentialResponse, error) {
+func (s *server) adminGetGitHubCredential(ctx context.Context, _ call) (protocol.AdminGetGitHubCredentialResponse, error) {
 	clientID, err := s.GitHub.ClientID(ctx)
 	if err != nil {
-		return protocol.AdminGetGithubCredentialResponse{}, err
+		return protocol.AdminGetGitHubCredentialResponse{}, err
 	}
-	return protocol.AdminGetGithubCredentialResponse{ClientID: optional(clientID), ClientSecretSet: clientID != "", CallbackURL: s.PublicURL + GitHubCallbackPath}, nil
+	return protocol.AdminGetGitHubCredentialResponse{ClientID: optional(clientID), ClientSecretSet: clientID != "", CallbackURL: s.PublicURL + GitHubCallbackPath}, nil
 }
 
-func (s *server) adminSetGithubCredential(ctx context.Context, _ call, req protocol.AdminSetGithubCredentialRequest) error {
+func (s *server) adminSetGitHubCredential(ctx context.Context, _ call, req protocol.AdminSetGitHubCredentialRequest) error {
 	return s.GitHub.SetOAuthApp(ctx, port.GitHubOAuthApp{ClientID: req.ClientID, ClientSecret: req.ClientSecret})
 }
 
-func (s *server) adminDeleteGithubCredential(ctx context.Context, _ call) error {
+func (s *server) adminDeleteGitHubCredential(ctx context.Context, _ call) error {
 	return s.GitHub.DeleteOAuthApp(ctx)
 }
 

@@ -26,7 +26,7 @@ type Service struct {
 	lobby *lobby.Service
 	rooms port.RoomDirectory
 	keys  port.APIKeys
-	// 扫码登录成功时由音源保存登录状态，后台只得到二维码和扫码结果。
+	// 扫码登录成功时由音乐平台适配器保存登录状态，后台只得到二维码和扫码结果。
 	netease  port.QRLoginSource
 	qq       port.QQQRLoginSource
 	bilibili port.QRLoginSource
@@ -64,11 +64,11 @@ type NewRoom struct {
 	// 空字符串表示没有别名。别名必须已经按格式校验过，因为存储按格式区分 UUID 和别名，自己不做检查。
 	Slug     string
 	Password string
-	// 为 0 时是 DefaultRoomCapacity。
+	// 为 0 时是 PersistentRoomCapacity。
 	Capacity int
 }
 
-const DefaultRoomCapacity = 64
+const PersistentRoomCapacity = 64
 
 func (s *Service) CreateRoom(ctx context.Context, r NewRoom) (string, error) {
 	hash, err := identity.HashPassword(ctx, r.Password)
@@ -77,7 +77,7 @@ func (s *Service) CreateRoom(ctx context.Context, r NewRoom) (string, error) {
 	}
 	capacity := r.Capacity
 	if capacity == 0 {
-		capacity = DefaultRoomCapacity
+		capacity = PersistentRoomCapacity
 	}
 	return s.rooms.CreateRoom(ctx, port.NewRoom{
 		Kind:         room.Persistent,
@@ -190,14 +190,14 @@ func (s *Service) SetYouTubeCookies(ctx context.Context, cookies string) error {
 	return s.youtube.SetYouTubeCookies(ctx, normalized)
 }
 
-func (s *Service) ClearYouTubeCookies(ctx context.Context) error {
+func (s *Service) ClearYouTubeCredential(ctx context.Context) error {
 	return s.youtube.SetYouTubeCookies(ctx, "")
 }
 
-func (s *Service) NeteaseCredentialStatus(ctx context.Context) (port.CredentialStatus, error) {
+func (s *Service) NetEaseCredentialStatus(ctx context.Context) (port.CredentialStatus, error) {
 	status, err := s.netease.CredentialStatus(ctx)
 	if err != nil {
-		return port.CredentialStatus{}, fmt.Errorf("查询网易云的登录状态：%w：%w", err, port.ErrProviderFailed)
+		return port.CredentialStatus{}, fmt.Errorf("查询网易云的登录状态：%w：%w", err, port.ErrSourceFailed)
 	}
 	return status, nil
 }
@@ -205,23 +205,23 @@ func (s *Service) NeteaseCredentialStatus(ctx context.Context) (port.CredentialS
 func (s *Service) QQCredentialStatus(ctx context.Context) (port.CredentialStatus, error) {
 	status, err := s.qq.CredentialStatus(ctx)
 	if err != nil {
-		return port.CredentialStatus{}, fmt.Errorf("查询 QQ 的登录状态：%w：%w", err, port.ErrProviderFailed)
+		return port.CredentialStatus{}, fmt.Errorf("查询 QQ 的登录状态：%w：%w", err, port.ErrSourceFailed)
 	}
 	return status, nil
 }
 
-func (s *Service) CreateNeteaseQRLogin(ctx context.Context) (port.QRLoginSession, error) {
+func (s *Service) CreateNetEaseQRLogin(ctx context.Context) (port.QRLoginSession, error) {
 	session, err := s.netease.CreateQRLogin(ctx)
 	if err != nil {
-		return port.QRLoginSession{}, fmt.Errorf("生成网易云的登录二维码：%w：%w", err, port.ErrProviderFailed)
+		return port.QRLoginSession{}, fmt.Errorf("生成网易云的登录二维码：%w：%w", err, port.ErrSourceFailed)
 	}
 	return session, nil
 }
 
-func (s *Service) CheckNeteaseQRLogin(ctx context.Context, key string) (port.QRLoginResult, error) {
+func (s *Service) CheckNetEaseQRLogin(ctx context.Context, key string) (port.QRLoginResult, error) {
 	result, err := s.netease.CheckQRLogin(ctx, key)
 	if err != nil {
-		return port.QRLoginResult{}, fmt.Errorf("查询网易云的扫码结果：%w：%w", err, port.ErrProviderFailed)
+		return port.QRLoginResult{}, fmt.Errorf("查询网易云的扫码结果：%w：%w", err, port.ErrSourceFailed)
 	}
 	return result, nil
 }
@@ -229,7 +229,7 @@ func (s *Service) CheckNeteaseQRLogin(ctx context.Context, key string) (port.QRL
 func (s *Service) CreateQQQRLogin(ctx context.Context, typ port.QQLoginType) (port.QRLoginSession, error) {
 	session, err := s.qq.CreateQRLogin(ctx, typ)
 	if err != nil {
-		return port.QRLoginSession{}, fmt.Errorf("生成 QQ 的登录二维码：%w：%w", err, port.ErrProviderFailed)
+		return port.QRLoginSession{}, fmt.Errorf("生成 QQ 的登录二维码：%w：%w", err, port.ErrSourceFailed)
 	}
 	return session, nil
 }
@@ -237,7 +237,7 @@ func (s *Service) CreateQQQRLogin(ctx context.Context, typ port.QQLoginType) (po
 func (s *Service) CheckQQQRLogin(ctx context.Context, typ port.QQLoginType, key string) (port.QRLoginResult, error) {
 	result, err := s.qq.CheckQRLogin(ctx, typ, key)
 	if err != nil {
-		return port.QRLoginResult{}, fmt.Errorf("查询 QQ 的扫码结果：%w：%w", err, port.ErrProviderFailed)
+		return port.QRLoginResult{}, fmt.Errorf("查询 QQ 的扫码结果：%w：%w", err, port.ErrSourceFailed)
 	}
 	return result, nil
 }
@@ -245,7 +245,7 @@ func (s *Service) CheckQQQRLogin(ctx context.Context, typ port.QQLoginType, key 
 func (s *Service) BilibiliCredentialStatus(ctx context.Context) (port.CredentialStatus, error) {
 	status, err := s.bilibili.CredentialStatus(ctx)
 	if err != nil {
-		return port.CredentialStatus{}, fmt.Errorf("查询 B 站的登录状态：%w：%w", err, port.ErrProviderFailed)
+		return port.CredentialStatus{}, fmt.Errorf("查询 B 站的登录状态：%w：%w", err, port.ErrSourceFailed)
 	}
 	return status, nil
 }
@@ -253,7 +253,7 @@ func (s *Service) BilibiliCredentialStatus(ctx context.Context) (port.Credential
 func (s *Service) CreateBilibiliQRLogin(ctx context.Context) (port.QRLoginSession, error) {
 	session, err := s.bilibili.CreateQRLogin(ctx)
 	if err != nil {
-		return port.QRLoginSession{}, fmt.Errorf("生成 B 站的登录二维码：%w：%w", err, port.ErrProviderFailed)
+		return port.QRLoginSession{}, fmt.Errorf("生成 B 站的登录二维码：%w：%w", err, port.ErrSourceFailed)
 	}
 	return session, nil
 }
@@ -261,15 +261,15 @@ func (s *Service) CreateBilibiliQRLogin(ctx context.Context) (port.QRLoginSessio
 func (s *Service) CheckBilibiliQRLogin(ctx context.Context, key string) (port.QRLoginResult, error) {
 	result, err := s.bilibili.CheckQRLogin(ctx, key)
 	if err != nil {
-		return port.QRLoginResult{}, fmt.Errorf("查询 B 站的扫码结果：%w：%w", err, port.ErrProviderFailed)
+		return port.QRLoginResult{}, fmt.Errorf("查询 B 站的扫码结果：%w：%w", err, port.ErrSourceFailed)
 	}
 	return result, nil
 }
 
-func (s *Service) YouTubeCookiesStatus(ctx context.Context) (port.YouTubeCookiesStatus, error) {
-	status, err := s.youtube.YouTubeCookiesStatus(ctx)
+func (s *Service) YouTubeCredentialStatus(ctx context.Context) (port.YouTubeCredentialStatus, error) {
+	status, err := s.youtube.YouTubeCredentialStatus(ctx)
 	if err != nil {
-		return port.YouTubeCookiesStatus{}, fmt.Errorf("查询 YouTube cookies 的状态：%w", err)
+		return port.YouTubeCredentialStatus{}, fmt.Errorf("查询 YouTube cookies 的状态：%w", err)
 	}
 	return status, nil
 }

@@ -180,7 +180,7 @@ func newWSFixtureWithTickets(t *testing.T, store *porttest.Store, tickets port.T
 		wait()
 		_ = server.Close()
 		transport.CloseIdleConnections()
-		// 音乐平台出错时接口层按设计记一条 WARN，有的场景故意让测试音源出错，所以这条不算在内。
+		// 音乐平台出错时接口层按设计记一条 WARN，有的场景故意让测试用的音乐平台出错，所以这条不算在内。
 		var unexpected strings.Builder
 		for line := range strings.Lines(logs.String()) {
 			if !strings.Contains(line, `"level":"WARN","msg":"音乐平台出错"`) {
@@ -610,7 +610,7 @@ func TestSessionRequests(t *testing.T) {
 		writeFrame(t, conn, hello(roomID, ticket))
 		self := `{"avatarHash":"","id":"` + m.ID + `","name":"` + m.Name + `"}`
 		snapshot := func(seq int) string {
-			return fmt.Sprintf(`{"term":1,"seq":%d,"room":{"id":"%s","name":"临时","description":"","kind":"ephemeral","capacity":16},"playMode":"sequential","nowPlaying":null,"pending":null,"next":null,"items":[],"members":{"sessions":[%s],"onlineCount":1}}`, seq, roomID, self)
+			return fmt.Sprintf(`{"term":1,"seq":%d,"room":{"id":"%s","name":"临时","description":"","kind":"ephemeral","capacity":16},"playMode":"sequential","nowPlaying":null,"pending":null,"next":null,"waiting":[],"members":{"sessions":[%s],"onlineCount":1}}`, seq, roomID, self)
 		}
 		// 加入时的在线列表事件已经包含在快照中，不再单独发送。
 		checkMessage(t, conn, `{"kind":"response","type":"hello","id":"h1","data":{"member":`+self+`,"serverTimeMs":1,"room":`+snapshot(1)+`}}`)

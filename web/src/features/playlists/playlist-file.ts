@@ -41,7 +41,7 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
-// 文件可以随意改写。元数据的类型不对时当作没有，由服务端决定用不用。音源和 ID 不对就认不出是哪首歌，整个文件都不导入。
+// 文件可以随意改写。元数据的类型不对时当作没有，由服务端决定用不用。来源和 ID 不对就认不出是哪首歌，整个文件都不导入。
 function importedTrack(entry: unknown): ImportedTrack | null {
   if (!isRecord(entry) || typeof entry.source !== 'string' || !sources.has(entry.source) || typeof entry.id !== 'string' || entry.id === '')
     return null
@@ -76,7 +76,7 @@ export function parsePlaylistFile(content: string): PlaylistFile | string {
   for (const [index, entry] of data.tracks.slice(0, importLimit).entries()) {
     const track = importedTrack(entry)
     if (!track)
-      return `文件里的第 ${index + 1} 首歌缺少音源或 ID，没有导入。`
+      return `文件里的第 ${index + 1} 首歌缺少来源或 ID，没有导入。`
     tracks.push(track)
   }
   return { name: text(data.name) ?? '', tracks, truncated: data.tracks.length > importLimit }

@@ -387,7 +387,7 @@ func TestRoomRoutes(t *testing.T) {
 			t.Errorf("投票 = %#v", got)
 		}
 		snapshot := decode[protocol.RoomSyncResponse](t, f.send(t, http.MethodGet, "/api/room", "", auth...)).Room
-		if snapshot.PlayMode != protocol.PlayModeRotation || snapshot.NowPlaying != nil || len(snapshot.Items) != 0 {
+		if snapshot.PlayMode != protocol.PlayModeRotation || snapshot.NowPlaying != nil || len(snapshot.Waiting) != 0 {
 			t.Errorf("房间快照 = %+v，期望轮流播放、没有正在播放和等待的歌", snapshot)
 		}
 

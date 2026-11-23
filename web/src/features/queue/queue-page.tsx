@@ -47,7 +47,7 @@ function QueueCard({ label, entry, className = '', playing = false, onSave, onRe
 export function QueuePage({ compact = false }: { compact?: boolean }) {
   const nowPlaying = useStore(roomStore, s => s.room?.nowPlaying ?? null)
   const pending = useStore(roomStore, s => s.room?.pending ?? null)
-  const items = useStore(roomStore, s => s.room?.items ?? noEntries)
+  const waiting = useStore(roomStore, s => s.room?.waiting ?? noEntries)
   const playMode = useStore(roomStore, s => s.room?.playMode ?? 'sequential')
   const connected = useStore(roomStore, s => s.status === 'open')
   const [saving, setSaving] = useState<{ track: Track, title: string } | null>(null)
@@ -57,7 +57,7 @@ export function QueuePage({ compact = false }: { compact?: boolean }) {
       <div className="section-heading">
         <h1 className={compact ? 'text-ui-base' : 'text-ui-xl'}>
           播放列表
-          <span className="text-ui-sm muted">{items.length}</span>
+          <span className="text-ui-sm muted">{waiting.length}</span>
         </h1>
         <Select
           className="queue-mode"
@@ -82,12 +82,12 @@ export function QueuePage({ compact = false }: { compact?: boolean }) {
           onRemove={{ disabled: !connected, run: () => void removeEntry(pending.id, pending.meta.title) }}
         />
       )}
-      {items.length
+      {waiting.length
         ? (
             <SongList
-              songs={items.map(songItem)}
+              songs={waiting.map(songItem)}
               actions={(song, index) => {
-                const { track } = items[index]
+                const { track } = waiting[index]
                 return [
                   { icon: ListPlus, label: saveToPlaylistLabel(song.title), secondary: true, run: async () => setSaving({ track, title: song.title }) },
                   { icon: Heart, label: `点赞${bookTitle(song.title)}`, disabled: !connected, secondary: true, run: () => likeEntry(song.key, song.title) },

@@ -215,8 +215,8 @@ describe('解绑 GitHub', () => {
 
   it('成功后账号改成没有绑定，其余不变', async () => {
     routes.set('POST /api/account/github/removals', () => new Response(null, { status: 204 }))
-    const { unbindGithub, profileStore, notifications } = await signedIn()
-    expect(await unbindGithub('correct horse')).toBe(true)
+    const { unbindGitHub, profileStore, notifications } = await signedIn()
+    expect(await unbindGitHub('correct horse')).toBe(true)
     expect(requests).toEqual([{ request: 'POST /api/account/github/removals', body: { currentPassword: 'correct horse' } }])
     expect(profileStore.state.account).toEqual({ username: 'alice', email: 'alice@example.com', github: false })
     expect(notifications()).toEqual([{ tone: 'success', message: '已解绑 GitHub' }])
@@ -224,22 +224,22 @@ describe('解绑 GitHub', () => {
 
   it('失败时给出原因，账号不变', async () => {
     routes.set('POST /api/account/github/removals', failure(401, 'INVALID_CREDENTIALS', '当前密码不对'))
-    const { unbindGithub, profileStore, notifications } = await signedIn()
-    expect(await unbindGithub('wrong')).toBe(false)
+    const { unbindGitHub, profileStore, notifications } = await signedIn()
+    expect(await unbindGitHub('wrong')).toBe(false)
     expect(profileStore.state.account).toMatchObject({ github: true })
     expect(notifications()).toEqual([{ tone: 'error', message: '当前密码不对' }])
   })
 
   it('身份更换之后提示没有解绑', async () => {
-    const { unbindGithub, notifications } = await signedIn()
+    const { unbindGitHub, notifications } = await signedIn()
     rejectIdentity('POST /api/account/github/removals')
-    expect(await unbindGithub('correct horse')).toBe(false)
+    expect(await unbindGitHub('correct horse')).toBe(false)
     expect(notifications()).toEqual([{ tone: 'error', message: '没有解绑，再试一次。' }])
   })
 
   it('没有账号时不发请求', async () => {
-    const { unbindGithub, notifications } = await load()
-    expect(await unbindGithub('correct horse')).toBe(false)
+    const { unbindGitHub, notifications } = await load()
+    expect(await unbindGitHub('correct horse')).toBe(false)
     expect(requests).toEqual([])
     expect(notifications()).toEqual([])
   })
@@ -278,7 +278,7 @@ describe('在落地页上兑换 GitHub 授权', () => {
 
   async function complete(intent: GitHubIntent) {
     const loaded = await load()
-    const result = await loaded.completeGithubLogin(landing(intent), new AbortController().signal, () => events.push('done'))
+    const result = await loaded.completeGitHubLogin(landing(intent), new AbortController().signal, () => events.push('done'))
     return { ...loaded, result }
   }
 
@@ -330,9 +330,9 @@ describe('在落地页上兑换 GitHub 授权', () => {
     ['失败', failure(503, 'UNAVAILABLE', '服务暂时不可用')],
   ])('离开落地页之后%s的结果作废', async (_, route) => {
     routes.set(exchange, route)
-    const { completeGithubLogin, profileStore, notifications } = await load()
+    const { completeGitHubLogin, profileStore, notifications } = await load()
     const leaving = new AbortController()
-    const result = completeGithubLogin(landing('login'), leaving.signal, () => events.push('done'))
+    const result = completeGitHubLogin(landing('login'), leaving.signal, () => events.push('done'))
     leaving.abort()
     expect(await result).toBeNull()
     expect(events).toEqual([])

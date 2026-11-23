@@ -1,4 +1,4 @@
-音源拒绝的歌准备失败：条目移出队列，房间广播失败的原因，不再重试。
+音乐平台拒绝的歌准备失败：条目移出队列，房间广播失败的原因，不再重试。
 
 -- request --
 POST /api/members
@@ -35,7 +35,7 @@ Authorization: Bearer $alice
   "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
   "serverTimeMs": 1,
   "room": {"term": 1, "seq": 1, "room": {"id": "$room", "name": "大厅", "description": "", "kind": "persistent", "capacity": 64},
-    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "waiting": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
 
 -- send alice --
@@ -46,7 +46,7 @@ Authorization: Bearer $alice
     "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"},
   "message": "点了《不能播放的歌》"}}
 -- receive alice --
-{"kind": "event", "type": "queue.updated", "term": 1, "seq": 3, "data": {"items": [],
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 3, "data": {"waiting": [],
   "next": null, "pending": {"id": "1", "track": {"source": "netease", "id": "404"}, "meta": {"title": "不能播放的歌", "artist": "无名", "album": "", "coverUrl": "", "pageUrl": "https://music.163.com/#/song?id=404", "durationMs": 60000},
     "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}}
 -- receive alice --
@@ -59,4 +59,4 @@ Authorization: Bearer $alice
     "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"},
   "message": "《不能播放的歌》没能准备好：网易云没有提供这首歌的播放地址"}}
 -- receive alice --
-{"kind": "event", "type": "queue.updated", "term": 1, "seq": 5, "data": {"next": null, "pending": null, "items": []}}
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 5, "data": {"next": null, "pending": null, "waiting": []}}

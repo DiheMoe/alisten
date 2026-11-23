@@ -9,7 +9,7 @@ import (
 	"github.com/dihemoe/alisten/protocol"
 )
 
-func TestAdminYouTubeCookies(t *testing.T) {
+func TestAdminYouTubeCredential(t *testing.T) {
 	cookies := porttest.NewYouTubeCookies()
 	server, _ := startAdmin(t, porttest.NewBilibiliQRLogin(), cookies)
 

@@ -19,7 +19,7 @@
         "QUEUE_FULL",
         "NOTHING_PLAYING",
         "RATE_LIMITED",
-        "PROVIDER_ERROR",
+        "SOURCE_ERROR",
         "UNAVAILABLE",
         "CLIENT_OUTDATED",
         "ROOM_FULL",
@@ -36,7 +36,7 @@
         "QUEUE_FULL": 409,
         "NOTHING_PLAYING": 409,
         "RATE_LIMITED": 429,
-        "PROVIDER_ERROR": 502,
+        "SOURCE_ERROR": 502,
         "UNAVAILABLE": 503,
         "INTERNAL": 500
       }
@@ -105,7 +105,7 @@
         "artist": {"type": "string"},
         "album": {"type": "string"},
         "coverUrl": {"type": "string"},
-        "pageUrl": {"type": "string", "description": "这首歌在音源网站上的页面，来源为 link 时是规范化之后的链接（scheme 和主机名转成小写），即曲目 ID"},
+        "pageUrl": {"type": "string", "description": "这首歌在音乐平台网站上的页面，来源为 link 时是规范化之后的链接（scheme 和主机名转成小写），即曲目 ID"},
         "durationMs": {"type": "integer", "description": "未知时为 0"}
       },
       "required": ["title", "artist", "album", "coverUrl", "pageUrl", "durationMs"]
@@ -305,10 +305,10 @@
         "nowPlaying": {"anyOf": [{"$ref": "#/$defs/NowPlaying"}, {"type": "null"}]},
         "pending": {"anyOf": [{"$ref": "#/$defs/Entry"}, {"type": "null"}], "description": "待播。没有歌在播放时，房间在等这首准备好再开播。点歌满 15 秒还没准备好、等待队列里又有准备好的歌时，它回到等待队列，先放准备好的歌"},
         "next": {"anyOf": [{"$ref": "#/$defs/NextTrack"}, {"type": "null"}], "description": "下一首。顺序和轮流模式下是等待队列里第一首没被跳过的歌，随机模式下是服务端从没被跳过的歌里提前抽好的那首。等待队列里有准备好的歌时，点歌满 15 秒还没准备好的歌会被跳过。没有歌在播放，或者下一首还没准备好时为 null"},
-        "items": {"type": "array", "items": {"$ref": "#/$defs/Entry"}, "description": "等待队列"},
+        "waiting": {"type": "array", "items": {"$ref": "#/$defs/Entry"}, "description": "等待队列"},
         "members": {"$ref": "#/$defs/Members"}
       },
-      "required": ["term", "seq", "room", "playMode", "nowPlaying", "pending", "next", "items", "members"]
+      "required": ["term", "seq", "room", "playMode", "nowPlaying", "pending", "next", "waiting", "members"]
     },
     "RoomListing": {
       "type": "object",
@@ -366,7 +366,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string", "description": "音源平台的账号 ID，用字符串避免大整数精度丢失"},
+        "id": {"type": "string", "description": "音乐平台的账号 ID，用字符串避免大整数精度丢失"},
         "name": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "账号昵称，未知时为 null"},
         "vip": {"anyOf": [{"type": "boolean"}, {"type": "null"}], "description": "会员状态，未知时为 null"},
         "verified": {"type": "boolean", "description": "是否由上游实时查询确认，仅从本地凭据识别时为 false"}
@@ -740,9 +740,9 @@
         "properties": {
           "pending": {"anyOf": [{"$ref": "#/$defs/Entry"}, {"type": "null"}], "description": "待播。没有歌在播放时，房间在等这首准备好再开播。点歌满 15 秒还没准备好、等待队列里又有准备好的歌时，它回到等待队列，先放准备好的歌"},
           "next": {"anyOf": [{"$ref": "#/$defs/NextTrack"}, {"type": "null"}], "description": "下一首。顺序和轮流模式下是等待队列里第一首没被跳过的歌，随机模式下是服务端从没被跳过的歌里提前抽好的那首。等待队列里有准备好的歌时，点歌满 15 秒还没准备好的歌会被跳过。没有歌在播放，或者下一首还没准备好时为 null"},
-          "items": {"type": "array", "items": {"$ref": "#/$defs/Entry"}}
+          "waiting": {"type": "array", "items": {"$ref": "#/$defs/Entry"}}
         },
-        "required": ["pending", "next", "items"]
+        "required": ["pending", "next", "waiting"]
       }
     },
     {
@@ -837,9 +837,9 @@
         "properties": {
           "member": {"$ref": "#/$defs/Member"},
           "account": {"$ref": "#/$defs/Account"},
-          "recordListens": {"type": "boolean", "description": "是否把在房间里听到的歌记进播放历史"}
+          "listenRecording": {"type": "boolean", "description": "是否把在房间里听到的歌记进播放历史"}
         },
-        "required": ["member", "recordListens"]
+        "required": ["member", "listenRecording"]
       }
     },
     {
@@ -867,7 +867,7 @@
     },
     {
       "name": "register",
-      "description": "游客注册账号，设置用户名和密码，成员和成员 token 都不变。站点关闭注册时返回 FORBIDDEN。只绑定了 GitHub 的账号也用 register 补设用户名和密码，不受注册开关限制。但发出请求的成员 token 要在 10 分钟内用绑定的 GitHub 确认过身份（startGithubLogin 的 verify），没有确认时返回 FORBIDDEN。这样拿到成员 token 的人就不能抢先设成自己的密码。补设成功之后这次确认作废，账号在其他设备上的成员 token 随即失效，这与修改密码相同。补设失败时确认仍然有效",
+      "description": "游客注册账号，设置用户名和密码，成员和成员 token 都不变。站点关闭注册时返回 FORBIDDEN。只绑定了 GitHub 的账号也用 register 补设用户名和密码，不受注册开关限制。但发出请求的成员 token 要在 10 分钟内用绑定的 GitHub 确认过身份（startGitHubLogin 的 verify），没有确认时返回 FORBIDDEN。这样拿到成员 token 的人就不能抢先设成自己的密码。补设成功之后这次确认作废，账号在其他设备上的成员 token 随即失效，这与修改密码相同。补设失败时确认仍然有效",
       "method": "POST",
       "path": "/api/account",
       "auth": "member",
@@ -1178,7 +1178,7 @@
     },
     {
       "name": "importMyPlatformPlaylist",
-      "description": "把平台歌单导入成一个新歌单，元数据取自平台。只收前 1000 首，重复的歌只留第一次出现的位置。歌单名不合法时返回 INVALID_ARGUMENT，不会像 importMyPlaylist 那样改用“导入的歌单”。新歌单受“最多 50 个”的限制。返回实际导入的数量。只支持网易云和 QQ 音乐，其他音源返回 INVALID_ARGUMENT",
+      "description": "把平台歌单导入成一个新歌单，元数据取自平台。只收前 1000 首，重复的歌只留第一次出现的位置。歌单名不合法时返回 INVALID_ARGUMENT，不会像 importMyPlaylist 那样改用“导入的歌单”。新歌单受“最多 50 个”的限制。返回实际导入的数量。只支持网易云和 QQ 音乐，其他音乐平台返回 INVALID_ARGUMENT",
       "method": "POST",
       "path": "/api/me/playlists/platform-imports",
       "auth": "account",
@@ -1307,9 +1307,9 @@
         "additionalProperties": false,
         "properties": {
           "items": {"type": "array", "items": {"$ref": "#/$defs/RoomListing"}},
-          "defaultCapacity": {"$ref": "#/$defs/RoomCapacity", "description": "adminCreateRoom 不填 capacity 时的人数上限"}
+          "persistentRoomCapacity": {"$ref": "#/$defs/RoomCapacity", "description": "adminCreateRoom 不填 capacity 时的人数上限"}
         },
-        "required": ["items", "defaultCapacity"]
+        "required": ["items", "persistentRoomCapacity"]
       }
     },
     {
@@ -1328,7 +1328,7 @@
           "description": {"$ref": "#/$defs/RoomDescription"},
           "slug": {"type": "string", "pattern": "^[a-z0-9-]{1,32}$"},
           "password": {"type": "string"},
-          "capacity": {"$ref": "#/$defs/RoomCapacity", "description": "房间最多能进多少人，按成员去重计算。不填时是 adminListRooms 返回的 defaultCapacity"}
+          "capacity": {"$ref": "#/$defs/RoomCapacity", "description": "房间最多能进多少人，按成员去重计算。不填时是 adminListRooms 返回的 persistentRoomCapacity"}
         },
         "required": ["name", "description"]
       },
@@ -1400,7 +1400,7 @@
       "response": {"$ref": "#/$defs/APIKey"}
     },
     {
-      "name": "adminGetNeteaseCredential",
+      "name": "adminGetNetEaseCredential",
       "description": "网易云登录凭据是否存在及账号资料，不返回 Cookie",
       "method": "GET",
       "path": "/api/admin/credentials/netease",
@@ -1417,7 +1417,7 @@
       }
     },
     {
-      "name": "adminGetQqCredential",
+      "name": "adminGetQQCredential",
       "description": "QQ 音乐的登录凭据是否存在及账号资料，不返回 Cookie",
       "method": "GET",
       "path": "/api/admin/credentials/qq",
@@ -1434,7 +1434,7 @@
       }
     },
     {
-      "name": "adminStartNeteaseLogin",
+      "name": "adminStartNetEaseLogin",
       "description": "生成网易云音乐的登录二维码",
       "method": "POST",
       "path": "/api/admin/credentials/netease/qr-logins",
@@ -1444,7 +1444,7 @@
       "response": {"$ref": "#/$defs/QRLogin"}
     },
     {
-      "name": "adminCheckNeteaseLogin",
+      "name": "adminCheckNetEaseLogin",
       "description": "查询网易云音乐扫码登录的结果",
       "method": "POST",
       "path": "/api/admin/credentials/netease/qr-logins/status",
@@ -1460,7 +1460,7 @@
       "response": {"$ref": "#/$defs/QRLoginResult"}
     },
     {
-      "name": "adminStartQqLogin",
+      "name": "adminStartQQLogin",
       "description": "生成 QQ 音乐的登录二维码，用 QQ 或微信扫码",
       "method": "POST",
       "path": "/api/admin/credentials/qq/qr-logins",
@@ -1477,7 +1477,7 @@
       "response": {"$ref": "#/$defs/QRLogin"}
     },
     {
-      "name": "adminCheckQqLogin",
+      "name": "adminCheckQQLogin",
       "description": "查询 QQ 音乐扫码登录的结果，type 与生成二维码时相同",
       "method": "POST",
       "path": "/api/admin/credentials/qq/qr-logins/status",
@@ -1537,7 +1537,7 @@
       "response": {"$ref": "#/$defs/QRLoginResult"}
     },
     {
-      "name": "adminGetYoutubeCredential",
+      "name": "adminGetYouTubeCredential",
       "description": "YouTube cookies 是否已设置及最近一次填写的时间，不返回 cookies",
       "method": "GET",
       "path": "/api/admin/credentials/youtube",
@@ -1553,7 +1553,7 @@
       }
     },
     {
-      "name": "adminSetYoutubeCredential",
+      "name": "adminSetYouTubeCredential",
       "description": "写入或覆盖 YouTube cookies，不返回 cookies",
       "method": "PUT",
       "path": "/api/admin/credentials/youtube",
@@ -1569,7 +1569,7 @@
       }
     },
     {
-      "name": "adminDeleteYoutubeCredential",
+      "name": "adminDeleteYouTubeCredential",
       "description": "清除 YouTube cookies",
       "method": "DELETE",
       "path": "/api/admin/credentials/youtube",
@@ -1577,7 +1577,7 @@
       "status": 204
     },
     {
-      "name": "adminGetGithubCredential",
+      "name": "adminGetGitHubCredential",
       "description": "GitHub 登录使用的 OAuth App：Client ID、Client Secret 是否已设置和要填进 OAuth App 的回调地址，不返回 Client Secret",
       "method": "GET",
       "path": "/api/admin/credentials/github",
@@ -1594,7 +1594,7 @@
       }
     },
     {
-      "name": "adminSetGithubCredential",
+      "name": "adminSetGitHubCredential",
       "description": "保存 GitHub 登录使用的 OAuth App，开启 GitHub 登录。Client ID 和 Client Secret 一起提交，覆盖已有的配置，立即对所有实例生效。授权进行中换了 OAuth App 时，GitHub 不认原来签发的授权码，这次登录失败",
       "method": "PUT",
       "path": "/api/admin/credentials/github",
@@ -1611,7 +1611,7 @@
       }
     },
     {
-      "name": "adminDeleteGithubCredential",
+      "name": "adminDeleteGitHubCredential",
       "description": "清除 GitHub 登录使用的 OAuth App，关闭 GitHub 登录。之后 GitHub 相关的接口返回 NOT_FOUND，已经绑定的 GitHub 保持绑定，已经登录的设备不受影响。只绑定了 GitHub 的账号没有密码，所以重新开启之前，新设备只能用已经登录的设备生成的配对码登录这个账号",
       "method": "DELETE",
       "path": "/api/admin/credentials/github",
@@ -1923,7 +1923,7 @@
       }
     },
     {
-      "name": "startGithubLogin",
+      "name": "startGitHubLogin",
       "description": "发起 GitHub 授权，返回 GitHub 的授权地址。nonce 由客户端随机生成并保存，兑换时原样带上。GitHub 授权之后跳转到 /auth/github#code=<兑换码>，失败时跳转到 /auth/github#error=<denied|expired|failed>。client 为 app 时跳转到 moe.dihe.alisten:/auth/github，片段相同。跳转目标只按发起授权时的 client 决定，state 已经过期或用过时跳转到网页的 /auth/github。如果回调时后台已经关闭了 GitHub 登录，error 为 failed。后台没有配置 GitHub OAuth App 时返回 NOT_FOUND。游客发起 bind 或 verify 时返回 FORBIDDEN。已注册的账号发起 login、已经绑定了 GitHub 的账号发起 bind、设置了密码的账号发起 verify 时返回 CONFLICT。bind 要带上当前密码，没带或不对时返回 INVALID_CREDENTIALS。要求密码是因为只凭成员 token 不能更换登录凭证，否则拿到 token 的人换上自己的 GitHub 之后，本人修改密码、后台重置密码都赶不走他",
       "method": "POST",
       "path": "/api/auth/github",
@@ -1950,7 +1950,7 @@
       }
     },
     {
-      "name": "finishGithubLogin",
+      "name": "finishGitHubLogin",
       "description": "用兑换码和发起授权时的 nonce 完成 GitHub 登录、注册或绑定，必须由发起授权的成员调用。GitHub 账号已经绑定了账号时，登录那个账号，返回账号的新成员 token，发出请求的游客 token 随即失效。GitHub 账号没有绑定过时，把这个 GitHub 账号绑到发出请求的成员上（游客即注册），成员和成员 token 都不变。verify 不修改账号，GitHub 账号要是这个账号绑定的那个，否则返回 INVALID_CREDENTIALS。verify 的确认记在发出请求的成员 token 上，要在 10 分钟内用这个 token 补设用户名和密码。兑换码过期、用过或 nonce 不对时返回 INVALID_CREDENTIALS，GitHub 账号已经绑定了其他账号时返回 CONFLICT，注册关闭时首次登录返回 FORBIDDEN，后台没有配置 GitHub OAuth App 时返回 NOT_FOUND",
       "method": "POST",
       "path": "/api/auth/github/exchange",
@@ -1976,8 +1976,8 @@
       }
     },
     {
-      "name": "unbindGithub",
-      "description": "解绑 GitHub。账号还没有设置密码时返回 CONFLICT，因为解绑之后这个账号就再也无法登录。要带上当前密码，不对时返回 INVALID_CREDENTIALS。只凭成员 token 不能更换登录凭证，理由同 startGithubLogin 的 bind。后台没有配置 GitHub OAuth App 时返回 NOT_FOUND",
+      "name": "unbindGitHub",
+      "description": "解绑 GitHub。账号还没有设置密码时返回 CONFLICT，因为解绑之后这个账号就再也无法登录。要带上当前密码，不对时返回 INVALID_CREDENTIALS。只凭成员 token 不能更换登录凭证，理由同 startGitHubLogin 的 bind。后台没有配置 GitHub OAuth App 时返回 NOT_FOUND",
       "method": "POST",
       "path": "/api/account/github/removals",
       "auth": "member",

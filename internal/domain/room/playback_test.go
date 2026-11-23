@@ -49,7 +49,7 @@ func TestSongEndRecordsPlayAndAdvances(t *testing.T) {
 	effects := r.Handle(at(3*time.Minute+time.Second), Timer{Token: r.endTimer})
 	plays := recorded(effects)
 	if len(plays) != 1 || plays[0].Entry.ID != first.Entry.ID || !plays[0].EndedAt.Equal(first.EndsAt()) {
-		t.Fatalf("播完应记录播放历史，结束时间为应播完的时间：%#v", effects)
+		t.Fatalf("播完应写入房间的播放记录，结束时间为应播完的时间：%#v", effects)
 	}
 	got := events[PlaybackChanged](effects)
 	if len(got) != 1 || got[0].Current == nil || got[0].Current.Entry.Track != netease("b") ||

@@ -36,7 +36,7 @@ Authorization: Bearer $alice
   "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
   "serverTimeMs": 1,
   "room": {"term": 1, "seq": 1, "room": {"id": "$room", "name": "大厅", "description": "", "kind": "persistent", "capacity": 64},
-    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "waiting": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
 
 -- send alice --
@@ -82,7 +82,7 @@ Authorization: Bearer $alice
     "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"},
   "message": "点了《晴天》"}}
 -- receive alice --
-{"kind": "event", "type": "queue.updated", "term": 1, "seq": 3, "data": {"items": [],
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 3, "data": {"waiting": [],
   "next": null, "pending": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269000},
     "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "preparing"}}}
 -- receive alice --
@@ -95,7 +95,7 @@ Authorization: Bearer $alice
     "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "ready"},
   "mediaUrl": "/media/netease/186016", "startedAtMs": 1, "durationMs": 269500, "gain": 1, "lyric": "[00:01.00]故事的小黄花"}}}
 -- receive alice --
-{"kind": "event", "type": "queue.updated", "term": 1, "seq": 5, "data": {"next": null, "pending": null, "items": []}}
+{"kind": "event", "type": "queue.updated", "term": 1, "seq": 5, "data": {"next": null, "pending": null, "waiting": []}}
 
 -- send alice --
 {"kind": "request", "type": "recommend.list", "id": "q8", "data": {}}
@@ -106,7 +106,7 @@ Authorization: Bearer $alice
 {"kind": "request", "type": "room.sync", "id": "s1", "data": {}}
 -- receive alice --
 {"kind": "response", "type": "room.sync", "id": "s1", "data": {"room": {"term": 1, "seq": 5, "room": {"id": "$room", "name": "大厅", "description": "", "kind": "persistent", "capacity": 64},
-  "playMode": "sequential", "next": null, "pending": null, "items": [],
+  "playMode": "sequential", "next": null, "pending": null, "waiting": [],
   "nowPlaying": {
     "entry": {"id": "1", "track": {"source": "netease", "id": "186016"}, "meta": {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "coverUrl": "https://p1.music.126.net/example.jpg", "pageUrl": "https://music.163.com/#/song?id=186016", "durationMs": 269500},
       "by": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}, "auto": false, "likes": 0, "status": "ready"},

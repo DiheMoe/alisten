@@ -477,7 +477,7 @@ func TestPlayURLAutoRefreshOutcomes(t *testing.T) {
 		}
 	})
 
-	t.Run("刷新成功但歌曲本身无版权时返回音源拒绝", func(t *testing.T) {
+	t.Run("刷新成功但歌曲本身无版权时返回音乐平台拒绝", func(t *testing.T) {
 		store := &cookieStore{value: baseCookie}
 		client, _, _ := newRefreshTestClient(t, store, func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodPost {
@@ -497,7 +497,7 @@ func TestPlayURLAutoRefreshOutcomes(t *testing.T) {
 		_, err := client.PlayURL(t.Context(), "id")
 		var rejected *port.RejectedError
 		if !errors.As(err, &rejected) {
-			t.Fatalf("刷新后仍无播放地址的错误 = %v，期望音源拒绝", err)
+			t.Fatalf("刷新后仍无播放地址的错误 = %v，期望音乐平台拒绝", err)
 		}
 	})
 

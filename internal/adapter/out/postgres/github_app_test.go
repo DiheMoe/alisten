@@ -15,7 +15,7 @@ func TestGitHubOAuthApp(t *testing.T) {
 	if app, err := store.GitHubOAuthApp(ctx); err != nil || app != (port.GitHubOAuthApp{}) {
 		t.Fatalf("没有配置时 = %#v, %v，期望零值", app, err)
 	}
-	if err := store.SetNeteaseCookie(ctx, "MUSIC_U=1"); err != nil {
+	if err := store.SetNetEaseCookie(ctx, "MUSIC_U=1"); err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []port.GitHubOAuthApp{{ClientID: "client-1", ClientSecret: "secret-1"}, {ClientID: "client-2", ClientSecret: "secret-2"}} {
@@ -67,7 +67,7 @@ func TestGitHubOAuthApp(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM credentials").Scan(&rows); err != nil {
 		t.Fatal(err)
 	}
-	if cookie, err := store.NeteaseCookie(ctx); err != nil || cookie != "MUSIC_U=1" || rows != 1 {
+	if cookie, err := store.NetEaseCookie(ctx); err != nil || cookie != "MUSIC_U=1" || rows != 1 {
 		t.Errorf("清除之后网易云 Cookie = %q, %v，凭据表有 %d 行，期望只删除 GitHub 的一行", cookie, err, rows)
 	}
 }

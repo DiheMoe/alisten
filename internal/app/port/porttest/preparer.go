@@ -23,7 +23,7 @@ type song struct {
 
 var _ port.Preparer = (*Preparer)(nil)
 
-var ErrUnknownTrack = errors.New("音源中没有这首歌")
+var ErrUnknownTrack = errors.New("音乐平台上没有这首歌")
 
 func NewPreparer() *Preparer {
 	return &Preparer{}

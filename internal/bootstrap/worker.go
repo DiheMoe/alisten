@@ -120,12 +120,12 @@ func runWorker(base *slog.Logger) (err error) {
 		return err
 	}
 	store := postgres.New(pool)
-	// 每个请求的期限由音源适配器设置。
+	// 每个请求的期限由音乐平台适配器设置。
 	upstream := &http.Client{Transport: traceHTTP(http.DefaultTransport, tracer)}
 	cookies := linkcookies.New(workDir, store.YouTubeCookies)
 	src := workerSources{
 		links:      ytdlp.New(workDir, net.DefaultResolver, cookies, observed.downloaded, base.With("component", "ytdlp")),
-		bilibili:   bilibili.New(upstream, workDir, store.BilibiliCredential, store.SetBilibiliCredential, observed.provider, base.With("component", "source")),
+		bilibili:   bilibili.New(upstream, workDir, store.BilibiliCookie, store.SetBilibiliCookie, observed.sourceRequested, base.With("component", "source")),
 		transcoder: ffmpeg.New(workDir, base.With("component", "ffmpeg")),
 	}
 	w, err := newMediaWorker(cfg, pool, rdb, src, metrics, observed, instance, tracer, base)

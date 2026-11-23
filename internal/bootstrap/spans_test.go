@@ -117,7 +117,7 @@ func TestOutboundHTTPSpans(t *testing.T) {
 	defer mu.Unlock()
 	for _, header := range traceparents {
 		if header != "" {
-			t.Errorf("音源收到了 traceparent：%q", header)
+			t.Errorf("音乐平台收到了 traceparent：%q", header)
 		}
 	}
 }

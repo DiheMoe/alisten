@@ -598,7 +598,7 @@ describe('playlistsStore', () => {
     expect(notificationStore.state.notifications.map(n => n.message)).toEqual(['最多只能建 50 个歌单'])
   })
 
-  it('resolveLink 返回音源和歌单 ID，不重新读取歌单', async () => {
+  it('resolveLink 返回音乐平台和歌单 ID，不重新读取歌单', async () => {
     const { playlistsStore } = await import('./playlists-store')
     const link = '分享歌单：通勤 https://163cn.tv/abc'
     const done = playlistsStore.resolveLink(link)

@@ -12,7 +12,7 @@ var (
 	patternAdminUpdateRoomRequestSlug = regexp.MustCompile(`^[a-z0-9-]{0,32}$`)
 	patternHelloRequestRoomID         = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 	patternTrackIDWhenLink            = regexp.MustCompile(`^https?://\S+$`)
-	patternTrackIDWhenNetease         = regexp.MustCompile(`^[0-9]+$`)
+	patternTrackIDWhenNetEase         = regexp.MustCompile(`^[0-9]+$`)
 	patternRoomID                     = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 	patternRoomRef                    = regexp.MustCompile(`^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9-]{1,32})$`)
 	patternSeat                       = regexp.MustCompile(`^[1-8]$`)
@@ -319,7 +319,7 @@ func decodeSource(raw json.RawMessage, path string) (Source, error) {
 		return "", err
 	}
 	switch v := Source(s); v {
-	case SourceNetease, SourceQQ, SourceLink:
+	case SourceNetEase, SourceQQ, SourceLink:
 		return v, nil
 	}
 	return "", invalid(path, "取值应为 netease、qq、link 之一")
@@ -348,8 +348,8 @@ func decodeTrack(raw json.RawMessage, path string) (Track, error) {
 			return v, err
 		}
 	}
-	if v.Source == SourceNetease {
-		if err = checkPattern(v.ID, field(path, "id"), patternTrackIDWhenNetease); err != nil {
+	if v.Source == SourceNetEase {
+		if err = checkPattern(v.ID, field(path, "id"), patternTrackIDWhenNetEase); err != nil {
 			return v, err
 		}
 	}

@@ -7,7 +7,7 @@ import { profileStore } from '@/core/profile'
 import { roomStore } from '@/core/room'
 import { ChatPanel } from '@/features/chat'
 import { HistoryPage } from '@/features/history'
-import { ListenPage } from '@/features/lyrics'
+import { NowPlayingPage } from '@/features/lyrics'
 import { AudioEngine, ManualStartPrompt, PlayerBar, playerStore } from '@/features/playback'
 import { MyPlaylistPage, PlaylistsPage, SharedPlaylistPage } from '@/features/playlists'
 import { QueuePage, voteSkip } from '@/features/queue'
@@ -33,7 +33,7 @@ const AdminPage = lazyPage(() => import('@/features/admin').then((module) => {
 const pageLoading = <div className="page-content"><Skeleton rows={6} /></div>
 
 const menu: { page: 'lobby' | 'settings' | 'history' | 'playlists' | RoomPage, label: string, icon: LucideIcon }[] = [
-  { page: 'listen', label: '正在播放', icon: Headphones },
+  { page: 'now-playing', label: '正在播放', icon: Headphones },
   { page: 'queue', label: '播放列表', icon: ListMusic },
   { page: 'chat', label: '房间聊天', icon: MessageCircle },
   { page: 'history', label: '播放历史', icon: History },
@@ -43,7 +43,7 @@ const menu: { page: 'lobby' | 'settings' | 'history' | 'playlists' | RoomPage, l
 ]
 
 const mobileMenu: { page: RoomPage, label: string, icon: LucideIcon }[] = [
-  { page: 'listen', label: '正在播放', icon: Headphones },
+  { page: 'now-playing', label: '正在播放', icon: Headphones },
   { page: 'queue', label: '播放列表', icon: ListMusic },
   { page: 'chat', label: '聊天', icon: MessageCircle },
 ]
@@ -101,7 +101,7 @@ function Header({ page }: { page: Page }) {
   const inRoom = useStore(roomEntryStore, s => s.phase !== 'idle')
   const joined = useStore(roomEntryStore, s => s.phase === 'joined')
   const roomName = useStore(roomEntryStore, s => s.room?.name)
-  const home = inRoom ? 'listen' : 'lobby'
+  const home = inRoom ? 'now-playing' : 'lobby'
   const menuRef = useRef<HTMLDetailsElement>(null)
   useEffect(() => {
     const dismiss = (event: PointerEvent) => {
@@ -302,7 +302,7 @@ export function App() {
   const joined = useStore(roomEntryStore, s => s.phase === 'joined')
   const songStartedAtMs = useStore(roomStore, s => s.room?.nowPlaying?.startedAtMs)
   const browse = () => navigationStore.open('lobby')
-  const showRoom = (ref: string) => navigationStore.navigate({ name: 'listen', ref, panel: null })
+  const showRoom = (ref: string) => navigationStore.navigate({ name: 'now-playing', ref, panel: null })
   // 加入房间前不显示面板，因为这时底部的切换按钮不可用，聊天视图的关闭按钮又在 RoomGate 里面，聊天面板一旦打开就关不掉。
   const shownPanel = joined && panel !== page ? panel : null
   const switchPanel = (next: Panel | null) => {
@@ -317,7 +317,7 @@ export function App() {
       navigationStore.open(target)
     }
     else if (route.name === target) {
-      navigationStore.navigate({ name: 'listen', ref: route.ref, panel: route.panel === target ? null : route.panel })
+      navigationStore.navigate({ name: 'now-playing', ref: route.ref, panel: route.panel === target ? null : route.panel })
     }
     else {
       switchPanel(panel === target ? null : target)
@@ -340,7 +340,7 @@ export function App() {
                 <Suspense fallback={pageLoading}>
                   {page === 'lobby' && <RoutedLobby onEntered={showRoom} />}
                   {page === 'admin' && <RoutedAdmin onEntered={showRoom} />}
-                  {page === 'listen' && <RoomGate onBrowse={browse}><ListenPage /></RoomGate>}
+                  {page === 'now-playing' && <RoomGate onBrowse={browse}><NowPlayingPage /></RoomGate>}
                   {page === 'queue' && <RoomGate onBrowse={browse}><QueuePage /></RoomGate>}
                   {page === 'search' && <RoomGate onBrowse={browse}><RoutedSearch /></RoomGate>}
                   {page === 'playlist' && <RoomGate onBrowse={browse}><RoutedPlaylist /></RoomGate>}
@@ -383,7 +383,7 @@ export function App() {
         <ErrorBoundary fallback={(retry, retryButton) => <section className="player-bar region-failed" aria-label="播放器"><RegionFailed message="播放器出错了" retry={retry} retryButton={retryButton} /></section>}>
           <PlayerBar
             onSkip={voteSkip}
-            onLyrics={() => navigationStore.open('listen')}
+            onLyrics={() => navigationStore.open('now-playing')}
             onQueue={() => togglePanel('queue')}
             onChat={() => togglePanel('chat')}
             queueOpen={joined && (page === 'queue' || panel === 'queue')}

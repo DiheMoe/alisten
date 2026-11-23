@@ -173,7 +173,7 @@ func TestRoomRouteDecode(t *testing.T) {
 		want    any
 		wantErr string
 	}{
-		{"搜索：查询串按字段的类型解析", search, nil, "source=netease&keyword=%E6%99%B4%E5%A4%A9&page=2&pageSize=10", "", SearchTracksRequest{Source: SourceNetease, Keyword: "晴天", Page: 2, PageSize: 10}, ""},
+		{"搜索：查询串按字段的类型解析", search, nil, "source=netease&keyword=%E6%99%B4%E5%A4%A9&page=2&pageSize=10", "", SearchTracksRequest{Source: SourceNetEase, Keyword: "晴天", Page: 2, PageSize: 10}, ""},
 		{"搜索：页码不是整数", search, nil, "source=netease&keyword=a&page=one&pageSize=10", "", nil, "page：应为整数"},
 		{"搜索：页码超出范围", search, nil, "source=netease&keyword=a&page=0&pageSize=10", "", nil, "page：不能小于 1"},
 		{"搜索：来源不是枚举中的值", search, nil, "source=apple&keyword=a&page=1&pageSize=10", "", nil, "source：取值应为 netease、qq、bilibili、link 之一"},
@@ -181,7 +181,7 @@ func TestRoomRouteDecode(t *testing.T) {
 		{"搜索：重复的参数", search, nil, "source=netease&keyword=a&page=1&page=2&pageSize=10", "", nil, "page：参数重复"},
 		{"搜索：未知参数", search, nil, "source=netease&keyword=a&page=1&pageSize=10&sort=hot", "", nil, "sort：未知参数"},
 		{"搜索：查询串格式不正确", search, nil, "keyword=%zz", "", nil, "查询串格式不正确"},
-		{"歌单：路径参数", playlist, map[string]string{"source": "netease", "playlistId": "3778678"}, "", "", PlaylistTracksRequest{Source: SourceNetease, PlaylistID: "3778678"}, ""},
+		{"歌单：路径参数", playlist, map[string]string{"source": "netease", "playlistId": "3778678"}, "", "", PlaylistTracksRequest{Source: SourceNetEase, PlaylistID: "3778678"}, ""},
 		{"歌单：路径中的来源不是枚举中的值", playlist, map[string]string{"source": "apple", "playlistId": "1"}, "", "", nil, "source：取值应为 netease、qq、bilibili、link 之一"},
 		{"删歌：DELETE 的路径参数", "DELETE /api/room/queue/{entryId}", map[string]string{"entryId": "7"}, "", "", QueueRemoveRequest{EntryID: "7"}, ""},
 		{"点赞：不带请求体", like, map[string]string{"entryId": "7"}, "", "", QueueLikeRequest{EntryID: "7"}, ""},

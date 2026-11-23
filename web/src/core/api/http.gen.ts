@@ -14,7 +14,7 @@ export interface AdminCheckBilibiliLoginRequest {
   key: string
 }
 
-export interface AdminCheckNeteaseLoginRequest {
+export interface AdminCheckNetEaseLoginRequest {
   key: string
 }
 
@@ -41,13 +41,13 @@ export interface AdminGetBilibiliCredentialResponse {
   signedOut: boolean
 }
 
-export interface AdminGetGithubCredentialResponse {
+export interface AdminGetGitHubCredentialResponse {
   callbackUrl: string
   clientId: string | null
   clientSecretSet: boolean
 }
 
-export interface AdminGetNeteaseCredentialResponse {
+export interface AdminGetNetEaseCredentialResponse {
   account: SourceAccount | null
   set: boolean
   signedOut: boolean
@@ -64,7 +64,7 @@ export interface AdminGetRoomApiKeyResponse {
   set: boolean
 }
 
-export interface AdminGetYoutubeCredentialResponse {
+export interface AdminGetYouTubeCredentialResponse {
   set: boolean
   updatedAtMs: number
 }
@@ -84,8 +84,8 @@ export interface AdminListMediaResponse {
 }
 
 export interface AdminListRoomsResponse {
-  defaultCapacity: number
   items: RoomListing[]
+  persistentRoomCapacity: number
 }
 
 export type AdminOpenRegistrationRequest = Record<string, never>
@@ -111,18 +111,18 @@ export interface AdminSetEphemeralRoomCapacityRequest {
   capacity: number
 }
 
-export interface AdminSetGithubCredentialRequest {
+export interface AdminSetGitHubCredentialRequest {
   clientId: string
   clientSecret: string
 }
 
-export interface AdminSetYoutubeCredentialRequest {
+export interface AdminSetYouTubeCredentialRequest {
   cookies: string
 }
 
 export type AdminStartBilibiliLoginRequest = Record<string, never>
 
-export type AdminStartNeteaseLoginRequest = Record<string, never>
+export type AdminStartNetEaseLoginRequest = Record<string, never>
 
 export interface AdminStartQQLoginRequest {
   type: QQLoginType
@@ -201,12 +201,12 @@ export interface CreateTicketResponse {
 
 export type EnableListenRecordingRequest = Record<string, never>
 
-export interface FinishGithubLoginRequest {
+export interface FinishGitHubLoginRequest {
   code: string
   nonce: string
 }
 
-export interface FinishGithubLoginResponse {
+export interface FinishGitHubLoginResponse {
   account: Account
   member: Member
   memberToken?: string
@@ -214,8 +214,8 @@ export interface FinishGithubLoginResponse {
 
 export interface GetMeResponse {
   account?: Account
+  listenRecording: boolean
   member: Member
-  recordListens: boolean
 }
 
 export interface GetSiteResponse {
@@ -334,18 +334,18 @@ export interface ShareMyPlaylistResponse {
   shareId: string
 }
 
-export interface StartGithubLoginRequest {
+export interface StartGitHubLoginRequest {
   client?: GitHubClient
   currentPassword?: string
   intent: GitHubIntent
   nonce: string
 }
 
-export interface StartGithubLoginResponse {
+export interface StartGitHubLoginResponse {
   url: string
 }
 
-export interface UnbindGithubRequest {
+export interface UnbindGitHubRequest {
   currentPassword: string
 }
 
@@ -406,21 +406,21 @@ export function httpClient(send: HttpSend) {
     adminDeleteRoom: (id: string) => send<void>({ method: 'DELETE', path: `/api/admin/rooms/${encodeURIComponent(id)}`, auth: 'admin' }),
     adminGetRoomApiKey: (id: string) => send<AdminGetRoomApiKeyResponse>({ method: 'GET', path: `/api/admin/rooms/${encodeURIComponent(id)}/api-key`, auth: 'admin' }),
     adminResetRoomApiKey: (id: string) => send<APIKey>({ method: 'POST', path: `/api/admin/rooms/${encodeURIComponent(id)}/api-key`, auth: 'admin', body: {} }),
-    adminGetNeteaseCredential: () => send<AdminGetNeteaseCredentialResponse>({ method: 'GET', path: '/api/admin/credentials/netease', auth: 'admin' }),
-    adminGetQqCredential: () => send<AdminGetQQCredentialResponse>({ method: 'GET', path: '/api/admin/credentials/qq', auth: 'admin' }),
-    adminStartNeteaseLogin: () => send<QRLogin>({ method: 'POST', path: '/api/admin/credentials/netease/qr-logins', auth: 'admin', body: {} }),
-    adminCheckNeteaseLogin: (body: AdminCheckNeteaseLoginRequest) => send<QRLoginResult>({ method: 'POST', path: '/api/admin/credentials/netease/qr-logins/status', auth: 'admin', body }),
-    adminStartQqLogin: (body: AdminStartQQLoginRequest) => send<QRLogin>({ method: 'POST', path: '/api/admin/credentials/qq/qr-logins', auth: 'admin', body }),
-    adminCheckQqLogin: (body: AdminCheckQQLoginRequest) => send<QRLoginResult>({ method: 'POST', path: '/api/admin/credentials/qq/qr-logins/status', auth: 'admin', body }),
+    adminGetNetEaseCredential: () => send<AdminGetNetEaseCredentialResponse>({ method: 'GET', path: '/api/admin/credentials/netease', auth: 'admin' }),
+    adminGetQQCredential: () => send<AdminGetQQCredentialResponse>({ method: 'GET', path: '/api/admin/credentials/qq', auth: 'admin' }),
+    adminStartNetEaseLogin: () => send<QRLogin>({ method: 'POST', path: '/api/admin/credentials/netease/qr-logins', auth: 'admin', body: {} }),
+    adminCheckNetEaseLogin: (body: AdminCheckNetEaseLoginRequest) => send<QRLoginResult>({ method: 'POST', path: '/api/admin/credentials/netease/qr-logins/status', auth: 'admin', body }),
+    adminStartQQLogin: (body: AdminStartQQLoginRequest) => send<QRLogin>({ method: 'POST', path: '/api/admin/credentials/qq/qr-logins', auth: 'admin', body }),
+    adminCheckQQLogin: (body: AdminCheckQQLoginRequest) => send<QRLoginResult>({ method: 'POST', path: '/api/admin/credentials/qq/qr-logins/status', auth: 'admin', body }),
     adminGetBilibiliCredential: () => send<AdminGetBilibiliCredentialResponse>({ method: 'GET', path: '/api/admin/credentials/bilibili', auth: 'admin' }),
     adminStartBilibiliLogin: () => send<QRLogin>({ method: 'POST', path: '/api/admin/credentials/bilibili/qr-logins', auth: 'admin', body: {} }),
     adminCheckBilibiliLogin: (body: AdminCheckBilibiliLoginRequest) => send<QRLoginResult>({ method: 'POST', path: '/api/admin/credentials/bilibili/qr-logins/status', auth: 'admin', body }),
-    adminGetYoutubeCredential: () => send<AdminGetYoutubeCredentialResponse>({ method: 'GET', path: '/api/admin/credentials/youtube', auth: 'admin' }),
-    adminSetYoutubeCredential: (body: AdminSetYoutubeCredentialRequest) => send<void>({ method: 'PUT', path: '/api/admin/credentials/youtube', auth: 'admin', body }),
-    adminDeleteYoutubeCredential: () => send<void>({ method: 'DELETE', path: '/api/admin/credentials/youtube', auth: 'admin' }),
-    adminGetGithubCredential: () => send<AdminGetGithubCredentialResponse>({ method: 'GET', path: '/api/admin/credentials/github', auth: 'admin' }),
-    adminSetGithubCredential: (body: AdminSetGithubCredentialRequest) => send<void>({ method: 'PUT', path: '/api/admin/credentials/github', auth: 'admin', body }),
-    adminDeleteGithubCredential: () => send<void>({ method: 'DELETE', path: '/api/admin/credentials/github', auth: 'admin' }),
+    adminGetYouTubeCredential: () => send<AdminGetYouTubeCredentialResponse>({ method: 'GET', path: '/api/admin/credentials/youtube', auth: 'admin' }),
+    adminSetYouTubeCredential: (body: AdminSetYouTubeCredentialRequest) => send<void>({ method: 'PUT', path: '/api/admin/credentials/youtube', auth: 'admin', body }),
+    adminDeleteYouTubeCredential: () => send<void>({ method: 'DELETE', path: '/api/admin/credentials/youtube', auth: 'admin' }),
+    adminGetGitHubCredential: () => send<AdminGetGitHubCredentialResponse>({ method: 'GET', path: '/api/admin/credentials/github', auth: 'admin' }),
+    adminSetGitHubCredential: (body: AdminSetGitHubCredentialRequest) => send<void>({ method: 'PUT', path: '/api/admin/credentials/github', auth: 'admin', body }),
+    adminDeleteGitHubCredential: () => send<void>({ method: 'DELETE', path: '/api/admin/credentials/github', auth: 'admin' }),
     adminListMedia: (body: AdminListMediaRequest) => send<AdminListMediaResponse>({ method: 'POST', path: '/api/admin/media/queries', auth: 'admin', body }),
     adminRemoveMedia: (body: AdminRemoveMediaRequest) => send<AdminRemoveMediaResponse>({ method: 'POST', path: '/api/admin/media/removals', auth: 'admin', body }),
     adminUpdateSite: (body: AdminUpdateSiteRequest) => send<AdminUpdateSiteResponse>({ method: 'PATCH', path: '/api/admin/site', auth: 'admin', body }),
@@ -440,8 +440,8 @@ export function httpClient(send: HttpSend) {
     copySharedPlaylist: (shareId: string, body: CopySharedPlaylistRequest) => send<MyPlaylist>({ method: 'POST', path: `/api/shared-playlists/${encodeURIComponent(shareId)}/copies`, auth: 'member', body }),
     createPairingCode: () => send<CreatePairingCodeResponse>({ method: 'POST', path: '/api/account/pairing-codes', auth: 'member', body: {} }),
     redeemPairingCode: (body: RedeemPairingCodeRequest) => send<RedeemPairingCodeResponse>({ method: 'POST', path: '/api/sessions/pairing', auth: 'member', body }),
-    startGithubLogin: (body: StartGithubLoginRequest) => send<StartGithubLoginResponse>({ method: 'POST', path: '/api/auth/github', auth: 'member', body }),
-    finishGithubLogin: (body: FinishGithubLoginRequest) => send<FinishGithubLoginResponse>({ method: 'POST', path: '/api/auth/github/exchange', auth: 'member', body }),
-    unbindGithub: (body: UnbindGithubRequest) => send<void>({ method: 'POST', path: '/api/account/github/removals', auth: 'member', body }),
+    startGitHubLogin: (body: StartGitHubLoginRequest) => send<StartGitHubLoginResponse>({ method: 'POST', path: '/api/auth/github', auth: 'member', body }),
+    finishGitHubLogin: (body: FinishGitHubLoginRequest) => send<FinishGitHubLoginResponse>({ method: 'POST', path: '/api/auth/github/exchange', auth: 'member', body }),
+    unbindGitHub: (body: UnbindGitHubRequest) => send<void>({ method: 'POST', path: '/api/account/github/removals', auth: 'member', body }),
   }
 }

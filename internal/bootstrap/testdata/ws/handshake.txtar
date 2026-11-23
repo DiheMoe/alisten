@@ -127,7 +127,7 @@ Origin: https://alisten.example
   "member": {"id": "$aliceId", "name": "$aliceName", "avatarHash": ""},
   "serverTimeMs": 1,
   "room": {"term": 1, "seq": 1, "room": {"id": "$room", "name": "临时", "description": "", "kind": "ephemeral", "capacity": 16},
-    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "items": [],
+    "playMode": "sequential", "nowPlaying": null, "next": null, "pending": null, "waiting": [],
     "members": {"sessions": [{"id": "$aliceId", "name": "$aliceName", "avatarHash": ""}], "onlineCount": 1}}}}
 -- send alice --
 {"kind": "request", "type": "hello", "id": "h2", "data": {"roomId": "$room", "ticket": "$ticket", "protocolVersion": "$protocolVersion"}}

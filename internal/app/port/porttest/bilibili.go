@@ -19,7 +19,7 @@ var (
 	_ port.YouTubeCookies = (*YouTubeCookies)(nil)
 )
 
-var ErrUnknownVideo = errors.New("音源中没有这个视频")
+var ErrUnknownVideo = errors.New("音乐平台上没有这个视频")
 
 type Bilibili struct {
 	mu       sync.Mutex
@@ -218,7 +218,7 @@ func (t *Transcoder) markReleased() {
 type YouTubeCookies struct {
 	mu      sync.Mutex
 	cookies string
-	status  port.YouTubeCookiesStatus
+	status  port.YouTubeCredentialStatus
 	failure error
 }
 
@@ -230,7 +230,7 @@ func NewYouTubeCookies() *YouTubeCookies {
 func (y *YouTubeCookies) Set(updatedAt time.Time) {
 	y.mu.Lock()
 	defer y.mu.Unlock()
-	y.status, y.failure = port.YouTubeCookiesStatus{Set: true, UpdatedAt: updatedAt}, nil
+	y.status, y.failure = port.YouTubeCredentialStatus{Set: true, UpdatedAt: updatedAt}, nil
 }
 
 func (y *YouTubeCookies) Fail(err error) {
@@ -255,11 +255,11 @@ func (y *YouTubeCookies) Cookies() string {
 	return y.cookies
 }
 
-func (y *YouTubeCookies) YouTubeCookiesStatus(context.Context) (port.YouTubeCookiesStatus, error) {
+func (y *YouTubeCookies) YouTubeCredentialStatus(context.Context) (port.YouTubeCredentialStatus, error) {
 	y.mu.Lock()
 	defer y.mu.Unlock()
 	if y.failure != nil {
-		return port.YouTubeCookiesStatus{}, y.failure
+		return port.YouTubeCredentialStatus{}, y.failure
 	}
 	return y.status, nil
 }

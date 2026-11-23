@@ -18,7 +18,7 @@ type Room struct {
 	Info        room.Info
 	Slug        string
 	HasPassword bool
-	Online      int
+	OnlineCount int
 }
 
 type NewRoom struct {
@@ -109,7 +109,7 @@ func (s *Service) listed(ctx context.Context, records []port.RoomRecord) ([]Room
 	}
 	rooms := make([]Room, len(records))
 	for i, r := range records {
-		rooms[i] = Room{Info: r.Info, Slug: r.Slug, HasPassword: r.PasswordHash != "", Online: counts[i]}
+		rooms[i] = Room{Info: r.Info, Slug: r.Slug, HasPassword: r.PasswordHash != "", OnlineCount: counts[i]}
 	}
 	return rooms, nil
 }

@@ -342,7 +342,7 @@ func runContract(t *testing.T, sections []txtar.File, databaseURL, redisURL stri
 }
 
 // 服务启动时会清理一次闲置的游客，这条日志和场景无关，不算在内。
-// 音乐平台出错时接口层按设计记一条 WARN，有的场景故意让测试音源出错，所以这条也不算在内。
+// 音乐平台出错时接口层按设计记一条 WARN，有的场景故意让测试用的音乐平台出错，所以这条也不算在内。
 func scenarioLogs(t *testing.T, logs string) string {
 	t.Helper()
 	var kept strings.Builder
@@ -352,8 +352,8 @@ func scenarioLogs(t *testing.T, logs string) string {
 			t.Fatalf("日志不是 JSON：%v\n%s", err, line)
 		}
 		cleanup := entry.Level == "INFO" && entry.Msg == "已清理闲置的游客"
-		provider := entry.Level == "WARN" && entry.Msg == "音乐平台出错"
-		if !cleanup && !provider {
+		sourceFailed := entry.Level == "WARN" && entry.Msg == "音乐平台出错"
+		if !cleanup && !sourceFailed {
 			kept.WriteString(line)
 		}
 	}

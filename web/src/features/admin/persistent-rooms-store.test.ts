@@ -24,7 +24,7 @@ function json(status: number, body: unknown): Response {
 const unavailable = { error: { code: 'UNAVAILABLE', message: '服务暂时不可用，请稍后再试。' } }
 
 async function list(): Promise<Response> {
-  const response = failReads ? json(503, unavailable) : json(200, { items: [...server], defaultCapacity: 32 })
+  const response = failReads ? json(503, unavailable) : json(200, { items: [...server], persistentRoomCapacity: 32 })
   if (holdReads)
     await new Promise<void>(resolve => release.push(resolve))
   return response
@@ -88,7 +88,7 @@ describe('常驻房间的读取', () => {
     store.open()
     expect(store.rooms.state.current).toEqual({ status: 'loading' })
     await vi.waitFor(() => expect(ids(store)).toEqual(['r1', 'r2', 'r3']))
-    expect(store.rooms.state.current).toMatchObject({ value: { defaultCapacity: 32 } })
+    expect(store.rooms.state.current).toMatchObject({ value: { persistentRoomCapacity: 32 } })
     expect(requests).toEqual(['GET /api/admin/rooms'])
   })
 
@@ -135,7 +135,7 @@ describe('常驻房间的删除', () => {
     server.push(room(4))
     expect(await store.remove('r2')).toBe(true)
     expect(ids(store)).toEqual(['r1', 'r3'])
-    expect(store.rooms.state.current).toMatchObject({ value: { defaultCapacity: 32 } })
+    expect(store.rooms.state.current).toMatchObject({ value: { persistentRoomCapacity: 32 } })
     await vi.waitFor(() => expect(release).toHaveLength(1))
     expect(requests).toEqual(['DELETE /api/admin/rooms/r2', 'GET /api/admin/rooms'])
     releaseAll()

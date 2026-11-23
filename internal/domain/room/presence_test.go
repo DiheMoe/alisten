@@ -59,7 +59,7 @@ func TestEphemeralRoomCloseEndsThePlayingSong(t *testing.T) {
 	recordAt := slices.IndexFunc(effects, func(e Effect) bool { p, ok := e.(Persist); return ok && len(p.Plays) > 0 })
 	closeAt := slices.IndexFunc(effects, func(e Effect) bool { _, ok := e.(Close); return ok })
 	if closeAt < recordAt {
-		t.Fatalf("播放记录应在关闭房间之前写入：%#v", effects)
+		t.Fatalf("房间的播放记录应在关闭房间之前写入：%#v", effects)
 	}
 }
 
@@ -178,7 +178,7 @@ func TestRejoinIsNotCheckedOrAnswered(t *testing.T) {
 			t.Fatalf("重新加入 alice 的第 %d 个连接应加入在线列表，不回复：%#v", i, effects)
 		}
 	}
-	if people, n := Headcount(r.sessions), len(r.sessions); people != 3 || n != 7 {
+	if people, n := OnlineCount(r.sessions), len(r.sessions); people != 3 || n != 7 {
 		t.Fatalf("重新加入之后有 %d 人、%d 个会话，期望 3 人、7 个会话，其中 alice 有 5 个", people, n)
 	}
 }

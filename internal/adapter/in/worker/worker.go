@@ -57,7 +57,7 @@ func (w *prepareWorker) Work(ctx context.Context, job *river.Job[prepareArgs]) e
 	case errors.As(err, &rejected):
 		return river.JobCancel(err)
 	// 登录失效时重试也没用，要等管理员重新扫码，所以直接取消。取消的原因会显示给房间里的人，
-	// 所以只用 ErrSourceSignedOut 自己的文案，不带音源的错误文本，因为那段文本可能带着凭据。
+	// 所以只用 ErrSourceSignedOut 自己的文案，不带音乐平台适配器的错误文本，因为那段文本可能带着凭据。
 	case errors.Is(err, port.ErrSourceSignedOut):
 		return river.JobCancel(port.ErrSourceSignedOut)
 	}
@@ -142,12 +142,12 @@ func periodicJobs() []*river.PeriodicJob {
 }
 
 // run 返回 *port.RejectedError 或者包装了 port.ErrSourceSignedOut 的错误时任务取消，返回其他错误时由 River 重试。
-// cleanup 返回错误时由 River 重试。refreshQQ 返回包装了 port.ErrSourceSignedOut 的错误时取消，返回其他错误时重试。
-func NewClient(pool *pgxpool.Pool, run func(context.Context, track.Track) error, cleanup func(context.Context, time.Time) error, refreshQQ func(context.Context) error, tracer trace.TracerProvider, logger *slog.Logger) (*river.Client[pgx.Tx], error) {
+// cleanup 返回错误时由 River 重试。qqRefresh 返回包装了 port.ErrSourceSignedOut 的错误时取消，返回其他错误时重试。
+func NewClient(pool *pgxpool.Pool, run func(context.Context, track.Track) error, cleanup func(context.Context, time.Time) error, qqRefresh func(context.Context) error, tracer trace.TracerProvider, logger *slog.Logger) (*river.Client[pgx.Tx], error) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, &prepareWorker{run: run})
 	river.AddWorker(workers, &cleanupWorker{run: cleanup})
-	river.AddWorker(workers, &qqRefreshWorker{run: refreshQQ})
+	river.AddWorker(workers, &qqRefreshWorker{run: qqRefresh})
 	return newClient(pool, map[string]river.QueueConfig{
 		prepareQueue:   {MaxWorkers: prepareWorkers},
 		cleanupQueue:   {MaxWorkers: cleanupWorkers},
@@ -211,7 +211,7 @@ func Watch(client *river.Client[pgx.Tx], finished func(port.PrepareOutcome), obs
 			case e.Kind == river.EventKindJobCancelled:
 				outcome.Reason = reason(e.Job)
 				observe(t.Source, "rejected", e.JobStats.RunDuration)
-				// 其他取消是音源拒绝了这首歌，属于正常的结果。登录失效要管理员处理，所以记下来。
+				// 其他取消是音乐平台拒绝了这首歌，属于正常的结果。登录失效要管理员处理，所以记下来。
 				if outcome.Reason == port.ErrSourceSignedOut.Error() {
 					logger.WarnContext(ctx, "准备任务取消，音乐平台的登录已失效", "source", t.Source, "track_id", t.ID)
 				}

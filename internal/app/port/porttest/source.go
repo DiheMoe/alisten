@@ -46,7 +46,7 @@ var (
 	_ port.PlayURLs      = (*Source)(nil)
 )
 
-var ErrUnknownSong = errors.New("音源中没有这首歌")
+var ErrUnknownSong = errors.New("音乐平台上没有这首歌")
 
 func NewSource(source track.Source) *Source {
 	return &Source{source: source, similar: map[string][]string{}}
@@ -136,7 +136,7 @@ func (s *Source) PlaylistTracks(_ context.Context, playlistID string) ([]port.So
 	}
 	i := slices.IndexFunc(s.playlists, func(p sourcePlaylist) bool { return p.playlist.ID == playlistID })
 	if i < 0 {
-		return nil, errors.New("音源中没有这个歌单")
+		return nil, errors.New("音乐平台上没有这个歌单")
 	}
 	return s.lookup(s.playlists[i].ids), nil
 }

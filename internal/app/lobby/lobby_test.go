@@ -66,12 +66,12 @@ func TestOnlineCount(t *testing.T) {
 	}
 	online := map[string]int{}
 	for _, r := range rooms {
-		online[r.Info.ID] = r.Online
+		online[r.Info.ID] = r.OnlineCount
 	}
 	if online[busy] != 2 || online[quiet] != 0 {
 		t.Errorf("在线人数 = %v，期望 %s 为 2，%s 为 0", online, busy, quiet)
 	}
-	if r, err := s.FindRoom(t.Context(), busy); err != nil || r.Online != 2 {
+	if r, err := s.FindRoom(t.Context(), busy); err != nil || r.OnlineCount != 2 {
 		t.Errorf("FindRoom = %#v, %v，期望在线人数 2", r, err)
 	}
 }

@@ -135,7 +135,7 @@ func (n *Node) Renew(_ context.Context, roomID string, ttl time.Duration) (bool,
 	return true, nil
 }
 
-func (n *Node) SetOnline(_ context.Context, roomID string, online int) (bool, error) {
+func (n *Node) SetOnlineCount(_ context.Context, roomID string, online int) (bool, error) {
 	r := n.redis
 	r.mu.Lock()
 	defer r.mu.Unlock()

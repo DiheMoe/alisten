@@ -6,12 +6,12 @@ import { useStore } from '@/shared/lib/use-store'
 import { SaveStatus, SegmentedControl } from '@/shared/ui'
 import { SettingRow, SwitchRow } from './setting-row'
 
-function RecordListensRow() {
-  const recordListens = useStore(profileStore, s => s.recordListens)
+function ListenRecordingRow() {
+  const listenRecording = useStore(profileStore, s => s.listenRecording)
   const failed = useStore(profileStore, s => s.failed)
   const account = useStore(profileStore, s => s.account)
   const id = 'settings-record-listens'
-  if (recordListens === null) {
+  if (listenRecording === null) {
     return (
       <SettingRow id={id} title="记录播放历史" description={failed ? '没有读到这项设置' : '正在读取…'} labelled={false}>
         {failed
@@ -25,8 +25,8 @@ function RecordListensRow() {
       id={id}
       title="记录播放历史"
       description={account ? '保存在服务器上，登录这个账号的设备共用' : '保存在服务器上'}
-      checked={recordListens}
-      onSave={on => profileStore.setRecordListens(on)}
+      checked={listenRecording}
+      onSave={on => profileStore.setListenRecording(on)}
     />
   )
 }
@@ -52,7 +52,7 @@ export function PrivacySettings({ onOpenHistory }: { onOpenHistory: () => void }
     <>
       <h2 className="settings-title">隐私与记录</h2>
       <div className="section-group">
-        <RecordListensRow />
+        <ListenRecordingRow />
         <button type="button" className="section-row" onClick={onOpenHistory}>
           <span className="section-row-copy">
             <span className="section-row-title">查看播放历史</span>

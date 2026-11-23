@@ -22,7 +22,7 @@ const cleanupTimeout = 10 * time.Second
 // 对象存储与页面同源时，要靠入口给 /storage/ 的响应加上 Content-Security-Policy: sandbox 和 X-Content-Type-Options: nosniff 来防范脚本。
 var coverTypes = map[string]string{"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
 
-// MediaRunner 准备音频和封面要存进对象存储的歌：链接由 yt-dlp 下载并转成 mp3，B 站的歌由音源下载原始文件，再转成 mp3。
+// MediaRunner 准备音频和封面要存进对象存储的歌：链接由 yt-dlp 下载并转成 mp3，B 站的歌由 B 站的适配器下载原始文件，再转成 mp3。
 type MediaRunner struct {
 	links      port.LinkDownloader
 	bilibili   port.BilibiliSource

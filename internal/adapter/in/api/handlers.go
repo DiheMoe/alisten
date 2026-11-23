@@ -30,7 +30,7 @@ func (s *server) getMe(ctx context.Context, c call) (protocol.GetMeResponse, err
 		dto := accountDTO(account)
 		resp.Account = &dto
 	}
-	if resp.RecordListens, err = s.Listens.Recording(ctx, c.caller.Member.ID); err != nil {
+	if resp.ListenRecording, err = s.Listens.Recording(ctx, c.caller.Member.ID); err != nil {
 		return protocol.GetMeResponse{}, err
 	}
 	return resp, nil
@@ -81,7 +81,7 @@ func (s *server) adminListRooms(ctx context.Context, _ call) (protocol.AdminList
 	if err != nil {
 		return protocol.AdminListRoomsResponse{}, err
 	}
-	return protocol.AdminListRoomsResponse{Items: listings(rooms), DefaultCapacity: admin.DefaultRoomCapacity}, nil
+	return protocol.AdminListRoomsResponse{Items: listings(rooms), PersistentRoomCapacity: admin.PersistentRoomCapacity}, nil
 }
 
 func (s *server) adminCreateRoom(ctx context.Context, _ call, req protocol.AdminCreateRoomRequest) (protocol.AdminCreateRoomResponse, string, error) {
@@ -101,12 +101,12 @@ func (s *server) adminCreateRoom(ctx context.Context, _ call, req protocol.Admin
 	return protocol.AdminCreateRoomResponse{ID: id}, "/api/rooms/" + id, nil
 }
 
-func (s *server) adminGetNeteaseCredential(ctx context.Context, _ call) (protocol.AdminGetNeteaseCredentialResponse, error) {
-	status, err := s.Admin.NeteaseCredentialStatus(ctx)
+func (s *server) adminGetNetEaseCredential(ctx context.Context, _ call) (protocol.AdminGetNetEaseCredentialResponse, error) {
+	status, err := s.Admin.NetEaseCredentialStatus(ctx)
 	if err != nil {
-		return protocol.AdminGetNeteaseCredentialResponse{}, err
+		return protocol.AdminGetNetEaseCredentialResponse{}, err
 	}
-	return protocol.AdminGetNeteaseCredentialResponse{Set: status.Set, Account: sourceAccountDTO(status.Account), SignedOut: status.SignedOut}, nil
+	return protocol.AdminGetNetEaseCredentialResponse{Set: status.Set, Account: sourceAccountDTO(status.Account), SignedOut: status.SignedOut}, nil
 }
 
 func (s *server) adminGetQQCredential(ctx context.Context, _ call) (protocol.AdminGetQQCredentialResponse, error) {
@@ -125,12 +125,12 @@ func (s *server) adminGetBilibiliCredential(ctx context.Context, _ call) (protoc
 	return protocol.AdminGetBilibiliCredentialResponse{Set: status.Set, Account: sourceAccountDTO(status.Account), SignedOut: status.SignedOut}, nil
 }
 
-func (s *server) adminGetYoutubeCredential(ctx context.Context, _ call) (protocol.AdminGetYoutubeCredentialResponse, error) {
-	status, err := s.Admin.YouTubeCookiesStatus(ctx)
+func (s *server) adminGetYouTubeCredential(ctx context.Context, _ call) (protocol.AdminGetYouTubeCredentialResponse, error) {
+	status, err := s.Admin.YouTubeCredentialStatus(ctx)
 	if err != nil {
-		return protocol.AdminGetYoutubeCredentialResponse{}, err
+		return protocol.AdminGetYouTubeCredentialResponse{}, err
 	}
-	resp := protocol.AdminGetYoutubeCredentialResponse{Set: status.Set}
+	resp := protocol.AdminGetYouTubeCredentialResponse{Set: status.Set}
 	// 零值的 UnixMilli 是负数，协议约定没有填写时为 0。
 	if !status.UpdatedAt.IsZero() {
 		resp.UpdatedAtMs = status.UpdatedAt.UnixMilli()
@@ -164,7 +164,7 @@ func listing(r lobby.Room) protocol.RoomListing {
 		Description: r.Info.Description,
 		Kind:        roomKind(r.Info.Kind),
 		HasPassword: r.HasPassword,
-		OnlineCount: int64(r.Online),
+		OnlineCount: int64(r.OnlineCount),
 		Capacity:    int64(r.Info.Capacity),
 	}
 	if r.Slug != "" {

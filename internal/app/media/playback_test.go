@@ -35,7 +35,7 @@ func (p *playURLs) PlayURL(ctx context.Context, id string) (string, error) {
 	if _, ok := ctx.Deadline(); !ok {
 		return "", errors.New("解析没有期限")
 	}
-	// 像真实的音源那样，请求的 ctx 结束了，解析就失败。
+	// 像真实的音乐平台适配器那样，请求的 ctx 结束了，解析就失败。
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
@@ -82,8 +82,8 @@ func TestPlaybackURL(t *testing.T) {
 		}
 	}
 	for _, id := range []string{"4", "5", "7"} {
-		if _, err := p.URL(t.Context(), track.Track{Source: track.NetEase, ID: id}, t0); !errors.Is(err, port.ErrProviderFailed) {
-			t.Errorf("第 %s 首 = %v，期望 ErrProviderFailed", id, err)
+		if _, err := p.URL(t.Context(), track.Track{Source: track.NetEase, ID: id}, t0); !errors.Is(err, port.ErrSourceFailed) {
+			t.Errorf("第 %s 首 = %v，期望 ErrSourceFailed", id, err)
 		}
 	}
 	if _, err := p.URL(t.Context(), track.Track{Source: track.QQ, ID: "1"}, t0); !errors.Is(err, ErrNoPlayback) {
@@ -99,7 +99,7 @@ func TestPlaybackOnlyForTracksInRooms(t *testing.T) {
 	sunny, rain := track.Track{Source: track.NetEase, ID: "1"}, track.Track{Source: track.NetEase, ID: "2"}
 
 	if _, err := p.URL(t.Context(), rain, t0); !errors.Is(err, ErrNotInRoom) || urls.count() != 0 {
-		t.Errorf("不在房间里的歌 = %v，解析了 %d 次，期望 ErrNotInRoom，不请求音源", err, urls.count())
+		t.Errorf("不在房间里的歌 = %v，解析了 %d 次，期望 ErrNotInRoom，不请求音乐平台", err, urls.count())
 	}
 	if got, err := p.URL(t.Context(), sunny, t0); err != nil || got != "https://m701.music.126.net/a.mp3" {
 		t.Errorf("房间里的歌 = %q, %v", got, err)
@@ -108,7 +108,7 @@ func TestPlaybackOnlyForTracksInRooms(t *testing.T) {
 	if _, err := p.URL(t.Context(), sunny, t0); !errors.Is(err, ErrNotInRoom) {
 		t.Errorf("移出房间之后 = %v，期望 ErrNotInRoom：复用的地址也只给房间里的歌", err)
 	}
-	if _, err := NewPlayback(sources, brokenRooms{}).URL(t.Context(), sunny, t0); !errors.Is(err, errDown) || errors.Is(err, port.ErrProviderFailed) {
+	if _, err := NewPlayback(sources, brokenRooms{}).URL(t.Context(), sunny, t0); !errors.Is(err, errDown) || errors.Is(err, port.ErrSourceFailed) {
 		t.Errorf("查不了房间时 = %v，期望原样返回存储的错误", err)
 	}
 	if n := urls.count(); n != 1 {
@@ -136,8 +136,8 @@ func TestPlaybackReusesURLForAMinute(t *testing.T) {
 	for _, id := range []string{"3", "6"} {
 		before := urls.count()
 		for range 2 {
-			if _, err := p.URL(t.Context(), track.Track{Source: track.NetEase, ID: id}, t0); !errors.Is(err, port.ErrProviderFailed) {
-				t.Errorf("第 %s 首 = %v，期望 ErrProviderFailed", id, err)
+			if _, err := p.URL(t.Context(), track.Track{Source: track.NetEase, ID: id}, t0); !errors.Is(err, port.ErrSourceFailed) {
+				t.Errorf("第 %s 首 = %v，期望 ErrSourceFailed", id, err)
 			}
 		}
 		if n := urls.count() - before; n != 2 {
@@ -271,12 +271,12 @@ func TestPlaybackWaiterLeavesWithoutStoppingResolution(t *testing.T) {
 
 type panicking struct{}
 
-func (panicking) PlayURL(context.Context, string) (string, error) { panic("音源出错了") }
+func (panicking) PlayURL(context.Context, string) (string, error) { panic("音乐平台出错了") }
 
 func TestPlaybackTurnsPanicIntoError(t *testing.T) {
 	p := NewPlayback(map[track.Source]port.PlayURLs{track.NetEase: panicking{}}, queued("1"))
 	_, err := p.URL(t.Context(), track.Track{Source: track.NetEase, ID: "1"}, t0)
-	if err == nil || !strings.Contains(err.Error(), "音源出错了") || errors.Is(err, port.ErrProviderFailed) {
-		t.Errorf("音源 panic 时 = %v，期望带着 panic 内容、不属于音源出错的错误", err)
+	if err == nil || !strings.Contains(err.Error(), "音乐平台出错了") || errors.Is(err, port.ErrSourceFailed) {
+		t.Errorf("音乐平台适配器 panic 时 = %v，期望带着 panic 内容、不属于音乐平台出错的错误", err)
 	}
 }

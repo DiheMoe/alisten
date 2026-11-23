@@ -1,20 +1,20 @@
-import type { YoutubeCredentialState } from './youtube-cookies-view'
+import type { YouTubeCredentialState } from './youtube-cookies-view'
 import { describe, expect, it } from 'vitest'
-import { canSubmitYoutubeCookies, shouldWarnAboutPlaintext, youtubeCookiesTooLarge, youtubeCookiesView } from './youtube-cookies-view'
+import { canSubmitYouTubeCookies, shouldWarnAboutPlaintext, youtubeCookiesTooLarge, youtubeCookiesView } from './youtube-cookies-view'
 
-describe('canSubmitYoutubeCookies', () => {
+describe('canSubmitYouTubeCookies', () => {
   it('空字符串和纯空白不能提交', () => {
-    expect(canSubmitYoutubeCookies('', false)).toBe(false)
-    expect(canSubmitYoutubeCookies(' \n\t ', false)).toBe(false)
+    expect(canSubmitYouTubeCookies('', false)).toBe(false)
+    expect(canSubmitYouTubeCookies(' \n\t ', false)).toBe(false)
   })
 
   it('非空内容可以提交，保存期间不能重复提交', () => {
-    expect(canSubmitYoutubeCookies('# Netscape HTTP Cookie File\n', false)).toBe(true)
-    expect(canSubmitYoutubeCookies('# Netscape HTTP Cookie File\n', true)).toBe(false)
+    expect(canSubmitYouTubeCookies('# Netscape HTTP Cookie File\n', false)).toBe(true)
+    expect(canSubmitYouTubeCookies('# Netscape HTTP Cookie File\n', true)).toBe(false)
   })
 
   it('超过 64 KiB 不能提交', () => {
-    expect(canSubmitYoutubeCookies('a'.repeat(64 * 1024), false)).toBe(false)
+    expect(canSubmitYouTubeCookies('a'.repeat(64 * 1024), false)).toBe(false)
   })
 })
 
@@ -56,7 +56,7 @@ describe('shouldWarnAboutPlaintext', () => {
 })
 
 describe('youtubeCookiesView', () => {
-  const cases: { name: string, state: YoutubeCredentialState, want: ReturnType<typeof youtubeCookiesView> }[] = [
+  const cases: { name: string, state: YouTubeCredentialState, want: ReturnType<typeof youtubeCookiesView> }[] = [
     { name: '正在查询', state: { status: 'loading' }, want: { status: '正在查询', updatedAtMs: null } },
     { name: '查询失败', state: { status: 'failed', error: '网络不通' }, want: { status: '查询失败', updatedAtMs: null } },
     { name: '未配置', state: { status: 'loaded', value: { set: false, updatedAtMs: 0 } }, want: { status: '未配置', updatedAtMs: null } },

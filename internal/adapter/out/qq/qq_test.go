@@ -184,7 +184,7 @@ func TestTrackMeta(t *testing.T) {
 	c, _ = serve(t, map[string]http.HandlerFunc{"/v8/fcg-bin/fcg_play_single_song.fcg": fixture(t, "song-detail-missing.json")})
 	var rejected *port.RejectedError
 	if _, err := c.TrackMeta(t.Context(), "000000000000xx"); !errors.As(err, &rejected) {
-		t.Errorf("不存在的歌的错误 = %v，期望音源拒绝", err)
+		t.Errorf("不存在的歌的错误 = %v，期望音乐平台拒绝", err)
 	}
 }
 

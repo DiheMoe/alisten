@@ -16,8 +16,8 @@ async function copyCallbackUrl(url: string): Promise<void> {
     notificationStore.info(`请手动复制回调地址：${url}`, 8000)
 }
 
-export function GithubApp() {
-  const credential = useResource(() => adminStore.attempt(() => api.adminGetGithubCredential()))
+export function GitHubApp() {
+  const credential = useResource(() => adminStore.attempt(() => api.adminGetGitHubCredential()))
   // null 表示沿用已保存的 Client ID。
   const [clientId, setClientId] = useState<string | null>(null)
   // 服务端不返回已保存的 Client Secret，而它必须和 Client ID 一起提交，所以每次保存都要重新填写。
@@ -38,7 +38,7 @@ export function GithubApp() {
   const save = async () => {
     if (draft === null)
       return
-    const saved = await adminStore.call(() => api.adminSetGithubCredential(draft), { INVALID_ARGUMENT: 'Client ID 和 Client Secret 只能包含字母、数字、点、下划线和连字符，请从 GitHub 重新复制。' })
+    const saved = await adminStore.call(() => api.adminSetGitHubCredential(draft), { INVALID_ARGUMENT: 'Client ID 和 Client Secret 只能包含字母、数字、点、下划线和连字符，请从 GitHub 重新复制。' })
     if (saved === null)
       return
     refetch()
@@ -101,7 +101,7 @@ export function GithubApp() {
           confirmLabel="关闭"
           danger
           onConfirm={async () => {
-            if (await adminStore.call(() => api.adminDeleteGithubCredential()) === null)
+            if (await adminStore.call(() => api.adminDeleteGitHubCredential()) === null)
               return
             setClosing(false)
             refetch()

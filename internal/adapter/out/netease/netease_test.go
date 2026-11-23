@@ -238,7 +238,7 @@ func TestTrackMeta(t *testing.T) {
 	c, _ = serve(t, map[string]http.HandlerFunc{"/weapi/v3/song/detail": fixture(t, "song-detail-missing.json")})
 	var rejected *port.RejectedError
 	if _, err := c.TrackMeta(t.Context(), "1"); !errors.As(err, &rejected) {
-		t.Errorf("不存在的歌的错误 = %v，期望音源拒绝", err)
+		t.Errorf("不存在的歌的错误 = %v，期望音乐平台拒绝", err)
 	}
 }
 
@@ -383,7 +383,7 @@ func trialClip() http.HandlerFunc {
 	return body(`{"data":[{"id":3387653989,"url":"http://m801.music.126.net` + audioPath + `?trial=1","br":320000,"code":200,"freeTrialInfo":{"start":0,"end":30},"fee":1}],"code":200}`)
 }
 
-// 试听片段不是完整的歌，按音源拒绝处理且不发起音频下载。
+// 试听片段不是完整的歌，按音乐平台拒绝处理且不发起音频下载。
 func TestTrialClipIsRejectedWithoutDownloading(t *testing.T) {
 	missing := fixture(t, "play-url-missing.json")
 	for _, tt := range []struct {
@@ -403,7 +403,7 @@ func TestTrialClipIsRejectedWithoutDownloading(t *testing.T) {
 			_, err := c.Resolve(t.Context(), "3387653989")
 			var rejected *port.RejectedError
 			if !errors.As(err, &rejected) || err.Error() != "这首歌需要网易云会员账号才能完整播放，请管理员在后台设置会员账号的 Cookie" {
-				t.Errorf("试听片段的错误 = %v，期望音源拒绝并说明需要会员账号", err)
+				t.Errorf("试听片段的错误 = %v，期望音乐平台拒绝并说明需要会员账号", err)
 			}
 		})
 	}
@@ -439,7 +439,7 @@ func TestResolveRejectsSongWithoutURL(t *testing.T) {
 	c, _ := serve(t, routes)
 	var rejected *port.RejectedError
 	if _, err := c.Resolve(t.Context(), "3387653989"); !errors.As(err, &rejected) || err.Error() != "网易云没有提供这首歌的播放地址" {
-		t.Errorf("没有播放地址时的错误 = %v，期望音源拒绝", err)
+		t.Errorf("没有播放地址时的错误 = %v，期望音乐平台拒绝", err)
 	}
 }
 

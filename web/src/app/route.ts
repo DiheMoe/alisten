@@ -6,7 +6,7 @@ import { MediaSortValues } from '@/core/realtime'
 import { defaultSearchSource, isSearchSource, keywordSearch } from '@/features/search'
 import { adminSections, settingsSections } from './page-paths'
 
-export type RoomPage = 'listen' | 'queue' | 'chat'
+export type RoomPage = 'now-playing' | 'queue' | 'chat'
 export type Panel = 'queue' | 'history' | 'chat'
 
 // panel 是宽屏右侧的侧栏，和当前页面相同时不显示。
@@ -132,7 +132,7 @@ export function parseRoute({ pathname, search, hash }: Pick<Location, 'pathname'
   const [, ref, subpath = ''] = room
   switch (subpath) {
     case '':
-      return { name: 'listen', ref, panel }
+      return { name: 'now-playing', ref, panel }
     case '/queue':
       return { name: 'queue', ref, panel }
     case '/chat':
@@ -163,7 +163,7 @@ function pathOf(route: Route): string {
       return '/pair'
     case 'github-login':
       return '/auth/github'
-    case 'listen':
+    case 'now-playing':
       return `/r/${route.ref}`
     case 'playlist':
       return `/r/${route.ref}/playlists/${route.source}/${route.id}`

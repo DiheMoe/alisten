@@ -223,7 +223,7 @@ func TestImportPlatform(t *testing.T) {
 	items, err := f.svc.Items(t.Context(), alice, p.ID)
 	want := []port.PlaylistItem{{Track: netease("185811"), Meta: sevenMeta}, {Track: sunny, Meta: sunnyMeta}}
 	if err != nil || !slices.Equal(items, want) {
-		t.Errorf("导入的曲目 = %#v, %v\n期望与平台同序、用音源的元数据 %#v", items, err, want)
+		t.Errorf("导入的曲目 = %#v, %v\n期望与平台同序、用音乐平台的元数据 %#v", items, err, want)
 	}
 	if want := []string{"playlist-import:member:" + alice.MemberID()}; !slices.Equal(f.quota.keys, want) || f.quota.burst != 10 || f.quota.refill != 6*time.Minute {
 		t.Errorf("额度 = %v（突发 %d，每 %v 恢复 1 次），期望 %v（突发 10，每 6 分钟恢复 1 次）", f.quota.keys, f.quota.burst, f.quota.refill, want)
@@ -281,8 +281,8 @@ func TestImportPlatformRejects(t *testing.T) {
 	if len(f.quota.keys) != 0 {
 		t.Errorf("被拒绝的请求不应取额度：%v", f.quota.keys)
 	}
-	if _, _, err := f.svc.ImportPlatform(t.Context(), alice, "不存在", track.NetEase, "missing"); !errors.Is(err, port.ErrProviderFailed) {
-		t.Errorf("音源里没有的歌单 = %v，期望 ErrProviderFailed", err)
+	if _, _, err := f.svc.ImportPlatform(t.Context(), alice, "不存在", track.NetEase, "missing"); !errors.Is(err, port.ErrSourceFailed) {
+		t.Errorf("音乐平台上没有的歌单 = %v，期望 ErrSourceFailed", err)
 	}
 	for i := range 49 {
 		if _, err := f.svc.Create(t.Context(), alice, "歌单"+strconv.Itoa(i)); err != nil {

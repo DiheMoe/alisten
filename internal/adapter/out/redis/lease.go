@@ -47,7 +47,7 @@ redis.call('PEXPIRE', KEYS[1], ARGV[2])
 redis.call('PEXPIRE', KEYS[2], ARGV[2])
 return 1`)
 
-	setOnlineScript = goredis.NewScript(`
+	setOnlineCountScript = goredis.NewScript(`
 if redis.call('GET', KEYS[1]) ~= ARGV[1] then
 	return 0
 end
@@ -77,8 +77,8 @@ func (l *Leases) Renew(ctx context.Context, roomID string, ttl time.Duration) (b
 	return n == 1, nil
 }
 
-func (l *Leases) SetOnline(ctx context.Context, roomID string, online int) (bool, error) {
-	n, err := setOnlineScript.Run(ctx, l.client, []string{ownerKey(roomID), onlineKey(roomID)}, l.instance, online).Int()
+func (l *Leases) SetOnlineCount(ctx context.Context, roomID string, online int) (bool, error) {
+	n, err := setOnlineCountScript.Run(ctx, l.client, []string{ownerKey(roomID), onlineKey(roomID)}, l.instance, online).Int()
 	if err != nil {
 		return false, fmt.Errorf("写入房间 %s 的在线人数：%w", roomID, err)
 	}

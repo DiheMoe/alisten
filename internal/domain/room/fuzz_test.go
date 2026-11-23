@@ -392,10 +392,10 @@ func checkJoin(t *testing.T, r *Room, before []Session, in Join, effects []Effec
 			mine++
 		}
 	}
-	admissible := mine < maxSessionsPerMember && (mine > 0 || Headcount(before) < r.info.Capacity)
+	admissible := mine < maxSessionsPerMember && (mine > 0 || OnlineCount(before) < r.info.Capacity)
 	if replies[0].Err == nil {
 		if !admissible {
-			t.Fatalf("%s 有 %d 个会话，在线 %d 人，上限 %d，不应被接受", in.Member.ID, mine, Headcount(before), r.info.Capacity)
+			t.Fatalf("%s 有 %d 个会话，在线 %d 人，上限 %d，不应被接受", in.Member.ID, mine, OnlineCount(before), r.info.Capacity)
 		}
 		if !slices.Equal(r.sessions, append(slices.Clone(before), Session{ID: in.Session, Member: in.Member})) {
 			t.Fatalf("回复了 Done，会话 %s 应加在在线列表的最后：%#v", in.Session, r.sessions)
@@ -410,11 +410,11 @@ func checkJoin(t *testing.T, r *Room, before []Session, in Join, effects []Effec
 		t.Fatalf("被拒的 Join 应回复 %d，不改在线列表：%#v", refusal, effects)
 	}
 	if admissible {
-		t.Fatalf("%s 有 %d 个会话，在线 %d 人，上限 %d，不应被拒：%v", in.Member.ID, mine, Headcount(before), r.info.Capacity, replies[0].Err)
+		t.Fatalf("%s 有 %d 个会话，在线 %d 人，上限 %d，不应被拒：%v", in.Member.ID, mine, OnlineCount(before), r.info.Capacity, replies[0].Err)
 	}
 }
 
-// 听歌记录只记正在播放的歌和在线的成员，排在落盘之后、广播之前。
+// 播放历史只记正在播放的歌和在线的成员，排在落盘之后、广播之前。
 func checkListen(t *testing.T, r *Room, effects []Effect) {
 	t.Helper()
 	i := slices.IndexFunc(effects, func(e Effect) bool { _, ok := e.(RecordListen); return ok })

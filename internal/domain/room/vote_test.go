@@ -40,13 +40,13 @@ func TestVoteSkipCountsPeopleNotConnections(t *testing.T) {
 	}
 }
 
-func TestHeadcountCountsEachMemberOnce(t *testing.T) {
+func TestOnlineCountCountsEachMemberOnce(t *testing.T) {
 	sessions := []Session{{ID: "a1", Member: alice}, {ID: "a2", Member: alice}, {ID: "b1", Member: bob}}
-	if got := Headcount(sessions); got != 2 {
-		t.Fatalf("Headcount = %d，期望 2", got)
+	if got := OnlineCount(sessions); got != 2 {
+		t.Fatalf("OnlineCount = %d，期望 2", got)
 	}
-	if got := Headcount(nil); got != 0 {
-		t.Fatalf("没有会话时 Headcount = %d，期望 0", got)
+	if got := OnlineCount(nil); got != 0 {
+		t.Fatalf("没有会话时 OnlineCount = %d，期望 0", got)
 	}
 }
 

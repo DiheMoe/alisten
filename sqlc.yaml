@@ -11,6 +11,8 @@ sql:
         omit_unused_structs: true
         emit_pointers_for_null_types: true
         initialisms: [id, url]
+        rename:
+          github_id: GitHubID
         overrides:
           - db_type: uuid
             go_type: string

@@ -17,7 +17,7 @@ function snapshot(term: number, seq: number, name: string): RoomSnapshot {
     nowPlaying: null,
     pending: null,
     next: null,
-    items: [],
+    waiting: [],
     members: { sessions: [], onlineCount: 0 },
   }
 }

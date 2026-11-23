@@ -32,7 +32,7 @@ var (
 	ErrUnsupported = errors.New("这个来源不支持这项操作。")
 )
 
-// RejectedLinkError 表示链接属于某个音源，但不能点播，例如 B 站的番剧和直播。RejectedLinkError 的文本就是返回给点歌人的原因。
+// RejectedLinkError 表示链接属于某个音乐平台，但不能点播，例如 B 站的番剧和直播。RejectedLinkError 的文本就是返回给点歌人的原因。
 type RejectedLinkError struct {
 	Reason string
 }
@@ -117,7 +117,7 @@ func (s *Service) RecommendList(ctx context.Context, roomID string) ([]port.Song
 	}
 	songs, err := s.candidates(ctx, roomID, true)
 	switch {
-	case errors.Is(err, port.ErrProviderFailed):
+	case errors.Is(err, port.ErrSourceFailed):
 		// 调用方放弃了请求时，上游的错误多半只是请求被取消，不记日志。
 		if ctx.Err() == nil {
 			s.logger.Log(ctx, s.recommendWarned.Level(), "获取推荐列表失败，返回空列表", "error", err)
@@ -154,7 +154,7 @@ func (s *Service) TrackMeta(ctx context.Context, t track.Track) (track.Meta, err
 	return m, nil
 }
 
-// B 站的链接转成 B 站音源的曲目，其他链接仍是链接曲目。链接曲目准备完成后才有元数据，在此之前以链接本身作为标题。
+// B 站的链接转成来源为 bilibili 的曲目，其他链接仍是链接曲目。链接曲目准备完成后才有元数据，在此之前以链接本身作为标题。
 func (s *Service) ResolveLink(ctx context.Context, link string) (track.Track, track.Meta, error) {
 	id, ok, err := s.links.Recognize(ctx, link)
 	var rejected *port.RejectedError
@@ -167,7 +167,7 @@ func (s *Service) ResolveLink(ctx context.Context, link string) (track.Track, tr
 		return track.Track{Source: track.Link, ID: link}, track.Meta{Title: link, PageURL: link}, nil
 	}
 	if _, _, valid := track.ParseBilibiliID(id); !valid {
-		return track.Track{}, track.Meta{}, fmt.Errorf("哔哩哔哩认出的曲目 ID %q 格式不对：%w", id, port.ErrProviderFailed)
+		return track.Track{}, track.Meta{}, fmt.Errorf("哔哩哔哩认出的曲目 ID %q 格式不对：%w", id, port.ErrSourceFailed)
 	}
 	t := track.Track{Source: track.Bilibili, ID: id}
 	m, err := s.TrackMeta(ctx, t)
@@ -326,7 +326,7 @@ func unsupported(source track.Source, what string) error {
 }
 
 func upstream(source track.Source, what string, err error) error {
-	return fmt.Errorf("在%s%s：%w：%w", source, what, err, port.ErrProviderFailed)
+	return fmt.Errorf("在%s%s：%w：%w", source, what, err, port.ErrSourceFailed)
 }
 
 // page 从 1 开始，size 至少为 1。page 和 size 都来自客户端，乘积可能溢出。

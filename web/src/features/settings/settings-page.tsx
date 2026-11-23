@@ -30,7 +30,7 @@ export function SettingsPage({ section, onSection, onOpenHistory }: {
     level: useStore(performanceStore, s => s.level),
     volume: useStore(volumeStore, s => s.volume),
     muted: useStore(volumeStore, s => s.muted),
-    recordListens: useStore(profileStore, s => s.recordListens),
+    listenRecording: useStore(profileStore, s => s.listenRecording),
   })
   // 资料的读取失败由各分类就地显示。
   useEffect(() => {

@@ -122,12 +122,12 @@ func TestSetYouTubeCookies(t *testing.T) {
 	}
 }
 
-func TestClearYouTubeCookies(t *testing.T) {
+func TestClearYouTubeCredential(t *testing.T) {
 	f := newService(t, "secret")
 	if err := f.admin.SetYouTubeCookies(t.Context(), "session=fictional"); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.admin.ClearYouTubeCookies(t.Context()); err != nil {
+	if err := f.admin.ClearYouTubeCredential(t.Context()); err != nil {
 		t.Fatalf("清除 cookies：%v", err)
 	}
 	if got := f.youtube.Cookies(); got != "" {
@@ -136,7 +136,7 @@ func TestClearYouTubeCookies(t *testing.T) {
 
 	failure := errors.New("删除失败")
 	f.youtube.Fail(failure)
-	if err := f.admin.ClearYouTubeCookies(t.Context()); !errors.Is(err, failure) {
+	if err := f.admin.ClearYouTubeCredential(t.Context()); !errors.Is(err, failure) {
 		t.Errorf("删除失败时的错误 = %v，期望透传 %v", err, failure)
 	}
 }
@@ -243,8 +243,8 @@ func TestUpdateRoomCapacity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if view := res.(room.SyncResult).View; view.Snapshot.Info.Capacity != 2 || room.Headcount(view.Sessions) != 3 {
-		t.Errorf("上限调到 2 之后，房间的上限 = %d，在线 %d 人，期望上限 2、3 个人都还在", view.Snapshot.Info.Capacity, room.Headcount(view.Sessions))
+	if view := res.(room.SyncResult).View; view.Snapshot.Info.Capacity != 2 || room.OnlineCount(view.Sessions) != 3 {
+		t.Errorf("上限调到 2 之后，房间的上限 = %d，在线 %d 人，期望上限 2、3 个人都还在", view.Snapshot.Info.Capacity, room.OnlineCount(view.Sessions))
 	}
 }
 
@@ -417,7 +417,7 @@ func TestCredentialStatus(t *testing.T) {
 		fail      func(error)
 		account   *port.SourceAccount
 	}{
-		{"网易云", f.admin.NeteaseCredentialStatus, f.netease.SetCredential, f.netease.SetSignedOut, f.netease.FailStatus, &port.SourceAccount{ID: "123", Name: &name, VIP: &vip, Verified: true}},
+		{"网易云", f.admin.NetEaseCredentialStatus, f.netease.SetCredential, f.netease.SetSignedOut, f.netease.FailStatus, &port.SourceAccount{ID: "123", Name: &name, VIP: &vip, Verified: true}},
 		{"QQ", f.admin.QQCredentialStatus, f.qq.SetCredential, f.qq.SetSignedOut, f.qq.FailStatus, &port.SourceAccount{ID: "456"}},
 		{"B 站", f.admin.BilibiliCredentialStatus, f.bilibili.SetCredential, f.bilibili.SetSignedOut, f.bilibili.FailStatus, &port.SourceAccount{ID: "789", Name: &name, VIP: &vip, Verified: true}},
 	} {
@@ -438,8 +438,8 @@ func TestCredentialStatus(t *testing.T) {
 			}
 			upstream := errors.New("上游失败")
 			source.fail(upstream)
-			if _, err := source.status(t.Context()); !errors.Is(err, port.ErrProviderFailed) || !errors.Is(err, upstream) {
-				t.Fatalf("查询登录状态失败 = %v，期望包含上游错误和 ErrProviderFailed", err)
+			if _, err := source.status(t.Context()); !errors.Is(err, port.ErrSourceFailed) || !errors.Is(err, upstream) {
+				t.Fatalf("查询登录状态失败 = %v，期望包含上游错误和 ErrSourceFailed", err)
 			}
 		})
 	}
@@ -447,19 +447,19 @@ func TestCredentialStatus(t *testing.T) {
 
 func TestQRLogin(t *testing.T) {
 	f := newService(t, "secret")
-	netease, err := f.admin.CreateNeteaseQRLogin(t.Context())
+	netease, err := f.admin.CreateNetEaseQRLogin(t.Context())
 	if err != nil || netease.Key == "" || netease.LoginURL == "" {
 		t.Fatalf("网易云的二维码 = %+v, %v", netease, err)
 	}
 	scanned := port.QRLoginResult{Status: port.QRLoginScanned, Message: "请在手机上确认"}
 	f.netease.SetResult(netease.Key, scanned)
-	if got, err := f.admin.CheckNeteaseQRLogin(t.Context(), netease.Key); err != nil || got != scanned {
+	if got, err := f.admin.CheckNetEaseQRLogin(t.Context(), netease.Key); err != nil || got != scanned {
 		t.Errorf("网易云的扫码结果 = %+v, %v，期望 %+v", got, err, scanned)
 	}
 
 	wx, err := f.admin.CreateQQQRLogin(t.Context(), port.QQLoginWeChat)
 	if err != nil || wx.QRImage != porttest.WeChatQRImage {
-		t.Fatalf("微信扫码的二维码 = %+v, %v，期望音源给出的微信二维码", wx, err)
+		t.Fatalf("微信扫码的二维码 = %+v, %v，期望音乐平台给出的微信二维码", wx, err)
 	}
 	for typ, want := range map[port.QQLoginType]port.QRLoginStatus{port.QQLoginWeChat: port.QRLoginWaiting, port.QQLoginQQ: port.QRLoginExpired} {
 		if got, err := f.admin.CheckQQQRLogin(t.Context(), typ, wx.Key); err != nil || got.Status != want {
@@ -470,13 +470,13 @@ func TestQRLogin(t *testing.T) {
 	f.netease.Fail(errors.New("连接被重置"))
 	f.qq.Fail(errors.New("连接被重置"))
 	for name, call := range map[string]func() error{
-		"生成网易云的二维码":   func() error { _, err := f.admin.CreateNeteaseQRLogin(t.Context()); return err },
-		"查询网易云的扫码结果":  func() error { _, err := f.admin.CheckNeteaseQRLogin(t.Context(), netease.Key); return err },
+		"生成网易云的二维码":   func() error { _, err := f.admin.CreateNetEaseQRLogin(t.Context()); return err },
+		"查询网易云的扫码结果":  func() error { _, err := f.admin.CheckNetEaseQRLogin(t.Context(), netease.Key); return err },
 		"生成 QQ 的二维码":  func() error { _, err := f.admin.CreateQQQRLogin(t.Context(), port.QQLoginQQ); return err },
 		"查询 QQ 的扫码结果": func() error { _, err := f.admin.CheckQQQRLogin(t.Context(), port.QQLoginWeChat, wx.Key); return err },
 	} {
-		if err := call(); !errors.Is(err, port.ErrProviderFailed) {
-			t.Errorf("音源出错时%s = %v，期望 ErrProviderFailed", name, err)
+		if err := call(); !errors.Is(err, port.ErrSourceFailed) {
+			t.Errorf("音乐平台出错时%s = %v，期望 ErrSourceFailed", name, err)
 		}
 	}
 }
@@ -497,8 +497,8 @@ func TestBilibiliQRLogin(t *testing.T) {
 		"生成 B 站的二维码":  func() error { _, err := f.admin.CreateBilibiliQRLogin(t.Context()); return err },
 		"查询 B 站的扫码结果": func() error { _, err := f.admin.CheckBilibiliQRLogin(t.Context(), session.Key); return err },
 	} {
-		if err := call(); !errors.Is(err, port.ErrProviderFailed) {
-			t.Errorf("音源出错时%s = %v，期望 ErrProviderFailed", name, err)
+		if err := call(); !errors.Is(err, port.ErrSourceFailed) {
+			t.Errorf("音乐平台出错时%s = %v，期望 ErrSourceFailed", name, err)
 		}
 	}
 }

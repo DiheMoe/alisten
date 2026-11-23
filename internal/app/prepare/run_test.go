@@ -187,7 +187,7 @@ func TestRunRejects(t *testing.T) {
 	source.Reject("186016", "网易云没有提供这首歌的播放地址")
 	var rejected *port.RejectedError
 	if _, err := run(t, source, sunny); !errors.As(err, &rejected) || err.Error() != "网易云没有提供这首歌的播放地址" {
-		t.Errorf("音源拒绝时的错误 = %v", err)
+		t.Errorf("音乐平台拒绝时的错误 = %v", err)
 	}
 	for _, tr := range []track.Track{{Source: track.Link, ID: "https://www.youtube.com/watch?v=x"}, {Source: track.NetEase}} {
 		if _, err := run(t, source, tr); !errors.As(err, &rejected) {

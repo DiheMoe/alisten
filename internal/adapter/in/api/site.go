@@ -18,7 +18,7 @@ func (s *server) getSite(ctx context.Context, _ call) (protocol.GetSiteResponse,
 	return protocol.GetSiteResponse{
 		BrandName:             settings.BrandName,
 		RegistrationOpen:      settings.RegistrationOpen,
-		GithubLogin:           githubClientID != "",
+		GitHubLogin:           githubClientID != "",
 		EphemeralRoomCapacity: int64(settings.EphemeralRoomCapacity),
 	}, nil
 }
