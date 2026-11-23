@@ -179,7 +179,7 @@ export function Lyrics() {
                   {line.translation && <span className="lyric-translation">{line.translation}</span>}
                 </p>
               ))
-          : <EmptyState icon={AlignLeft} title="歌词随音乐浮现">播放带有歌词的歌曲时，会在这里同步显示。</EmptyState>}
+          : <EmptyState icon={AlignLeft} title="暂无歌词" />}
       </div>
     </section>
   )

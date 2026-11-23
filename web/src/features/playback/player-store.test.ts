@@ -332,7 +332,7 @@ describe('自动播放被拒绝', () => {
     expect(playerStore.state.needsGesture).toBe(false)
   })
 
-  it('稍后播放只关掉提示', async () => {
+  it('选择稍后时只关掉提示', async () => {
     const playerStore = await attached()
     audio.playError = new DOMException('blocked', 'NotAllowedError')
     setPlaying(song('a'))

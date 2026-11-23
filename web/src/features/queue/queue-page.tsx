@@ -97,9 +97,7 @@ export function QueuePage({ compact = false }: { compact?: boolean }) {
             />
           )
         : !pending && (
-            <EmptyState icon={ListMusic} title={nowPlaying ? '后面还没有歌' : '播放列表还是空的'}>
-              每个人都可以点歌，一起决定下一首。
-            </EmptyState>
+            <EmptyState icon={ListMusic} title={nowPlaying ? '后面还没有歌' : '播放列表还是空的'} />
           )}
       {saving && <SaveToPlaylistDialog track={saving.track} title={saving.title} onClose={() => setSaving(null)} />}
     </section>

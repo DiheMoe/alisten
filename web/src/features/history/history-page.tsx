@@ -100,7 +100,7 @@ export function HistoryPage({ compact = false, filter = '', onFilter }: { compac
   }
   else {
     body = (
-      <EmptyState icon={History} title={filter ? '没有找到相关记录' : '你的音乐足迹，从这里开始'}>
+      <EmptyState icon={History} title={filter ? '没有找到相关记录' : '还没有播放记录'}>
         {filter ? '换个关键词，再找找看。' : '你在房间里听过的歌会记在这里。'}
       </EmptyState>
     )
@@ -111,7 +111,6 @@ export function HistoryPage({ compact = false, filter = '', onFilter }: { compac
         <>
           <div className="page-title">
             <h1 ref={titleRef} className="text-ui-xl" tabIndex={-1}>播放历史</h1>
-            <p className="text-ui-base muted">重温那些一起听过的旋律。</p>
           </div>
           <div className="history-toolbar">
             <label className="search-field">

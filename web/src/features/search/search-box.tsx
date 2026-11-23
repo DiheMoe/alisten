@@ -66,7 +66,7 @@ export function SearchBox({ className, recent, onSearch }: { className: string, 
           aria-haspopup="dialog"
           aria-expanded={popover}
           aria-controls={popover ? popoverId : undefined}
-          placeholder="想播放什么？"
+          placeholder="搜索歌曲或粘贴链接"
           maxLength={KeywordLimits.maxLength}
           value={text}
           onFocus={() => setOpen(true)}

@@ -147,9 +147,7 @@ export function ChatPanel({ compact = false, onClose }: { compact?: boolean, onC
           </button>
         )}
         {!items.length && (
-          <EmptyState icon={MessageCircle} title="好音乐，一起分享">
-            打个招呼，或分享这首歌带给你的心情。
-          </EmptyState>
+          <EmptyState icon={MessageCircle} title="还没有消息" />
         )}
         {items.slice(first).map(item => item.kind === 'message'
           ? (
@@ -186,7 +184,7 @@ export function ChatPanel({ compact = false, onClose }: { compact?: boolean, onC
         <input
           type="text"
           aria-label="聊天消息"
-          placeholder={connected ? '聊聊这首歌…' : '连上房间之后开始聊天'}
+          placeholder={connected ? '发送消息' : '连上房间之后开始聊天'}
           value={draft}
           onChange={event => setDraft(event.target.value)}
           maxLength={500}

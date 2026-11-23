@@ -30,7 +30,7 @@ export function JoinDialog({ room, onJoined, onClose }: { room: RoomListing, onJ
           </div>
           <div className="join-detail">
             <h3 className="text-ui-lg">{room.name}</h3>
-            <p className="text-ui-caption muted">{room.description || '来这里，听见好音乐。'}</p>
+            {room.description && <p className="text-ui-caption muted">{room.description}</p>}
             <span className="join-meta text-ui-sm muted">
               <Users size={14} aria-hidden="true" />
               {`${room.onlineCount} / ${room.capacity} 人正在听`}
@@ -56,7 +56,6 @@ export function JoinDialog({ room, onJoined, onClose }: { room: RoomListing, onJ
             <input type="password" autoComplete="current-password" data-autofocus required value={password} onChange={event => setPassword(event.target.value)} placeholder="输入房间密码" />
           </label>
         )}
-        <p className="text-ui-caption muted">加入后，与房间内的所有人同步播放、点歌和聊天。</p>
         <button type="submit" className="button-primary" disabled={busy || (needsPassword && !password)}>
           {busy ? '正在加入…' : '加入房间'}
         </button>

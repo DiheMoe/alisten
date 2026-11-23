@@ -49,11 +49,11 @@ export function CreateRoomDialog({ onCreated, onClose }: { onCreated: (id: strin
       >
         <label>
           房间名称
-          <input data-autofocus value={name} onChange={event => setName(event.target.value)} required maxLength={RoomNameLimits.maxLength} placeholder="给这个房间起个名字" />
+          <input data-autofocus value={name} onChange={event => setName(event.target.value)} required maxLength={RoomNameLimits.maxLength} />
         </label>
         <label>
           房间描述
-          <textarea value={description} onChange={event => setDescription(event.target.value)} maxLength={RoomDescriptionLimits.maxLength} rows={3} placeholder="你想和大家听什么？" />
+          <textarea value={description} onChange={event => setDescription(event.target.value)} maxLength={RoomDescriptionLimits.maxLength} rows={3} placeholder="选填" />
         </label>
         <label className="checkbox-label">
           <input type="checkbox" checked={locked} onChange={event => setLocked(event.target.checked)} />

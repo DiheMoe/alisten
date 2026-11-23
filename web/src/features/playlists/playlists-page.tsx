@@ -93,7 +93,7 @@ export function PlaylistsPage({ onOpen, onRegister }: { onOpen: (playlist: MyPla
   }
   else if (!account) {
     body = (
-      <EmptyState icon={Star} title="收藏你喜欢的歌" action={<button type="button" className="button-secondary" onClick={onRegister}>去注册</button>}>
+      <EmptyState icon={Star} title="注册后使用歌单" action={<button type="button" className="button-secondary" onClick={onRegister}>去注册</button>}>
         注册账号之后，就能收藏歌曲、建自己的歌单。
       </EmptyState>
     )

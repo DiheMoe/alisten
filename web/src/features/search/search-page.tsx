@@ -165,7 +165,7 @@ function RecentSearches({ connected, onSearch }: { connected: boolean, onSearch:
   const searches = useStore(searchHistoryStore, s => s.searches)
   const enabled = useStore(searchHistoryStore, s => s.searchesEnabled)
   if (!enabled || !searches.length)
-    return <EmptyState icon={Search} title="你想听哪首歌？">搜索歌名、歌手或歌单。</EmptyState>
+    return <EmptyState icon={Search} title="搜索音乐">搜索歌名、歌手或歌单。</EmptyState>
   return (
     <section aria-label="最近搜索">
       <div className="section-heading">
@@ -296,9 +296,11 @@ export function SearchPage({ inlineSearchClassName, onSearch, onOpenPlaylist }: 
       </div>
       <header className="search-page-heading">
         <h1 className="text-ui-xl">{recommending ? '为你推荐' : keyword ? '搜索结果' : '搜索'}</h1>
-        <p className="text-ui-caption muted">
-          {recommending ? '发现下一首想听的歌。' : keyword ? `“${keyword}” · ${searchSourceNames[source]}` : '搜索歌名、歌手或歌单。'}
-        </p>
+        {!recommending && (
+          <p className="text-ui-caption muted">
+            {keyword ? `“${keyword}” · ${searchSourceNames[source]}` : '搜索歌名、歌手或歌单。'}
+          </p>
+        )}
         {recommending && (
           <p className="search-recommend-hint text-ui-caption muted">
             <Sparkles size={14} aria-hidden="true" />

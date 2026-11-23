@@ -33,7 +33,7 @@ const AdminPage = lazyPage(() => import('@/features/admin').then((module) => {
 const pageLoading = <div className="page-content"><Skeleton rows={6} /></div>
 
 const menu: { page: 'lobby' | 'settings' | 'history' | 'playlists' | RoomPage, label: string, icon: LucideIcon }[] = [
-  { page: 'listen', label: '正在聆听', icon: Headphones },
+  { page: 'listen', label: '正在播放', icon: Headphones },
   { page: 'queue', label: '播放列表', icon: ListMusic },
   { page: 'chat', label: '房间聊天', icon: MessageCircle },
   { page: 'history', label: '播放历史', icon: History },
@@ -43,7 +43,7 @@ const menu: { page: 'lobby' | 'settings' | 'history' | 'playlists' | RoomPage, l
 ]
 
 const mobileMenu: { page: RoomPage, label: string, icon: LucideIcon }[] = [
-  { page: 'listen', label: '聆听', icon: Headphones },
+  { page: 'listen', label: '正在播放', icon: Headphones },
   { page: 'queue', label: '播放列表', icon: ListMusic },
   { page: 'chat', label: '聊天', icon: MessageCircle },
 ]
@@ -81,7 +81,7 @@ function ConnectionStatus() {
       onClick={() => roomStore.reconnect()}
     >
       {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
-      <span>{!inRoom ? '未加入' : connected ? '同步在线' : status === 'connecting' ? '连接中' : '重连中'}</span>
+      <span>{!inRoom ? '未加入' : connected ? '已连接' : status === 'connecting' ? '连接中' : '重连中'}</span>
     </button>
   )
 }
@@ -173,7 +173,7 @@ function Header({ page }: { page: Page }) {
       <div className="header-search-area">
         <IconButton
           icon={House}
-          label={inRoom ? '返回聆听' : '发现房间'}
+          label={inRoom ? '回到正在播放' : '发现房间'}
           title={inRoom ? roomName : '发现房间'}
           className="home-widget"
           aria-current={page === home ? 'page' : undefined}

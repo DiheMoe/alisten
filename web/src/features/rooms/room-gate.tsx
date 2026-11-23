@@ -12,7 +12,7 @@ export function RoomGate({ children, onBrowse }: { children: ReactNode, onBrowse
     case 'joined':
       return children
     case 'not-found':
-      return <EmptyState title="房间不存在或已关闭" action={browse}>换一个房间，继续听歌。</EmptyState>
+      return <EmptyState title="房间不存在或已关闭" action={browse} />
     case 'full':
       return (
         <EmptyState

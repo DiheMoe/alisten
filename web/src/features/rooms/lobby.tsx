@@ -35,8 +35,7 @@ export function Lobby({ filter, onFilter, onEntered }: { filter: string, onFilte
     <div className="page-content room-page">
       <div className="page-title">
         <span className="text-ui-sm accent">{brandName}</span>
-        <h1 className="text-ui-xl">好音乐，值得一起听</h1>
-        <p className="text-ui-base muted">找到你的听歌房，与同频的人分享此刻。</p>
+        <h1 className="text-ui-xl">发现房间</h1>
       </div>
       <div className="room-toolbar">
         <label className="search-field">
@@ -49,8 +48,8 @@ export function Lobby({ filter, onFilter, onEntered }: { filter: string, onFilte
         </button>
       </div>
       <div className="section-heading">
-        <h2 className="text-ui-lg">正在发生的音乐</h2>
-        <span className="muted text-ui-sm">{rooms ? `${visible.length} 个房间` : '正在寻找房间…'}</span>
+        <h2 className="text-ui-lg">全部房间</h2>
+        <span className="muted text-ui-sm">{rooms ? `${visible.length} 个房间` : '正在加载…'}</span>
       </div>
       {listing.state.status === 'failed'
         ? (
@@ -67,10 +66,10 @@ export function Lobby({ filter, onFilter, onEntered }: { filter: string, onFilte
                 ? (
                     <EmptyState
                       icon={Headphones}
-                      title={filter ? '没有找到这个房间' : '成为第一个创建房间的人'}
+                      title={filter ? '没有找到这个房间' : '还没有房间'}
                       action={<button type="button" className="button-secondary" onClick={() => setCreating(true)}>创建房间</button>}
                     >
-                      {filter ? '换个关键词，再找找看。' : '创建一个房间，邀请朋友一起听歌。'}
+                      {filter && '换个关键词，再找找看。'}
                     </EmptyState>
                   )
                 : (
@@ -98,7 +97,7 @@ export function Lobby({ filter, onFilter, onEntered }: { filter: string, onFilte
                           </div>
                           <div className="room-card-copy">
                             <h3 className="text-ui-base truncate" title={room.name}>{room.name}</h3>
-                            <p className="text-ui-caption muted">{room.description || '来这里，听见好音乐。'}</p>
+                            {room.description && <p className="text-ui-caption muted">{room.description}</p>}
                             <span className="text-ui-sm muted">
                               <Users size={14} aria-hidden="true" />
                               {`${room.onlineCount} / ${room.capacity} 人正在听`}
