@@ -4,8 +4,7 @@ import type { PerformanceLevel } from './performance-store'
 export const themeNames: Record<Theme, string> = { dark: '深色', light: '浅色', system: '跟随系统' }
 
 export const levelNames: Record<PerformanceLevel, { name: string, description: string }> = {
-  high: { name: '高质量', description: '所有动画效果，适合高性能设备。' },
-  medium: { name: '平衡', description: '优化过的动画效果，推荐使用。' },
+  standard: { name: '标准', description: '保留全部动画和过渡。' },
   low: { name: '省电', description: '页面和弹窗只淡入淡出，去掉光晕、悬停浮起和歌词的平滑滚动。' },
   off: { name: '极简', description: '关闭所有动画和过渡，去掉阴影和模糊。' },
 }

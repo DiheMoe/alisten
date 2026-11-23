@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { notificationHint, sectionSummaries } from './settings-labels'
 
-const defaults = { theme: 'dark', level: 'medium', volume: 75, muted: false, recordListens: true } as const
+const defaults = { theme: 'dark', level: 'standard', volume: 75, muted: false, recordListens: true } as const
 
 describe('sectionSummaries', () => {
   it('手机端分类列表显示各分类的当前值', () => {
-    expect(sectionSummaries(defaults)).toEqual({ appearance: '深色', playback: '75%', performance: '平衡', privacy: '开' })
+    expect(sectionSummaries(defaults)).toEqual({ appearance: '深色', playback: '75%', performance: '标准', privacy: '开' })
     expect(sectionSummaries({ ...defaults, theme: 'system', level: 'off', recordListens: false })).toEqual({ appearance: '跟随系统', playback: '75%', performance: '极简', privacy: '关' })
   })
 

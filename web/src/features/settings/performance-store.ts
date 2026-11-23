@@ -1,10 +1,10 @@
 import { Store } from '@/shared/lib/store'
 
-export type PerformanceLevel = 'high' | 'medium' | 'low' | 'off'
+export type PerformanceLevel = 'standard' | 'low' | 'off'
 
-export const performanceLevels: PerformanceLevel[] = ['high', 'medium', 'low', 'off']
+export const performanceLevels: PerformanceLevel[] = ['standard', 'low', 'off']
 
-const defaultLevel: PerformanceLevel = 'medium'
+const defaultLevel: PerformanceLevel = 'standard'
 const levelKey = 'alisten.performance'
 const reducedMotionKey = 'alisten.reduced-motion'
 
@@ -35,7 +35,7 @@ class PerformanceStore extends Store<{ level: PerformanceLevel, reducedMotion: b
   smoothMotion(): boolean {
     const { level, reducedMotion } = this.state
     this.#systemReducedMotion ??= window.matchMedia('(prefers-reduced-motion: reduce)')
-    return (level === 'high' || level === 'medium') && !reducedMotion && !this.#systemReducedMotion.matches
+    return level === 'standard' && !reducedMotion && !this.#systemReducedMotion.matches
   }
 
   #apply(): void {
