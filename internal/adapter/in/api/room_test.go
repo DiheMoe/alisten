@@ -64,7 +64,7 @@ func newRoomFixture(t *testing.T) roomFixture {
 	server, _ := start(t, Services{
 		Identity:   identity.New(store, store, store, porttest.Quota{}, gateway),
 		Lobby:      l,
-		Admin:      admin.New("secret", l, store, store, store, porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), gateway),
+		Admin:      admin.New("secret", l, store, store, porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), gateway),
 		Gateway:    gateway,
 		Catalog:    music,
 		StorageURL: "https://alisten.example/storage/alisten",

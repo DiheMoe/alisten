@@ -33,7 +33,7 @@ const twoPages = `{"code":0,"message":"0","data":[{"cid":111,"page":1,"part":"",
 
 func TestTrackMetaSinglePage(t *testing.T) {
 	c, tr, obs, creds := serve(t, metaRoutes(singlePage))
-	creds.set(t, "SESSDATA=sess123", "")
+	creds.set(t, "SESSDATA=sess123")
 	meta, err := c.TrackMeta(t.Context(), "BV1xx411c7mD")
 	if err != nil {
 		t.Fatal(err)
@@ -62,6 +62,26 @@ func TestTrackMetaSecondPage(t *testing.T) {
 	}
 }
 
+func TestTrackMetaCleansControlChars(t *testing.T) {
+	routes := map[string]http.HandlerFunc{
+		"/x/web-interface/view": func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, `{"code":0,"message":"0","data":{"bvid":"BV1xx411c7mD","title":"标\u0000题\n","pic":"","owner":{"name":"作\u0000者","mid":99}}}`)
+		},
+		"/x/player/pagelist": func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, `{"code":0,"message":"0","data":[{"cid":222,"page":2,"part":"分\u0000P","duration":120}]}`)
+		},
+	}
+	c, _, _, _ := serve(t, routes)
+	meta, err := c.TrackMeta(t.Context(), "BV1xx411c7mD/2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := track.Meta{Title: "标题 - 分P", Artist: "作者", Duration: 120 * time.Second}
+	if meta != want {
+		t.Fatalf("清理后的元数据 = %+v，期望 %+v", meta, want)
+	}
+}
+
 func TestTrackMetaPageMissing(t *testing.T) {
 	c, _, _, _ := serve(t, metaRoutes(twoPages))
 	_, err := c.TrackMeta(t.Context(), "BV1xx411c7mD/3")
@@ -71,7 +91,6 @@ func TestTrackMetaPageMissing(t *testing.T) {
 	}
 }
 
-// pagelist 返回 -400（不存在的视频）时拒绝准备。
 func TestTrackMetaRejected(t *testing.T) {
 	c, _, obs, _ := serve(t, map[string]http.HandlerFunc{
 		"/x/player/pagelist": func(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +105,7 @@ func TestTrackMetaRejected(t *testing.T) {
 	obs.check(t, "bilibili:meta_pagelist:error")
 }
 
-// view 接口经常被风控（未登录 412、登录后伪装 -404），失败时退化为 pagelist 的元数据。
+// view 接口被风控时退回使用 pagelist 的元数据。
 func TestTrackMetaViewFallback(t *testing.T) {
 	routes := metaRoutes(twoPages)
 	routes["/x/web-interface/view"] = func(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +123,6 @@ func TestTrackMetaViewFallback(t *testing.T) {
 	obs.check(t, "bilibili:meta_pagelist:ok", "bilibili:meta_view:error")
 }
 
-// 单 P 视频的分 P 标题为空时，降级用 BV 号做标题。
 func TestTrackMetaViewFallbackUntitled(t *testing.T) {
 	routes := metaRoutes(singlePage)
 	routes["/x/web-interface/view"] = func(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +147,6 @@ func TestTrackMetaPagelistFailure(t *testing.T) {
 	if _, err := c.TrackMeta(t.Context(), "BV1xx411c7mD"); err == nil {
 		t.Fatal("pagelist 失败时没有返回错误")
 	}
-	// pagelist 是第一步，失败时不应再请求 view。
 	obs.check(t, "bilibili:meta_pagelist:error")
 }
 
@@ -141,4 +158,23 @@ func TestTrackMetaInvalidID(t *testing.T) {
 	if len(tr.requests()) != 0 {
 		t.Fatalf("非法 ID 不应请求平台，请求了 %+v", tr.requests())
 	}
+}
+
+func TestAPIDoesNotFollowRedirectsWithCookie(t *testing.T) {
+	c, tr, obs, creds := serve(t, map[string]http.HandlerFunc{
+		"/x/player/pagelist": func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "http://api.bilibili.com/redirected", http.StatusTemporaryRedirect)
+		},
+		"/redirected": func(w http.ResponseWriter, r *http.Request) {
+			t.Errorf("带 Cookie 的接口自动跟随了重定向，Cookie = %q", r.Header.Get("Cookie"))
+		},
+	})
+	creds.set(t, "SESSDATA=sess123")
+	if _, err := c.TrackMeta(t.Context(), "BV1xx411c7mD"); err == nil {
+		t.Fatal("接口重定向没有返回错误")
+	}
+	if tr.countRequests("/redirected") != 0 {
+		t.Error("不应请求重定向目标")
+	}
+	obs.check(t, "bilibili:meta_pagelist:error")
 }

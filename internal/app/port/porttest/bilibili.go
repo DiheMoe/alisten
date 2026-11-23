@@ -13,11 +13,10 @@ import (
 )
 
 var (
-	_ port.BilibiliSource        = (*Bilibili)(nil)
-	_ port.BilibiliLinks         = (*Bilibili)(nil)
-	_ port.BilibiliQRLoginSource = (*BilibiliQRLogin)(nil)
-	_ port.Transcoder            = (*Transcoder)(nil)
-	_ port.YouTubeCookies        = (*YouTubeCookies)(nil)
+	_ port.BilibiliSource = (*Bilibili)(nil)
+	_ port.BilibiliLinks  = (*Bilibili)(nil)
+	_ port.Transcoder     = (*Transcoder)(nil)
+	_ port.YouTubeCookies = (*YouTubeCookies)(nil)
 )
 
 var ErrUnknownVideo = errors.New("音源中没有这个视频")
@@ -140,16 +139,10 @@ func (b *Bilibili) markReleased() {
 	b.released++
 }
 
-type BilibiliQRLogin struct {
-	qrLogins
-
-	statusMu      sync.Mutex
-	status        port.CredentialStatus
-	statusFailure error
-}
+type BilibiliQRLogin struct{ qrLogins }
 
 func NewBilibiliQRLogin() *BilibiliQRLogin {
-	return &BilibiliQRLogin{qrLogins: qrLogins{logins: map[string]qrLogin{}}}
+	return &BilibiliQRLogin{qrLogins{logins: map[string]qrLogin{}}}
 }
 
 func (l *BilibiliQRLogin) CreateQRLogin(context.Context) (port.QRLoginSession, error) {
@@ -162,28 +155,6 @@ func (l *BilibiliQRLogin) CreateQRLogin(context.Context) (port.QRLoginSession, e
 
 func (l *BilibiliQRLogin) CheckQRLogin(_ context.Context, key string) (port.QRLoginResult, error) {
 	return l.check("bilibili", key)
-}
-
-// account 为 nil 表示已保存登录信息但未识别到账号。
-func (l *BilibiliQRLogin) SetCredential(account *port.SourceAccount) {
-	l.statusMu.Lock()
-	defer l.statusMu.Unlock()
-	l.status, l.statusFailure = port.CredentialStatus{Set: true, Account: account}, nil
-}
-
-func (l *BilibiliQRLogin) FailStatus(err error) {
-	l.statusMu.Lock()
-	defer l.statusMu.Unlock()
-	l.statusFailure = err
-}
-
-func (l *BilibiliQRLogin) CredentialStatus(context.Context) (port.CredentialStatus, error) {
-	l.statusMu.Lock()
-	defer l.statusMu.Unlock()
-	if l.statusFailure != nil {
-		return port.CredentialStatus{}, l.statusFailure
-	}
-	return l.status, nil
 }
 
 // 每次转码都返回构造时给的 mp3。

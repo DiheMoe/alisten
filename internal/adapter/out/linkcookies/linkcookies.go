@@ -1,7 +1,6 @@
-// Package linkcookies 把数据库中保存的 YouTube cookies 写成 yt-dlp 需要的临时文件：
-// yt-dlp 只接受文件路径，cookies 必须短暂落盘。文件写在 worker 工作根目录下权限 0700
-// 的临时目录中，下载结束由调用方 release 删除；进程崩溃留下的残留由 worker 启动时的
-// 清理逻辑删除。yt-dlp 运行中会把更新后的 cookies 写回文件，所以 release 删除整个目录。
+// Package linkcookies 把数据库中保存的 YouTube cookies 写成临时文件供 yt-dlp 读取，因为 yt-dlp 只接受文件路径。
+// 文件建在 worker 工作根目录下权限 0700 的独立临时目录中，下载结束后由调用方调用 release 删除整个目录，
+// 这样 yt-dlp 运行期间写回的新文件也会一并清除。进程崩溃留下的残留目录由 worker 启动时的清理逻辑删除。
 package linkcookies
 
 import (
@@ -51,7 +50,7 @@ func (m *Manager) CookieFile(ctx context.Context, link string) (string, func(), 
 	return path, release, true, nil
 }
 
-// 链接由用户提交，yt-dlp 接受不带 scheme 的 YouTube 短链接。
+// 允许不带 scheme 的短链接，因为链接由用户提交，而且 yt-dlp 支持这种写法。
 func isYouTube(link string) bool {
 	if !strings.Contains(link, "://") {
 		link = "https://" + link

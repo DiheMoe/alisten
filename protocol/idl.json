@@ -1504,9 +1504,10 @@
         "additionalProperties": false,
         "properties": {
           "set": {"type": "boolean", "description": "是否保存了登录凭据，不代表凭据仍然有效"},
-          "account": {"anyOf": [{"$ref": "#/$defs/SourceAccount"}, {"type": "null"}]}
+          "account": {"anyOf": [{"$ref": "#/$defs/SourceAccount"}, {"type": "null"}]},
+          "signedOut": {"type": "boolean", "description": "保存了登录凭据，但 B 站确认登录已失效，要重新扫码登录。为 true 时 account 为 null"}
         },
-        "required": ["set", "account"]
+        "required": ["set", "account", "signedOut"]
       }
     },
     {

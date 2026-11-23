@@ -11,7 +11,6 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port"
 )
 
-var _ port.Credentials = (*Store)(nil)
 var _ port.YouTubeCookies = (*Store)(nil)
 
 const (
@@ -43,13 +42,25 @@ func (s *Store) SetQQCookie(ctx context.Context, cookie string) error {
 	return nil
 }
 
+func (s *Store) SwapQQCookie(ctx context.Context, expected, cookie string) (bool, error) {
+	rows, err := s.q.SwapCredential(ctx, query.SwapCredentialParams{
+		Name:     qqCookie,
+		Expected: expected,
+		Value:    cookie,
+	})
+	if err != nil {
+		return false, fmt.Errorf("更新 QQ Cookie：%w", err)
+	}
+	return rows > 0, nil
+}
+
 func (s *Store) BilibiliCredential(ctx context.Context) (string, error) {
-	return s.credential(ctx, bilibiliCredential, "读取 Bilibili 凭据")
+	return s.credential(ctx, bilibiliCredential, "读取 B 站凭据")
 }
 
 func (s *Store) SetBilibiliCredential(ctx context.Context, credential string) error {
 	if err := s.setCredential(ctx, bilibiliCredential, credential); err != nil {
-		return fmt.Errorf("保存 Bilibili 凭据：%w", err)
+		return fmt.Errorf("保存 B 站凭据：%w", err)
 	}
 	return nil
 }

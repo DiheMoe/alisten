@@ -265,7 +265,7 @@ func (c *Client) checkQQQR(ctx context.Context, key string) (port.QRLoginResult,
 		result.Message = "QQ 音乐登录未返回音乐 key"
 		return result, nil
 	}
-	if err := c.cookie.put(ctx, cookie); err != nil {
+	if err := c.cookie.Put(ctx, cookie); err != nil {
 		return port.QRLoginResult{}, fmt.Errorf("保存 QQ Cookie：%w", err)
 	}
 	return result, nil
@@ -292,11 +292,11 @@ func (c *Client) createWeChatQR(ctx context.Context) (port.QRLoginSession, error
 	if err != nil {
 		return port.QRLoginSession{}, err
 	}
-	html, err := readQQLoginBody(resp)
+	pageHTML, err := readQQLoginBody(resp)
 	if err != nil {
 		return port.QRLoginSession{}, err
 	}
-	matches := weChatQRUUIDPattern.FindSubmatch(html)
+	matches := weChatQRUUIDPattern.FindSubmatch(pageHTML)
 	if len(matches) != 2 || len(matches[1]) == 0 {
 		return port.QRLoginSession{}, errors.New("微信创建扫码登录的响应缺少 UUID")
 	}
@@ -365,7 +365,7 @@ func (c *Client) checkWeChatQR(ctx context.Context, key string) (port.QRLoginRes
 		result.Message = "QQ 音乐登录未返回音乐 key"
 		return result, nil
 	}
-	if err := c.cookie.put(ctx, cookie); err != nil {
+	if err := c.cookie.Put(ctx, cookie); err != nil {
 		return port.QRLoginResult{}, fmt.Errorf("保存 QQ Cookie：%w", err)
 	}
 	return result, nil
@@ -404,7 +404,7 @@ func (c *Client) completeWeChatLogin(ctx context.Context, client *http.Client, c
 		return "", err
 	}
 	header := http.Header{
-		"Content-Type": {"application/x-www-form-urlencoded"},
+		"Content-Type": {"application/json"},
 		"Referer":      {weChatLoginRedirectURI},
 		"Origin":       {"https://y.qq.com"},
 		"Cookie":       {"login_type=2"},
@@ -541,6 +541,11 @@ func (e *qqLoginRejectedError) Error() string {
 	return fmt.Sprintf("QQ 音乐登录返回错误码 %d、%d", e.code, e.reqCode)
 }
 
+var qqOptionalLoginFields = []string{
+	"refresh_key", "refresh_token", "openid", "unionid", "wxaccess_token",
+	"access_token", "expired_in", "expired_at", "keyExpiresIn", "musickeyCreateTime", "loginType",
+}
+
 func mergeQQMusicLoginResponse(credentials map[string]string, resp *http.Response, musicBody []byte) error {
 	var payload struct {
 		Code *int `json:"code"`
@@ -570,14 +575,8 @@ func mergeQQMusicLoginResponse(credentials map[string]string, resp *http.Respons
 	}
 	for name, value := range payload.Req.Data {
 		musicKey := slices.Contains(qqMusicKeyNames, name)
-		if !musicKey {
-			switch name {
-			case "uin", "musicid", "userid", "user_id", "ptui_loginuin", "luin", "pt2gguin", "superuin", "p_uin", "wxuin",
-				"refresh_key", "refresh_token", "openid", "unionid", "wxaccess_token",
-				"access_token", "expired_in", "expired_at", "keyExpiresIn", "musickeyCreateTime", "loginType":
-			default:
-				continue
-			}
+		if !musicKey && !slices.Contains(qqAccountIDNames, name) && !slices.Contains(qqOptionalLoginFields, name) {
+			continue
 		}
 		credential := ""
 		switch value := value.(type) {
@@ -692,16 +691,7 @@ func qqLoginRequest(ctx context.Context, client *http.Client, method, target str
 	chinaip.Set(req.Header)
 	resp, err := client.Do(req)
 	if err != nil {
-		var requestError *url.Error
-		if errors.As(err, &requestError) {
-			err = requestError.Err
-		}
-		// net/http 会在 CheckRedirect 前解析 Location，这个错误没有独立类型。
-		// 按文本识别并替换解析错误，避免完整登录跳转地址及查询参数进入错误或日志。
-		if strings.Contains(err.Error(), "failed to parse Location header") {
-			return nil, fmt.Errorf("请求 %s：解析 QQ 登录跳转地址失败", req.URL.Host)
-		}
-		return nil, fmt.Errorf("请求 %s：%w", req.URL.Host, err)
+		return nil, requestError(req.URL.Host, err)
 	}
 	return resp, nil
 }
@@ -711,15 +701,18 @@ func readQQLoginBody(resp *http.Response) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%s 返回 HTTP %d", resp.Request.URL.Host, resp.StatusCode)
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, bodyLimit+1))
 	if err != nil {
 		return nil, fmt.Errorf("读取 %s 的响应：%w", resp.Request.URL.Host, err)
+	}
+	if len(body) > bodyLimit {
+		return nil, fmt.Errorf("%s 的响应超过大小上限", resp.Request.URL.Host)
 	}
 	return body, nil
 }
 
 func closeQQLoginBody(resp *http.Response) {
-	_, _ = io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, bodyLimit))
 	_ = resp.Body.Close()
 }
 
@@ -820,7 +813,7 @@ func normalizeQQLoginCredentials(credentials map[string]string) bool {
 		credentials["qqmusic_key"] = musicKey
 	}
 	if credentials["uin"] == "" {
-		for _, name := range []string{"musicid", "userid", "user_id", "ptui_loginuin", "luin", "pt2gguin", "superuin", "p_uin", "wxuin"} {
+		for _, name := range qqAccountIDNames {
 			if credentials[name] != "" {
 				credentials["uin"] = credentials[name]
 				break

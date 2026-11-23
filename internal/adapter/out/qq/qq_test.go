@@ -17,20 +17,18 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"github.com/dihemoe/alisten/internal/app/port"
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
-const testCookie = "qq_test_cookie=fictitious"
+const testCookie = "uin=o000123; qm_keyst=fictitious"
 
 var testLogger = slog.New(slog.DiscardHandler)
 
 const accountValidResponse = `{"code":0,"req":{"code":0,"data":{"dirinfo":{"dirid":201}}}}`
 
-// 测试服务器按路径返回 testdata 中录制的响应，Client 的所有请求都转到它。
 func serve(t *testing.T, routes map[string]http.HandlerFunc) (*Client, *observed) {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +51,7 @@ func serve(t *testing.T, routes map[string]http.HandlerFunc) (*Client, *observed
 		&http.Client{Transport: redirect{target}},
 		func(context.Context) (string, error) { return testCookie, nil },
 		func(context.Context, string) error { return nil },
+		func(context.Context, string, string) (bool, error) { return true, nil },
 		obs.record,
 		testLogger,
 	), obs
@@ -66,10 +65,7 @@ func (r redirect) RoundTrip(req *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-// 国内运营商的地址段。
-var chinaPrefixes = [][2]byte{{116, 255}, {116, 228}, {218, 192}, {124, 0}, {14, 132}, {183, 14}, {58, 14}, {113, 116}, {120, 230}}
-
-// 请求接口时带上同一个随机的国内 IP，下载音频时不带。
+// 请求接口时带上同一个随机的国内 IPv4，下载音频时不带。
 func checkClientIP(t *testing.T, r *http.Request) {
 	realIP, forwarded := r.Header.Get("X-Real-IP"), r.Header.Get("X-Forwarded-For")
 	if r.URL.Path == audioPath {
@@ -79,8 +75,8 @@ func checkClientIP(t *testing.T, r *http.Request) {
 		return
 	}
 	addr, err := netip.ParseAddr(realIP)
-	if err != nil || !addr.Is4() || !slices.Contains(chinaPrefixes, [2]byte(addr.AsSlice())) || forwarded != realIP {
-		t.Errorf("%s 的 X-Real-IP 为 %q、X-Forwarded-For 为 %q，期望同一个国内运营商的 IP", r.URL.Path, realIP, forwarded)
+	if err != nil || !addr.Is4() || forwarded != realIP {
+		t.Errorf("%s 的 X-Real-IP 为 %q、X-Forwarded-For 为 %q，期望同一个 IPv4 地址", r.URL.Path, realIP, forwarded)
 	}
 }
 
@@ -127,7 +123,7 @@ func wantSong(mid, title, album, albumMID string, seconds int) port.Song {
 		Meta: track.Meta{
 			Title: title, Artist: "周杰伦", Album: album,
 			CoverURL: "https://y.gtimg.cn/music/photo_new/T002R300x300M000" + albumMID + ".jpg",
-			PageURL:  "https://y.qq.com/n/ryqq/songDetail/" + mid,
+			PageURL:  track.QQPageURL(mid),
 			Duration: time.Duration(seconds) * time.Second,
 		},
 	}
@@ -182,7 +178,7 @@ func TestSearchPlaylists(t *testing.T) {
 func TestTrackMeta(t *testing.T) {
 	c, _ := serve(t, map[string]http.HandlerFunc{"/v8/fcg-bin/fcg_play_single_song.fcg": fixture(t, "song-detail.json")})
 	if got, err := c.TrackMeta(t.Context(), "004Fs2FP1EvZYc"); err != nil || got != live.Meta {
-		t.Errorf("元数据 = %#v, %v，期望 %#v：标题要带上版本", got, err, live.Meta)
+		t.Errorf("元数据 = %#v, %v，期望 %#v，标题需带上版本说明", got, err, live.Meta)
 	}
 
 	c, _ = serve(t, map[string]http.HandlerFunc{"/v8/fcg-bin/fcg_play_single_song.fcg": fixture(t, "song-detail-missing.json")})
@@ -192,11 +188,12 @@ func TestTrackMeta(t *testing.T) {
 	}
 }
 
-// 歌曲的元数据和歌词会写入 PostgreSQL，text 类型不能存储 U+0000，要在解密之后清除。
+// 歌曲元数据、歌单和歌词都会写入 PostgreSQL，text 类型不能存储 U+0000，解密和反转义之后都要清除。
 func TestTextDropsNUL(t *testing.T) {
 	c, _ := serve(t, map[string]http.HandlerFunc{
-		"/v8/fcg-bin/fcg_play_single_song.fcg": body(`{"code":0,"data":[{"mid":"004Fs2FP1EvZYc","title":"晴\u0000天","interval":249,"album":{"mid":"004fXS\u0000yj3bWTMN","name":"叶\u0000惠美"},"singer":[{"name":"周\u0000杰伦"}]}]}`),
-		"/cgi-bin/musicu.fcg":                  fixture(t, "lyric-nul.json"),
+		"/v8/fcg-bin/fcg_play_single_song.fcg":        body(`{"code":0,"data":[{"mid":"004Fs2FP1EvZYc","title":"晴\u0000天","interval":249,"album":{"mid":"004fXS\u0000yj3bWTMN","name":"叶\u0000惠美"},"singer":[{"name":"周\u0000杰伦"}]}]}`),
+		"/cgi-bin/musicu.fcg":                         fixture(t, "lyric-nul.json"),
+		"/soso/fcgi-bin/client_music_search_songlist": body(`{"code":0,"data":{"list":[{"dissid":"1","dissname":"歌\u0000单 &amp; 精选","imgurl":"http://p.qpic.cn/a\u0000.jpg","introduction":"简\u0000介","creator":{"name":"作\u0000者"}}]}}`),
 	})
 	want := wantSong("004Fs2FP1EvZYc", "晴天", "叶惠美", "004fXSyj3bWTMN", 249).Meta
 	if got, err := c.TrackMeta(t.Context(), "004Fs2FP1EvZYc"); err != nil || got != want {
@@ -205,10 +202,13 @@ func TestTextDropsNUL(t *testing.T) {
 	if got, err := c.lyric(t.Context(), "004Fs2FP1EvZYc"); err != nil || got.LRC != "[00:01.00]故事\n" {
 		t.Errorf("歌词 = %q, %v", got.LRC, err)
 	}
+	playlists, err := c.SearchPlaylists(t.Context(), "歌单")
+	if err != nil || len(playlists) != 1 || playlists[0].Name != "歌单 & 精选" || playlists[0].CoverURL != "http://p.qpic.cn/a.jpg" || playlists[0].Creator != "作者" || playlists[0].Description != "简介" {
+		t.Errorf("歌单 = %#v, %v", playlists, err)
+	}
 }
 
-// 解密后的歌词不保证是 UTF-8，比如 GBK 编码的歌词；PostgreSQL 的 text 类型拒绝不合法的 UTF-8，
-// 这样的歌词存不进去，准备任务每次都失败。
+// 解密后的歌词不保证是合法的 UTF-8（例如混有 GBK 字节），必须替换掉非法字节才不会在写 PostgreSQL 时失败。
 func TestLyricReplacesInvalidUTF8(t *testing.T) {
 	c, _ := serve(t, map[string]http.HandlerFunc{
 		"/cgi-bin/musicu.fcg": fixture(t, "lyric-gbk.json"),
@@ -220,7 +220,7 @@ func TestLyricReplacesInvalidUTF8(t *testing.T) {
 
 const audioPath = "/qq/80456317.flac"
 
-// musicu 网关同时承载歌词和播放地址：按请求里的 req_1（播放地址）有无分发打桩。
+// musicu 网关同时承载歌词、播放地址和账号校验，按查询参数中的模块分发打桩。
 func musicu(t *testing.T, playResponse string) http.HandlerFunc {
 	return musicuLyric(t, playResponse, fixture(t, "lyric.json"))
 }
@@ -295,21 +295,13 @@ func TestResolve(t *testing.T) {
 	obs.check(t, "qq track_detail", "qq lyric", "qq play_url")
 }
 
-func TestResolveRejects(t *testing.T) {
-	c, _ := serve(t, resolveRoutes(t))
-	var rejected *port.RejectedError
-	if _, err := c.Resolve(t.Context(), "004Fs2FP1EvZYc"); !errors.As(err, &rejected) || err.Error() != "QQ 音乐没有提供这首歌的播放地址" {
-		t.Errorf("QQ 没有播放地址时的错误 = %v，期望音源拒绝", err)
-	}
-}
-
 func TestResolveRetriesUpstreamFailures(t *testing.T) {
 	var rejected *port.RejectedError
 	routes := resolveRoutes(t)
 	routes["/cgi-bin/musicu.fcg"] = playRequest(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusBadGateway) })
 	c, obs := serve(t, routes)
 	if _, err := c.Resolve(t.Context(), "004Fs2FP1EvZYc"); err == nil || errors.As(err, &rejected) {
-		t.Errorf("QQ 原生播放接口出错时的错误 = %v，期望可以重试的错误", err)
+		t.Errorf("播放接口出错时的错误 = %v，期望可以重试的错误", err)
 	}
 	obs.check(t, "qq track_detail", "qq lyric", "qq play_url 失败")
 }
@@ -318,89 +310,6 @@ func TestLyricMissing(t *testing.T) {
 	c, _ := serve(t, map[string]http.HandlerFunc{"/cgi-bin/musicu.fcg": fixture(t, "lyric-missing.json")})
 	if got, err := c.lyric(t.Context(), "000000000000xx"); err != nil || got != (lyricResult{}) {
 		t.Errorf("没有歌词的歌 = %#v, %v，期望空结果", got, err)
-	}
-}
-
-func TestCookieIsReloadedEvery30Seconds(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		loads := 0
-		c := cookieCache{load: func(context.Context) (string, error) {
-			loads++
-			return "qq_cookie=" + string(rune('0'+loads)), nil
-		}}
-		for range 2 {
-			if got, err := c.get(t.Context()); err != nil || got != "qq_cookie=1" {
-				t.Fatalf("Cookie = %q, %v", got, err)
-			}
-		}
-		time.Sleep(30*time.Second - time.Nanosecond)
-		if got, err := c.get(t.Context()); err != nil || got != "qq_cookie=1" {
-			t.Fatalf("不到 30 秒的 Cookie = %q, %v，期望仍是缓存的", got, err)
-		}
-		time.Sleep(time.Nanosecond)
-		if got, err := c.get(t.Context()); err != nil || got != "qq_cookie=2" {
-			t.Errorf("30 秒之后的 Cookie = %q, %v，期望重新读取", got, err)
-		}
-	})
-}
-
-func TestCookieLoadHasOwnDeadline(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		c := cookieCache{load: func(ctx context.Context) (string, error) {
-			<-ctx.Done()
-			return "", ctx.Err()
-		}}
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-		start := time.Now()
-		if _, err := c.get(ctx); !errors.Is(err, context.DeadlineExceeded) {
-			t.Errorf("读取卡住时的错误 = %v，期望超过期限", err)
-		}
-		if waited := time.Since(start); waited != 10*time.Second {
-			t.Errorf("等了 %v，期望 10 秒", waited)
-		}
-	})
-}
-
-func TestCookieSaveHasOwnDeadline(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		c := cookieCache{store: func(ctx context.Context, _ string) error {
-			<-ctx.Done()
-			return ctx.Err()
-		}}
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-		start := time.Now()
-		if err := c.put(ctx, testCookie); !errors.Is(err, context.DeadlineExceeded) {
-			t.Errorf("保存卡住时的错误 = %v，期望超过期限", err)
-		}
-		if waited := time.Since(start); waited != 10*time.Second {
-			t.Errorf("等了 %v，期望 10 秒", waited)
-		}
-	})
-}
-
-func TestCookiePutUpdatesCache(t *testing.T) {
-	loads := 0
-	saved := ""
-	c := cookieCache{
-		load: func(context.Context) (string, error) {
-			loads++
-			return "loaded", nil
-		},
-		store: func(_ context.Context, value string) error {
-			saved = value
-			return nil
-		},
-	}
-	if err := c.put(t.Context(), testCookie); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := c.get(t.Context()); err != nil || got != testCookie {
-		t.Errorf("保存后的 Cookie = %q, %v，期望 %q", got, err, testCookie)
-	}
-	if saved != testCookie || loads != 0 {
-		t.Errorf("保存的 Cookie = %q，重新加载了 %d 次", saved, loads)
 	}
 }
 

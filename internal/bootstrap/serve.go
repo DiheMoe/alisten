@@ -76,9 +76,9 @@ func runServe(base *slog.Logger) (err error) {
 	upstream := &http.Client{Transport: traceHTTP(http.DefaultTransport, tracer)}
 	sourceLogger := base.With("component", "source")
 	neteaseSource := netease.New(upstream, store.NeteaseCookie, store.SetNeteaseCookie, observed.provider, sourceLogger)
-	qqSource := qq.New(upstream, store.QQCookie, store.SetQQCookie, observed.provider, sourceLogger)
+	qqSource := qq.New(upstream, store.QQCookie, store.SetQQCookie, store.SwapQQCookie, observed.provider, sourceLogger)
 	// serve 不下载文件，下载由 worker 在自己的工作目录中进行。
-	bilibiliSource := bilibili.New(upstream, "", store.BilibiliCredential, store.SetBilibiliCredential, observed.provider)
+	bilibiliSource := bilibili.New(upstream, "", store.BilibiliCredential, store.SetBilibiliCredential, observed.provider, sourceLogger)
 	src := sources{
 		netease:       neteaseSource,
 		qq:            qqSource,

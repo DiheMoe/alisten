@@ -1,6 +1,7 @@
 package bilibili
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"net/http"
@@ -82,7 +83,7 @@ func countDirs(t *testing.T, root string) int {
 	return len(entries)
 }
 
-// 不提供 nav 路由：下载不应请求 nav，playurl 统一 fnval=80，不区分大会员；误调会因 404 失败。
+// 不提供 nav 路由，因为下载固定使用 fnval=80 而不先查大会员状态，误调会直接收到 404。
 func baseDownloadRoutes(calls *playurlCalls, playurl func(q url.Values) string) map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
 		"/x/web-interface/view": func(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +112,7 @@ func lastRequest(tr *redirectTransport, path string) *recordedRequest {
 func TestDownloadWithCredential(t *testing.T) {
 	calls := &playurlCalls{}
 	c, tr, obs, creds := serve(t, baseDownloadRoutes(calls, func(url.Values) string { return dashResponse }))
-	creds.set(t, "SESSDATA=sess123; bili_jct=jct456", "refresh789")
+	creds.set(t, "SESSDATA=sess123; bili_jct=jct456")
 
 	d, release, err := c.Download(t.Context(), "BV1xx411c7mD")
 	if err != nil {
@@ -134,14 +135,15 @@ func TestDownloadWithCredential(t *testing.T) {
 	if len(queries) != 1 {
 		t.Fatalf("playurl 请求数 = %d", len(queries))
 	}
-	// playurl 统一 fnval=80，不区分大会员，也不为判定大会员请求 nav。
 	if q := queries[0]; q.Get("fnval") != "80" || q.Get("qn") != "127" || q.Get("bvid") != "BV1xx411c7mD" || q.Get("cid") != "111" {
 		t.Errorf("playurl 参数 = %v", q)
+	}
+	if playurlReq := lastRequest(tr, "/x/player/playurl"); playurlReq == nil || playurlReq.cookie != "SESSDATA=sess123; bili_jct=jct456" {
+		t.Errorf("playurl 请求 = %+v，期望携带 Cookie", playurlReq)
 	}
 	if tr.countRequests("/x/web-interface/nav") != 0 {
 		t.Error("下载不应请求 nav")
 	}
-	// 不选 FLAC 和杜比，即使它们存在。
 	if tr.countRequests("/upgcxcode/flac.flac") != 0 || tr.countRequests("/upgcxcode/dolby.m4s") != 0 {
 		t.Errorf("下载了 FLAC 或杜比音轨：%+v", tr.requests())
 	}
@@ -152,15 +154,15 @@ func TestDownloadWithCredential(t *testing.T) {
 	if audioReq.scheme != "https" || audioReq.host != "upos-sz-mirrorcos.bilivideo.com" {
 		t.Errorf("音频请求地址 = %s://%s", audioReq.scheme, audioReq.host)
 	}
-	if audioReq.cookie != "SESSDATA=sess123; bili_jct=jct456" || audioReq.referer != "https://www.bilibili.com/" {
-		t.Errorf("音频请求头 = %+v", audioReq)
+	// 音视频 CDN 靠签名鉴权，账号 Cookie 不能发给 CDN 节点。
+	if audioReq.cookie != "" || audioReq.referer != "https://www.bilibili.com/" {
+		t.Errorf("音频请求头 = %+v，期望不带 Cookie 且带 Referer", audioReq)
 	}
-	// 完整文件的 GET 会被部分 CDN 节点（EdgeOne）拦截，Range 请求会回源放行。
 	if audioReq.range_ != "bytes=0-" {
 		t.Errorf("音频请求没有带 Range 头：%+v", audioReq)
 	}
-	if coverReq := lastRequest(tr, "/bfs/archive/cover.jpg"); coverReq == nil || coverReq.referer != "https://www.bilibili.com/" {
-		t.Errorf("封面请求 = %+v", coverReq)
+	if coverReq := lastRequest(tr, "/bfs/archive/cover.jpg"); coverReq == nil || coverReq.cookie != "" || coverReq.referer != "https://www.bilibili.com/" {
+		t.Errorf("封面请求 = %+v，期望不带 Cookie 且带 Referer", coverReq)
 	} else if coverReq.range_ != "bytes=0-" {
 		t.Errorf("封面请求没有带 Range 头：%+v", coverReq)
 	}
@@ -271,7 +273,66 @@ func TestDownloadPlayurlRejected(t *testing.T) {
 	}
 }
 
-// view 被风控返回 -404 时降级使用 pagelist 的元数据，下载继续。
+func TestDownloadAudioTooLargeRejectedByContentLength(t *testing.T) {
+	calls := &playurlCalls{}
+	routes := baseDownloadRoutes(calls, func(url.Values) string {
+		return `{"code":0,"message":"0","data":{"dash":{"audio":[{"id":30280,` +
+			`"baseUrl":"https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/huge.m4s?sig=SIGHUGE",` +
+			`"backup_url":["https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/audio30280.m4s?sig=SIG80"]}]}}}`
+	})
+	routes["/upgcxcode/huge.m4s"] = func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", strconv.FormatInt(port.MaxAudioSize+1, 10))
+		w.WriteHeader(http.StatusOK)
+	}
+	c, tr, _, _ := serve(t, routes)
+	before := countDirs(t, c.root)
+	_, release, err := c.Download(t.Context(), "BV1xx411c7mD")
+	if release != nil {
+		release()
+	}
+	var rejected *port.RejectedError
+	if !errors.As(err, &rejected) || !errors.Is(err, port.ErrAudioTooLarge) {
+		t.Fatalf("超限音频错误 = %v，期望包装 ErrAudioTooLarge 的 RejectedError", err)
+	}
+	if tr.countRequests("/upgcxcode/audio30280.m4s") != 0 {
+		t.Error("音频本身超过大小上限时不应再重试备用节点")
+	}
+	if after := countDirs(t, c.root); after != before {
+		t.Fatalf("超限失败后留下了临时目录：之前 %d 个，之后 %d 个", before, after)
+	}
+}
+
+func TestDownloadAudioTooLargeRejectedByStreamSize(t *testing.T) {
+	calls := &playurlCalls{}
+	routes := baseDownloadRoutes(calls, func(url.Values) string { return dashResponse })
+	routes["/upgcxcode/audio30280.m4s"] = func(w http.ResponseWriter, _ *http.Request) {
+		// 使用分块传输隐藏 Content-Length，验证按实际写入字节数中止。
+		flusher, _ := w.(http.Flusher)
+		chunk := bytes.Repeat([]byte("a"), 1<<20)
+		for written := 0; written <= port.MaxAudioSize; written += len(chunk) {
+			if _, err := w.Write(chunk); err != nil {
+				return
+			}
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+	}
+	c, _, _, _ := serve(t, routes)
+	before := countDirs(t, c.root)
+	_, release, err := c.Download(t.Context(), "BV1xx411c7mD")
+	if release != nil {
+		release()
+	}
+	var rejected *port.RejectedError
+	if !errors.As(err, &rejected) || !errors.Is(err, port.ErrAudioTooLarge) {
+		t.Fatalf("流式超限音频错误 = %v，期望包装 ErrAudioTooLarge 的 RejectedError", err)
+	}
+	if after := countDirs(t, c.root); after != before {
+		t.Fatalf("流式超限失败后留下了临时目录：之前 %d 个，之后 %d 个", before, after)
+	}
+}
+
 func TestDownloadViewFailureFallsBack(t *testing.T) {
 	calls := &playurlCalls{}
 	routes := baseDownloadRoutes(calls, func(url.Values) string { return dashResponse })
@@ -411,7 +472,7 @@ func TestDownloadAudioFailureSanitized(t *testing.T) {
 		w.WriteHeader(http.StatusForbidden)
 	}
 	c, _, _, creds := serve(t, routes)
-	creds.set(t, "SESSDATA=sess123", "refresh789")
+	creds.set(t, "SESSDATA=sess123")
 
 	_, release, err := c.Download(t.Context(), "BV1xx411c7mD")
 	if release != nil {
@@ -420,7 +481,7 @@ func TestDownloadAudioFailureSanitized(t *testing.T) {
 	if err == nil {
 		t.Fatal("音频 403 没有返回错误")
 	}
-	for _, secret := range []string{"SECRETSIG", "sess123", "refresh789", "audio30280.m4s"} {
+	for _, secret := range []string{"SECRETSIG", "sess123", "audio30280.m4s"} {
 		if strings.Contains(err.Error(), secret) {
 			t.Fatalf("错误泄露了 %q：%v", secret, err)
 		}
@@ -481,23 +542,33 @@ func TestDownloadCoverSkipped(t *testing.T) {
 	}
 }
 
-func TestDownloadCoverFailure(t *testing.T) {
-	calls := &playurlCalls{}
-	routes := baseDownloadRoutes(calls, func(url.Values) string { return dashResponse })
-	routes["/bfs/archive/cover.jpg"] = func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}
-	c, _, _, _ := serve(t, routes)
-	before := countDirs(t, c.root)
-	_, release, err := c.Download(t.Context(), "BV1xx411c7mD")
-	if release != nil {
-		release()
-	}
-	if err == nil {
-		t.Fatal("封面下载失败时没有返回错误")
-	}
-	if after := countDirs(t, c.root); after != before {
-		t.Fatalf("失败后留下了临时目录：之前 %d 个，之后 %d 个", before, after)
+func TestDownloadCoverFailureOrTooLargeDegrades(t *testing.T) {
+	for name, coverHandler := range map[string]http.HandlerFunc{
+		"节点返回 500": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		},
+		"超过封面大小上限": func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Length", strconv.FormatInt(port.MaxCoverSize+1, 10))
+			w.WriteHeader(http.StatusOK)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := &playurlCalls{}
+			routes := baseDownloadRoutes(calls, func(url.Values) string { return dashResponse })
+			routes["/bfs/archive/cover.jpg"] = coverHandler
+			c, _, _, _ := serve(t, routes)
+			d, release, err := c.Download(t.Context(), "BV1xx411c7mD")
+			if err != nil {
+				t.Fatalf("封面不可用时整首歌不应失败：%v", err)
+			}
+			defer release()
+			if got := readLinkFile(t, d.Audio); got != "AUDIO-DATA" {
+				t.Errorf("音频 = %q", got)
+			}
+			if d.Cover != nil || d.CoverExt != "" {
+				t.Errorf("封面 = %v, %q，期望降级为空", d.Cover != nil, d.CoverExt)
+			}
+		})
 	}
 }
 
@@ -515,7 +586,7 @@ func TestDownloadUnderGivenRoot(t *testing.T) {
 	}
 }
 
-// 不下载的进程（serve）以空目录构造；误调用 Download 应当显式失败，而不是把文件写进系统临时目录。
+// 不下载的进程（serve）以空目录构造，误调用 Download 时显式报错而不是写进系统临时目录。
 func TestDownloadWithoutRoot(t *testing.T) {
 	c, tr, _, _ := serve(t, baseDownloadRoutes(&playurlCalls{}, func(url.Values) string { return dashResponse }))
 	noRoot := *c
@@ -542,7 +613,6 @@ func TestDownloadInvalidID(t *testing.T) {
 	}
 }
 
-// baseUrl 指向的节点（比如 EdgeOne 承载的镜像）会拦截下载，同一条流的 backup_url 仍可用。
 func TestDownloadFallsBackToBackupNode(t *testing.T) {
 	calls := &playurlCalls{}
 	routes := baseDownloadRoutes(calls, func(url.Values) string {
@@ -566,7 +636,6 @@ func TestDownloadFallsBackToBackupNode(t *testing.T) {
 	}
 }
 
-// 所有候选节点都失败时才返回错误。
 func TestDownloadAllNodesFail(t *testing.T) {
 	calls := &playurlCalls{}
 	routes := baseDownloadRoutes(calls, func(url.Values) string {
@@ -577,6 +646,7 @@ func TestDownloadAllNodesFail(t *testing.T) {
 	routes["/upgcxcode/blocked.m4s"] = func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusForbidden) }
 	routes["/upgcxcode/blocked2.m4s"] = func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusForbidden) }
 	c, tr, _, _ := serve(t, routes)
+	before := countDirs(t, c.root)
 	_, release, err := c.Download(t.Context(), "BV1xx411c7mD")
 	if release != nil {
 		release()
@@ -592,9 +662,11 @@ func TestDownloadAllNodesFail(t *testing.T) {
 			t.Fatalf("错误泄露了 %q：%v", secret, err)
 		}
 	}
+	if after := countDirs(t, c.root); after != before {
+		t.Fatalf("失败后留下了临时目录：之前 %d 个，之后 %d 个", before, after)
+	}
 }
 
-// durl 兜底同样有备用地址。
 func TestDownloadDurlFallsBackToBackupNode(t *testing.T) {
 	calls := &playurlCalls{}
 	routes := baseDownloadRoutes(calls, func(q url.Values) string {
@@ -620,7 +692,6 @@ func TestDownloadDurlFallsBackToBackupNode(t *testing.T) {
 	}
 }
 
-// 节点对 Range 请求返回 206 Partial Content。
 func TestDownloadAcceptsPartialContent(t *testing.T) {
 	calls := &playurlCalls{}
 	routes := baseDownloadRoutes(calls, func(url.Values) string { return dashResponse })

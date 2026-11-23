@@ -46,10 +46,10 @@ type sources struct {
 	bilibili      port.BilibiliSource
 	bilibiliLinks port.BilibiliLinks
 	playback      map[track.Source]port.PlayURLs
-	neteaseLogin  port.NetEaseQRLoginSource
+	neteaseLogin  port.QRLoginSource
 	qqLogin       port.QQQRLoginSource
 	qqRefresh     func(context.Context) error
-	bilibiliLogin port.BilibiliQRLoginSource
+	bilibiliLogin port.QRLoginSource
 }
 
 type public struct {
@@ -94,7 +94,7 @@ func newPublic(cfg serveConfig, pool *pgxpool.Pool, rdb *goredis.Client, instanc
 		Accounts:  accounts,
 		Playlists: playlist.New(store, store, music, quota, shortlink.New(traceHTTP(http.DefaultTransport, tracer), playlistlink.AllowedRedirectHost, playlistlink.Recognized)),
 		Lobby:     rooms,
-		Admin:     admin.New(cfg.adminToken, rooms, store, store, store, src.neteaseLogin, src.qqLogin, src.bilibiliLogin, store, gateway),
+		Admin:     admin.New(cfg.adminToken, rooms, store, store, src.neteaseLogin, src.qqLogin, src.bilibiliLogin, store, gateway),
 		Gateway:   gateway,
 		Catalog:   music,
 		Media:     media.NewLibrary(store, store, objects),

@@ -1,6 +1,7 @@
 package netease
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,21 +11,20 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 
 	"github.com/dihemoe/alisten/internal/lib/chinaip"
+	"github.com/dihemoe/alisten/internal/lib/cookiecache"
 )
 
 const (
-	requestTimeout    = 30 * time.Second
-	downloadTimeout   = 10 * time.Minute
-	cacheSize         = 512
-	cacheTTL          = 30 * time.Minute
-	cookieTTL         = 30 * time.Second
-	cookieLoadTimeout = 10 * time.Second
+	requestTimeout  = 30 * time.Second
+	downloadTimeout = 10 * time.Minute
+	cacheSize       = 512
+	cacheTTL        = 30 * time.Minute
+	bodyLimit       = 4 << 20
 )
 
 const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -32,7 +32,7 @@ const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 
 type Client struct {
 	http    *http.Client
 	api     *http.Client
-	cookie  cookieCache
+	cookie  *cookiecache.Cache
 	cache   *expirable.LRU[string, any]
 	observe func(source, op string, elapsed time.Duration, err error)
 	logger  *slog.Logger
@@ -44,55 +44,18 @@ func New(httpClient *http.Client, cookie func(context.Context) (string, error), 
 	return &Client{
 		http:    httpClient,
 		api:     &api,
-		cookie:  cookieCache{load: cookie, store: saveCookie},
+		cookie:  cookiecache.New(cookie, saveCookie),
 		cache:   expirable.NewLRU[string, any](cacheSize, nil, cacheTTL),
 		observe: observe,
 		logger:  logger,
 	}
 }
 
-// interfaceError 表示接口本身失败：网络错误、HTTP 非 200、上游返回错误码。
-// 这类失败重试可能成功；响应解析失败不属于此类，重试结果不会变。
+// interfaceError 表示网络出错、HTTP 非 200 或上游返回错误码。这类失败重试可能恢复，而响应解析失败重试也不会改变结果，所以不包成 interfaceError。
 type interfaceError struct{ err error }
 
 func (e *interfaceError) Error() string { return e.err.Error() }
 func (e *interfaceError) Unwrap() error { return e.err }
-
-type cookieCache struct {
-	load    func(context.Context) (string, error)
-	store   func(context.Context, string) error
-	mu      sync.Mutex
-	value   string
-	expires time.Time
-}
-
-func (c *cookieCache) get(ctx context.Context) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if time.Now().Before(c.expires) {
-		return c.value, nil
-	}
-	ctx, cancel := context.WithTimeout(ctx, cookieLoadTimeout)
-	defer cancel()
-	value, err := c.load(ctx)
-	if err != nil {
-		return "", err
-	}
-	c.value, c.expires = value, time.Now().Add(cookieTTL)
-	return value, nil
-}
-
-func (c *cookieCache) put(ctx context.Context, value string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	ctx, cancel := context.WithTimeout(ctx, cookieLoadTimeout)
-	defer cancel()
-	if err := c.store(ctx, value); err != nil {
-		return err
-	}
-	c.value, c.expires = value, time.Now().Add(cookieTTL)
-	return nil
-}
 
 func cached[T any](c *Client, key string, fetch func() (T, error)) (T, error) {
 	if v, ok := c.cache.Get(key); ok {
@@ -115,14 +78,18 @@ type base struct {
 func (b base) status() int { return b.Code }
 
 func (c *Client) call(ctx context.Context, op, endpoint string, form url.Values, out response) error {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-	cookie, err := c.cookie.get(ctx)
+	cookie, err := c.cookie.Get(ctx)
 	if err != nil {
 		return err
 	}
+	return c.callWithCookie(ctx, op, endpoint, form, cookie, out)
+}
+
+func (c *Client) callWithCookie(ctx context.Context, op, endpoint string, form url.Values, cookie string, out response) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
 	start := time.Now()
-	err = c.post(ctx, endpoint, form, cookie, out)
+	_, err := c.post(ctx, endpoint, form, userAgent, cookie, out)
 	if err == nil && out.status() != http.StatusOK {
 		err = &interfaceError{fmt.Errorf("网易云的接口 %s 返回错误码 %d", op, out.status())}
 	}
@@ -130,30 +97,37 @@ func (c *Client) call(ctx context.Context, op, endpoint string, form url.Values,
 	return err
 }
 
-func (c *Client) post(ctx context.Context, endpoint string, form url.Values, cookie string, out response) error {
+func (c *Client) post(ctx context.Context, endpoint string, form url.Values, ua, cookie string, out any) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		return errors.New("网易云的请求地址无效")
+		return nil, errors.New("网易云的请求地址无效")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Referer", "https://music.163.com/")
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("User-Agent", ua)
 	chinaip.Set(req.Header)
 	if cookie != "" {
 		req.Header.Set("Cookie", cookie)
 	}
 	resp, err := c.api.Do(req)
 	if err != nil {
-		return &interfaceError{requestError(req.URL.Host, err)}
+		return nil, &interfaceError{requestError(req.URL.Host, err)}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return &interfaceError{fmt.Errorf("网易云返回 HTTP %d", resp.StatusCode)}
+		return nil, &interfaceError{fmt.Errorf("网易云返回 HTTP %d", resp.StatusCode)}
 	}
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("解析网易云的响应：%w", err)
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, bodyLimit+1))
+	if err != nil {
+		return nil, &interfaceError{fmt.Errorf("读取网易云的响应：%w", err)}
 	}
-	return nil
+	if len(raw) > bodyLimit {
+		return nil, errors.New("网易云的响应超过大小上限")
+	}
+	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(out); err != nil {
+		return nil, fmt.Errorf("解析网易云的响应：%w", err)
+	}
+	return resp, nil
 }
 
 func linux(data any) (url.Values, error) {
@@ -211,7 +185,7 @@ func requestError(host string, err error) error {
 	if errors.As(err, &urlError) {
 		err = urlError.Err
 	}
-	// 播放地址的查询参数可能携带签名，错误包装不得泄漏完整 URL。
+	// 播放地址的查询参数可能携带签名，错误包装不得泄露完整 URL。
 	if strings.Contains(err.Error(), "failed to parse Location header") {
 		return fmt.Errorf("请求 %s：解析跳转地址失败", host)
 	}

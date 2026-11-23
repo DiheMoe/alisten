@@ -29,13 +29,6 @@ type BilibiliLinks interface {
 	Recognize(ctx context.Context, link string) (id string, ok bool, err error)
 }
 
-type BilibiliQRLoginSource interface {
-	CreateQRLogin(context.Context) (QRLoginSession, error)
-	CheckQRLogin(context.Context, string) (QRLoginResult, error)
-	// 是否已登录也由实现判断，凭据不离开适配器。
-	CredentialStatus(context.Context) (CredentialStatus, error)
-}
-
 // 只读本地文件，不访问网络。调用方读完 mp3 之后调用 release 删除它。返回错误时没有要删除的文件。输入超过 MaxAudioSize 时返回 *RejectedError。
 type Transcoder interface {
 	ToMP3(ctx context.Context, audio LinkFile) (mp3 LinkFile, release func(), err error)

@@ -27,9 +27,9 @@ func (c *Client) CreateQRLogin(ctx context.Context) (session port.QRLoginSession
 		return port.QRLoginSession{}, err
 	}
 	if strings.TrimSpace(data.QRCodeKey) == "" {
-		return port.QRLoginSession{}, errors.New("平台没有返回二维码 key")
+		return port.QRLoginSession{}, errors.New("哔哩哔哩没有返回二维码 key")
 	}
-	// QRImage 留空：调用方按 LoginURL 生成二维码图片。
+	// QRImage 留空，由入口层按 LoginURL 生成二维码图片。
 	return port.QRLoginSession{
 		Key:       data.QRCodeKey,
 		LoginURL:  data.URL,
@@ -39,7 +39,7 @@ func (c *Client) CreateQRLogin(ctx context.Context) (session port.QRLoginSession
 
 func (c *Client) CheckQRLogin(ctx context.Context, key string) (result port.QRLoginResult, err error) {
 	if strings.TrimSpace(key) == "" {
-		return port.QRLoginResult{}, errors.New("二维码 key 为空")
+		return port.QRLoginResult{}, errors.New("哔哩哔哩扫码登录的 key 为空")
 	}
 	start := time.Now()
 	defer func() { c.report("login_check", start, err) }()
@@ -51,13 +51,12 @@ func (c *Client) CheckQRLogin(ctx context.Context, key string) (result port.QRLo
 		Code    int    `json:"code"`
 		Message string `json:"message"`
 		Data    struct {
-			Code         int    `json:"code"`
-			Message      string `json:"message"`
-			RefreshToken string `json:"refresh_token"`
+			Code    int    `json:"code"`
+			Message string `json:"message"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return port.QRLoginResult{}, fmt.Errorf("解析扫码结果：%w", err)
+		return port.QRLoginResult{}, fmt.Errorf("解析 哔哩哔哩扫码结果：%w", err)
 	}
 	if payload.Code != 0 {
 		return port.QRLoginResult{}, classifyCode(payload.Code, payload.Message)
@@ -69,13 +68,13 @@ func (c *Client) CheckQRLogin(ctx context.Context, key string) (result port.QRLo
 	if payload.Data.Code != 0 {
 		return result, nil
 	}
-	// Set-Cookie 和 refresh_token 只写入服务端凭据，不放入 QRLoginResult。
+	// Set-Cookie 只写入服务端存储，不放进返回给前端的 QRLoginResult。
 	cookie := joinCookies(cookies)
 	if cookie == "" {
-		return port.QRLoginResult{}, errors.New("扫码成功但平台没有返回 Cookie")
+		return port.QRLoginResult{}, errors.New("哔哩哔哩扫码成功但响应没有返回 Cookie")
 	}
-	if err := c.saveCredential(ctx, encodeCredential(cookie, payload.Data.RefreshToken)); err != nil {
-		return port.QRLoginResult{}, fmt.Errorf("保存 Bilibili 凭据：%w", err)
+	if err := c.cookie.Put(ctx, cookie); err != nil {
+		return port.QRLoginResult{}, fmt.Errorf("保存 哔哩哔哩凭据：%w", err)
 	}
 	return result, nil
 }
@@ -98,7 +97,7 @@ func qrStatus(code int) port.QRLoginStatus {
 func joinCookies(cookies []*http.Cookie) string {
 	parts := make([]string, 0, len(cookies))
 	for _, cookie := range cookies {
-		if strings.TrimSpace(cookie.Name) != "" {
+		if strings.TrimSpace(cookie.Name) != "" && cookie.Value != "" {
 			parts = append(parts, cookie.Name+"="+cookie.Value)
 		}
 	}
@@ -114,7 +113,7 @@ type navData struct {
 	VipType   int    `json:"vipType"`
 }
 
-// fetchNav 不检查信封的 code：未登录时平台返回 -101，由调用方按 isLogin 区分。
+// fetchNav 不检查顶层 code，因为未登录时平台返回 -101，由调用方按 isLogin 判断登录是否失效。
 func (c *Client) fetchNav(ctx context.Context, op, cookie string) (d navData, err error) {
 	start := time.Now()
 	defer func() { c.report(op, start, err) }()
@@ -123,10 +122,15 @@ func (c *Client) fetchNav(ctx context.Context, op, cookie string) (d navData, er
 		return navData{}, err
 	}
 	var payload struct {
-		Data navData `json:"data"`
+		Code    int     `json:"code"`
+		Message string  `json:"message"`
+		Data    navData `json:"data"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return navData{}, fmt.Errorf("解析账号信息：%w", err)
+		return navData{}, fmt.Errorf("解析 哔哩哔哩账号信息：%w", err)
+	}
+	if payload.Code != 0 && payload.Code != -101 {
+		return navData{}, classifyCode(payload.Code, payload.Message)
 	}
 	return payload.Data, nil
 }
@@ -136,32 +140,28 @@ func (n navData) vip() bool {
 }
 
 func (c *Client) CredentialStatus(ctx context.Context) (port.CredentialStatus, error) {
-	raw, err := c.loadCredential(ctx)
+	cookie, err := c.cookie.Reload(ctx)
 	if err != nil {
-		return port.CredentialStatus{}, fmt.Errorf("读取 Bilibili 凭据：%w", err)
+		return port.CredentialStatus{}, fmt.Errorf("读取 哔哩哔哩凭据：%w", err)
 	}
-	if raw == "" {
+	if strings.TrimSpace(cookie) == "" {
 		return port.CredentialStatus{}, nil
 	}
-	cred, err := decodeCredential(raw)
-	if err != nil {
-		return port.CredentialStatus{}, err
-	}
-	nav, err := c.fetchNav(ctx, "credential_status", cred.Cookie)
+	nav, err := c.fetchNav(ctx, "credential_status", cookie)
 	if err != nil {
 		return port.CredentialStatus{}, err
 	}
 	if !nav.IsLogin {
-		return port.CredentialStatus{Set: true}, nil
+		return port.CredentialStatus{Set: true, SignedOut: true}, nil
 	}
-	name, vip := nav.Uname, nav.vip()
-	return port.CredentialStatus{
-		Set: true,
-		Account: &port.SourceAccount{
-			ID:       strconv.FormatInt(nav.Mid, 10),
-			Name:     &name,
-			VIP:      &vip,
-			Verified: true,
-		},
-	}, nil
+	vip := nav.vip()
+	account := &port.SourceAccount{
+		ID:       strconv.FormatInt(nav.Mid, 10),
+		VIP:      &vip,
+		Verified: true,
+	}
+	if name := cleanText(nav.Uname); name != "" {
+		account.Name = &name
+	}
+	return port.CredentialStatus{Set: true, Account: account}, nil
 }

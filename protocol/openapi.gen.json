@@ -193,11 +193,16 @@
           "set": {
             "description": "是否保存了登录凭据，不代表凭据仍然有效",
             "type": "boolean"
+          },
+          "signedOut": {
+            "description": "保存了登录凭据，但 B 站确认登录已失效，要重新扫码登录。为 true 时 account 为 null",
+            "type": "boolean"
           }
         },
         "required": [
           "set",
-          "account"
+          "account",
+          "signedOut"
         ],
         "type": "object"
       },
@@ -2509,7 +2514,7 @@
   },
   "info": {
     "title": "Alisten",
-    "version": "77c2a450b56ba881"
+    "version": "b23410b249f706ea"
   },
   "openapi": "3.1.0",
   "paths": {

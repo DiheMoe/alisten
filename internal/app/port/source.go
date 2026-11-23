@@ -49,18 +49,18 @@ const (
 	QQLoginWeChat QQLoginType = "wx"
 )
 
-// CurrentAccount 在平台明确表示保存的登录已失效时，返回包装了 ErrSourceSignedOut 的错误。
-type NetEaseQRLoginSource interface {
+// 是否已登录和登录是否失效都由实现判断，凭据不离开适配器。
+type QRLoginSource interface {
 	CreateQRLogin(context.Context) (QRLoginSession, error)
 	CheckQRLogin(context.Context, string) (QRLoginResult, error)
-	CurrentAccount(context.Context) (*SourceAccount, error)
+	CredentialStatus(context.Context) (CredentialStatus, error)
 }
 
-// CurrentAccount 在平台明确表示保存的登录已失效时，返回包装了 ErrSourceSignedOut 的错误。
+// 是否已登录和登录是否失效都由实现判断，凭据不离开适配器。
 type QQQRLoginSource interface {
 	CreateQRLogin(context.Context, QQLoginType) (QRLoginSession, error)
 	CheckQRLogin(context.Context, QQLoginType, string) (QRLoginResult, error)
-	CurrentAccount(context.Context) (*SourceAccount, error)
+	CredentialStatus(context.Context) (CredentialStatus, error)
 }
 
 // 音乐平台明确表示保存的登录已失效时，音源返回包装了它的错误。登录失效之后重试没有用，要管理员重新扫码登录，

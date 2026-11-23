@@ -20,15 +20,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"github.com/dihemoe/alisten/internal/app/port"
-	"github.com/dihemoe/alisten/internal/app/prepare"
 	"github.com/dihemoe/alisten/internal/domain/track"
 )
 
-// 测试服务器按路径返回 testdata 中录制的网易云响应，Client 的所有请求都转到它。
 var testLogger = slog.New(slog.DiscardHandler)
 
 func serve(t *testing.T, routes map[string]http.HandlerFunc) (*Client, *observed) {
@@ -61,10 +58,7 @@ func (r redirect) RoundTrip(req *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-// 国内运营商的地址段。
-var chinaPrefixes = [][2]byte{{116, 255}, {116, 228}, {218, 192}, {124, 0}, {14, 132}, {183, 14}, {58, 14}, {113, 116}, {120, 230}}
-
-// 请求接口时带上同一个随机的国内 IP，下载音频时不带。
+// 请求接口时带上同一个随机的国内 IPv4，下载音频时不带。
 func checkClientIP(t *testing.T, r *http.Request) {
 	realIP, forwarded := r.Header.Get("X-Real-IP"), r.Header.Get("X-Forwarded-For")
 	if r.URL.Path == audioPath {
@@ -74,8 +68,8 @@ func checkClientIP(t *testing.T, r *http.Request) {
 		return
 	}
 	addr, err := netip.ParseAddr(realIP)
-	if err != nil || !addr.Is4() || !slices.Contains(chinaPrefixes, [2]byte(addr.AsSlice())) || forwarded != realIP {
-		t.Errorf("%s 的 X-Real-IP 为 %q、X-Forwarded-For 为 %q，期望同一个国内运营商的 IP", r.URL.Path, realIP, forwarded)
+	if err != nil || !addr.Is4() || forwarded != realIP {
+		t.Errorf("%s 的 X-Real-IP 为 %q、X-Forwarded-For 为 %q，期望同一个 IPv4 地址", r.URL.Path, realIP, forwarded)
 	}
 }
 
@@ -143,7 +137,6 @@ func decryptECB(t *testing.T, hexText, key string) string {
 	return string(out[:len(out)-int(out[len(out)-1])])
 }
 
-// linuxapi 的请求中是转发给搜索接口的参数。
 func searchParams(t *testing.T, r *http.Request) map[string]any {
 	t.Helper()
 	var forward struct {
@@ -160,7 +153,7 @@ func wantSong(id string, title, artist, album, cover string, ms int) port.Song {
 		Track: track.Track{Source: track.NetEase, ID: id},
 		Meta: track.Meta{
 			Title: title, Artist: artist, Album: album, CoverURL: cover,
-			PageURL: "https://music.163.com/#/song?id=" + id, Duration: time.Duration(ms) * time.Millisecond,
+			PageURL: track.NetEasePageURL(id), Duration: time.Duration(ms) * time.Millisecond,
 		},
 	}
 }
@@ -249,18 +242,23 @@ func TestTrackMeta(t *testing.T) {
 	}
 }
 
-// 歌曲的元数据和歌词会写入 PostgreSQL，text 类型不能存储 U+0000。
+// 歌曲的元数据、歌单和歌词会写入 PostgreSQL，text 类型不能存储 U+0000。
 func TestTextDropsNUL(t *testing.T) {
 	c, _ := serve(t, map[string]http.HandlerFunc{
 		"/weapi/v3/song/detail": body(`{"songs":[{"name":"晴\u0000天","id":1,"ar":[{"name":"周\u0000杰伦"}],"al":{"name":"叶\u0000惠美","picUrl":"https://p1.music.126.net/a\u0000.jpg"},"dt":1000}],"code":200}`),
 		"/weapi/song/lyric/v1":  body(`{"lrc":{"lyric":"[00:01.00]故\u0000事"},"code":200}`),
+		"/api/linux/forward":    body(`{"result":{"playlists":[{"id":9,"name":"歌\u0000单","coverImgUrl":"https://p1.music.126.net/p\u0000.jpg","creator":{"nickname":"创\u0000作者"},"description":"简\u0000介"}]},"code":200}`),
 	})
-	want := track.Meta{Title: "晴天", Artist: "周杰伦", Album: "叶惠美", CoverURL: "https://p1.music.126.net/a.jpg", PageURL: "https://music.163.com/#/song?id=1", Duration: time.Second}
+	want := track.Meta{Title: "晴天", Artist: "周杰伦", Album: "叶惠美", CoverURL: "https://p1.music.126.net/a.jpg", PageURL: track.NetEasePageURL("1"), Duration: time.Second}
 	if got, err := c.TrackMeta(t.Context(), "1"); err != nil || got != want {
 		t.Errorf("元数据 = %#v, %v，期望 %#v", got, err, want)
 	}
 	if got, err := c.lyric(t.Context(), "1"); err != nil || got.LRC != "[00:01.00]故事" {
 		t.Errorf("歌词 = %q, %v", got.LRC, err)
+	}
+	playlists, err := c.SearchPlaylists(t.Context(), "歌单")
+	if err != nil || len(playlists) != 1 || playlists[0].Name != "歌单" || playlists[0].Creator != "创作者" || playlists[0].Description != "简介" {
+		t.Errorf("歌单 = %#v, %v", playlists, err)
 	}
 }
 
@@ -290,7 +288,7 @@ func resolveRoutes(t *testing.T) map[string]http.HandlerFunc {
 		"/weapi/song/lyric/v1":     fixture(t, "lyric.json"),
 		"/weapi/nuser/account/get": body(`{"code":200,"profile":{"userId":42,"nickname":"","vipType":0}}`),
 		audioPath: func(w http.ResponseWriter, r *http.Request) {
-			// 音频来自 CDN，网易云的 Cookie 不能发给它。
+			// 网易云的 Cookie 不能发给音频 CDN 节点。
 			if got := r.Header.Get("Cookie"); got != "" {
 				t.Errorf("下载音频时带上了 Cookie %q", got)
 			}
@@ -339,9 +337,9 @@ func TestResolve(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantWords := "[16350,3810](16350,600,0)故(16950,600,0)事(17550,600,0)的(18150,600,0)小(18750,600,0)黄(19350,600,0)花(19950,210,0)\n[20160,4000](20160,500,0)从(20660,500,0)出(21160,500,0)生(21660,500,0)那(22160,500,0)年(22660,500,0)就(23160,500,0)飘(23660,500,0)着(24160,500,0)\n"
-	wantTrans := "[00:16.35]Story of the flower\n[00:20.16]Floating since birth\n"
-	if got.Meta != cover.Meta || got.Lyric != "[00:16.35]故事的小黄花\n[00:20.16]从出生那年就飘着\n" || got.LyricWords != wantWords || got.LyricTrans != wantTrans {
+	wantWords := "[1000,2000](1000,500,0)合(1500,500,0)成(2000,500,0)第(2500,500,0)一(3000,0,0)句\n[3500,2000](3500,500,0)合(4000,500,0)成(4500,500,0)第(5000,500,0)二(5500,0,0)句\n"
+	wantTrans := "[00:01.00]Synthetic line one\n[00:03.50]Synthetic line two\n"
+	if got.Meta != cover.Meta || got.Lyric != "[00:01.00]合成第一句\n[00:03.50]合成第二句\n" || got.LyricWords != wantWords || got.LyricTrans != wantTrans {
 		t.Errorf("解析结果 = %#v", got)
 	}
 	if audio := readAudio(t, got); audio != "ID3 音频" {
@@ -365,7 +363,7 @@ func TestResolveFallsBackToStandardQuality(t *testing.T) {
 	obs.check(t, "track_detail", "lyric", "play_url", "play_url")
 }
 
-// 播放地址有时效性，两次准备之间不能复用；元数据和歌词命中缓存。
+// 播放地址有时效性，两次准备之间不能复用。元数据和歌词则命中缓存。
 func TestResolveDoesNotCachePlayURL(t *testing.T) {
 	routes := resolveRoutes(t)
 	routes["/eapi/song/enhance/player/url/v1"] = fixture(t, "play-url.json")
@@ -380,26 +378,13 @@ func TestResolveDoesNotCachePlayURL(t *testing.T) {
 	obs.check(t, "track_detail", "lyric", "play_url", "play_url")
 }
 
-// 没有会员权限的账号只能取到试听片段：播放地址有值，freeTrialInfo 给出片段的范围。
-// 录制不到这样的响应，按解析时读取的字段构造。
+// 没有会员权限的账号只能拿到试听片段，响应里仍有 URL 并通过 freeTrialInfo 给出片段起止时间。
 func trialClip() http.HandlerFunc {
 	return body(`{"data":[{"id":3387653989,"url":"http://m801.music.126.net` + audioPath + `?trial=1","br":320000,"code":200,"freeTrialInfo":{"start":0,"end":30},"fee":1}],"code":200}`)
 }
 
-// 记下写入曲目表的歌。
-type savedTracks struct{ saved []track.Track }
-
-func (*savedTracks) PreparedTrack(context.Context, track.Track) (port.PreparedTrack, bool, error) {
-	return port.PreparedTrack{}, false, nil
-}
-
-func (s *savedTracks) SavePreparedTrack(_ context.Context, t track.Track, _ port.PreparedTrack) error {
-	s.saved = append(s.saved, t)
-	return nil
-}
-
-// 试听片段不是完整的歌，存下来这首歌就只有 30 秒：按音源拒绝处理，不下载，也不写入曲目表。
-func TestTrialClipIsRejectedAndNotStored(t *testing.T) {
+// 试听片段不是完整的歌，按音源拒绝处理且不发起音频下载。
+func TestTrialClipIsRejectedWithoutDownloading(t *testing.T) {
 	missing := fixture(t, "play-url-missing.json")
 	for _, tt := range []struct {
 		name        string
@@ -415,20 +400,16 @@ func TestTrialClipIsRejectedAndNotStored(t *testing.T) {
 			routes["/weapi/song/enhance/player/url"] = tt.weapi
 			routes[audioPath] = func(http.ResponseWriter, *http.Request) { t.Error("试听片段不应下载") }
 			c, _ := serve(t, routes)
-			tracks := &savedTracks{}
-			err := prepare.NewRunner(map[track.Source]port.Source{track.NetEase: c}, tracks, slog.New(slog.DiscardHandler)).Run(t.Context(), track.Track{Source: track.NetEase, ID: "3387653989"})
+			_, err := c.Resolve(t.Context(), "3387653989")
 			var rejected *port.RejectedError
 			if !errors.As(err, &rejected) || err.Error() != "这首歌需要网易云会员账号才能完整播放，请管理员在后台设置会员账号的 Cookie" {
-				t.Errorf("试听片段的错误 = %v，期望音源拒绝，原因说明需要会员账号", err)
-			}
-			if len(tracks.saved) != 0 {
-				t.Errorf("曲目表中写入了 %v", tracks.saved)
+				t.Errorf("试听片段的错误 = %v，期望音源拒绝并说明需要会员账号", err)
 			}
 		})
 	}
 }
 
-// 第一个接口只给试听片段时，回落的接口给出完整的歌就用它。
+// 第一个接口只给试听片段时，回落的接口给出完整的歌就用回落结果。
 func TestResolveFallsBackFromTrialClip(t *testing.T) {
 	routes := resolveRoutes(t)
 	routes["/eapi/song/enhance/player/url/v1"] = trialClip()
@@ -502,48 +483,6 @@ func TestFailedResponseIsNotCached(t *testing.T) {
 	obs.check(t, "search_tracks 失败", "search_tracks")
 }
 
-func TestCookieIsReloadedEvery30Seconds(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		loads := 0
-		c := cookieCache{load: func(context.Context) (string, error) {
-			loads++
-			return "MUSIC_U=" + string(rune('0'+loads)), nil
-		}}
-		for range 2 {
-			if got, err := c.get(t.Context()); err != nil || got != "MUSIC_U=1" {
-				t.Fatalf("Cookie = %q, %v", got, err)
-			}
-		}
-		time.Sleep(30*time.Second - time.Nanosecond)
-		if got, err := c.get(t.Context()); err != nil || got != "MUSIC_U=1" {
-			t.Fatalf("不到 30 秒的 Cookie = %q, %v，期望仍是缓存的", got, err)
-		}
-		time.Sleep(time.Nanosecond)
-		if got, err := c.get(t.Context()); err != nil || got != "MUSIC_U=2" {
-			t.Errorf("30 秒之后的 Cookie = %q, %v，期望重新读取", got, err)
-		}
-	})
-}
-
-// 读取 Cookie 是读 PostgreSQL，期限与其他读写 PostgreSQL 的操作相同，不占用接口调用的 30 秒。
-func TestCookieLoadHasOwnDeadline(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		c := cookieCache{load: func(ctx context.Context) (string, error) {
-			<-ctx.Done()
-			return "", ctx.Err()
-		}}
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-		start := time.Now()
-		if _, err := c.get(ctx); !errors.Is(err, context.DeadlineExceeded) {
-			t.Errorf("读取卡住时的错误 = %v，期望超过期限", err)
-		}
-		if waited := time.Since(start); waited != 10*time.Second {
-			t.Errorf("等了 %v，期望 10 秒", waited)
-		}
-	})
-}
-
 // 把 HTTPS 的请求转给 TLS 服务器，HTTP 的请求转给明文服务器。
 type split struct {
 	secure, plain *url.URL
@@ -589,7 +528,7 @@ func TestCookieIsNotSentOverPlainHTTPAfterRedirect(t *testing.T) {
 	obs.check(t, "track_detail 失败")
 }
 
-// 音频下载不带 Cookie，沿用默认的重定向策略：网易云给出的 CDN 地址可能再跳转一次。
+// 音频下载不带 Cookie，沿用默认的重定向策略，因为网易云给出的 CDN 地址可能再跳转一次。
 func TestResolveFollowsAudioRedirects(t *testing.T) {
 	routes := resolveRoutes(t)
 	routes["/eapi/song/enhance/player/url/v1"] = fixture(t, "play-url.json")

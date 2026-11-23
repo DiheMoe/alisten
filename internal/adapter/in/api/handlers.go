@@ -122,7 +122,7 @@ func (s *server) adminGetBilibiliCredential(ctx context.Context, _ call) (protoc
 	if err != nil {
 		return protocol.AdminGetBilibiliCredentialResponse{}, err
 	}
-	return protocol.AdminGetBilibiliCredentialResponse{Set: status.Set, Account: sourceAccountDTO(status.Account)}, nil
+	return protocol.AdminGetBilibiliCredentialResponse{Set: status.Set, Account: sourceAccountDTO(status.Account), SignedOut: status.SignedOut}, nil
 }
 
 func (s *server) adminGetYoutubeCredential(ctx context.Context, _ call) (protocol.AdminGetYoutubeCredentialResponse, error) {

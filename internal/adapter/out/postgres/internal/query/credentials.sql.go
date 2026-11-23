@@ -55,3 +55,23 @@ func (q *Queries) SetCredential(ctx context.Context, arg SetCredentialParams) er
 	_, err := q.db.Exec(ctx, setCredential, arg.Name, arg.Value)
 	return err
 }
+
+const swapCredential = `-- name: SwapCredential :execrows
+UPDATE credentials
+SET value = $1, updated_at = now()
+WHERE name = $2 AND value = $3
+`
+
+type SwapCredentialParams struct {
+	Value    string
+	Name     string
+	Expected string
+}
+
+func (q *Queries) SwapCredential(ctx context.Context, arg SwapCredentialParams) (int64, error) {
+	result, err := q.db.Exec(ctx, swapCredential, arg.Value, arg.Name, arg.Expected)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

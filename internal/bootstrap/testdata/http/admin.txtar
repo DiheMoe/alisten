@@ -234,7 +234,7 @@ GET /api/admin/credentials/bilibili
 Authorization: Bearer admin-secret
 -- response --
 200
-{"set": false, "account": null}
+{"set": false, "account": null, "signedOut": false}
 
 -- request --
 POST /api/admin/credentials/bilibili/qr-logins

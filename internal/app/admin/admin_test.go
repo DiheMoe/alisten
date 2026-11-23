@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
-	"fmt"
 	"log/slog"
 	"reflect"
 	"strconv"
@@ -55,7 +54,7 @@ func newService(t *testing.T, token string) fixture {
 	})
 	l := lobby.New(store, site.New(store), node, porttest.Quota{})
 	netease, qq, bilibili, youtube := porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies()
-	return fixture{admin: New(token, l, store, store, store, netease, qq, bilibili, youtube, gateway), store: store, youtube: youtube, netease: netease, qq: qq, bilibili: bilibili, node: node, host: host, gateway: gateway}
+	return fixture{admin: New(token, l, store, store, netease, qq, bilibili, youtube, gateway), store: store, youtube: youtube, netease: netease, qq: qq, bilibili: bilibili, node: node, host: host, gateway: gateway}
 }
 
 func TestSetYouTubeCookies(t *testing.T) {
@@ -411,39 +410,36 @@ func TestCredentialStatus(t *testing.T) {
 	f := newService(t, "secret")
 	name, vip := "测试账号", true
 	for _, source := range []struct {
-		name        string
-		save        func(context.Context, string) error
-		status      func(context.Context) (port.CredentialStatus, error)
-		setAccount  func(*port.SourceAccount)
-		failAccount func(error)
-		account     *port.SourceAccount
+		name      string
+		status    func(context.Context) (port.CredentialStatus, error)
+		set       func(*port.SourceAccount)
+		signedOut func()
+		fail      func(error)
+		account   *port.SourceAccount
 	}{
-		{"网易云", f.store.SetNeteaseCookie, f.admin.NeteaseCredentialStatus, f.netease.SetAccount, f.netease.FailAccount, &port.SourceAccount{ID: "123", Name: &name, VIP: &vip, Verified: true}},
-		{"QQ", f.store.SetQQCookie, f.admin.QQCredentialStatus, f.qq.SetAccount, f.qq.FailAccount, &port.SourceAccount{ID: "456"}},
+		{"网易云", f.admin.NeteaseCredentialStatus, f.netease.SetCredential, f.netease.SetSignedOut, f.netease.FailStatus, &port.SourceAccount{ID: "123", Name: &name, VIP: &vip, Verified: true}},
+		{"QQ", f.admin.QQCredentialStatus, f.qq.SetCredential, f.qq.SetSignedOut, f.qq.FailStatus, &port.SourceAccount{ID: "456"}},
+		{"B 站", f.admin.BilibiliCredentialStatus, f.bilibili.SetCredential, f.bilibili.SetSignedOut, f.bilibili.FailStatus, &port.SourceAccount{ID: "789", Name: &name, VIP: &vip, Verified: true}},
 	} {
 		t.Run(source.name, func(t *testing.T) {
-			source.failAccount(errors.New("无凭据时不允许查询账号"))
 			got, err := source.status(t.Context())
-			if err != nil || got.Set || got.Account != nil {
-				t.Fatalf("没有凭据时的状态 = %+v, %v，期望未设置且不查询账号", got, err)
+			if err != nil || got.Set || got.Account != nil || got.SignedOut {
+				t.Fatalf("没有凭据时的状态 = %+v, %v，期望未设置", got, err)
 			}
-			if err := source.save(t.Context(), "敏感凭据"); err != nil {
-				t.Fatal(err)
-			}
-			source.setAccount(source.account)
+			source.set(source.account)
 			got, err = source.status(t.Context())
-			if err != nil || !got.Set || got.Account != source.account {
+			if err != nil || !got.Set || got.Account != source.account || got.SignedOut {
 				t.Fatalf("保存凭据后的状态 = %+v, %v，期望 %+v", got, err, source.account)
 			}
-			upstream := errors.New("上游失败")
-			source.failAccount(upstream)
-			if _, err := source.status(t.Context()); !errors.Is(err, port.ErrProviderFailed) || !errors.Is(err, upstream) {
-				t.Fatalf("账号查询错误 = %v，期望包含上游错误和 ErrProviderFailed", err)
-			}
-			source.failAccount(fmt.Errorf("平台说未登录：%w", port.ErrSourceSignedOut))
+			source.signedOut()
 			got, err = source.status(t.Context())
 			if err != nil || got != (port.CredentialStatus{Set: true, SignedOut: true}) {
 				t.Fatalf("登录已失效时的状态 = %+v, %v，期望已保存、登录已失效、不当成查询出错", got, err)
+			}
+			upstream := errors.New("上游失败")
+			source.fail(upstream)
+			if _, err := source.status(t.Context()); !errors.Is(err, port.ErrProviderFailed) || !errors.Is(err, upstream) {
+				t.Fatalf("查询登录状态失败 = %v，期望包含上游错误和 ErrProviderFailed", err)
 			}
 		})
 	}
@@ -482,24 +478,6 @@ func TestQRLogin(t *testing.T) {
 		if err := call(); !errors.Is(err, port.ErrProviderFailed) {
 			t.Errorf("音源出错时%s = %v，期望 ErrProviderFailed", name, err)
 		}
-	}
-}
-
-func TestBilibiliCredentialStatus(t *testing.T) {
-	f := newService(t, "secret")
-	if got, err := f.admin.BilibiliCredentialStatus(t.Context()); err != nil || got.Set || got.Account != nil {
-		t.Fatalf("没有登录时 = %+v, %v，期望未设置", got, err)
-	}
-	name, vip := "测试账号", true
-	account := &port.SourceAccount{ID: "789", Name: &name, VIP: &vip, Verified: true}
-	f.bilibili.SetCredential(account)
-	if got, err := f.admin.BilibiliCredentialStatus(t.Context()); err != nil || !got.Set || got.Account != account {
-		t.Fatalf("登录之后 = %+v, %v，期望 %+v", got, err, account)
-	}
-	upstream := errors.New("上游失败")
-	f.bilibili.FailStatus(upstream)
-	if _, err := f.admin.BilibiliCredentialStatus(t.Context()); !errors.Is(err, port.ErrProviderFailed) || !errors.Is(err, upstream) {
-		t.Errorf("查询登录状态失败时 = %v，期望包含音源的错误和 ErrProviderFailed", err)
 	}
 }
 

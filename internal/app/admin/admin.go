@@ -22,21 +22,20 @@ var (
 
 // 除 Authorize 外的方法都不检查凭证，调用方要先用 Authorize 校验管理 token。
 type Service struct {
-	token       string
-	lobby       *lobby.Service
-	rooms       port.RoomDirectory
-	keys        port.APIKeys
-	credentials port.Credentials
+	token string
+	lobby *lobby.Service
+	rooms port.RoomDirectory
+	keys  port.APIKeys
 	// 扫码登录成功时由音源保存登录状态，后台只得到二维码和扫码结果。
-	netease  port.NetEaseQRLoginSource
+	netease  port.QRLoginSource
 	qq       port.QQQRLoginSource
-	bilibili port.BilibiliQRLoginSource
+	bilibili port.QRLoginSource
 	youtube  port.YouTubeCookies
 	gateway  *realtime.Gateway
 }
 
-func New(token string, lobbyService *lobby.Service, rooms port.RoomDirectory, keys port.APIKeys, credentials port.Credentials, netease port.NetEaseQRLoginSource, qq port.QQQRLoginSource, bilibili port.BilibiliQRLoginSource, youtube port.YouTubeCookies, gateway *realtime.Gateway) *Service {
-	return &Service{token: token, lobby: lobbyService, rooms: rooms, keys: keys, credentials: credentials, netease: netease, qq: qq, bilibili: bilibili, youtube: youtube, gateway: gateway}
+func New(token string, lobbyService *lobby.Service, rooms port.RoomDirectory, keys port.APIKeys, netease port.QRLoginSource, qq port.QQQRLoginSource, bilibili port.QRLoginSource, youtube port.YouTubeCookies, gateway *realtime.Gateway) *Service {
+	return &Service{token: token, lobby: lobbyService, rooms: rooms, keys: keys, netease: netease, qq: qq, bilibili: bilibili, youtube: youtube, gateway: gateway}
 }
 
 func (s *Service) Authorize(token string) error {
@@ -196,42 +195,19 @@ func (s *Service) ClearYouTubeCookies(ctx context.Context) error {
 }
 
 func (s *Service) NeteaseCredentialStatus(ctx context.Context) (port.CredentialStatus, error) {
-	cookie, err := s.credentials.NeteaseCookie(ctx)
+	status, err := s.netease.CredentialStatus(ctx)
 	if err != nil {
-		return port.CredentialStatus{}, err
-	}
-	status, err := credentialStatus(ctx, cookie, s.netease.CurrentAccount)
-	if err != nil {
-		return port.CredentialStatus{}, fmt.Errorf("查询网易云的账号资料：%w：%w", err, port.ErrProviderFailed)
+		return port.CredentialStatus{}, fmt.Errorf("查询网易云的登录状态：%w：%w", err, port.ErrProviderFailed)
 	}
 	return status, nil
 }
 
 func (s *Service) QQCredentialStatus(ctx context.Context) (port.CredentialStatus, error) {
-	cookie, err := s.credentials.QQCookie(ctx)
+	status, err := s.qq.CredentialStatus(ctx)
 	if err != nil {
-		return port.CredentialStatus{}, err
-	}
-	status, err := credentialStatus(ctx, cookie, s.qq.CurrentAccount)
-	if err != nil {
-		return port.CredentialStatus{}, fmt.Errorf("查询 QQ 的账号资料：%w：%w", err, port.ErrProviderFailed)
+		return port.CredentialStatus{}, fmt.Errorf("查询 QQ 的登录状态：%w：%w", err, port.ErrProviderFailed)
 	}
 	return status, nil
-}
-
-func credentialStatus(ctx context.Context, cookie string, current func(context.Context) (*port.SourceAccount, error)) (port.CredentialStatus, error) {
-	if cookie == "" {
-		return port.CredentialStatus{}, nil
-	}
-	account, err := current(ctx)
-	switch {
-	// 登录失效是平台明确给出的状态，不是查询出错，所以照常回复，由后台提示重新扫码。
-	case errors.Is(err, port.ErrSourceSignedOut):
-		return port.CredentialStatus{Set: true, SignedOut: true}, nil
-	case err != nil:
-		return port.CredentialStatus{Set: true}, err
-	}
-	return port.CredentialStatus{Set: true, Account: account}, nil
 }
 
 func (s *Service) CreateNeteaseQRLogin(ctx context.Context) (port.QRLoginSession, error) {

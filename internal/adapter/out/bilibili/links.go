@@ -40,7 +40,7 @@ func isBilibiliHost(host string) bool {
 	return host == "bilibili.com" || strings.HasSuffix(host, ".bilibili.com")
 }
 
-// plainID 处理不带 scheme 的写法：BV 号（可带分 P）和 av 号。
+// plainID 识别不带协议头的 BV 号（可带分 P）和 av 号。
 func plainID(s string) (string, bool) {
 	if bvid, page, ok := track.ParseBilibiliID(s); ok {
 		return track.BilibiliID(bvid, page), true
@@ -55,10 +55,10 @@ func plainID(s string) (string, bool) {
 	return "", false
 }
 
-// classifyVideoURL 处理 bilibili.com 的链接：视频返回曲目 ID，其他（番剧、直播、个人空间等）都拒绝。
+// classifyVideoURL 把 bilibili.com 下的视频链接转成曲目 ID，番剧、直播和个人空间等非视频链接一律拒绝。
 func classifyVideoURL(u *url.URL) (string, bool, error) {
 	if !strings.HasPrefix(u.Path, "/video/") {
-		return "", false, &port.RejectedError{Err: errors.New("这个 B 站链接不是视频，番剧、直播和个人空间等都不支持")}
+		return "", false, &port.RejectedError{Err: errors.New("这个 哔哩哔哩链接不是视频，番剧、直播和个人空间等都不支持")}
 	}
 	idPart := strings.Trim(strings.TrimPrefix(u.Path, "/video/"), "/")
 	var bvid string
@@ -68,15 +68,15 @@ func classifyVideoURL(u *url.URL) (string, bool, error) {
 	default:
 		m := plainAV.FindStringSubmatch(idPart)
 		if m == nil {
-			return "", false, &port.RejectedError{Err: fmt.Errorf("无法识别的 B 站视频 ID：%s", idPart)}
+			return "", false, &port.RejectedError{Err: fmt.Errorf("无法识别的 哔哩哔哩视频 ID：%s", idPart)}
 		}
 		aid, err := strconv.ParseInt(m[1], 10, 64)
 		if err != nil {
-			return "", false, &port.RejectedError{Err: fmt.Errorf("无法识别的 B 站视频 ID：%s", idPart)}
+			return "", false, &port.RejectedError{Err: fmt.Errorf("无法识别的 哔哩哔哩视频 ID：%s", idPart)}
 		}
 		converted, ok := avToBV(aid)
 		if !ok {
-			return "", false, &port.RejectedError{Err: fmt.Errorf("无法识别的 B 站视频 ID：%s", idPart)}
+			return "", false, &port.RejectedError{Err: fmt.Errorf("无法识别的 哔哩哔哩视频 ID：%s", idPart)}
 		}
 		bvid = converted
 	}
@@ -103,12 +103,10 @@ func (c *Client) resolveShortLink(ctx context.Context, u *url.URL) (id string, o
 		return "", false, err
 	}
 	req.Header.Set("User-Agent", userAgent)
-	// 保留注入 client 的 Transport，只禁止跟随重定向：跳转地址由下面的识别逻辑校验。
-	client := *c.api
-	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	resp, err := client.Do(req)
+	// c.api 禁止自动跟随重定向，这样只读第一跳的 Location 头就能交由下面的规则校验目标域名。
+	resp, err := c.api.Do(req)
 	if err != nil {
-		return "", false, fmt.Errorf("请求 b23.tv 短链失败：%w", requestError(err))
+		return "", false, requestError(req.URL.Host, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
@@ -120,13 +118,13 @@ func (c *Client) resolveShortLink(ctx context.Context, u *url.URL) (id string, o
 		return "", false, errors.New("b23.tv 短链没有给出跳转地址")
 	}
 	if !isBilibiliHost(strings.ToLower(target.Hostname())) {
-		return "", false, &port.RejectedError{Err: errors.New("b23.tv 短链指向的不是 B 站视频")}
+		return "", false, &port.RejectedError{Err: errors.New("b23.tv 短链指向的不是 哔哩哔哩视频")}
 	}
 	id, _, err = classifyVideoURL(target)
 	return id, err == nil, err
 }
 
-// av 号和 BV 号的换算，与平台前端使用的算法相同。
+// av 号和 BV 号的换算与平台前端使用的算法相同。
 const (
 	bvTable = "fZodR9XQDSUm21yCkr6zBqiveYah8bt4xsWpHnJE7jL5VG3guMTKNPAwcF"
 	bvXOR   = 177451812

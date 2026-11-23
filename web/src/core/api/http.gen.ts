@@ -38,6 +38,7 @@ export interface AdminCreateRoomResponse {
 export interface AdminGetBilibiliCredentialResponse {
   account: SourceAccount | null
   set: boolean
+  signedOut: boolean
 }
 
 export interface AdminGetGithubCredentialResponse {

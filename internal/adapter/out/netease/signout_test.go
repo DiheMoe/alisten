@@ -23,7 +23,7 @@ func TestPlayURLSignedOut(t *testing.T) {
 	}
 }
 
-// 没有保存凭据时不复核登录：不是登录失效，按音源拒绝处理。
+// 没有保存凭据时不复核登录，按音源拒绝处理而不是登录失效。
 func TestPlayURLRejectsWithoutCookie(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/weapi/nuser/account/get" {

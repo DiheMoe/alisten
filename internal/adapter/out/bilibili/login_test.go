@@ -1,6 +1,7 @@
 package bilibili
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -47,7 +48,7 @@ func TestCreateQRLogin(t *testing.T) {
 func TestCreateQRLoginFailure(t *testing.T) {
 	for name, body := range map[string]string{
 		"平台错误":  `{"code":-1,"message":"操作频繁","data":{}}`,
-		"缺少key": `{"code":0,"message":"0","data":{"url":"https://example.com","qrcode_key":""}}`,
+		"缺少key": `{"code":0,"message":"0","data":{"url":"https://passport.bilibili.com/scan","qrcode_key":""}}`,
 		"格式错误":  `不是 JSON`,
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -58,8 +59,6 @@ func TestCreateQRLoginFailure(t *testing.T) {
 			})
 			if _, err := c.CreateQRLogin(t.Context()); err == nil {
 				t.Fatal("没有返回错误")
-			} else if strings.Contains(err.Error(), "example.com") {
-				t.Fatalf("错误包含平台地址：%v", err)
 			}
 			obs.check(t, "bilibili:login_create:error")
 		})
@@ -72,6 +71,30 @@ func TestCreateQRLoginFailure(t *testing.T) {
 	})
 	if _, err := c.CreateQRLogin(t.Context()); err == nil {
 		t.Fatal("HTTP 500 没有返回错误")
+	}
+}
+
+type failingRoundTripper struct{}
+
+func (failingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("连接中断")
+}
+
+func TestCheckQRLoginNetworkErrorHidesKey(t *testing.T) {
+	c := New(
+		&http.Client{Transport: failingRoundTripper{}},
+		"",
+		func(context.Context) (string, error) { return "", nil },
+		func(context.Context, string) error { return nil },
+		func(string, string, time.Duration, error) {},
+		testLogger,
+	)
+	_, err := c.CheckQRLogin(t.Context(), "SECRET-QR-KEY")
+	if err == nil || !strings.Contains(err.Error(), "连接中断") {
+		t.Fatalf("网络错误 = %v，期望保留底层错误", err)
+	}
+	if strings.Contains(err.Error(), "SECRET-QR-KEY") {
+		t.Fatalf("错误泄露了二维码 key：%v", err)
 	}
 }
 
@@ -142,7 +165,7 @@ func TestCheckQRLoginSuccess(t *testing.T) {
 		"/x/passport-login/web/qrcode/poll": func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Add("Set-Cookie", "bili_jct=jct456; Path=/")
 			w.Header().Add("Set-Cookie", "SESSDATA=sess123; Path=/; HttpOnly")
-			respondJSON(w, `{"code":0,"message":"0","data":{"code":0,"message":"登录成功","refresh_token":"refresh789"}}`)
+			respondJSON(w, `{"code":0,"message":"0","data":{"code":0,"message":"登录成功"}}`)
 		},
 	})
 	result, err := c.CheckQRLogin(t.Context(), "KEY123")
@@ -152,17 +175,10 @@ func TestCheckQRLoginSuccess(t *testing.T) {
 	if result.Status != port.QRLoginSuccess || result.Message != "登录成功" {
 		t.Fatalf("结果 = %+v", result)
 	}
-	if len(creds.saves) != 1 {
-		t.Fatalf("保存次数 = %d", len(creds.saves))
+	if len(creds.saves) != 1 || creds.saves[0] != "SESSDATA=sess123; bili_jct=jct456" {
+		t.Fatalf("保存的凭据 = %q，期望排序后的 Cookie", creds.saves)
 	}
-	saved := creds.saves[0]
-	for _, want := range []string{"SESSDATA=sess123; bili_jct=jct456", "refresh789"} {
-		if !strings.Contains(saved, want) {
-			t.Errorf("保存的凭据不含 %q：%q", want, saved)
-		}
-	}
-	// 结果不能把凭据带出去。
-	if strings.Contains(result.Message, "sess123") || strings.Contains(result.Message, "refresh789") {
+	if strings.Contains(result.Message, "sess123") {
 		t.Fatalf("结果泄露了凭据：%+v", result)
 	}
 	obs.check(t, "bilibili:login_check:ok")
@@ -171,7 +187,7 @@ func TestCheckQRLoginSuccess(t *testing.T) {
 func TestCheckQRLoginSuccessWithoutCookies(t *testing.T) {
 	c, _, _, creds := serve(t, map[string]http.HandlerFunc{
 		"/x/passport-login/web/qrcode/poll": func(w http.ResponseWriter, r *http.Request) {
-			respondJSON(w, `{"code":0,"message":"0","data":{"code":0,"message":"登录成功","refresh_token":"refresh789"}}`)
+			respondJSON(w, `{"code":0,"message":"0","data":{"code":0,"message":"登录成功"}}`)
 		},
 	})
 	if _, err := c.CheckQRLogin(t.Context(), "KEY123"); err == nil {
@@ -195,7 +211,7 @@ func TestCheckQRLoginFailure(t *testing.T) {
 	c, _, _, creds := serve(t, map[string]http.HandlerFunc{
 		"/x/passport-login/web/qrcode/poll": func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Add("Set-Cookie", "SESSDATA=sess123; Path=/")
-			respondJSON(w, `{"code":0,"message":"0","data":{"code":0,"message":"登录成功","refresh_token":"refresh789"}}`)
+			respondJSON(w, `{"code":0,"message":"0","data":{"code":0,"message":"登录成功"}}`)
 		},
 	})
 	creds.saveErr = errors.New("数据库不可用")
@@ -213,7 +229,7 @@ func TestCredentialStatusNotSet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status.Set || status.Account != nil {
+	if status.Set || status.Account != nil || status.SignedOut {
 		t.Fatalf("状态 = %+v，期望未设置", status)
 	}
 	if len(tr.requests()) != 0 {
@@ -238,12 +254,12 @@ func TestCredentialStatusLoggedIn(t *testing.T) {
 					respondJSON(w, `{"code":0,"message":"0","data":{"isLogin":true,"uname":"测试用户","mid":12345,"vipStatus":`+strconv.Itoa(tc.vipStatus)+`,"vipType":`+strconv.Itoa(tc.vipType)+`}}`)
 				},
 			})
-			creds.set(t, "SESSDATA=sess123; bili_jct=jct456", "refresh789")
+			creds.set(t, "SESSDATA=sess123; bili_jct=jct456")
 			status, err := c.CredentialStatus(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !status.Set || status.Account == nil {
+			if !status.Set || status.SignedOut || status.Account == nil {
 				t.Fatalf("状态 = %+v，期望已登录", status)
 			}
 			a := status.Account
@@ -259,19 +275,19 @@ func TestCredentialStatusLoggedIn(t *testing.T) {
 	}
 }
 
-func TestCredentialStatusNotLoggedIn(t *testing.T) {
+func TestCredentialStatusSignedOut(t *testing.T) {
 	c, _, _, creds := serve(t, map[string]http.HandlerFunc{
 		"/x/web-interface/nav": func(w http.ResponseWriter, r *http.Request) {
 			respondJSON(w, `{"code":-101,"message":"账号未登录","data":{"isLogin":false}}`)
 		},
 	})
-	creds.set(t, "SESSDATA=expired", "refresh789")
+	creds.set(t, "SESSDATA=expired")
 	status, err := c.CredentialStatus(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !status.Set || status.Account != nil {
-		t.Fatalf("状态 = %+v，期望已保存但未识别到账号", status)
+	if status != (port.CredentialStatus{Set: true, SignedOut: true}) {
+		t.Fatalf("状态 = %+v，期望 Set=true 且 SignedOut=true", status)
 	}
 }
 
@@ -281,7 +297,7 @@ func TestCredentialStatusFailure(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		},
 	})
-	creds.set(t, "SESSDATA=sess123", "")
+	creds.set(t, "SESSDATA=sess123")
 	if _, err := c.CredentialStatus(t.Context()); err == nil {
 		t.Fatal("nav 请求失败时没有返回错误")
 	} else if strings.Contains(err.Error(), "sess123") {

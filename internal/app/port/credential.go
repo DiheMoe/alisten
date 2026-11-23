@@ -5,13 +5,6 @@ import (
 	"time"
 )
 
-// 凭据未设置时，读取方法都返回空字符串。写入方法在具体的 Store 上，与网易云、QQ 的 SetCookie 相同。
-type Credentials interface {
-	NeteaseCookie(ctx context.Context) (string, error)
-	QQCookie(ctx context.Context) (string, error)
-	BilibiliCredential(ctx context.Context) (string, error)
-}
-
 type CredentialStatus struct {
 	Set     bool
 	Account *SourceAccount

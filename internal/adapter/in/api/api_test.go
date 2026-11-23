@@ -51,7 +51,7 @@ func services(store *porttest.Store, rooms port.RoomDirectory, adminToken string
 		Identity: identity.New(store, rooms, store, porttest.Quota{}, gateway),
 		Accounts: accounts,
 		Lobby:    l,
-		Admin:    admin.New(adminToken, l, rooms, store, store, porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), gateway),
+		Admin:    admin.New(adminToken, l, rooms, store, porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), gateway),
 		Gateway:  gateway,
 		Catalog:  music,
 		Site:     siteService,

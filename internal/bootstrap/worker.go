@@ -125,7 +125,7 @@ func runWorker(base *slog.Logger) (err error) {
 	cookies := linkcookies.New(workDir, store.YouTubeCookies)
 	src := workerSources{
 		links:      ytdlp.New(workDir, net.DefaultResolver, cookies, observed.downloaded, base.With("component", "ytdlp")),
-		bilibili:   bilibili.New(upstream, workDir, store.BilibiliCredential, store.SetBilibiliCredential, observed.provider),
+		bilibili:   bilibili.New(upstream, workDir, store.BilibiliCredential, store.SetBilibiliCredential, observed.provider, base.With("component", "source")),
 		transcoder: ffmpeg.New(workDir, base.With("component", "ffmpeg")),
 	}
 	w, err := newMediaWorker(cfg, pool, rdb, src, metrics, observed, instance, tracer, base)

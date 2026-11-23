@@ -2,6 +2,7 @@ package bilibili
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,6 +11,8 @@ import (
 	"testing"
 	"time"
 )
+
+var testLogger = slog.New(slog.DiscardHandler)
 
 type observer struct {
 	mu    sync.Mutex
@@ -60,11 +63,11 @@ func (s *credentialStore) save(_ context.Context, value string) error {
 	return nil
 }
 
-func (s *credentialStore) set(t *testing.T, cookie, refreshToken string) {
+func (s *credentialStore) set(t *testing.T, cookie string) {
 	t.Helper()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.value = encodeCredential(cookie, refreshToken)
+	s.value = cookie
 }
 
 type recordedRequest struct {
@@ -77,7 +80,7 @@ type recordedRequest struct {
 	range_  string
 }
 
-// 把所有请求改写到 httptest 服务器，同时记录原来的地址和请求头。
+// 把所有请求改写到 httptest 服务器，同时记下原始目标地址与请求头。
 type redirectTransport struct {
 	target *url.URL
 	rt     http.RoundTripper
@@ -136,7 +139,7 @@ func serve(t *testing.T, routes map[string]http.HandlerFunc) (*Client, *redirect
 	rt := &redirectTransport{target: target, rt: &http.Transport{}}
 	obs := &observer{}
 	creds := &credentialStore{}
-	return New(&http.Client{Transport: rt}, t.TempDir(), creds.load, creds.save, obs.observe), rt, obs, creds
+	return New(&http.Client{Transport: rt}, t.TempDir(), creds.load, creds.save, obs.observe, testLogger), rt, obs, creds
 }
 
 func respondJSON(w http.ResponseWriter, body string) {

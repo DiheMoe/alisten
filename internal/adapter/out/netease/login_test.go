@@ -132,7 +132,7 @@ func TestCheckQRLoginSavesCookie(t *testing.T) {
 	if err != nil || got != want || saved != "MUSIC_U=test" {
 		t.Fatalf("登录结果 = %#v, %v，保存的 Cookie = %q", got, err, saved)
 	}
-	if cached, err := c.cookie.get(t.Context()); err != nil || cached != "MUSIC_U=test" {
+	if cached, err := c.cookie.Get(t.Context()); err != nil || cached != "MUSIC_U=test" {
 		t.Errorf("本地缓存的 Cookie = %q, %v", cached, err)
 	}
 	obs.check(t, "login_check")
@@ -175,13 +175,13 @@ func TestCheckQRLoginDoesNotCacheFailedSave(t *testing.T) {
 	c, obs := serveLoginWithStore(t, map[string]http.HandlerFunc{
 		"/api/login/qrcode/client/login": body(`{"code":803,"message":"授权成功","cookie":"MUSIC_U=test"}`),
 	}, func(context.Context, string) error { return saveErr })
-	if _, err := c.cookie.get(t.Context()); err != nil {
+	if _, err := c.cookie.Get(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := c.CheckQRLogin(t.Context(), "test-key"); !errors.Is(err, saveErr) || got.Status == port.QRLoginSuccess {
 		t.Errorf("保存失败的登录结果 = %#v, %v", got, err)
 	}
-	if cached, err := c.cookie.get(t.Context()); err != nil || cached != "MUSIC_U=loaded" {
+	if cached, err := c.cookie.Get(t.Context()); err != nil || cached != "MUSIC_U=loaded" {
 		t.Errorf("保存失败后的本地 Cookie = %q, %v", cached, err)
 	}
 	obs.check(t, "login_check 失败")

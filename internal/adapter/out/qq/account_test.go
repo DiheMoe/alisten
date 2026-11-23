@@ -39,53 +39,60 @@ func accountTestClient(t *testing.T, cookie string, diss, vip http.HandlerFunc) 
 		&http.Client{Transport: redirect{target}},
 		func(context.Context) (string, error) { return cookie, nil },
 		nil,
+		nil,
 		(&observed{}).record,
 		testLogger,
 	)
 }
 
-func TestCurrentAccount(t *testing.T) {
+func TestCredentialStatus(t *testing.T) {
 	tests := []struct {
-		name   string
-		cookie string
-		wantID string
+		name    string
+		cookie  string
+		wantSet bool
+		wantID  string
 	}{
-		{"QQ uin 去前缀和前导零", "uin=o000123", "123"},
-		{"微信 uin", "wxuin=000101", "101"},
-		{"ptui_loginuin", "ptui_loginuin=o000102", "102"},
-		{"luin", "luin=o000103", "103"},
-		{"pt2gguin", "pt2gguin=o000104", "104"},
-		{"superuin", "superuin=o000105", "105"},
-		{"p_uin", "p_uin=o000106", "106"},
-		{"musicid", "musicid=107", "107"},
-		{"userid", "userid=108", "108"},
-		{"user_id", "user_id=109", "109"},
-		{"微信 uin 优先", "uin=000123; wxuin=000456", "456"},
-		{"没有账号标识", "qqmusic_key=fictitious", ""},
-		{"账号标识为零", "uin=o0000", ""},
+		{"未保存凭据", "", false, ""},
+		{"QQ uin 去前缀和前导零", "uin=o000123", true, "123"},
+		{"微信 uin", "wxuin=000101", true, "101"},
+		{"ptui_loginuin", "ptui_loginuin=o000102", true, "102"},
+		{"luin", "luin=o000103", true, "103"},
+		{"pt2gguin", "pt2gguin=o000104", true, "104"},
+		{"superuin", "superuin=o000105", true, "105"},
+		{"p_uin", "p_uin=o000106", true, "106"},
+		{"musicid", "musicid=107", true, "107"},
+		{"userid", "userid=108", true, "108"},
+		{"user_id", "user_id=109", true, "109"},
+		{"微信 uin 优先", "uin=000123; wxuin=000456", true, "456"},
+		{"没有账号标识", "qqmusic_key=fictitious", true, ""},
+		{"账号标识为零", "uin=o0000", true, ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := accountTestClient(t, tc.cookie, body(accountValidResponse), fixture(t, "account.json")).CurrentAccount(t.Context())
+			got, err := accountTestClient(t, tc.cookie, body(accountValidResponse), fixture(t, "account.json")).CredentialStatus(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}
 			if tc.wantID == "" {
-				if got != nil {
-					t.Fatalf("没有账号标识时 = %+v，期望 nil", got)
+				want := port.CredentialStatus{Set: tc.wantSet}
+				if got != want {
+					t.Fatalf("没有账号标识时 = %+v，期望 %+v", got, want)
 				}
 				return
 			}
-			want := &port.SourceAccount{ID: tc.wantID, VIP: new(bool), Verified: true}
+			want := port.CredentialStatus{
+				Set:     true,
+				Account: &port.SourceAccount{ID: tc.wantID, VIP: new(bool), Verified: true},
+			}
 			if !reflect.DeepEqual(got, want) {
-				t.Fatalf("账号资料 = %+v，期望 %+v", got, want)
+				t.Fatalf("凭据状态 = %+v，期望 %+v", got, want)
 			}
 		})
 	}
 }
 
-// 绿钻和豪华绿钻任一有效都算会员，identity 缺失时 VIP 留 nil 显示未知。
-func TestCurrentAccountVIP(t *testing.T) {
+// 绿钻和豪华绿钻任一有效都算会员，identity 缺失时 VIP 保持 nil 显示未知。
+func TestCredentialStatusVIP(t *testing.T) {
 	for _, tc := range []struct {
 		file    string
 		wantVIP *bool
@@ -95,47 +102,45 @@ func TestCurrentAccountVIP(t *testing.T) {
 		{"account.json", boolPtr(false)},
 		{"account-no-identity.json", nil},
 	} {
-		got, err := accountTestClient(t, "uin=o000123", body(accountValidResponse), fixture(t, tc.file)).CurrentAccount(t.Context())
+		got, err := accountTestClient(t, "uin=o000123", body(accountValidResponse), fixture(t, tc.file)).CredentialStatus(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got == nil || got.Verified != true || !reflect.DeepEqual(got.VIP, tc.wantVIP) {
-			t.Errorf("%s 的 VIP = %v，期望 %v", tc.file, got.VIP, tc.wantVIP)
+		if !got.Set || got.SignedOut || got.Account == nil || !got.Account.Verified || !reflect.DeepEqual(got.Account.VIP, tc.wantVIP) {
+			t.Errorf("%s 的状态 = %+v，期望 VIP=%v", tc.file, got, tc.wantVIP)
 		}
 	}
 }
 
-// QQ 音乐明确报告登录失效时返回包装了 ErrSourceSignedOut 的错误，不能再显示成非会员。
-func TestCurrentAccountExpired(t *testing.T) {
-	got, err := accountTestClient(t, "uin=o000123", fixture(t, "account-expired.json"), fixture(t, "account.json")).CurrentAccount(t.Context())
-	if !errors.Is(err, port.ErrSourceSignedOut) {
-		t.Fatalf("登录失效时 = %+v, %v，期望 ErrSourceSignedOut", got, err)
+func TestCredentialStatusExpired(t *testing.T) {
+	got, err := accountTestClient(t, "uin=o000123", fixture(t, "account-expired.json"), fixture(t, "account.json")).CredentialStatus(t.Context())
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got != nil {
-		t.Fatalf("登录失效时返回了账号 %+v", got)
+	if got != (port.CredentialStatus{Set: true, SignedOut: true}) {
+		t.Fatalf("登录失效时 = %+v，期望 Set=true 且 SignedOut=true", got)
 	}
 }
 
-// 上游异常是查询失败，不能冒充没有账号。
-func TestCurrentAccountUpstreamError(t *testing.T) {
+func TestCredentialStatusUpstreamError(t *testing.T) {
 	for name, handler := range map[string]http.HandlerFunc{
 		"HTTP 502":   func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusBadGateway) },
 		"响应 JSON 畸形": body(`{"code":0,`),
 		"业务码缺失":      body(`{"code":0,"req":{"data":{}}}`),
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := accountTestClient(t, "uin=o000123", handler, fixture(t, "account.json")).CurrentAccount(t.Context()); err == nil {
+			if _, err := accountTestClient(t, "uin=o000123", handler, fixture(t, "account.json")).CredentialStatus(t.Context()); err == nil {
 				t.Error("上游异常时没有返回错误")
 			}
 		})
 	}
 }
 
-func TestCurrentAccountCookieError(t *testing.T) {
+func TestCredentialStatusCookieError(t *testing.T) {
 	want := errors.New("读取失败")
 	load := func(context.Context) (string, error) { return "", want }
-	c := New(&http.Client{}, load, nil, (&observed{}).record, testLogger)
-	if _, err := c.CurrentAccount(t.Context()); !errors.Is(err, want) {
+	c := New(&http.Client{}, load, nil, nil, (&observed{}).record, testLogger)
+	if _, err := c.CredentialStatus(t.Context()); !errors.Is(err, want) {
 		t.Fatalf("读取凭据的错误 = %v，期望 %v", err, want)
 	}
 }

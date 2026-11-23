@@ -1,6 +1,7 @@
 package qq
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,124 +11,57 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 
 	"github.com/dihemoe/alisten/internal/lib/chinaip"
+	"github.com/dihemoe/alisten/internal/lib/cookiecache"
 )
 
 const (
-	requestTimeout    = 30 * time.Second
-	downloadTimeout   = 10 * time.Minute
-	cacheSize         = 512
-	cacheTTL          = 30 * time.Minute
-	cookieTTL         = 30 * time.Second
-	cookieLoadTimeout = 10 * time.Second
+	requestTimeout  = 30 * time.Second
+	downloadTimeout = 10 * time.Minute
+	cacheSize       = 512
+	cacheTTL        = 30 * time.Minute
+	bodyLimit       = 4 << 20
 )
 
 type Client struct {
 	http    *http.Client
 	api     *http.Client
-	cookie  cookieCache
+	cookie  *cookiecache.Cache
 	refresh refreshState
 	cache   *expirable.LRU[string, any]
 	observe func(source, op string, elapsed time.Duration, err error)
 	logger  *slog.Logger
 }
 
-func New(httpClient *http.Client, loadCookie func(context.Context) (string, error), saveCookie func(context.Context, string) error, observe func(source, op string, elapsed time.Duration, err error), logger *slog.Logger) *Client {
+func New(
+	httpClient *http.Client,
+	loadCookie func(context.Context) (string, error),
+	saveCookie func(context.Context, string) error,
+	swapCookie func(context.Context, string, string) (bool, error),
+	observe func(source, op string, elapsed time.Duration, err error),
+	logger *slog.Logger,
+) *Client {
 	api := *httpClient
 	api.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &Client{
 		http:    httpClient,
 		api:     &api,
-		cookie:  cookieCache{load: loadCookie, store: saveCookie},
+		cookie:  cookiecache.NewWithSwap(loadCookie, saveCookie, swapCookie),
 		cache:   expirable.NewLRU[string, any](cacheSize, nil, cacheTTL),
 		observe: observe,
 		logger:  logger,
 	}
 }
 
-// interfaceError 表示接口本身失败：网络错误、HTTP 非 200、上游返回错误码。
-// 这类失败重试可能成功；响应解析失败、解密失败不属于此类，重试结果不会变。
+// interfaceError 表示网络出错、HTTP 非 200 或上游返回错误码。这类失败重试可能恢复，而响应解析或解密失败重试也不会改变结果，所以不包成 interfaceError。
 type interfaceError struct{ err error }
 
 func (e *interfaceError) Error() string { return e.err.Error() }
 func (e *interfaceError) Unwrap() error { return e.err }
-
-type cookieCache struct {
-	load    func(context.Context) (string, error)
-	store   func(context.Context, string) error
-	mu      sync.Mutex
-	value   string
-	expires time.Time
-}
-
-func (c *cookieCache) get(ctx context.Context) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if time.Now().Before(c.expires) {
-		return c.value, nil
-	}
-	return c.loadLocked(ctx)
-}
-
-func (c *cookieCache) current() (string, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if time.Now().Before(c.expires) {
-		return c.value, true
-	}
-	return "", false
-}
-
-func (c *cookieCache) reload(ctx context.Context) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.loadLocked(ctx)
-}
-
-func (c *cookieCache) loadLocked(ctx context.Context) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, cookieLoadTimeout)
-	defer cancel()
-	value, err := c.load(ctx)
-	if err != nil {
-		return "", err
-	}
-	c.value, c.expires = value, time.Now().Add(cookieTTL)
-	return value, nil
-}
-
-func (c *cookieCache) put(ctx context.Context, value string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.storeLocked(ctx, value)
-}
-
-// 刷新在后台或并发请求中完成，如果期间本地已经写入了新的凭据（比如管理员刚重新扫码），就不再覆盖。
-func (c *cookieCache) putIfUnchanged(ctx context.Context, expected, value string) (bool, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if time.Now().Before(c.expires) && c.value != expected {
-		return false, nil
-	}
-	if err := c.storeLocked(ctx, value); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func (c *cookieCache) storeLocked(ctx context.Context, value string) error {
-	ctx, cancel := context.WithTimeout(ctx, cookieLoadTimeout)
-	defer cancel()
-	if err := c.store(ctx, value); err != nil {
-		return err
-	}
-	c.value, c.expires = value, time.Now().Add(cookieTTL)
-	return nil
-}
 
 func cached[T any](c *Client, key string, fetch func() (T, error)) (T, error) {
 	if v, ok := c.cache.Get(key); ok {
@@ -154,22 +88,18 @@ func (s status) check() error {
 	return nil
 }
 
-func (c *Client) get(ctx context.Context, source, op, endpoint string, query url.Values, header http.Header, out response) error {
-	var cookie string
-	if source == "qq" {
-		var err error
-		cookie, err = c.cookie.get(ctx)
-		if err != nil {
-			return err
-		}
+func (c *Client) get(ctx context.Context, op, endpoint string, query url.Values, header http.Header, out response) error {
+	cookie, err := c.cookie.Get(ctx)
+	if err != nil {
+		return err
 	}
-	return c.getWithCookie(ctx, source, op, endpoint, query, header, cookie, out)
+	return c.getWithCookie(ctx, op, endpoint, query, header, cookie, out)
 }
 
-func (c *Client) getWithCookie(ctx context.Context, source, op, endpoint string, query url.Values, header http.Header, cookie string, out response) error {
+func (c *Client) getWithCookie(ctx context.Context, op, endpoint string, query url.Values, header http.Header, cookie string, out response) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	if source == "qq" && cookie != "" {
+	if cookie != "" {
 		header = header.Clone()
 		header.Set("Cookie", cookie)
 	}
@@ -178,7 +108,7 @@ func (c *Client) getWithCookie(ctx context.Context, source, op, endpoint string,
 	if err == nil {
 		err = out.check()
 	}
-	c.observe(source, op, time.Since(start), err)
+	c.observe("qq", op, time.Since(start), err)
 	return err
 }
 
@@ -197,7 +127,14 @@ func (c *Client) fetch(ctx context.Context, target string, header http.Header, o
 	if resp.StatusCode != http.StatusOK {
 		return &interfaceError{fmt.Errorf("%s 返回 HTTP %d", req.URL.Host, resp.StatusCode)}
 	}
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, bodyLimit+1))
+	if err != nil {
+		return &interfaceError{fmt.Errorf("读取 %s 的响应：%w", req.URL.Host, err)}
+	}
+	if len(raw) > bodyLimit {
+		return fmt.Errorf("%s 的响应超过大小上限", req.URL.Host)
+	}
+	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(out); err != nil {
 		return fmt.Errorf("解析 %s 的响应：%w", req.URL.Host, err)
 	}
 	return nil
@@ -224,12 +161,12 @@ func (c *Client) download(ctx context.Context, audioURL string) (io.ReadCloser, 
 	return &audio{ReadCloser: resp.Body, cancel: cancel}, nil
 }
 
+// requestError 按文本识别并替换 Location 解析错误，因为 net/http 在调用 CheckRedirect 前就会解析 Location 头，而且这个错误没有独立类型，原样透传会把完整的登录跳转地址带进日志。
 func requestError(host string, err error) error {
 	var urlError *url.Error
 	if errors.As(err, &urlError) {
 		err = urlError.Err
 	}
-	// 播放地址的查询参数可能携带签名，错误包装不得泄漏完整 URL。
 	if strings.Contains(err.Error(), "failed to parse Location header") {
 		return fmt.Errorf("请求 %s：解析跳转地址失败", host)
 	}
@@ -249,4 +186,19 @@ func (a *audio) Close() error {
 
 func text(s string) string {
 	return strings.ReplaceAll(strings.ToValidUTF8(s, "\uFFFD"), "\x00", "")
+}
+
+func parseQQCookies(cookie string) map[string]string {
+	creds := make(map[string]string)
+	for part := range strings.SplitSeq(cookie, ";") {
+		key, value, ok := strings.Cut(part, "=")
+		if !ok {
+			continue
+		}
+		key, value = strings.TrimSpace(key), strings.TrimSpace(value)
+		if key != "" && value != "" {
+			creds[key] = value
+		}
+	}
+	return creds
 }

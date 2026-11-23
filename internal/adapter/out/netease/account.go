@@ -2,7 +2,6 @@ package netease
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -17,7 +16,7 @@ type accountInfo struct {
 	VipType  int    `json:"vipType"`
 }
 
-func (c *Client) accountInfo(ctx context.Context) (accountInfo, error) {
+func (c *Client) accountInfo(ctx context.Context, cookie string) (accountInfo, error) {
 	form, err := weapi(map[string]any{"csrf_token": ""})
 	if err != nil {
 		return accountInfo{}, err
@@ -26,37 +25,36 @@ func (c *Client) accountInfo(ctx context.Context) (accountInfo, error) {
 		base
 		Profile accountInfo `json:"profile"`
 	}
-	if err := c.call(ctx, "account", accountAPI, form, &resp); err != nil {
+	if err := c.callWithCookie(ctx, "account", accountAPI, form, cookie, &resp); err != nil {
 		return accountInfo{}, err
 	}
 	return resp.Profile, nil
 }
 
-func (c *Client) CurrentAccount(ctx context.Context) (*port.SourceAccount, error) {
-	cookie, err := c.cookie.get(ctx)
+func (c *Client) CredentialStatus(ctx context.Context) (port.CredentialStatus, error) {
+	cookie, err := c.cookie.Reload(ctx)
 	if err != nil {
-		return nil, err
+		return port.CredentialStatus{}, err
 	}
-	// 没有保存过凭据是"从未登录"，不是"登录失效"。
 	if strings.TrimSpace(cookie) == "" {
-		return nil, nil
+		return port.CredentialStatus{}, nil
 	}
-	info, err := c.accountInfo(ctx)
+	info, err := c.accountInfo(ctx, cookie)
 	if err != nil {
-		return nil, err
+		return port.CredentialStatus{}, err
 	}
-	// 平台对失效凭据返回空的个人资料，与账号接口的其他失败分开。
+	// 平台对失效凭据返回空的个人资料，这里与账号接口的其他失败区分开。
 	if info.UserID == 0 {
-		return nil, fmt.Errorf("查询网易云登录状态：%w", port.ErrSourceSignedOut)
+		return port.CredentialStatus{Set: true, SignedOut: true}, nil
 	}
+	vip := info.VipType != 0
 	account := &port.SourceAccount{
 		ID:       strconv.FormatInt(info.UserID, 10),
-		VIP:      new(bool),
+		VIP:      &vip,
 		Verified: true,
 	}
-	*account.VIP = info.VipType != 0
-	if info.Nickname != "" {
-		account.Name = &info.Nickname
+	if name := text(info.Nickname); name != "" {
+		account.Name = &name
 	}
-	return account, nil
+	return port.CredentialStatus{Set: true, Account: account}, nil
 }

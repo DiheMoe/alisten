@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strings"
 
 	"github.com/dihemoe/alisten/internal/app/port"
 )
@@ -49,7 +48,7 @@ func (c *Client) PlayURL(ctx context.Context, songMID string) (string, error) {
 }
 
 func (c *Client) playURL(ctx context.Context, songMID string, allowRefresh bool) (string, error) {
-	cookie, err := c.cookie.get(ctx)
+	cookie, err := c.cookie.Get(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -81,7 +80,7 @@ func (c *Client) playURL(ctx context.Context, songMID string, allowRefresh bool)
 	}
 	var resp playURLResponse
 	query := url.Values{"data": {string(payload)}}
-	if err := c.getWithCookie(ctx, "qq", "play_url", musicuAPI, query, desktopHeader, cookie, &resp); err != nil {
+	if err := c.getWithCookie(ctx, "play_url", musicuAPI, query, desktopHeader, cookie, &resp); err != nil {
 		return "", err
 	}
 	for _, filename := range filenames {
@@ -91,9 +90,10 @@ func (c *Client) playURL(ctx context.Context, songMID string, allowRefresh bool)
 			}
 		}
 	}
-	// 拿不到播放地址时复核登录：vkey 对失效凭据不一定直接报错，用严格登录态接口区分"登录失效"和"需要会员或没有版权"。
-	if strings.TrimSpace(cookie) != "" {
-		valid, err := c.loginState(ctx, cookie, qqAccountID(cookie))
+	// 拿不到播放地址时用严格登录态接口复核，因为 vkey 接口对失效凭据不一定直接报错，只有复核后才能区分登录失效与无版权。
+	creds := parseQQCookies(cookie)
+	if id := qqAccountID(creds); id != "" {
+		valid, err := c.loginState(ctx, cookie, creds, id)
 		if err != nil {
 			return "", err
 		}

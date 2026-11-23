@@ -33,6 +33,7 @@ const (
 var (
 	_ port.NetEaseSource = (*Client)(nil)
 	_ port.PlayURLs      = (*Client)(nil)
+	_ port.QRLoginSource = (*Client)(nil)
 )
 
 type (
@@ -116,10 +117,10 @@ func (c *Client) SearchPlaylists(ctx context.Context, keyword string) ([]port.Pl
 		for i, p := range resp.Result.Playlists {
 			playlists[i] = port.Playlist{
 				ID:          strconv.FormatInt(p.ID, 10),
-				Name:        p.Name,
-				CoverURL:    p.CoverImgURL,
-				Creator:     p.Creator.Nickname,
-				Description: p.Description,
+				Name:        text(p.Name),
+				CoverURL:    text(p.CoverImgURL),
+				Creator:     text(p.Creator.Nickname),
+				Description: text(p.Description),
 				TrackCount:  p.TrackCount,
 				PlayCount:   p.PlayCount,
 			}
@@ -264,16 +265,16 @@ func (c *Client) Resolve(ctx context.Context, id string) (port.Resolved, error) 
 	return port.Resolved{Meta: meta, Lyric: lyric.LRC, LyricWords: lyric.Words, LyricTrans: lyric.Trans, Audio: audio}, nil
 }
 
-// 行级 LRC 原文、逐字歌词（YRC 语法）、行级翻译 LRC，后两者可为空。
+// 行级 LRC 原文、逐字歌词（YRC 语法）和行级翻译 LRC，后两者可为空。
 type lyricResult struct {
 	LRC   string
 	Words string
 	Trans string
 }
 
-// lyricOrDegrade 让歌词问题不阻塞播放：接口失败就地重试一次，仍失败（或解析失败）则降级为无歌词并记 WARN。
-// 曲目表里有记录的歌不会重新准备，网络抖动后直接降级会让这首歌永久没有歌词，所以先重试。
-// 调用方的 ctx 被取消或超时不降级：任务退出时中断，不能把空歌词写进曲目表。
+// lyricOrDegrade 在歌词接口失败时就地重试一次，仍失败或解析失败就降级为无歌词并记 WARN，不让歌词阻塞播放。
+// 先重试一次，是因为曲目表里有记录的歌不会重新准备，网络抖动后直接降级会让这首歌永久没有歌词。
+// 调用方的 ctx 已取消或超时时不降级，否则任务退出会把空歌词写进曲目表。
 func (c *Client) lyricOrDegrade(ctx context.Context, id string) (lyricResult, error) {
 	r, err := c.lyric(ctx, id)
 	if err == nil || ctx.Err() != nil {
@@ -347,6 +348,10 @@ func yrcToLRC(yrc string) string {
 }
 
 func (c *Client) PlayURL(ctx context.Context, id string) (string, error) {
+	cookie, err := c.cookie.Get(ctx)
+	if err != nil {
+		return "", err
+	}
 	eapiForm, err := eapi(eapiURLAPI, map[string]any{
 		"ids":        []json.Number{json.Number(id)},
 		"level":      "exhigh",
@@ -357,7 +362,7 @@ func (c *Client) PlayURL(ctx context.Context, id string) (string, error) {
 		return "", err
 	}
 	var exhigh urlResponse
-	exhighErr := c.call(ctx, "play_url", eapiURLAPI, eapiForm, &exhigh)
+	exhighErr := c.callWithCookie(ctx, "play_url", eapiURLAPI, eapiForm, cookie, &exhigh)
 	if u := exhigh.url(); exhighErr == nil && u != "" {
 		return u, nil
 	}
@@ -366,20 +371,16 @@ func (c *Client) PlayURL(ctx context.Context, id string) (string, error) {
 		return "", err
 	}
 	var standard urlResponse
-	standardErr := c.call(ctx, "play_url", weapiURLAPI, weapiForm, &standard)
+	standardErr := c.callWithCookie(ctx, "play_url", weapiURLAPI, weapiForm, cookie, &standard)
 	if u := standard.url(); standardErr == nil && u != "" {
 		return u, nil
 	}
 	if err := errors.Join(exhighErr, standardErr); err != nil {
 		return "", err
 	}
-	// 拿不到播放地址时复核登录：播放接口对失效凭据不直接报登录失效，用账号接口区分"登录失效"和"需要会员或没有版权"。
-	cookie, err := c.cookie.get(ctx)
-	if err != nil {
-		return "", err
-	}
+	// 拿不到播放地址时用账号接口复核登录，因为播放接口对失效凭据不直接报未登录，只有复核后才能区分登录失效与无版权。
 	if strings.TrimSpace(cookie) != "" {
-		info, err := c.accountInfo(ctx)
+		info, err := c.accountInfo(ctx, cookie)
 		if err != nil {
 			return "", err
 		}
@@ -423,8 +424,8 @@ func toSong(id int64, name string, artists []artist, al album, durationMs int64)
 			Artist:   text(strings.Join(names, ", ")),
 			Album:    text(al.Name),
 			CoverURL: text(al.PicURL),
-			PageURL:  "https://music.163.com/#/song?id=" + sid,
-			Duration: time.Duration(durationMs) * time.Millisecond,
+			PageURL:  track.NetEasePageURL(sid),
+			Duration: max(0, time.Duration(durationMs)*time.Millisecond),
 		},
 	}
 }

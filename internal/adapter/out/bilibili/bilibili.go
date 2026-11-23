@@ -6,12 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/dihemoe/alisten/internal/app/port"
+	"github.com/dihemoe/alisten/internal/lib/cookiecache"
 )
 
 const (
@@ -29,91 +32,65 @@ const (
 	downloadTimeout = 10 * time.Minute
 	qrLoginTTL      = 3 * time.Minute
 	bodyLimit       = 4 << 20
+	textLimit       = 500
+	maxDuration     = 24 * time.Hour
 )
 
 type Client struct {
-	api            *http.Client
-	download       *http.Client
-	root           string
-	loadCredential func(context.Context) (string, error)
-	saveCredential func(context.Context, string) error
-	observe        func(source, op string, elapsed time.Duration, err error)
+	api      *http.Client
+	download *http.Client
+	root     string
+	cookie   *cookiecache.Cache
+	observe  func(source, op string, elapsed time.Duration, err error)
+	logger   *slog.Logger
 }
 
 var (
-	_ port.BilibiliSource        = (*Client)(nil)
-	_ port.BilibiliLinks         = (*Client)(nil)
-	_ port.BilibiliQRLoginSource = (*Client)(nil)
+	_ port.BilibiliSource = (*Client)(nil)
+	_ port.BilibiliLinks  = (*Client)(nil)
+	_ port.QRLoginSource  = (*Client)(nil)
 )
 
-// upstream 用于全部平台请求，不能带 Timeout：API 请求的期限由 context 控制（30 秒）。
-// 下载复制一份 client，保留它的 Transport，期限放宽到 downloadTimeout；每次跳转都重新校验目标地址。
-// root 是下载中转文件的目录，必须是进程崩溃后残留会被启动清理删掉的目录（worker 的工作目录）；
-// 不下载文件的进程传空字符串，此时 Download 显式失败而不是写进系统临时目录。
-func New(upstream *http.Client, root string, loadCredential func(context.Context) (string, error), saveCredential func(context.Context, string) error, observe func(source, op string, elapsed time.Duration, err error)) *Client {
+// upstream 不能自带 Timeout，因为接口请求的 30 秒期限由 context 控制。
+// 接口客户端禁止跟随重定向，防止手动设置的 Cookie 头被带往明文跳转目标。
+// 下载客户端放宽期限到 downloadTimeout，并在每次跳转时校验目标域名和 HTTPS 协议。
+// root 是 worker 存放下载中转文件的目录，不下载文件的进程传空字符串，误调 Download 时会直接报错而不会写进系统临时目录。
+func New(
+	upstream *http.Client,
+	root string,
+	loadCookie func(context.Context) (string, error),
+	saveCookie func(context.Context, string) error,
+	observe func(source, op string, elapsed time.Duration, err error),
+	logger *slog.Logger,
+) *Client {
+	api := *upstream
+	api.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	download := *upstream
 	download.Timeout = downloadTimeout
 	download.CheckRedirect = func(req *http.Request, _ []*http.Request) error {
-		return checkDownloadURL(req.URL)
+		return checkDownloadRedirect(req.URL)
 	}
 	return &Client{
-		api:            upstream,
-		download:       &download,
-		root:           root,
-		loadCredential: loadCredential,
-		saveCredential: saveCredential,
-		observe:        observe,
+		api:      &api,
+		download: &download,
+		root:     root,
+		cookie:   cookiecache.New(loadCookie, saveCookie),
+		observe:  observe,
+		logger:   logger,
 	}
 }
 
 func (c *Client) report(op string, start time.Time, err error) {
-	if c.observe != nil {
-		c.observe("bilibili", op, time.Since(start), err)
-	}
+	c.observe("bilibili", op, time.Since(start), err)
 }
 
-// 凭据对调用方是不透明字符串；Cookie 和 refresh token 的编码由本包决定。
-type credential struct {
-	Cookie       string `json:"cookie"`
-	RefreshToken string `json:"refresh_token,omitempty"`
-}
-
-func encodeCredential(cookie, refreshToken string) string {
-	b, _ := json.Marshal(credential{Cookie: cookie, RefreshToken: refreshToken})
-	return string(b)
-}
-
-func decodeCredential(raw string) (credential, error) {
-	var cred credential
-	if err := json.Unmarshal([]byte(raw), &cred); err != nil {
-		return credential{}, fmt.Errorf("bilibili 凭据格式无法解析：%w", err)
-	}
-	return cred, nil
-}
-
-// cookie 读取保存的凭据；没有凭据时返回空字符串。
-func (c *Client) cookie(ctx context.Context) (string, error) {
-	raw, err := c.loadCredential(ctx)
-	if err != nil {
-		return "", fmt.Errorf("读取 Bilibili 凭据：%w", err)
-	}
-	if raw == "" {
-		return "", nil
-	}
-	cred, err := decodeCredential(raw)
-	if err != nil {
-		return "", err
-	}
-	return cred.Cookie, nil
-}
-
-// 请求地址可能含敏感查询参数，返回错误不得携带地址。
+// 返回的错误不带完整请求地址，因为查询参数里可能有签名等敏感信息。
 func (c *Client) get(ctx context.Context, rawURL, cookie string) ([]byte, []*http.Cookie, error) {
 	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.New("哔哩哔哩的请求地址无效")
 	}
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Referer", referer)
@@ -122,18 +99,18 @@ func (c *Client) get(ctx context.Context, rawURL, cookie string) ([]byte, []*htt
 	}
 	resp, err := c.api.Do(req)
 	if err != nil {
-		return nil, nil, fmt.Errorf("请求 B 站接口失败：%w", requestError(err))
+		return nil, nil, requestError(req.URL.Host, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("bilibili 接口返回 HTTP %d", resp.StatusCode)
+		return nil, nil, fmt.Errorf("哔哩哔哩接口返回 HTTP %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, bodyLimit+1))
 	if err != nil {
-		return nil, nil, fmt.Errorf("读取 B 站接口的响应：%w", err)
+		return nil, nil, fmt.Errorf("读取 哔哩哔哩接口的响应：%w", err)
 	}
 	if len(body) > bodyLimit {
-		return nil, nil, errors.New("bilibili 接口的响应过大")
+		return nil, nil, errors.New("哔哩哔哩接口的响应过大")
 	}
 	return body, resp.Cookies(), nil
 }
@@ -144,7 +121,6 @@ type envelope struct {
 	Data    json.RawMessage `json:"data"`
 }
 
-// getData 解开 code/message/data 信封；code 非 0 时按平台拒绝或普通错误分类。
 func (c *Client) getData(ctx context.Context, rawURL, cookie string, data any) error {
 	body, _, err := c.get(ctx, rawURL, cookie)
 	if err != nil {
@@ -152,18 +128,18 @@ func (c *Client) getData(ctx context.Context, rawURL, cookie string, data any) e
 	}
 	var env envelope
 	if err := json.Unmarshal(body, &env); err != nil {
-		return fmt.Errorf("解析 B 站接口的响应：%w", err)
+		return fmt.Errorf("解析 哔哩哔哩接口的响应：%w", err)
 	}
 	if env.Code != 0 {
 		return classifyCode(env.Code, env.Message)
 	}
 	if err := json.Unmarshal(env.Data, data); err != nil {
-		return fmt.Errorf("解析 B 站接口的数据：%w", err)
+		return fmt.Errorf("解析 哔哩哔哩接口的数据：%w", err)
 	}
 	return nil
 }
 
-// 这些 code 表示平台明确拒绝了这首歌：准备不再重试。
+// 命中 rejectionReasons 说明平台明确拒绝了这个视频，准备任务不再重试。
 var rejectionReasons = map[int]string{
 	-400:  "视频不存在或请求有误",
 	-404:  "视频不存在或已被删除",
@@ -174,27 +150,29 @@ var rejectionReasons = map[int]string{
 
 func classifyCode(code int, message string) error {
 	if reason, ok := rejectionReasons[code]; ok {
-		if message != "" {
-			reason += "（" + message + "）"
+		if msg := cleanText(message); msg != "" {
+			reason += "（" + msg + "）"
 		}
 		return &port.RejectedError{Err: errors.New(reason)}
 	}
 	if message == "" {
-		return fmt.Errorf("bilibili 接口返回错误：code=%d", code)
+		return fmt.Errorf("哔哩哔哩接口返回错误码 %d", code)
 	}
-	return fmt.Errorf("bilibili 接口返回错误：code=%d message=%s", code, message)
+	return fmt.Errorf("哔哩哔哩接口返回错误码 %d（%s）", code, cleanText(message))
 }
 
-// requestError 去掉 url.Error 携带的方法和地址：签名地址不能进错误和日志。
-func requestError(err error) error {
+// requestError 剥掉 url.Error 携带的方法和完整地址，防止签名参数进入错误和日志。
+func requestError(host string, err error) error {
 	var uerr *url.Error
 	if errors.As(err, &uerr) {
-		return uerr.Err
+		err = uerr.Err
 	}
-	return err
+	if strings.Contains(err.Error(), "failed to parse Location header") {
+		return fmt.Errorf("请求 %s：解析跳转地址失败", host)
+	}
+	return fmt.Errorf("请求 %s：%w", host, err)
 }
 
-// isDownloadHost 只允许 B 站的域名：bilibili.com、bilivideo.com、hdslb.com 和它们的子域名。
 func isDownloadHost(host string) bool {
 	for _, d := range []string{"bilibili.com", "bilivideo.com", "hdslb.com"} {
 		if host == d || strings.HasSuffix(host, "."+d) {
@@ -204,31 +182,50 @@ func isDownloadHost(host string) bool {
 	return false
 }
 
-// downloadURL 校验并规范化平台返回的地址：协议相对地址补成 https，主机必须在 B 站域名内，http 升级成 https。
+// downloadURL 校验并规范化平台返回的下载地址，把协议相对地址和 http 地址统一升级成 https。
 func downloadURL(rawURL string) (string, error) {
 	if strings.HasPrefix(rawURL, "//") {
 		rawURL = "https:" + rawURL
 	}
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Host == "" {
-		return "", errors.New("平台返回的下载地址无法解析")
+		return "", errors.New("哔哩哔哩返回的下载地址无法解析")
 	}
-	if err := checkDownloadURL(u); err != nil {
-		return "", err
-	}
-	return u.String(), nil
-}
-
-func checkDownloadURL(u *url.URL) error {
 	host := strings.ToLower(u.Hostname())
 	if !isDownloadHost(host) {
-		return fmt.Errorf("平台返回的下载地址不在 B 站域名内：%s", host)
+		return "", fmt.Errorf("哔哩哔哩返回的下载地址不在允许的域名内：%s", host)
 	}
 	if u.Scheme == "http" {
 		u.Scheme = "https"
 	}
 	if u.Scheme != "https" {
-		return fmt.Errorf("平台返回的下载地址不是 HTTPS：%s", u.Scheme)
+		return "", fmt.Errorf("哔哩哔哩返回的下载地址不是 HTTPS：%s", u.Scheme)
+	}
+	return u.String(), nil
+}
+
+func checkDownloadRedirect(u *url.URL) error {
+	host := strings.ToLower(u.Hostname())
+	if !isDownloadHost(host) {
+		return fmt.Errorf("哔哩哔哩下载跳转地址不在允许的域名内：%s", host)
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("哔哩哔哩下载跳转地址不是 HTTPS：%s", u.Scheme)
 	}
 	return nil
+}
+
+// cleanText 先去掉控制字符和非法 UTF-8 再按长度截断，因为标题和作者来自用户上传的内容，会写入 PostgreSQL 的 text 列。
+func cleanText(s string) string {
+	s = strings.ToValidUTF8(s, "\uFFFD")
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
+	if r := []rune(s); len(r) > textLimit {
+		s = string(r[:textLimit])
+	}
+	return s
 }

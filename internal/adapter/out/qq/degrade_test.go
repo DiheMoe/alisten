@@ -19,7 +19,7 @@ func readQQAudio(t *testing.T, audio io.ReadCloser) string {
 	return string(b)
 }
 
-// 歌词接口失败：就地重试一次仍失败则降级为空歌词，元数据和音频不受影响。
+// 歌词接口就地重试一次仍失败时降级为空歌词，元数据和音频不受影响。
 func TestResolveDegradesOnLyricInterfaceFailure(t *testing.T) {
 	calls := 0
 	routes := resolveRoutes(t)
@@ -47,7 +47,6 @@ func TestResolveDegradesOnLyricInterfaceFailure(t *testing.T) {
 	obs.check(t, "qq track_detail", "qq lyric 失败", "qq lyric 失败", "qq play_url")
 }
 
-// 第一次失败、重试成功时歌词正常返回。
 func TestResolveRetriesLyricOnce(t *testing.T) {
 	calls := 0
 	routes := resolveRoutes(t)
@@ -74,7 +73,7 @@ func TestResolveRetriesLyricOnce(t *testing.T) {
 	obs.check(t, "qq track_detail", "qq lyric 失败", "qq lyric", "qq play_url")
 }
 
-// 解密失败重试结果也不会变，直接降级，不重试。
+// 解密失败重试结果也不会变，直接降级而不重复请求。
 func TestResolveDegradesOnLyricDecryptFailure(t *testing.T) {
 	calls := 0
 	routes := resolveRoutes(t)
@@ -94,11 +93,10 @@ func TestResolveDegradesOnLyricDecryptFailure(t *testing.T) {
 	if calls != 1 {
 		t.Errorf("解密失败后歌词接口调用了 %d 次，期望不重试", calls)
 	}
-	// 解密在接口调用成功之后，观测上歌词请求本身没有失败，降级由 WARN 日志体现。
 	obs.check(t, "qq track_detail", "qq lyric", "qq play_url")
 }
 
-// 调用方 ctx 被取消时返回错误，不降级：任务退出时中断，不能把空歌词写进曲目表。
+// 调用方 ctx 被取消时直接返回错误而不降级，否则任务退出会把空歌词写进曲目表。
 func TestResolveDoesNotDegradeWhenCtxCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	routes := resolveRoutes(t)

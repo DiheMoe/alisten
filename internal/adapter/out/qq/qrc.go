@@ -8,21 +8,20 @@ import (
 	"strings"
 )
 
-// qrcWord 是一段带独立时间的歌词片段，通常是单个字。毫秒，绝对于曲目起点。
+// qrcWord 是一段带独立时间的歌词片段，通常是单个字。时间单位为毫秒，相对于曲目起点。
 type qrcWord struct {
 	StartMs    int
 	DurationMs int
 	Text       string
 }
 
-// qrcLine 是一行逐字歌词。毫秒，绝对于曲目起点。
+// qrcLine 是一行逐字歌词。时间单位为毫秒，相对于曲目起点。
 type qrcLine struct {
 	StartMs    int
 	DurationMs int
 	Words      []qrcWord
 }
 
-// Text 拼接整行文本。
 func (l qrcLine) text() string {
 	var b strings.Builder
 	for _, w := range l.Words {
@@ -38,7 +37,7 @@ var (
 	timingRe  = regexp.MustCompile(`^\d+,\d+$`)
 )
 
-// QRC 的时间标记跟在它所定时的文本之后；只有内容是纯数字时间的圆括号才是标记，其余按歌词原文保留。
+// QRC 的时间标记跟在它所定时的文本后面。只有内容为纯数字时间的半角圆括号才是时间标记，其余括号按歌词原文保留。
 func parseWords(content string) []qrcWord {
 	var words []qrcWord
 	start := 0
@@ -69,7 +68,7 @@ func parseWords(content string) []qrcWord {
 	return words
 }
 
-// Parse 解析解密后的 QRC 文本：剥掉 XML 外壳，返回头部标签和逐字行；kana 等注音注解行被丢弃。
+// parseQRC 剥掉解密后 QRC 文本的 XML 外壳，分离出方括号头部标签与逐字行。
 func parseQRC(text string) (map[string]string, []qrcLine) {
 	if m := contentRe.FindStringSubmatch(text); m != nil {
 		text = html.UnescapeString(m[1])
@@ -95,7 +94,7 @@ func parseQRC(text string) (map[string]string, []qrcLine) {
 	return tags, lines
 }
 
-// renderYRCLines 输出传输用的逐字格式（YRC 语法）：[行起始,行时长](字起始,字时长,0)字…，毫秒为绝对时间。
+// renderYRCLines 输出传输用的 YRC 逐字格式，毫秒为相对曲目起点的绝对时间。
 func renderYRCLines(lines []qrcLine) string {
 	var b strings.Builder
 	for _, l := range lines {
@@ -108,7 +107,7 @@ func renderYRCLines(lines []qrcLine) string {
 	return b.String()
 }
 
-// renderLRCLines 输出行级 LRC：头部标签行在前，随后是 [分:秒.厘秒]行文本。
+// renderLRCLines 输出行级 LRC，只保留常用的元信息标签，kana 等注音标签不输出。
 func renderLRCLines(tags map[string]string, lines []qrcLine) string {
 	var b strings.Builder
 	for _, k := range []string{"ti", "ar", "al", "by", "offset"} {

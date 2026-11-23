@@ -35,20 +35,20 @@ type videoInfo struct {
 func (c *Client) TrackMeta(ctx context.Context, id string) (track.Meta, error) {
 	bvid, page, ok := track.ParseBilibiliID(id)
 	if !ok {
-		return track.Meta{}, fmt.Errorf("不是 Bilibili 曲目 ID：%q", id)
+		return track.Meta{}, fmt.Errorf("不是 哔哩哔哩曲目 ID：%q", id)
 	}
-	meta, _, err := c.trackMeta(ctx, "meta_view", "meta_pagelist", bvid, page)
+	cookie, err := c.cookie.Get(ctx)
+	if err != nil {
+		return track.Meta{}, err
+	}
+	meta, _, err := c.trackMeta(ctx, "meta_view", "meta_pagelist", bvid, page, cookie)
 	return meta, err
 }
 
-// trackMeta 取标题、UP 主和时长；CoverURL 和 PageURL 留空：封面在准备时下载存储，页面地址由调用方按 ID 拼出。
-// pagelist 是存在性判断和 cid 的来源；view 接口经常被风控（未登录 412、登录后伪装 -404），
-// 失败时退化为 pagelist 的元数据：标题用分 P 标题（分 P 标题为空时用 BV 号），UP 主和封面缺失。
-func (c *Client) trackMeta(ctx context.Context, viewOp, pagelistOp, bvid string, page int) (track.Meta, videoInfo, error) {
-	cookie, err := c.cookie(ctx)
-	if err != nil {
-		return track.Meta{}, videoInfo{}, err
-	}
+// CoverURL 和 PageURL 都留空，因为封面在准备阶段下载到对象存储，页面地址由调用方按曲目 ID 拼出。
+// pagelist 提供分 P 存在性判断和 cid。view 接口常被风控拦截（未登录返回 412，登录后也可能伪装成 -404），
+// 所以 view 失败时退回使用 pagelist 的分 P 标题（为空则用 BV 号）。
+func (c *Client) trackMeta(ctx context.Context, viewOp, pagelistOp, bvid string, page int, cookie string) (track.Meta, videoInfo, error) {
 	pages, err := c.fetchPagelist(ctx, pagelistOp, bvid, cookie)
 	if err != nil {
 		return track.Meta{}, videoInfo{}, err
@@ -57,7 +57,9 @@ func (c *Client) trackMeta(ctx context.Context, viewOp, pagelistOp, bvid string,
 	if !ok {
 		return track.Meta{}, videoInfo{}, &port.RejectedError{Err: fmt.Errorf("这个视频没有第 %d P", page)}
 	}
-	meta := track.Meta{Title: p.Part, Duration: time.Duration(p.Duration) * time.Second}
+	part := cleanText(p.Part)
+	duration := min(max(0, time.Duration(p.Duration)*time.Second), maxDuration)
+	meta := track.Meta{Title: part, Duration: duration}
 	if meta.Title == "" {
 		meta.Title = bvid
 	}
@@ -66,11 +68,19 @@ func (c *Client) trackMeta(ctx context.Context, viewOp, pagelistOp, bvid string,
 	if err != nil {
 		return meta, info, nil
 	}
-	title := view.Title
-	if p.Part != "" && p.Part != view.Title {
-		title = view.Title + " - " + p.Part
+	title := cleanText(view.Title)
+	if part != "" && part != title {
+		if title != "" {
+			title = title + " - " + part
+		} else {
+			title = part
+		}
 	}
-	meta.Title, meta.Artist = title, view.Owner.Name
+	if title == "" {
+		title = bvid
+	}
+	meta.Title = cleanText(title)
+	meta.Artist = cleanText(view.Owner.Name)
 	info.pic = view.Pic
 	return meta, info, nil
 }

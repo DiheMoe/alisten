@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/dihemoe/alisten/internal/app/port"
+	"github.com/dihemoe/alisten/internal/lib/cookiecache"
 )
 
 type cookieStore struct {
@@ -41,6 +42,19 @@ func (s *cookieStore) save(_ context.Context, value string) error {
 	}
 	s.value = value
 	return nil
+}
+
+func (s *cookieStore) swap(_ context.Context, expected, value string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.saveErr != nil {
+		return false, s.saveErr
+	}
+	if s.value != expected {
+		return false, nil
+	}
+	s.value = value
+	return true, nil
 }
 
 func (s *cookieStore) get() string {
@@ -69,7 +83,7 @@ func newRefreshTestClient(t *testing.T, store *cookieStore, handler http.Handler
 	obs := &observed{}
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&logs, nil))
-	client := New(&http.Client{Transport: redirect{target}}, store.load, store.save, obs.record, logger)
+	client := New(&http.Client{Transport: redirect{target}}, store.load, store.save, store.swap, obs.record, logger)
 	return client, obs, &logs
 }
 
@@ -166,7 +180,7 @@ func TestRefreshLoginProactiveQQ(t *testing.T) {
 		t.Errorf("刷新日志泄露了凭据：%s", logs.String())
 	}
 
-	// 刚刷新过的凭据未到下一次刷新窗口，再次调用不应再请求上游。
+	// 再次调用不应请求上游，因为刚刷新过的凭据还没到下一次刷新窗口。
 	if err := client.RefreshLogin(t.Context()); err != nil {
 		t.Fatalf("第二次主动刷新：%v", err)
 	}
@@ -214,11 +228,11 @@ func newInMemoryRefreshClient(t *testing.T, store *cookieStore, rt roundTripFunc
 		Transport:     rt,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	// synctest 要求退出前所有气泡内 goroutine 都结束，所以这里不构造带后台清理协程的 LRU 缓存。
+	// 不构造带后台清理协程的 LRU 缓存，因为 synctest 要求退出前气泡内的 goroutine 全部结束。
 	client := &Client{
 		http:    &http.Client{Transport: rt},
 		api:     api,
-		cookie:  cookieCache{load: store.load, store: store.save},
+		cookie:  cookiecache.NewWithSwap(store.load, store.save, store.swap),
 		observe: obs.record,
 		logger:  testLogger,
 	}
@@ -288,7 +302,7 @@ func TestRefreshLoginErrors(t *testing.T) {
 		if !errors.Is(err, saveErr) || errors.Is(err, port.ErrSourceSignedOut) {
 			t.Fatalf("保存失败的错误 = %v，期望包装 %v", err, saveErr)
 		}
-		if cached, err := client.cookie.get(t.Context()); err != nil || cached != baseCookie {
+		if cached, err := client.cookie.Get(t.Context()); err != nil || cached != baseCookie {
 			t.Errorf("保存失败后的本地缓存 = %q, %v，期望保留旧值", cached, err)
 		}
 	})
@@ -511,7 +525,7 @@ func TestPlayURLAutoRefreshOutcomes(t *testing.T) {
 	})
 }
 
-func TestCurrentAccountAutoRefreshesExpiredCookie(t *testing.T) {
+func TestCredentialStatusAutoRefreshesExpiredCookie(t *testing.T) {
 	store := &cookieStore{
 		value: "musicid=123456; musickey=Q_H_L_old; qm_keyst=Q_H_L_old; refresh_token=rt-1; uin=123456",
 	}
@@ -532,12 +546,12 @@ func TestCurrentAccountAutoRefreshesExpiredCookie(t *testing.T) {
 		fixture(t, "account-vip.json")(w, r)
 	})
 
-	account, err := client.CurrentAccount(t.Context())
+	status, err := client.CredentialStatus(t.Context())
 	if err != nil {
-		t.Fatalf("CurrentAccount = %v", err)
+		t.Fatalf("CredentialStatus = %v", err)
 	}
-	if account == nil || account.ID != "123456" || !account.Verified || account.VIP == nil || !*account.VIP {
-		t.Fatalf("刷新后的账号 = %+v，期望已验证的 VIP 账号", account)
+	if status.SignedOut || status.Account == nil || status.Account.ID != "123456" || !status.Account.Verified || status.Account.VIP == nil || !*status.Account.VIP {
+		t.Fatalf("刷新后的凭据状态 = %+v，期望已验证的 VIP 账号", status)
 	}
 	obs.check(t, "qq account", "qq login_refresh", "qq account", "qq account")
 }
@@ -608,30 +622,96 @@ func TestConcurrentRefreshCoalescesAndSurvivesCallerCancel(t *testing.T) {
 func TestRefreshDoesNotOverwriteNewerQRLogin(t *testing.T) {
 	initial := "musicid=123456; musickey=Q_H_L_old; qm_keyst=Q_H_L_old; refresh_token=rt-1; uin=123456"
 	adminCookie := "musicid=123456; musickey=Q_H_L_admin; qm_keyst=Q_H_L_admin; refresh_token=rt-admin; uin=123456"
-	store := &cookieStore{value: initial}
-	entered := make(chan struct{})
-	release := make(chan struct{})
 
-	client, _, _ := newRefreshTestClient(t, store, func(w http.ResponseWriter, r *http.Request) {
-		close(entered)
-		<-release
-		body(`{"code":0,"req":{"code":0,"data":{"musickey":"Q_H_L_refreshed","musicid":123456}}}`)(w, r)
-	})
+	for _, tc := range []struct {
+		name  string
+		write func(t *testing.T, client *Client, store *cookieStore)
+	}{
+		{
+			name: "同实例扫码写入",
+			write: func(t *testing.T, client *Client, _ *cookieStore) {
+				if err := client.cookie.Put(t.Context(), adminCookie); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "其他实例扫码写入",
+			write: func(_ *testing.T, _ *Client, store *cookieStore) {
+				store.set(adminCookie)
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &cookieStore{value: initial}
+			entered := make(chan struct{})
+			release := make(chan struct{})
 
-	done := make(chan error, 1)
-	go func() {
-		done <- client.RefreshLogin(t.Context())
-	}()
-	<-entered
-	// 刷新请求还在路上时，模拟管理员扫码写入了一份新凭据。
-	if err := client.cookie.put(t.Context(), adminCookie); err != nil {
-		t.Fatal(err)
+			client, _, _ := newRefreshTestClient(t, store, func(w http.ResponseWriter, r *http.Request) {
+				close(entered)
+				<-release
+				body(`{"code":0,"req":{"code":0,"data":{"musickey":"Q_H_L_refreshed","musicid":123456}}}`)(w, r)
+			})
+
+			done := make(chan error, 1)
+			go func() {
+				done <- client.RefreshLogin(t.Context())
+			}()
+			<-entered
+			tc.write(t, client, store)
+			close(release)
+			if err := <-done; err != nil {
+				t.Fatalf("RefreshLogin = %v", err)
+			}
+			if got := store.get(); got != adminCookie {
+				t.Errorf("存储的 Cookie 被旧刷新覆盖成 %q，期望保留 %q", got, adminCookie)
+			}
+			if cached, err := client.cookie.Get(t.Context()); err != nil || cached != adminCookie {
+				t.Errorf("缓存的 Cookie = %q, %v，期望 %q", cached, err, adminCookie)
+			}
+		})
 	}
-	close(release)
-	if err := <-done; err != nil {
-		t.Fatalf("RefreshLogin = %v", err)
+}
+
+func TestRefreshCookieRecoversSingleflightPanic(t *testing.T) {
+	store := &cookieStore{
+		value: "musicid=123456; musickey=Q_H_L_old; qm_keyst=Q_H_L_old; refresh_token=rt-1; uin=123456",
 	}
-	if got := store.get(); got != adminCookie {
-		t.Errorf("存储的 Cookie 被旧刷新覆盖成 %q，期望保留 %q", got, adminCookie)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logs, nil))
+	api := &http.Client{
+		Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			panic("boom")
+		}),
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	client := &Client{
+		http:    api,
+		api:     api,
+		cookie:  cookiecache.NewWithSwap(store.load, store.save, store.swap),
+		observe: func(string, string, time.Duration, error) {},
+		logger:  logger,
+	}
+
+	err := client.RefreshLogin(t.Context())
+	if err == nil {
+		t.Fatal("panic 时返回了 nil 错误")
+	}
+	if strings.Contains(err.Error(), "\n") || strings.Contains(err.Error(), "boom") {
+		t.Errorf("panic 返回的错误包含堆栈或原始信息：%q", err.Error())
+	}
+	rawLog := strings.TrimSpace(logs.String())
+	if strings.Contains(rawLog, "\n") {
+		t.Fatalf("panic 输出了多行日志：%q", logs.String())
+	}
+	var entry map[string]any
+	if err := json.Unmarshal([]byte(rawLog), &entry); err != nil {
+		t.Fatalf("解析日志 JSON 失败：%v\n原始日志：%s", err, rawLog)
+	}
+	if entry["level"] != "ERROR" || entry["panic"] != "boom" {
+		t.Errorf("日志字段 = %#v", entry)
+	}
+	if stack, ok := entry["stack"].(string); !ok || stack == "" {
+		t.Errorf("日志缺少单行 JSON 内的 stack 字段：%#v", entry["stack"])
 	}
 }

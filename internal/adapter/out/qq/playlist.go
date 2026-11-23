@@ -40,7 +40,7 @@ func (c *Client) PlaylistTracks(ctx context.Context, playlistID string) ([]port.
 			"format": {"json"}, "g_tk": {"5381"}, "loginUin": {"0"}, "hostUin": {"0"},
 			"inCharset": {"utf8"}, "outCharset": {"utf-8"}, "notice": {"0"}, "platform": {"yqq"}, "needNewCode": {"0"},
 		}
-		if err := c.get(ctx, "qq", "playlist_tracks", playlistDetailAPI, query, desktopHeader, &resp); err != nil {
+		if err := c.get(ctx, "playlist_tracks", playlistDetailAPI, query, desktopHeader, &resp); err != nil {
 			return nil, err
 		}
 		if len(resp.Cdlist) == 0 {

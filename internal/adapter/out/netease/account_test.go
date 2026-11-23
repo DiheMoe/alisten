@@ -2,7 +2,6 @@ package netease
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"reflect"
 	"testing"
@@ -10,14 +9,13 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port"
 )
 
-func TestCurrentAccount(t *testing.T) {
+func TestCredentialStatus(t *testing.T) {
 	tests := []struct {
 		name      string
 		body      string
 		id        string
 		nickname  string
 		vip       bool
-		empty     bool
 		wantErr   bool
 		signedOut bool
 	}{
@@ -56,28 +54,19 @@ func TestCurrentAccount(t *testing.T) {
 					_, _ = w.Write([]byte(tc.body))
 				},
 			})
-			got, err := client.CurrentAccount(t.Context())
-			if tc.signedOut {
-				if !errors.Is(err, port.ErrSourceSignedOut) {
-					t.Fatalf("登录失效的错误 = %v，期望 ErrSourceSignedOut", err)
-				}
-				if got != nil {
-					t.Fatalf("登录失效时返回了账号 %+v", got)
-				}
-				return
-			}
+			got, err := client.CredentialStatus(t.Context())
 			if tc.wantErr {
 				if err == nil {
-					t.Fatal("账号查询错误 = nil，期望失败")
+					t.Fatal("登录状态查询错误 = nil，期望失败")
 				}
 				return
 			}
 			if err != nil {
 				t.Fatal(err)
 			}
-			if tc.empty {
-				if got != nil {
-					t.Fatalf("没有账号资料时 = %+v，期望 nil", got)
+			if tc.signedOut {
+				if got != (port.CredentialStatus{Set: true, SignedOut: true}) {
+					t.Fatalf("登录失效的状态 = %+v，期望 Set=true 且 SignedOut=true", got)
 				}
 				return
 			}
@@ -85,19 +74,21 @@ func TestCurrentAccount(t *testing.T) {
 			if tc.nickname != "" {
 				name = &tc.nickname
 			}
-			want := &port.SourceAccount{ID: tc.id, Name: name, VIP: &tc.vip, Verified: true}
+			want := port.CredentialStatus{
+				Set:     true,
+				Account: &port.SourceAccount{ID: tc.id, Name: name, VIP: &tc.vip, Verified: true},
+			}
 			if !reflect.DeepEqual(got, want) {
-				t.Fatalf("账号资料 = %+v，期望 %+v", got, want)
+				t.Fatalf("凭据状态 = %+v，期望 %+v", got, want)
 			}
 		})
 	}
 }
 
-// 没有保存凭据是"从未登录"，不是"登录失效"：返回 nil 账号，不发请求。
-func TestCurrentAccountWithoutCookie(t *testing.T) {
+func TestCredentialStatusWithoutCookie(t *testing.T) {
 	c := New(&http.Client{}, func(context.Context) (string, error) { return "", nil }, nil, (&observed{}).record, testLogger)
-	got, err := c.CurrentAccount(t.Context())
-	if err != nil || got != nil {
-		t.Fatalf("没有凭据时 = %+v, %v，期望 nil 账号且无错误", got, err)
+	got, err := c.CredentialStatus(t.Context())
+	if err != nil || got != (port.CredentialStatus{}) {
+		t.Fatalf("没有凭据时 = %+v, %v，期望未设置且无错误", got, err)
 	}
 }

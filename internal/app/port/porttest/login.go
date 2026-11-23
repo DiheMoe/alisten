@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	_ port.NetEaseQRLoginSource = (*NetEaseQRLogin)(nil)
-	_ port.QQQRLoginSource      = (*QQQRLogin)(nil)
+	_ port.QRLoginSource   = (*NetEaseQRLogin)(nil)
+	_ port.QQQRLoginSource = (*QQQRLogin)(nil)
+	_ port.QRLoginSource   = (*BilibiliQRLogin)(nil)
 )
 
 const (
@@ -21,12 +22,12 @@ const (
 
 // 查询时不检查会话的过期时间。登录成功时也不像真实的音源那样保存登录状态。
 type qrLogins struct {
-	mu             sync.Mutex
-	created        int
-	logins         map[string]qrLogin
-	failure        error
-	account        *port.SourceAccount
-	accountFailure error
+	mu            sync.Mutex
+	created       int
+	logins        map[string]qrLogin
+	failure       error
+	status        port.CredentialStatus
+	statusFailure error
 }
 
 type qrLogin struct {
@@ -73,25 +74,32 @@ func (l *qrLogins) Fail(err error) {
 	l.failure = err
 }
 
-func (l *qrLogins) CurrentAccount(context.Context) (*port.SourceAccount, error) {
+// account 为 nil 表示已保存登录信息但未识别到账号。
+func (l *qrLogins) SetCredential(account *port.SourceAccount) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.accountFailure != nil {
-		return nil, l.accountFailure
+	l.status, l.statusFailure = port.CredentialStatus{Set: true, Account: account}, nil
+}
+
+func (l *qrLogins) SetSignedOut() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.status, l.statusFailure = port.CredentialStatus{Set: true, SignedOut: true}, nil
+}
+
+func (l *qrLogins) FailStatus(err error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.statusFailure = err
+}
+
+func (l *qrLogins) CredentialStatus(context.Context) (port.CredentialStatus, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.statusFailure != nil {
+		return port.CredentialStatus{}, l.statusFailure
 	}
-	return l.account, nil
-}
-
-func (l *qrLogins) SetAccount(account *port.SourceAccount) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.account, l.accountFailure = account, nil
-}
-
-func (l *qrLogins) FailAccount(err error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.accountFailure = err
+	return l.status, nil
 }
 
 // 像网易云那样只给登录链接。

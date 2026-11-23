@@ -1,4 +1,4 @@
-// Package chinaip 让发往音源接口的请求带上随机的国内 IP：音源会限制来自国外的请求。
+// Package chinaip 让发往音源接口的请求带上随机的国内 IP，因为音源会限制来自国外的请求。
 package chinaip
 
 import (

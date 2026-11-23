@@ -1,7 +1,7 @@
 package qq
 
-// QQ 歌词的密文是十六进制字符串，加密为 QQ 改版 DES 的三轮 EDE，解压为 zlib。
-// 改版 DES 与标准 DES 不兼容：32 位字内字节小端、两个 S 盒条目被改动、PC-2 的 D 半区错位一位。
+// QQ 歌词的密文是十六进制字符串，经 QQ 改版三轮 DES EDE 解密后再做 zlib 解压。
+// 改版 DES 与标准 DES 有三处不同：32 位字内字节按小端排列，两个 S 盒条目被替换，PC-2 的 D 半区偏移一位。
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 
 var qrcKey = []byte("!@#)(*$%123ZXC!@!@#)(NHL")
 
-// decryptQRCHex 解密十六进制的 QRC 密文。
 func decryptQRCHex(content string) (string, error) {
 	encrypted, err := hex.DecodeString(strings.TrimSpace(content))
 	if err != nil {
@@ -56,7 +55,7 @@ func tripleDESDecrypt(block []byte) []byte {
 	return data
 }
 
-// bitNum 取输入中第 b 位（逻辑序号），放到结果的 c 位上；逻辑字节 n 在物理字节 (n/4)*4+3-n%4。
+// bitNum 按字内小端字节序（逻辑字节 n 位于物理下标 (n/4)*4+3-n%4）取输入第 b 位并放到结果的第 c 位上。
 func bitNum(a []byte, b, c int) uint32 {
 	return uint32((a[(b/32)*4+3-(b%32)/8]>>(7-b%8))&1) << c
 }

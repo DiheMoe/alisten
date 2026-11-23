@@ -33,7 +33,6 @@ type Store struct {
 	tickets  map[string]storedTicket
 	// 房间 ID 到 bot 成员 ID。
 	bots                  map[string]string
-	cookies               map[string]string
 	githubApp             port.GitHubOAuthApp
 	brandName             string
 	registrationClosed    bool
@@ -86,7 +85,6 @@ var (
 	_ port.Tickets         = (*Store)(nil)
 	_ port.ExistingTickets = (*Store)(nil)
 	_ port.RoomDirectory   = (*Store)(nil)
-	_ port.Credentials     = (*Store)(nil)
 	_ port.GitHubOAuthApps = (*Store)(nil)
 	_ port.APIKeys         = (*Store)(nil)
 	_ port.Site            = (*Store)(nil)
@@ -99,7 +97,6 @@ func New() *Store {
 		sessions: map[string]storedSession{},
 		tickets:  map[string]storedTicket{},
 		bots:     map[string]string{},
-		cookies:  map[string]string{},
 		listens:  map[string][]port.Listen{},
 	}
 }
@@ -651,44 +648,6 @@ func (s *Store) SetRoomPassword(_ context.Context, id, passwordHash string) erro
 		maps.DeleteFunc(s.tickets, func(_ string, t storedTicket) bool { return t.roomID == r.Info.ID && t.memberID != bot })
 	}
 	return nil
-}
-
-func (s *Store) NeteaseCookie(context.Context) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.cookies["netease"], nil
-}
-
-func (s *Store) SetNeteaseCookie(_ context.Context, cookie string) error {
-	if err := checkText(cookie); err != nil {
-		return err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.cookies["netease"] = cookie
-	return nil
-}
-
-func (s *Store) QQCookie(context.Context) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.cookies["qq"], nil
-}
-
-func (s *Store) SetQQCookie(_ context.Context, cookie string) error {
-	if err := checkText(cookie); err != nil {
-		return err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.cookies["qq"] = cookie
-	return nil
-}
-
-func (s *Store) BilibiliCredential(context.Context) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.cookies["bilibili"], nil
 }
 
 func (s *Store) GitHubOAuthApp(context.Context) (port.GitHubOAuthApp, error) {

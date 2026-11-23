@@ -4,7 +4,7 @@ package protocol
 
 import "encoding/json"
 
-const Version = "77c2a450b56ba881"
+const Version = "b23410b249f706ea"
 
 type APIKey struct {
 	Key string `json:"key"`
@@ -66,8 +66,9 @@ type AdminCreateRoomResponse struct {
 }
 
 type AdminGetBilibiliCredentialResponse struct {
-	Account *SourceAccount `json:"account"`
-	Set     bool           `json:"set"`
+	Account   *SourceAccount `json:"account"`
+	Set       bool           `json:"set"`
+	SignedOut bool           `json:"signedOut"`
 }
 
 type AdminGetGithubCredentialResponse struct {

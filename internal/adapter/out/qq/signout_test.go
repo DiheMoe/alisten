@@ -12,7 +12,7 @@ import (
 	"github.com/dihemoe/alisten/internal/app/port"
 )
 
-// 播放地址拿不到时用严格登录态接口复核：登录失效返回 ErrSourceSignedOut，登录有效才按音源拒绝处理。
+// 拿不到播放地址时用严格登录态接口复核，登录失效返回 ErrSourceSignedOut，登录有效才按音源拒绝处理。
 func TestPlayURLSignedOut(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
@@ -47,7 +47,7 @@ func TestPlayURLSignedOut(t *testing.T) {
 	}
 }
 
-// 没有保存凭据时不复核登录：不是登录失效，按音源拒绝处理。
+// 没有保存凭据时不复核登录，按音源拒绝处理而不是登录失效。
 func TestPlayURLRejectsWithoutCookie(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Query().Get("data"), "DissInfo") {
@@ -60,7 +60,7 @@ func TestPlayURLRejectsWithoutCookie(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := New(&http.Client{Transport: redirect{target}}, func(context.Context) (string, error) { return "", nil }, nil, (&observed{}).record, testLogger)
+	c := New(&http.Client{Transport: redirect{target}}, func(context.Context) (string, error) { return "", nil }, nil, nil, (&observed{}).record, testLogger)
 	var rejected *port.RejectedError
 	if _, err := c.PlayURL(t.Context(), "id"); !errors.As(err, &rejected) {
 		t.Errorf("没有凭据时的错误 = %v，期望音源拒绝", err)

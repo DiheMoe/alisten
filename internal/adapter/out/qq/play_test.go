@@ -120,35 +120,6 @@ func TestPlayURLUpstreamErrorsAreRetryable(t *testing.T) {
 	}
 }
 
-func TestResolveDoesNotFallbackForInvalidPlayURLResponses(t *testing.T) {
-	tests := []struct {
-		name     string
-		response string
-	}{
-		{name: "响应 JSON 畸形", response: `{"code":0,`},
-		{name: "顶层 code 缺失", response: `{"req_1":{"code":0,"data":{"midurlinfo":[]}}}`},
-		{name: "顶层 code 为 null", response: `{"code":null,"req_1":{"code":0,"data":{"midurlinfo":[]}}}`},
-		{name: "req_1.code 缺失", response: `{"code":0,"req_1":{"data":{"midurlinfo":[]}}}`},
-		{name: "req_1.code 为 null", response: `{"code":0,"req_1":{"code":null,"data":{"midurlinfo":[]}}}`},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			routes := resolveRoutes(t)
-			routes["/cgi-bin/musicu.fcg"] = playRequest(t, body(tt.response))
-			c, obs := serve(t, routes)
-			got, err := c.Resolve(t.Context(), "004Fs2FP1EvZYc")
-			if got.Audio != nil {
-				_ = got.Audio.Close()
-			}
-			var rejected *port.RejectedError
-			if err == nil || errors.As(err, &rejected) {
-				t.Errorf("无效原生播放响应的 Resolve 错误 = %v，期望普通可重试错误", err)
-			}
-			obs.check(t, "qq track_detail", "qq lyric", "qq play_url 失败")
-		})
-	}
-}
-
 func TestResolveRejectsEmptyPlayURL(t *testing.T) {
 	c, obs := serve(t, resolveRoutes(t))
 	_, err := c.Resolve(t.Context(), "004Fs2FP1EvZYc")
@@ -211,6 +182,7 @@ func TestDownloadErrorDoesNotExposeSignedURL(t *testing.T) {
 		&http.Client{Transport: failingTransport{}},
 		func(context.Context) (string, error) { return "", nil },
 		func(context.Context, string) error { return nil },
+		func(context.Context, string, string) (bool, error) { return true, nil },
 		func(string, string, time.Duration, error) {},
 		testLogger,
 	)

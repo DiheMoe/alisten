@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
@@ -22,11 +21,11 @@ import (
 
 var adminHeader = []string{"Authorization", "Bearer admin-secret"}
 
-func startQRLogin(t *testing.T, netease port.NetEaseQRLoginSource, qq port.QQQRLoginSource) (*httptest.Server, *bytes.Buffer) {
+func startQRLogin(t *testing.T, netease port.QRLoginSource, qq port.QQQRLoginSource) (*httptest.Server, *bytes.Buffer) {
 	t.Helper()
 	store := porttest.New()
 	s := services(store, store, "admin-secret")
-	s.Admin = admin.New("admin-secret", s.Lobby, store, store, store, netease, qq, porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), s.Gateway)
+	s.Admin = admin.New("admin-secret", s.Lobby, store, store, netease, qq, porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), s.Gateway)
 	return start(t, s)
 }
 
@@ -103,55 +102,52 @@ func TestQRLoginKeyIsNotLogged(t *testing.T) {
 
 func TestCredentialStatus(t *testing.T) {
 	store := porttest.New()
-	netease, qq := porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin()
+	netease, qq, bilibili := porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin()
 	s := services(store, store, "admin-secret")
-	s.Admin = admin.New("admin-secret", s.Lobby, store, store, store, netease, qq, porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), s.Gateway)
+	s.Admin = admin.New("admin-secret", s.Lobby, store, store, netease, qq, bilibili, porttest.NewYouTubeCookies(), s.Gateway)
 	server, _ := start(t, s)
-	for _, path := range []string{"/api/admin/credentials/netease", "/api/admin/credentials/qq"} {
+	for _, path := range []string{"/api/admin/credentials/netease", "/api/admin/credentials/qq", "/api/admin/credentials/bilibili"} {
 		want := response{status: http.StatusOK, body: `{"account":null,"set":false,"signedOut":false}`}
 		if got := send(t, server, http.MethodGet, path, "", adminHeader...); got != want {
 			t.Errorf("没有凭据时 %s = %#v，期望 %#v", path, got, want)
 		}
 	}
 
-	if err := store.SetNeteaseCookie(t.Context(), "netease-cookie-secret"); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SetQQCookie(t.Context(), "qq-cookie-secret"); err != nil {
-		t.Fatal(err)
-	}
 	name, vip := "测试账号", true
-	netease.SetAccount(&port.SourceAccount{ID: "123", Name: &name, VIP: &vip, Verified: true})
-	qq.SetAccount(&port.SourceAccount{ID: "456"})
+	netease.SetCredential(&port.SourceAccount{ID: "123", Name: &name, VIP: &vip, Verified: true})
+	qq.SetCredential(&port.SourceAccount{ID: "456"})
+	bilibili.SetCredential(&port.SourceAccount{ID: "789", Name: &name, Verified: true})
 	for path, want := range map[string]string{
-		"/api/admin/credentials/netease": `{"account":{"id":"123","name":"测试账号","verified":true,"vip":true},"set":true,"signedOut":false}`,
-		"/api/admin/credentials/qq":      `{"account":{"id":"456","name":null,"verified":false,"vip":null},"set":true,"signedOut":false}`,
+		"/api/admin/credentials/netease":  `{"account":{"id":"123","name":"测试账号","verified":true,"vip":true},"set":true,"signedOut":false}`,
+		"/api/admin/credentials/qq":       `{"account":{"id":"456","name":null,"verified":false,"vip":null},"set":true,"signedOut":false}`,
+		"/api/admin/credentials/bilibili": `{"account":{"id":"789","name":"测试账号","verified":true,"vip":null},"set":true,"signedOut":false}`,
 	} {
 		got := send(t, server, http.MethodGet, path, "", adminHeader...)
 		if got.status != http.StatusOK || got.body != want {
 			t.Errorf("有账号资料时 %s = %#v，期望 %s", path, got, want)
 		}
-		if strings.Contains(got.body, "cookie-secret") {
-			t.Errorf("%s 的响应泄漏了 Cookie：%s", path, got.body)
+	}
+
+	qq.SetSignedOut()
+	bilibili.SetSignedOut()
+	for _, path := range []string{"/api/admin/credentials/qq", "/api/admin/credentials/bilibili"} {
+		want := response{status: http.StatusOK, body: `{"account":null,"set":true,"signedOut":true}`}
+		if got := send(t, server, http.MethodGet, path, "", adminHeader...); got != want {
+			t.Errorf("登录已失效时 %s = %#v，期望 %#v", path, got, want)
 		}
 	}
 
-	qq.FailAccount(fmt.Errorf("平台说未登录：%w", port.ErrSourceSignedOut))
-	if got, want := send(t, server, http.MethodGet, "/api/admin/credentials/qq", "", adminHeader...), (response{status: http.StatusOK, body: `{"account":null,"set":true,"signedOut":true}`}); got != want {
-		t.Errorf("登录已失效时 /api/admin/credentials/qq = %#v，期望 %#v", got, want)
-	}
-
-	netease.FailAccount(errors.New("上游失败"))
+	netease.FailStatus(errors.New("上游失败"))
 	if got, want := send(t, server, http.MethodGet, "/api/admin/credentials/netease", "", adminHeader...), failure(protocol.ErrorCodeProviderError, "音乐平台没有正常响应，请稍后再试。"); got != want {
 		t.Errorf("账号查询失败 = %#v，期望 %#v", got, want)
 	}
 }
 
-func startAdmin(t *testing.T, bilibili port.BilibiliQRLoginSource, youtube port.YouTubeCookies) (*httptest.Server, *bytes.Buffer) {
+func startAdmin(t *testing.T, bilibili port.QRLoginSource, youtube port.YouTubeCookies) (*httptest.Server, *bytes.Buffer) {
 	t.Helper()
 	store := porttest.New()
 	s := services(store, store, "admin-secret")
-	s.Admin = admin.New("admin-secret", s.Lobby, store, store, store, porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), bilibili, youtube, s.Gateway)
+	s.Admin = admin.New("admin-secret", s.Lobby, store, store, porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), bilibili, youtube, s.Gateway)
 	return start(t, s)
 }
 
@@ -176,31 +172,15 @@ func TestBilibiliQRLogin(t *testing.T) {
 	}
 }
 
-func TestBilibiliAndYouTubeCredentialStatus(t *testing.T) {
-	bilibili, youtube := porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies()
-	server, _ := startAdmin(t, bilibili, youtube)
-	for path, want := range map[string]string{
-		"/api/admin/credentials/bilibili": `{"account":null,"set":false}`,
-		"/api/admin/credentials/youtube":  `{"set":false,"updatedAtMs":0}`,
-	} {
-		if got := send(t, server, http.MethodGet, path, "", adminHeader...); got != (response{status: http.StatusOK, body: want}) {
-			t.Errorf("没有凭据时 %s = %#v，期望 %s", path, got, want)
-		}
+func TestYouTubeCredentialStatus(t *testing.T) {
+	youtube := porttest.NewYouTubeCookies()
+	server, _ := startAdmin(t, porttest.NewBilibiliQRLogin(), youtube)
+	if got := send(t, server, http.MethodGet, "/api/admin/credentials/youtube", "", adminHeader...); got != (response{status: http.StatusOK, body: `{"set":false,"updatedAtMs":0}`}) {
+		t.Errorf("没有凭据时 = %#v", got)
 	}
-	name := "测试账号"
-	bilibili.SetCredential(&port.SourceAccount{ID: "789", Name: &name, Verified: true})
 	youtube.Set(time.UnixMilli(1760000000123))
-	for path, want := range map[string]string{
-		"/api/admin/credentials/bilibili": `{"account":{"id":"789","name":"测试账号","verified":true,"vip":null},"set":true}`,
-		"/api/admin/credentials/youtube":  `{"set":true,"updatedAtMs":1760000000123}`,
-	} {
-		if got := send(t, server, http.MethodGet, path, "", adminHeader...); got != (response{status: http.StatusOK, body: want}) {
-			t.Errorf("有凭据时 %s = %#v，期望 %s", path, got, want)
-		}
-	}
-	bilibili.FailStatus(errors.New("上游失败"))
-	if got, want := send(t, server, http.MethodGet, "/api/admin/credentials/bilibili", "", adminHeader...), failure(protocol.ErrorCodeProviderError, "音乐平台没有正常响应，请稍后再试。"); got != want {
-		t.Errorf("查询 B 站的登录状态失败 = %#v，期望 %#v", got, want)
+	if got := send(t, server, http.MethodGet, "/api/admin/credentials/youtube", "", adminHeader...); got != (response{status: http.StatusOK, body: `{"set":true,"updatedAtMs":1760000000123}`}) {
+		t.Errorf("有凭据时 = %#v", got)
 	}
 	youtube.Fail(errors.New("数据库不可用"))
 	if got, want := send(t, server, http.MethodGet, "/api/admin/credentials/youtube", "", adminHeader...), failure(protocol.ErrorCodeInternal, "服务器出错了，请稍后再试。"); got != want {

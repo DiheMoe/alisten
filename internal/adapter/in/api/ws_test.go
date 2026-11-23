@@ -151,7 +151,7 @@ func newWSFixtureWithTickets(t *testing.T, store *porttest.Store, tickets port.T
 	f := &wsFixture{
 		identity: identity.New(store, directory, tickets, porttest.Quota{}, gateway),
 		lobby:    l,
-		admin:    admin.New("secret", l, store, store, store, porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), gateway),
+		admin:    admin.New("secret", l, store, store, porttest.NewNetEaseQRLogin(), porttest.NewQQQRLogin(), porttest.NewBilibiliQRLogin(), porttest.NewYouTubeCookies(), gateway),
 		gateway:  gateway,
 		node:     node,
 		preparer: preparer,
