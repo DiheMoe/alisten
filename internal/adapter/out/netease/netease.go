@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	linuxAPI    = "https://music.163.com/api/linux/forward"
+	searchAPI   = "https://interface3.music.163.com/eapi/cloudsearch/pc"
 	detailAPI   = "https://music.163.com/weapi/v3/song/detail"
 	playlistAPI = "https://music.163.com/weapi/v3/playlist/detail"
 	lyricAPI    = "https://music.163.com/weapi/song/lyric/v1"
@@ -167,15 +167,11 @@ func trimSearchPage[T any](items []T, rawTotal, offset int64) ([]T, int64) {
 }
 
 func (c *Client) search(ctx context.Context, op, keyword string, kind int, offset, limit int64, out response) error {
-	form, err := linux(map[string]any{
-		"method": "POST",
-		"url":    "http://music.163.com/api/cloudsearch/pc",
-		"params": map[string]any{"s": keyword, "type": kind, "offset": offset, "limit": limit},
-	})
+	form, err := eapi(searchAPI, map[string]any{"s": keyword, "type": kind, "offset": offset, "limit": limit})
 	if err != nil {
 		return err
 	}
-	return c.call(ctx, op, linuxAPI, form, out)
+	return c.call(ctx, op, searchAPI, form, out)
 }
 
 func (c *Client) PlaylistTracks(ctx context.Context, playlistID string) ([]port.Song, error) {

@@ -45,13 +45,3 @@ func TestEapiParams(t *testing.T) {
 		t.Errorf("eapi 参数解密之后 = %q\n期望 %q", plain, want)
 	}
 }
-
-func TestLinuxParams(t *testing.T) {
-	params := linuxParams([]byte(`{"method":"POST"}`))
-	if !regexp.MustCompile(`^[0-9A-F]+$`).MatchString(params) {
-		t.Errorf("linuxapi 参数 = %q，期望大写十六进制", params)
-	}
-	if got := decryptECB(t, params, linuxKey); got != `{"method":"POST"}` {
-		t.Errorf("linuxapi 参数解密之后 = %q", got)
-	}
-}

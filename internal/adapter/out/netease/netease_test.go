@@ -139,13 +139,16 @@ func decryptECB(t *testing.T, hexText, key string) string {
 
 func searchParams(t *testing.T, r *http.Request) map[string]any {
 	t.Helper()
-	var forward struct {
-		Params map[string]any `json:"params"`
+	plain := decryptECB(t, r.FormValue("params"), eapiKey)
+	parts := strings.Split(plain, "-36cd479b6b5-")
+	if len(parts) != 3 || parts[0] != "/api/cloudsearch/pc" {
+		t.Fatalf("eapi 搜索参数 = %q", plain)
 	}
-	if err := json.Unmarshal([]byte(decryptECB(t, r.FormValue("eparams"), linuxKey)), &forward); err != nil {
-		t.Error(err)
+	var params map[string]any
+	if err := json.Unmarshal([]byte(parts[1]), &params); err != nil {
+		t.Fatal(err)
 	}
-	return forward.Params
+	return params
 }
 
 func wantSong(id string, title, artist, album, cover string, ms int) port.Song {
@@ -163,17 +166,18 @@ var cover = wantSong("3387653989", "晴天 (Cover 蓝心羽)", "小汤圆", "", 
 func TestSearchTracks(t *testing.T) {
 	var offsets []float64
 	c, obs := serve(t, map[string]http.HandlerFunc{
-		"/api/linux/forward": func(w http.ResponseWriter, r *http.Request) {
+		"/eapi/cloudsearch/pc": func(w http.ResponseWriter, r *http.Request) {
 			params := searchParams(t, r)
 			if params["s"] != "晴天" || params["type"] != float64(1) || params["limit"] != float64(20) {
 				t.Errorf("搜索参数 = %v", params)
 			}
 			offsets = append(offsets, params["offset"].(float64))
+			w.Header().Set("Content-Type", "text/plain;charset=UTF-8")
 			fixture(t, "search-tracks.json")(w, r)
 		},
 	})
 	want := []port.Song{
-		wantSong("2652820720", "晴天(深情版)", "Lucky小爱", "晴天(深情版)", "http://p1.music.126.net/F0fTkmBTVykCa2o7Vgu1rQ==/109951173569626660.jpg", 278961),
+		wantSong("2668397359", "晴天 (原唱 周杰伦)", "RyaVocal", "晴天", "http://p2.music.126.net/-NVLOT5vt9I91LRiZV1TCQ==/109951170413587092.jpg", 270738),
 		wantSong("3387653989", "晴天 (Cover 蓝心羽)", "小汤圆", "", "http://p1.music.126.net/pvManIVaLdiDyKMDzuChuA==/109951173298787727.jpg", 176773),
 	}
 	for range 2 {
@@ -181,13 +185,13 @@ func TestSearchTracks(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if total != 338 || !reflect.DeepEqual(got, want) {
-			t.Fatalf("搜索结果 = %#v, total=%d\n期望 %#v, total=338", got, total, want)
+		if total != 335 || !reflect.DeepEqual(got, want) {
+			t.Fatalf("搜索结果 = %#v, total=%d\n期望 %#v, total=335", got, total, want)
 		}
 	}
 	// 偏移量达到 songCount 时丢弃上游回绕返回的重复歌曲。
-	if got, total, err := c.SearchTracks(t.Context(), "晴天", 18, 20); err != nil || total != 338 || len(got) != 0 {
-		t.Fatalf("越过总数页 = %#v, total=%d, %v，期望空切片且 total=338", got, total, err)
+	if got, total, err := c.SearchTracks(t.Context(), "晴天", 18, 20); err != nil || total != 335 || len(got) != 0 {
+		t.Fatalf("越过总数页 = %#v, total=%d, %v，期望空切片且 total=335", got, total, err)
 	}
 	if got, total, err := c.SearchTracks(t.Context(), "晴天", 1<<62, 100); err != nil || total != 0 || len(got) != 0 {
 		t.Fatalf("超大页码 = %#v, total=%d, %v，期望不请求上游直接返回空", got, total, err)
@@ -200,10 +204,11 @@ func TestSearchTracks(t *testing.T) {
 
 func TestSearchPlaylists(t *testing.T) {
 	c, obs := serve(t, map[string]http.HandlerFunc{
-		"/api/linux/forward": func(w http.ResponseWriter, r *http.Request) {
+		"/eapi/cloudsearch/pc": func(w http.ResponseWriter, r *http.Request) {
 			if params := searchParams(t, r); params["type"] != float64(1000) || params["offset"] != float64(40) || params["limit"] != float64(20) {
 				t.Errorf("搜索参数 = %v，期望 offset=40 limit=20", params)
 			}
+			w.Header().Set("Content-Type", "text/plain;charset=UTF-8")
 			fixture(t, "search-playlists.json")(w, r)
 		},
 	})
@@ -212,11 +217,11 @@ func TestSearchPlaylists(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []port.Playlist{
-		{ID: "6792103822", Name: "周杰伦-Jay 『网易云精选』", CoverURL: "http://p1.music.126.net/WFQ4EKF5QabD33U3NUOPWQ==/109951169535051638.jpg", Creator: "Buradarrr", Description: "【持续更新】欢迎投稿", TrackCount: 143, PlayCount: 34028960},
-		{ID: "17745261207", Name: "周杰伦歌单", CoverURL: "http://p1.music.126.net/-79-XFhWolhMzGESC8ifkg==/109951170218252280.jpg", Creator: "双鱼不困", TrackCount: 29, PlayCount: 514834},
+		{ID: "17745261207", Name: "周杰伦歌单", CoverURL: "http://p1.music.126.net/-79-XFhWolhMzGESC8ifkg==/109951170218252280.jpg", Creator: "双鱼不困", Description: "雨声钢琴前奏响起，青春回忆随旋律翻涌", TrackCount: 29, PlayCount: 532134},
+		{ID: "14343682292", Name: "周杰伦 晴天", CoverURL: "http://p1.music.126.net/-79-XFhWolhMzGESC8ifkg==/109951170218252280.jpg", Creator: "私廪", TrackCount: 2, PlayCount: 231175},
 	}
-	if total != 290 || !reflect.DeepEqual(got, want) {
-		t.Errorf("歌单 = %#v, total=%d\n期望 %#v, total=290", got, total, want)
+	if total != 298 || !reflect.DeepEqual(got, want) {
+		t.Errorf("歌单 = %#v, total=%d\n期望 %#v, total=298", got, total, want)
 	}
 	obs.check(t, "search_playlists")
 }
@@ -259,7 +264,7 @@ func TestTextDropsNUL(t *testing.T) {
 	c, _ := serve(t, map[string]http.HandlerFunc{
 		"/weapi/v3/song/detail": body(`{"songs":[{"name":"晴\u0000天","id":1,"ar":[{"name":"周\u0000杰伦"}],"al":{"name":"叶\u0000惠美","picUrl":"https://p1.music.126.net/a\u0000.jpg"},"dt":1000}],"code":200}`),
 		"/weapi/song/lyric/v1":  body(`{"lrc":{"lyric":"[00:01.00]故\u0000事"},"code":200}`),
-		"/api/linux/forward":    body(`{"result":{"playlists":[{"id":9,"name":"歌\u0000单","coverImgUrl":"https://p1.music.126.net/p\u0000.jpg","creator":{"nickname":"创\u0000作者"},"description":"简\u0000介"}]},"code":200}`),
+		"/eapi/cloudsearch/pc":  body(`{"result":{"playlists":[{"id":9,"name":"歌\u0000单","coverImgUrl":"https://p1.music.126.net/p\u0000.jpg","creator":{"nickname":"创\u0000作者"},"description":"简\u0000介"}]},"code":200}`),
 	})
 	want := track.Meta{Title: "晴天", Artist: "周杰伦", Album: "叶惠美", CoverURL: "https://p1.music.126.net/a.jpg", PageURL: track.NetEasePageURL("1"), Duration: time.Second}
 	if got, err := c.TrackMeta(t.Context(), "1"); err != nil || got != want {
@@ -478,7 +483,7 @@ func TestResolveRetriesUpstreamFailures(t *testing.T) {
 func TestFailedResponseIsNotCached(t *testing.T) {
 	var calls atomic.Int32
 	c, obs := serve(t, map[string]http.HandlerFunc{
-		"/api/linux/forward": func(w http.ResponseWriter, r *http.Request) {
+		"/eapi/cloudsearch/pc": func(w http.ResponseWriter, r *http.Request) {
 			if calls.Add(1) == 1 {
 				_, _ = io.WriteString(w, `{"code":-460,"message":"Cheating"}`)
 				return

@@ -130,14 +130,6 @@ func (c *Client) post(ctx context.Context, endpoint string, form url.Values, ua,
 	return resp, nil
 }
 
-func linux(data any) (url.Values, error) {
-	b, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
-	return url.Values{"eparams": {linuxParams(b)}}, nil
-}
-
 func weapi(data any) (url.Values, error) {
 	b, err := json.Marshal(data)
 	if err != nil {
